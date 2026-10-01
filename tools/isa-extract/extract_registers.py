@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+"""Extract E2K state and AAU register tables from MCST binutils.
+
+Reads include/opcode/e2k/state-regs.def and aau-regs.def and writes
+spec/isa/registers.yaml.
+"""
+
+import argparse
+import re
+from pathlib import Path
+
+import yaml
+
+from extract_binutils import FlowList, HexInt, flow_list_representer, \
+    git_describe, hex_int_representer
+
+ARGS_RX = r"\(([^)]*)\)"
+
+
+def parse_args(text):
+    out = []
+    for part in text.split(","):
+        part = part.strip()
+        out.append(part.strip('"') if part.startswith('"') else int(part, 0))
+    return out
+
+
+def state_registers(path):
+    """ENTRY(min_iset, name, num, rw_wait, rr_nop); STALE_ENTRY adds max_iset.
+
+    ALT_ENTRY names are accepted by the assembler only.
+    """
+    regs = []
+    for m in re.finditer(r"^\s*(ENTRY|STALE_ENTRY|ALT_ENTRY)" + ARGS_RX,
+                         path.read_text(), re.M):
+        kind, args = m.group(1), parse_args(m.group(2))
+        if kind == "STALE_ENTRY":
+            lo, hi, name, num, rw_wait, rr_nop = args
+        else:
+            lo, name, num, rw_wait, rr_nop = args
+            hi = 7
+        reg = {"name": name, "num": HexInt(num), "isets": FlowList(range(lo, hi + 1)),
+               "rw_wait": bool(rw_wait), "rr_nop": bool(rr_nop)}
+        if kind == "ALT_ENTRY":
+            reg["assembler_only"] = True
+        regs.append(reg)
+    return regs
+
+
+def aau_registers(path):
+    """Code is the 16-bit ALS opce1 value (ALS bits 8-23) that selects it.
+
+    ENTRY(name, n): opce1 = n << 2
+    ENTRY_ALS_IND(name, n, i): opce1 = n << 2 | i << 7
+    ENTRY_ALS_D(name, n, d): opce1 = n << 2 | d << 11
+    """
+    regs = []
+    for m in re.finditer(r"^\s*(ENTRY|ENTRY_ALS_IND|ENTRY_ALS_D)\s*" + ARGS_RX,
+                         path.read_text(), re.M):
+        kind, args = m.group(1), parse_args(m.group(2))
+        name, n = args[0], args[1]
+        code = n << 2
+        if kind == "ENTRY_ALS_IND":
+            code |= args[2] << 7
+        elif kind == "ENTRY_ALS_D":
+            code |= args[2] << 11
+        regs.append({"name": name, "opce1": HexInt(code)})
+    return regs
+
+
+def main():
+    here = Path(__file__).resolve().parent
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--binutils", type=Path,
+                    default=here.parents[1] / "OpenE2K" / "binutils-gdb")
+    ap.add_argument("-o", "--output", type=Path,
+                    default=here.parents[1] / "spec" / "isa" / "registers.yaml")
+    args = ap.parse_args()
+
+    inc = args.binutils / "include" / "opcode" / "e2k"
+    rev, subj = git_describe(args.binutils)
+    doc = {
+        "source": {
+            "project": "MCST binutils (OpenE2K/binutils-gdb)",
+            "commit": rev,
+            "release": subj,
+            "files": ["include/opcode/e2k/state-regs.def",
+                      "include/opcode/e2k/aau-regs.def"],
+        },
+        "notes": [
+            "state_registers: num is the register number used by rrs/rrd "
+            "(ALS src1 field) and rws/rwd (ALS dst field). The first listed "
+            "name valid for an ISA version is the one objdump prints.",
+            "rw_wait/rr_nop: gas adds 'wait all_e=1' after a write, or 'nop 4' "
+            "after a read, when the operation is written outside braces. They "
+            "are the same for all ISA versions and are not real timing data.",
+            "aau_registers: opce1 is the value of ALS bits 8-23 that selects "
+            "the register in aaurr/aaurw.",
+        ],
+        "state_registers": state_registers(inc / "state-regs.def"),
+        "aau_registers": aau_registers(inc / "aau-regs.def"),
+    }
+    yaml.add_representer(FlowList, flow_list_representer)
+    yaml.add_representer(HexInt, hex_int_representer)
+    with args.output.open("w") as f:
+        yaml.dump(doc, f, sort_keys=False, width=100)
+    print(f"{len(doc['state_registers'])} state, {len(doc['aau_registers'])} AAU "
+          f"registers -> {args.output}")
+
+
+if __name__ == "__main__":
+    main()

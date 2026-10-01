@@ -12,6 +12,10 @@ Status markers:
 
 - **[checked]**: verified byte for byte against gas by
   `tools/isa-extract/check_encodings.py`
+- **[decoded]**: `tools/isa-decode/e2kdis.py`, written from this document,
+  decodes gas output identically to objdump over the corpus in
+  `tools/isa-decode/corpus` (compiler output and hand-written bundles, v3–v7).
+  This confirms the reading of binutils, not the hardware.
 - **[source]**: read from binutils, not yet machine-checked
 
 Every syllable is a little-endian 32-bit word. "Bits a–b" are counted from bit
@@ -64,7 +68,7 @@ ALES2 and ALES5 have no half-syllable slots. When needed, they share one
 The presence test: the word exists if `mdl` equals the current offset plus 4
 (no CS1) or plus 8 (with CS1).
 
-## HS: header syllable [source]
+## HS: header syllable [decoded]
 
 | Bits | Field | Meaning |
 |---|---|---|
@@ -94,7 +98,7 @@ An HS where everything except `lng` is zero is an empty instruction (`nop`).
 | 8–15 | `src2` |
 | 0–7 | `dst`, `src3` for stores, or a predicate destination |
 
-### Operand encodings [checked for window registers; others source]
+### Operand encodings [checked for window registers; literals decoded]
 
 Applies to `src1`, `src2`, `src3` and `dst` bytes:
 
@@ -127,12 +131,13 @@ not from the encoding.
 | ALOPF7 | src1, src2 → predicate | `cmpopce` in dst bits 5–7, predicate number in bits 0–4 |
 | ALOPF17 | src1, src2 → predicate | ALES = `0x0200 \| cmpopce`; dst bits 5–7 are zero |
 | ALOPF8 | src2 → predicate | src1 field = `0xc0` (none); `cmpopce` in dst bits 5–7 |
-| ALOPF3, ALOPF13 [source] | src1 (address), src2 (offset), src3 (data, in the dst byte) | stores; ALOPF13 also has ALES |
+| ALOPF3 [decoded], ALOPF13 [source] | src1 (address), src2 (offset), src3 (data, in the dst byte) | stores; ALOPF13 also has ALES |
 | ALOPF11_LIT8 [source] | src1, src2, 8-bit literal, dst | literal in ALES bits 0–7 |
 | ALOPF12_PSHUFH [source] | src2, 8-bit literal, dst | literal in ALES bits 0–7 |
-| ALOPF15 [source] | src2 → state register | register number in the dst byte (`rws`/`rwd`) |
-| ALOPF16 [source] | state register → dst | register number in the src1 field (`rrs`/`rrd`) |
-| ALOPF10, ALOPF19 [source] | AAU store/load: `%aadD [ %aastiI + literal ]` | fields in ALS bits 8–23; see `print_alf` |
+| ALOPF15 [decoded] | src2 → state register | register number in the dst byte (`rws`/`rwd`) |
+| ALOPF16 [decoded] | state register → dst | register number in the src1 field (`rrs`/`rrd`) |
+| ALOPF10, ALOPF19 [decoded] | AAU store/load (`staa*`/`ldaa*`): `%aadD [ %aastiI + literal ]` | ALS bits 8–23 form a 16-bit field: `lt` bits 0–1 (LTS number + 1, or 0 for none), `am` bit 2, `incr` bits 4–6, `ind` bits 7–10, `d` bits 11–15 |
+| AAURR, AAURW [decoded] | AAU register read/write | Same opcodes as `ldaa*`/`staa*` with MAS `0x3f` in CS1; ALS bits 8–23 select the register (`registers.yaml`) |
 
 When the table lists fewer formats than the struct's array holds, the
 remaining operands are 32-bit (`s`), as C zero-initialises them. The
@@ -152,7 +157,7 @@ Binutils special-cases these by name, and its list is incomplete. The
 checker found `movt{c,r,rc}q`, `cudtoap`, `ldod{w,r,p}q` and `getsod` as
 well. The full list is in `PAIRED` in `check_encodings.py`.
 
-## SS: stubs syllable [source]
+## SS: stubs syllable [decoded, except `abg`, `crp`, `srp`, `vfdi`, `dtbp`]
 
 Bits 0–9, 30 and 31 are common to both types. `type` is bit 20.
 
@@ -177,7 +182,7 @@ Bits 0–9, 30 and 31 are common to both types. `type` is bit 20.
 Without an SS, `ipd` takes a default value other than 0 (binutils MCSTBug
 #163454).
 
-### ctcond [source]
+### ctcond [decoded for types 0–7, 14, 15; others source]
 
 Bits 0–4 are `psrc`; bits 5–8 are the condition type:
 
@@ -197,7 +202,7 @@ Bits 0–4 are `psrc`; bits 5–8 are the condition type:
 | 15 | `%predN && %NOT_LOOP_END` |
 | 10, 12, 13 | Reserved (and 11 before v7) |
 
-## CS0: control syllable 0 [source]
+## CS0: control syllable 0 [decoded: `disp`, `ldisp`, `sdisp`, `return`, `ibranch`; others source]
 
 Bits 30–31 are `ctpr` and bits 28–29 are `ctp_opc`. Together they select the
 operation:
@@ -216,7 +221,7 @@ operation:
 - **`ibranch`, `done`, `iret`, `hret`, `glaunch`** need an SS with `ctop` = 0;
   the condition comes from `SS.ctcond`.
 
-## CS1: control syllable 1 [source]
+## CS1: control syllable 1 [decoded: opcodes 0, 1, 2 (`setei`), 3, 5 (`call %ctprN`), 6, 7 (`flush*`); others source]
 
 Bits 28–31 are the opcode:
 
@@ -232,7 +237,7 @@ Bits 28–31 are the opcode:
 | 7 | `flushr` / `flushc` / `fillr` / `fillc` | Bits 0–3; `fill*` is v6+ |
 | 8 | `vfbg` | `umask` bits 0–7, `dmask` 8–15, `chkm4` 16 |
 
-## PLS: predicate logic syllables [source]
+## PLS: predicate logic syllables [decoded for `%predN` ELPs, `andp`, `landp`; others source]
 
 PLS0 and PLS1 each contain two ELPs and one CLP. PLS2 contains only a CLP.
 
@@ -261,7 +266,7 @@ PLS0 and PLS1 each contain two ELPs and one CLP. PLS2 contains only a CLP.
 
   The result goes to `@p(4 + i)`.
 
-## CDS: condition syllables [source]
+## CDS: condition syllables [decoded for RLP and MRGC on ALC0–5]
 
 Each CDS holds two 16-bit RLP/MRGC entries. The second entry is printed
 first.
@@ -273,7 +278,7 @@ first.
 | 7–9 | Per-channel negation |
 | 0–6 | Predicate: `10nnnnn` `%pcntN`, `11nnnnn` `%predN` |
 
-## AAS: array access syllables [source]
+## AAS: array access syllables [decoded]
 
 Present only with an SS of type 0, selected by `SS.aa0`–`aa3`.
 
@@ -294,3 +299,27 @@ Present only with an SS of type 0, selected by `SS.aa0`–`aa3`.
 Array prefetch programs consist of pairs of 64-bit `apb` entries (API_L,
 API_R). They are not wide instructions; the disassembler recognises them when
 `mdl` doesn't match the syllables HS declares. See `print_apb_instr`.
+
+## Bundling restrictions [source: gas]
+
+gas rejects these combinations within one wide instruction:
+
+- a store in ALC2 together with a load in ALC3;
+- a store in ALC5 together with a load in ALC0;
+- `disp` and `ldisp` together (both need CS0);
+- two operations in the same channel.
+
+## Assembler syntax notes [decoded]
+
+- **Store operand order.** By default gas reads stores as *data, address,
+  offset*. The directive `.ignore ld_st_style` switches to *address, offset,
+  data*, which is the order objdump prints and the order Unipro's clang emits
+  (it puts the directive at the top of every file).
+- **`%empty`** is gas's name for the `%empty.hi` destination (`0xdf`). Unipro's
+  clang writes `%empty.hi`, which gas rejects.
+
+## Known objdump bugs
+
+- `staa*`/`ldaa*` without a memory specifier are printed as `aaurw*`/`aaurr*`
+  with `%unknown_aau_reg`. `print_alf` accepts the AAU register forms when
+  ALES is `0x01c0` *or* MAS is `0x3f`; it should require MAS `0x3f`.

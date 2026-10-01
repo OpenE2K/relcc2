@@ -132,11 +132,12 @@ not from the encoding.
 | ALOPF17 | src1, src2 → predicate | ALES = `0x0200 \| cmpopce`; dst bits 5–7 are zero |
 | ALOPF8 | src2 → predicate | src1 field = `0xc0` (none); `cmpopce` in dst bits 5–7 |
 | ALOPF3 [decoded], ALOPF13 [source] | src1 (address), src2 (offset), src3 (data, in the dst byte) | stores; ALOPF13 also has ALES |
-| ALOPF11_LIT8 [source] | src1, src2, 8-bit literal, dst | literal in ALES bits 0–7 |
-| ALOPF12_PSHUFH [source] | src2, 8-bit literal, dst | literal in ALES bits 0–7 |
+| ALOPF11_LIT8 [decoded] | src1, src2, 8-bit literal, dst | literal in ALES bits 0–7 |
+| ALOPF12_PSHUFH [decoded] | src2, 8-bit literal, dst | literal in ALES bits 0–7 |
+| ALOPF12_IBRANCHD, ALOPF12_ICALLD [decoded] | src2 (target), dst | v6+. `icalld` keeps `wbs` in the src1 field; the condition comes from `SS.ctcond` |
 | ALOPF15 [decoded] | src2 → state register | register number in the dst byte (`rws`/`rwd`) |
 | ALOPF16 [decoded] | state register → dst | register number in the src1 field (`rrs`/`rrd`) |
-| ALOPF10, ALOPF19 [decoded] | AAU store/load (`staa*`/`ldaa*`): `%aadD [ %aastiI + literal ]` | ALS bits 8–23 form a 16-bit field: `lt` bits 0–1 (LTS number + 1, or 0 for none), `am` bit 2, `incr` bits 4–6, `ind` bits 7–10, `d` bits 11–15 |
+| ALOPF10, ALOPF19 [source] | AAU store/load (`staa*`/`ldaa*`): `%aadD [ %aastiI + literal ]` | ALS bits 8–23 form a 16-bit field: `lt` bits 0–1 (LTS number + 1, or 0 for none), `am` bit 2, `incr` bits 4–6, `ind` bits 7–10, `d` bits 11–15 |
 | AAURR, AAURW [decoded] | AAU register read/write | Same opcodes as `ldaa*`/`staa*` with MAS `0x3f` in CS1; ALS bits 8–23 select the register (`registers.yaml`) |
 
 When the table lists fewer formats than the struct's array holds, the
@@ -157,7 +158,7 @@ Binutils special-cases these by name, and its list is incomplete. The
 checker found `movt{c,r,rc}q`, `cudtoap`, `ldod{w,r,p}q` and `getsod` as
 well. The full list is in `PAIRED` in `check_encodings.py`.
 
-## SS: stubs syllable [decoded, except `abg`, `crp`, `srp`, `vfdi`, `dtbp`]
+## SS: stubs syllable [decoded for type 0, except `dtbp`]
 
 Bits 0–9, 30 and 31 are common to both types. `type` is bit 20.
 
@@ -182,7 +183,12 @@ Bits 0–9, 30 and 31 are common to both types. `type` is bit 20.
 Without an SS, `ipd` takes a default value other than 0 (binutils MCSTBug
 #163454).
 
-### ctcond [decoded for types 0–7, 14, 15; others source]
+**Type 1 (SF2) [source]:** used from v6 for `abgc`/`rbgc`, which replace
+`abg`. `abgc NUM` (1–7) puts NUM in bits 13–15 (the `aa1`–`aa3` positions of
+type 0) together with a condition. objdump prints no type-1 fields, so this
+can't be checked by decoding.
+
+### ctcond [decoded for types 0–9, 14, 15; type 11 source]
 
 Bits 0–4 are `psrc`; bits 5–8 are the condition type:
 
@@ -202,7 +208,12 @@ Bits 0–4 are `psrc`; bits 5–8 are the condition type:
 | 15 | `%predN && %NOT_LOOP_END` |
 | 10, 12, 13 | Reserved (and 11 before v7) |
 
-## CS0: control syllable 0 [decoded: `disp`, `ldisp`, `sdisp`, `return`, `ibranch`; others source]
+gas accepts conditions involving `%MLOCK` only on `ibranch`. In types 8, 9
+and 11, `%dt_alN`, `%cmpN` and `%clpN` refer to operations in the same
+bundle: a speculative operation in ALC N, a compare in ALC N, and the CLP
+that produces `@p(4 + N)`.
+
+## CS0: control syllable 0 [decoded, except `puttsd`, which gas does not accept]
 
 Bits 30–31 are `ctpr` and bits 28–29 are `ctp_opc`. Together they select the
 operation:
@@ -221,7 +232,7 @@ operation:
 - **`ibranch`, `done`, `iret`, `hret`, `glaunch`** need an SS with `ctop` = 0;
   the condition comes from `SS.ctcond`.
 
-## CS1: control syllable 1 [decoded: opcodes 0, 1, 2 (`setei`), 3, 5 (`call %ctprN`), 6, 7 (`flush*`); others source]
+## CS1: control syllable 1 [decoded, except `vfbg`, which gas does not accept]
 
 Bits 28–31 are the opcode:
 
@@ -237,7 +248,7 @@ Bits 28–31 are the opcode:
 | 7 | `flushr` / `flushc` / `fillr` / `fillc` | Bits 0–3; `fill*` is v6+ |
 | 8 | `vfbg` | `umask` bits 0–7, `dmask` 8–15, `chkm4` 16 |
 
-## PLS: predicate logic syllables [decoded for `%predN` ELPs, `andp`, `landp`; others source]
+## PLS: predicate logic syllables [decoded, except `%bgrpred`, which gas does not accept as a `pass` source]
 
 PLS0 and PLS1 each contain two ELPs and one CLP. PLS2 contains only a CLP.
 
@@ -321,5 +332,7 @@ gas rejects these combinations within one wide instruction:
 ## Known objdump bugs
 
 - `staa*`/`ldaa*` without a memory specifier are printed as `aaurw*`/`aaurr*`
-  with `%unknown_aau_reg`. `print_alf` accepts the AAU register forms when
+  with `%unknown_aau_reg`, and the `incr` that may accompany a `staa` is
+  dropped. So objdump can never show `staa` or `incr` correctly, and their
+  encodings are marked [source] here. `print_alf` accepts the AAU register forms when
   ALES is `0x01c0` *or* MAS is `0x3f`; it should require MAS `0x3f`.

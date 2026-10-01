@@ -1,5 +1,5 @@
-/* Hand-written bundles exercising syllables rarely produced by compilers.
-   Assembled for v3..v7 by build_corpus.sh.  */
+/* isets: 3-7
+   Hand-written bundles exercising syllables rarely produced by compilers.  */
 
 	.text
 	.global	ctl
@@ -148,6 +148,73 @@ ctl:
 }
 {
 	getsp,0 _f32s 0x40, %dr7
+}
+{
+	pref %ipr1, disp = 0x10, ipd = 1
+}
+{
+	gettsd %ctpr1
+}
+{
+	done
+}
+{
+	setsft
+}
+{
+	srp
+}
+{
+	crp
+}
+{
+	slrp
+}
+{
+	vfdi
+}
+{
+	pass %lcntex, @p0
+	pass %spred013, @p1
+	movep @p0, @p1, @p4
+	pass @p4, %pred3
+}
+{
+	pass %rndpred5, @p2
+}
+{
+	staad,2 %dr1, %aad3 [ %aasti1 ]
+	incr,2 %aaincr2
+}
+{
+	pextrh,1 %dr1, %dr2, 0x3, %dr3
+	pshufh,4 %dr4, 0x1b, %dr5
+}
+/* Conditions involving %MLOCK are allowed only on ibranch. %dt_alN, %cmpN
+   and %clpN refer to a speculative operation in ALC N, a compare in ALC N
+   and the CLP producing @p(4 + N), all in the same bundle.  */
+{
+	ibranch ctl ? %MLOCK
+}
+{
+	ldd,0,sm %dr0, 0x0, %dr1
+	ldd,3,sm %dr0, 0x8, %dr2
+	ibranch ctl ? %MLOCK || %dt_al03
+}
+{
+	cmpesb,1 %r1, %r2, %pred1
+	ibranch ctl ? %MLOCK || ~%cmp1
+}
+{
+	cmpesb,0 %r1, %r2, %pred1
+	cmplsb,1 %r1, %r2, %pred2
+	ibranch ctl ? %MLOCK || %cmp0 || ~%cmp1
+}
+{
+	pass %pred1, @p0
+	pass %pred2, @p1
+	andp @p0, @p1, @p6
+	ibranch ctl ? %MLOCK || %clp2
 }
 {
 	nop

@@ -25,9 +25,11 @@ BUNDLE_RX = re.compile(r"^\s+([0-9a-f]+):\s*$")
 # line, explanation). Bundles where every difference is explained by these
 # are counted separately rather than failing.
 KNOWN_OBJDUMP_BUGS = [
+    # (objdump line, our corresponding lines, explanation)
     (re.compile(r"^aaur[rw]\w*,\d .*%unknown_aau_reg"),
+     re.compile(r"^(staa\w*|ldaa\w*|incr),\d "),
      "print_alf accepts AAURR/AAURW when ALES is 0x01c0 even without MAS "
-     "0x3f, so plain staa/ldaa print as aaurw/aaurr"),
+     "0x3f, so plain staa/ldaa print as aaurw/aaurr (and their incr is lost)"),
 ]
 
 
@@ -63,7 +65,7 @@ def main():
     total = collections.Counter()
     shown = 0
     for obj in map(Path, sys.argv[2:]):
-        iset = int(re.search(r"-v(\d)", obj.name).group(1))
+        iset = int(re.findall(r"-v(\d)", obj.name)[-1])
         canonical = e2kdis.Spec(iset).canonical
         with tempfile.NamedTemporaryFile() as tmp:
             subprocess.run([binutils / "e2k-linux-objcopy", "-O", "binary",
@@ -77,9 +79,11 @@ def main():
             if a == b:
                 total["match"] += 1
                 continue
-            only_ref = list((a - b).elements())
-            if only_ref and all(any(rx.search(l) for rx, _ in KNOWN_OBJDUMP_BUGS)
-                                for l in only_ref) and len(b - a) == len(only_ref):
+            only_ref, only_ours = list((a - b).elements()), list((b - a).elements())
+            if only_ref and all(any(r.search(l) for r, _, _ in KNOWN_OBJDUMP_BUGS)
+                                for l in only_ref) \
+                    and all(any(o.search(l) for _, o, _ in KNOWN_OBJDUMP_BUGS)
+                            for l in only_ours):
                 total["known objdump bug"] += 1
                 continue
             total["differ"] += 1

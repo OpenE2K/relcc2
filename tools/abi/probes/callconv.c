@@ -2,7 +2,9 @@
 /* Calling-convention probes. Compile to assembly with the reference
    compilers and read where each value is passed or returned:
 
-     toolchains/lcc-1.29.16-e2k-v5/lcc -O1 -fno-optimize-sibling-calls -S
+     /opt/mcst/lcc-1.29.16.e2k-v5.8c2.linux-6.1/bin/lcc -O1 \
+         -fno-optimize-sibling-calls -S
+         (or toolchains/lcc-1.29.16-e2k-v5/lcc where /opt/mcst is absent)
      toolchains/unipro/bin/clang --target=e2k64-linux -march=elbrus-v5 -O1 \
          -fno-optimize-sibling-calls -S
 

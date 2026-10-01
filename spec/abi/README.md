@@ -32,8 +32,9 @@ running mixed-compiler tests on real machines is the next step.
 ## Probes
 
 ```
-toolchains/lcc-1.29.16-e2k-v5/lcc -O1 -fno-optimize-sibling-calls -S tools/abi/probes/callconv.c
-toolchains/lcc-1.29.16-e2k-v5/lcc -c tools/abi/probes/layout.c    # must compile
+LCC=/opt/mcst/lcc-1.29.16.e2k-v5.8c2.linux-6.1/bin/lcc    # or toolchains/lcc-1.29.16-e2k-v5/lcc
+$LCC -O1 -fno-optimize-sibling-calls -S tools/abi/probes/callconv.c
+$LCC -c tools/abi/probes/layout.c    # must compile
 ```
 
 `layout.c` encodes every rule in data-layout.md as `_Static_assert`s; both

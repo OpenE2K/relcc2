@@ -7,21 +7,12 @@
 # MCST's emulator is the reference for instruction semantics; the community
 # one is older but implements some things MCST's does not.
 #
-# Ninja comes from PyPI into toolchains/host if the host has none.
+# Needs QEMU's usual build dependencies on the host (ninja, glib, ...).
 #
 # Usage: tools/setup/build-qemu.sh [mcst|community]...   (default: both)
 set -e
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
-host=$root/toolchains/host
-
-if ! command -v ninja >/dev/null 2>&1; then
-	if [ ! -x "$host/pylib/bin/ninja" ]; then
-		python3 -m pip install -q --target "$host/pylib" ninja
-	fi
-	PATH=$host/pylib/bin:$PATH
-	export PATH
-fi
 
 build() {
 	flavor=$1 targets=$2

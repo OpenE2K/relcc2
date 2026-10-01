@@ -93,18 +93,13 @@ tools/setup/fetch-lcc.sh             # toolchains/lcc-1.29.16-e2k-v5/{lcc,l++,ld
 tools/setup/build-qemu.sh            # toolchains/qemu-{mcst,community}/bin/qemu-e2k
 ```
 
-- `build-qemu.sh [mcst|community]` builds Linux user mode only. It fetches
-  ninja from PyPI into `toolchains/host/` if the host has none, and meson
-  downloads QEMU's subprojects into the submodules (ignored by their git).
-  A full build of both takes about 80 s.
-- Running E2K programs: `qemu-e2k -cpu elbrus-v5 -L <lcc>/opt/mcst/lcc-*/fs
-  ./prog` (`-L` is lcc's sysroot, needed for dynamic binaries; MCST's
-  default CPU is elbrus-v6). With lcc 1.29.16 `-march` v5 output, MCST's
-  emulator runs static and dynamic C and C++ programs (setjmp, varargs,
-  exceptions). The community emulator runs the dynamic ones but segfaults
-  on static binaries. v5 code on `-cpu elbrus-v3` fails as it should
-  (community: SIGILL; MCST: an assertion in `translate-lookahead.c`
-  instead of SIGILL).
+- `build-qemu.sh [mcst|community]` builds Linux user mode only. Run
+  programs with `qemu-e2k -cpu elbrus-vN -L <lcc>/opt/mcst/lcc-*/fs ./prog`
+  (`-L` is lcc's sysroot, needed for dynamic binaries).
+- Neither emulator can be fully trusted. MCST's is the reference where
+  they disagree; confirm anything important on hardware.
+- Never install well-known host tools (ninja, meson, compilers, libraries)
+  yourself, e.g. from PyPI. Ask the owner to install them on the host.
 
 - lcc expects to live in `/opt/mcst/...`; the wrapper runs it under `bwrap`
   with the tree mounted there. No root needed. It compiles, assembles and
@@ -179,8 +174,7 @@ data in DWARF 64/65 (`%b[0]`, `%b[1]`).
 
 ## Open questions for the owner
 
-- SSH access to the 4C/8CB, to confirm qemu results on hardware (the
-  suite runs under qemu-e2k first).
+- SSH access to the 4C/8CB: the owner will arrange it later.
 - `libxml2.so.2` in the repository root is a stale, untracked symlink into an
   old session's scratch directory; it can be deleted (the owner created it,
   so ask before removing).

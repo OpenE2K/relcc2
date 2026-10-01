@@ -21,13 +21,29 @@ python3 tools/isa-extract/extract_binutils.py
 | `template`, `alopf` | Binutils template struct and ALU operation format (ALOPF1, ALOPF11, …). |
 | `opc` | Opcode (ALS.cop). |
 | `channels` | ALU channels (0–5) the entry may be placed in. |
-| `args` | Register formats of the operands, in table order: `s` 32-bit, `d` 64-bit, `q` 128-bit, `p` packed 128-bit. Which operand is a source and which is the destination isn't recorded yet. |
+| `args` | Register formats of the operands, in table order: `s` 32-bit, `d` 64-bit, `q` 128-bit, `p` packed 128-bit. Padded to the struct's array length. The role of each position depends on the format; see [bundle.md](bundle.md#operand-roles-per-format-checked-except-where-marked). |
 | `flags` | `MAS`, `LOAD`, `STORE`. |
 | `opce`, `ales_opce`, `ales_opc2`, `cmpopce`, … | Extra encoding fields, depending on the format. `ales_opc2` is keyed by channel when it differs per channel. |
 | `aliases` | Other mnemonics binutils accepts for the same bits. |
 
 One mnemonic can have several entries: per ISA version, per set of channels,
 or per format. gas links them by name.
+
+## Encoding check against gas
+
+`tools/isa-extract/check_encodings.py <dir with e2k-linux-as>` predicts the
+ALS and ALES syllables of every operation from this database, assembles each
+one with gas for every ISA version and allowed channel, and compares the
+bytes. It also exercises the wide-instruction layout in
+[bundle.md](bundle.md).
+
+Against binutils 2.41-29.023 it passes for all 24,238 cases on v2–v7. Not
+covered yet:
+
+- formats with memory, AAU or state-register operands, merges and
+  `ibranchd`/`icalld`, listed in the tool's output;
+- operations that take two channels;
+- `_lt3` forms, whose src3 must be a literal.
 
 ## Cross-check against the opcode spreadsheet
 

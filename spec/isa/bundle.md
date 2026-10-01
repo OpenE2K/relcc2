@@ -1,0 +1,296 @@
+# Wide instruction format
+
+This describes how an E2K wide instruction (bundle) is laid out in memory,
+as implemented by MCST binutils 2.41-29.023. Main sources:
+
+- `opcodes/e2k-dis.c`: `unpack_instr`, `print_alf`, `print_ss`, `print_cs0`,
+  `print_cs1`, `print_pls_syllables`, `print_cds`, `print_ctcond`
+- `gas/config/tc-e2k.c`: the `e2k_hs` struct and the packing code that
+  follows it
+
+Status markers:
+
+- **[checked]**: verified byte for byte against gas by
+  `tools/isa-extract/check_encodings.py`
+- **[source]**: read from binutils, not yet machine-checked
+
+Every syllable is a little-endian 32-bit word. "Bits a–b" are counted from bit
+0, the least significant.
+
+## Overall layout [checked for the parts used by ALU operations]
+
+A wide instruction is 8–64 bytes long, in multiples of 8. It has two parts:
+
+1. **Before the middle point**, in this order, each present only if HS says
+   so:
+
+   | Syllable | Present when |
+   |---|---|
+   | HS | always |
+   | SS | HS bit 12 |
+   | ALS0 … ALS5 | HS bits 26–31 |
+   | CS0 | HS bit 14 |
+   | ALES5/ALES2 word | see below |
+   | CS1 | HS bit 15 |
+
+   `HS.mdl` gives the position of the middle point.
+
+2. **After the middle point**: 16-bit half-syllables, then any gap, then
+   32-bit syllables placed backwards from the end of the instruction.
+
+   - **Half-syllables:** ALES0, 1, 3 and 4 first (those marked in HS), then
+     the AAS half-syllables. They are paired into 32-bit words, and **the
+     first half of each pair occupies the upper 16 bits** of its word. So
+     half-syllable `k` sits at byte offset `mdl + 2*((k & ~1) + 1 - (k & 1))`.
+     An odd count leaves an unused half.
+   - **From the end, going backwards:** CDS0, CDS1, CDS2 (count in HS), then
+     PLS0, PLS1, PLS2 (count in HS), then LTS0, LTS1, … The LTS syllables
+     fill whatever space remains down to the half-syllables. Anything between
+     them is gap.
+
+### ALES2 and ALES5 [checked]
+
+ALES2 and ALES5 have no half-syllable slots. When needed, they share one
+32-bit word just before CS1: ALES5 in bits 0–15 and ALES2 in bits 16–31.
+
+- If HS marks ALES2 or ALES5 but that word is absent, the value is the
+  default `0x01c0` (opc2 = EXT, opce = NONE).
+- gas omits the word whenever both values are default. Before v4 it never
+  emits it at all, so on v1–v3, channels 2 and 5 can only take ALES2/ALES5
+  with the default value.
+- On v4, an operation with `explicit_ales25_v4` set forces the word to be
+  emitted.
+
+The presence test: the word exists if `mdl` equals the current offset plus 4
+(no CS1) or plus 8 (with CS1).
+
+## HS: header syllable [source]
+
+| Bits | Field | Meaning |
+|---|---|---|
+| 0–3 | `mdl` | Middle point: number of 32-bit words before it, minus one |
+| 4–6 | `lng` | Length in 64-bit units, minus one |
+| 7–9 | `nop` | Empty cycles to insert after this instruction |
+| 10 | `lm` | Loop mode (`loop_mode`) |
+| 11 | — | Reserved |
+| 12 | `s` | SS present |
+| 13 | `sw` | Set by `set_mark` |
+| 14 | `c[0]` | CS0 present |
+| 15 | `c[1]` | CS1 present |
+| 16–17 | `cd` | Number of CDS syllables |
+| 18–19 | `pl` | Number of PLS syllables |
+| 20–25 | `ale` | ALES0 … ALES5 present |
+| 26–31 | `al` | ALS0 … ALS5 present |
+
+An HS where everything except `lng` is zero is an empty instruction (`nop`).
+
+## ALS: ALU operation syllable [checked]
+
+| Bits | Field |
+|---|---|
+| 31 | `sm`: speculative mode (`,sm` in assembly) |
+| 24–30 | `opc`: opcode |
+| 16–23 | `src1`, or `opce` for formats without src1 |
+| 8–15 | `src2` |
+| 0–7 | `dst`, `src3` for stores, or a predicate destination |
+
+### Operand encodings [checked for window registers; others source]
+
+Applies to `src1`, `src2`, `src3` and `dst` bytes:
+
+| Value | src1 | src2 | src3 | dst |
+|---|---|---|---|---|
+| `0xxxxxxx` | `%b[x]` rotating-base register | same | same | same |
+| `10xxxxxx` | `%rx` window register | same | same | same |
+| `110xxxxx` | 5-bit literal `x` | see next rows | literal forms (v7 `_lt3`) | special registers |
+| `1100xxxx` | — | 4-bit literal `x` | — | — |
+| `11010hll` | — | 16-bit literal: LTS`ll` (0 or 1), half `h` | — | — |
+| `110110ll` | — | 32-bit literal: LTS`ll` | 32-bit literal (v7 `_lt3`) | — |
+| `110111ll` | — | 64-bit literal: LTS`ll` and LTS`ll+1` | — | — |
+| `111xxxxx` | `%gx` global register | same | same | same |
+
+Special destinations (`110xxxxx`): 13 `%tst`, 14 `%tc`, 15 `%tcd`, 17–19
+`%ctpr1`–`%ctpr3`, 30 `%empty.lo`, 31 `%empty.hi`. Other values are reserved.
+
+The register's width (`%r`, `%dr`, `%qr`, `%qpr`) comes from the operation,
+not from the encoding.
+
+### Operand roles per format [checked except where marked]
+
+`args` in `binutils-ops.yaml` lists the operand formats in this order:
+
+| Format | Operands | Extra fields |
+|---|---|---|
+| ALOPF1, ALOPF11 | src1, src2, dst | ALOPF11: ALES = `opc2 << 8 \| opce` |
+| ALOPF21 | src1, src2, src3, dst | src3 in ALES bits 0–7; ALES bits 8–15 = `opc2` |
+| ALOPF2, ALOPF12, ALOPF22 | src2, dst | `opce` in the src1 field; ALOPF12 also has ALES |
+| ALOPF7 | src1, src2 → predicate | `cmpopce` in dst bits 5–7, predicate number in bits 0–4 |
+| ALOPF17 | src1, src2 → predicate | ALES = `0x0200 \| cmpopce`; dst bits 5–7 are zero |
+| ALOPF8 | src2 → predicate | src1 field = `0xc0` (none); `cmpopce` in dst bits 5–7 |
+| ALOPF3, ALOPF13 [source] | src1 (address), src2 (offset), src3 (data, in the dst byte) | stores; ALOPF13 also has ALES |
+| ALOPF11_LIT8 [source] | src1, src2, 8-bit literal, dst | literal in ALES bits 0–7 |
+| ALOPF12_PSHUFH [source] | src2, 8-bit literal, dst | literal in ALES bits 0–7 |
+| ALOPF15 [source] | src2 → state register | register number in the dst byte (`rws`/`rwd`) |
+| ALOPF16 [source] | state register → dst | register number in the src1 field (`rrs`/`rrd`) |
+| ALOPF10, ALOPF19 [source] | AAU store/load: `%aadD [ %aastiI + literal ]` | fields in ALS bits 8–23; see `print_alf` |
+
+When the table lists fewer formats than the struct's array holds, the
+remaining operands are 32-bit (`s`), as C zero-initialises them. The
+extractor pads `args` accordingly.
+
+### Operations that take two channels [source; not yet modelled]
+
+Some quad operations occupy two adjacent channels:
+
+- **Before v7:** both halves are encoded explicitly. Channels j and j+1 get
+  register numbers N and N+1.
+- **From v7:** only the lower channel is encoded, and the upper one is
+  reserved implicitly (see the `implicit_paired_alc_delta` comment in
+  `include/opcode/e2k.h`).
+
+Binutils special-cases these by name, and its list is incomplete. The
+checker found `movt{c,r,rc}q`, `cudtoap`, `ldod{w,r,p}q` and `getsod` as
+well. The full list is in `PAIRED` in `check_encodings.py`.
+
+## SS: stubs syllable [source]
+
+Bits 0–9, 30 and 31 are common to both types. `type` is bit 20.
+
+| Bits | Field | Meaning |
+|---|---|---|
+| 0–8 | `ctcond` | Control-transfer condition (see below) |
+| 9 | `dtbp` | v7 |
+| 10–11 | `ctop` | `ct %ctprN` with N = ctop; 0 means `ibranch` or `call` via CS0/CS1 |
+| 12–15 | `aa0`–`aa3` | AAS half-syllables present (type 0 only) |
+| 16 / 17 | `alct` / `alcf` | `alc`: advance loop counters |
+| 18 / 19 | `abpt` / `abpf` | `abp`: advance the predicate rotation base |
+| 20 | `type` | |
+| 21 / 22 | `abnt` / `abnf` | `abn`: advance the register rotation base |
+| 23–24 | `abg` | `abgi`, `abgd` |
+| 25 | `crp` | |
+| 26 | `vfdi` | |
+| 27 | `srp` | `crp` and `srp` together encode `slrp` |
+| 28 | `bap` | Begin array prefetch |
+| 29 | `eap` | End array prefetch |
+| 30–31 | `ipd` | Instruction prefetch depth |
+
+Without an SS, `ipd` takes a default value other than 0 (binutils MCSTBug
+#163454).
+
+### ctcond [source]
+
+Bits 0–4 are `psrc`; bits 5–8 are the condition type:
+
+| Type | Condition |
+|---|---|
+| 0 | never |
+| 1 | always |
+| 2 / 3 | `%predN` / `~%predN` |
+| 4 | `%LOOP_END` |
+| 5 | `%NOT_LOOP_END` |
+| 6 | `%predN \|\| %LOOP_END` |
+| 7 | `~%predN && %NOT_LOOP_END` |
+| 8 | `%MLOCK`, optionally `\|\| %dt_al…` (psrc bits 0–3) |
+| 9 | `%MLOCK \|\| ` a compare or CLP result (psrc encodes which) |
+| 11 | Same as 9 without `%MLOCK` (v7 only) |
+| 14 | `~%predN \|\| %LOOP_END` |
+| 15 | `%predN && %NOT_LOOP_END` |
+| 10, 12, 13 | Reserved (and 11 before v7) |
+
+## CS0: control syllable 0 [source]
+
+Bits 30–31 are `ctpr` and bits 28–29 are `ctp_opc`. Together they select the
+operation:
+
+| ctpr \ ctp_opc | 0 | 1 | 2 | 3 |
+|---|---|---|---|---|
+| 0 | `ibranch` | `pref` | `puttsd` | `done` (also `iret`/`hret`/`glaunch`, chosen by `param` bits 0–2 = 2/3/4) |
+| 1 | `disp` | — | `sdisp` | `gettsd` |
+| 2 | `disp` | `ldisp` | `sdisp` | `gettsd` |
+| 3 | `disp` | — | `sdisp` | `return` (`gettsd` if `param` bits 0–2 = 1) |
+
+- **`disp`, `ldisp`, `ibranch`, `puttsd`:** bits 0–27 hold a signed
+  displacement in 8-byte units, relative to the start of the instruction.
+- **`sdisp`:** bits 0–4.
+- **`pref`:** `%iprN` in bits 0–2, `ipd` in bit 3, displacement in bits 4–27.
+- **`ibranch`, `done`, `iret`, `hret`, `glaunch`** need an SS with `ctop` = 0;
+  the condition comes from `SS.ctcond`.
+
+## CS1: control syllable 1 [source]
+
+Bits 28–31 are the opcode:
+
+| opc | Operation | Fields |
+|---|---|---|
+| 0 | `setwd` (+ `setbn`/`setbp`) | `setwd` takes `wsz` (bits 5–11), `nfx` (bit 4) and `dbl` (bit 3, v3+) from **LTS0** |
+| 1 | `vfrpsz` + `setwd` (+ `setbn`/`setbp`) | `rpsz` in LTS0 bits 12–16 |
+| 2 | `setei` / `setsft` | `setei`: value in bits 0–7. Bit 27 set means `setsft` |
+| 3 | `wait` | `all_c` bit 0, `all_e` 1, `st_c` 2, `ld_c` 3, `fl_c` 4, `ma_c` 5, `trap` 6 (v2+), `sas` 7, `sal` 8 (v5+) |
+| 4 | `setbn` / `setbp` | Applies to opcodes 0, 1 and 4: `setbn` (bit 26) uses `rbs` bits 0–5, `rsz` bits 6–11, `rcur` bits 12–17; `setbp` (bit 27) uses `psz` bits 18–22 |
+| 5 | `call` | `wbs` in bits 0–6, target from `SS.ctop`. With `ctop` = 0, bits 7–9 = 1/2 select `icall`/`hcall`, and CS0 holds the displacement |
+| 6 | MAS | 7-bit memory access specifiers for ALC0 (bits 21–27), ALC2 (14–20), ALC3 (7–13) and ALC5 (0–6) |
+| 7 | `flushr` / `flushc` / `fillr` / `fillc` | Bits 0–3; `fill*` is v6+ |
+| 8 | `vfbg` | `umask` bits 0–7, `dmask` 8–15, `chkm4` 16 |
+
+## PLS: predicate logic syllables [source]
+
+PLS0 and PLS1 each contain two ELPs and one CLP. PLS2 contains only a CLP.
+
+- **ELP** (7 bits; at bits 24–30 and 16–22) loads a primary predicate
+  `@pK`:
+
+  | ELP value | Source |
+  |---|---|
+  | `0x00` | `%lcntex` |
+  | `0bbbbb`, nonzero | `%spred`, with bits selecting ALC compare results 0–4 |
+  | `0x40` | `%bgrpred` |
+  | `0x41`–`0x4f` | `%rndpred1`–`%rndpred15` |
+  | `11nnnnn` | `%predN` |
+
+- **CLP/MLP** (bits 0–15) combines two primary predicates:
+
+  | Bits | Field |
+  |---|---|
+  | 14–15 | opcode: 0 `andp`, 1 `landp`, 3 `movep` |
+  | 13 | neg0 |
+  | 10–12 | p0 |
+  | 9 | neg1 |
+  | 6–8 | p1 |
+  | 5 | vdst: also write the result to a register predicate |
+  | 0–4 | pdst: the destination `%predN` |
+
+  The result goes to `@p(4 + i)`.
+
+## CDS: condition syllables [source]
+
+Each CDS holds two 16-bit RLP/MRGC entries. The second entry is printed
+first.
+
+| Bits | Field |
+|---|---|
+| 14–15 | Opcode: 0 RLP for ALC0–2, 1 RLP for ALC3–5, 2 MRGC for ALC0–2, 3 MRGC for ALC3–5 |
+| 10–13 | Mask: which of the three channels the entry applies to. Bit 3 is AM2/AM5 (the AAU increment of `staa`) |
+| 7–9 | Per-channel negation |
+| 0–6 | Predicate: `10nnnnn` `%pcntN`, `11nnnnn` `%predN` |
+
+## AAS: array access syllables [source]
+
+Present only with an SS of type 0, selected by `SS.aa0`–`aa3`.
+
+- **AAS0 and AAS1** each hold two 8-bit destinations. The order is swapped:
+  movement j=0 is in the upper byte.
+- **AAS2–AAS5** each describe one movement:
+
+  | Bits | Field |
+  |---|---|
+  | 15 | `be` |
+  | 12–14 | opc: 1 `movab`, 2 `movah`, 3 `movaw`, 4 `movad`, 5 `movaq`, 7 `movaqp` |
+  | 6–10 | `area` |
+  | 1–5 | `ind` |
+  | 0 | `am` |
+
+## APB instructions [source]
+
+Array prefetch programs consist of pairs of 64-bit `apb` entries (API_L,
+API_R). They are not wide instructions; the disassembler recognises them when
+`mdl` doesn't match the syllables HS declares. See `print_apb_instr`.

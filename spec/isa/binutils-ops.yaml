@@ -13,8 +13,8 @@ notes:
   by name.
 - 'aliases: other mnemonics binutils accepts for the identical encoding (e.g. plog_128 and plog_and for
   plog_0x80).'
-- 'args: operand register formats in table order (s=32-bit, d=64-bit, q=128-bit, p=packed 128-bit). Operand
-  roles are not yet verified.'
+- 'args: operand register formats in table order (s=32-bit, d=64-bit, q=128-bit, p=packed 128-bit), padded
+  to the template''s array length as the C struct does. Operand roles per format are described in spec/isa/bundle.md.'
 alu_ops:
 - name: adds
   template: alf1
@@ -5904,7 +5904,7 @@ alu_ops:
   flags: []
   opc: 0x30
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLB
 - name: incs_fh
   template: alopf21
@@ -5913,7 +5913,7 @@ alu_ops:
   flags: []
   opc: 0x30
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLH
 - name: incs_fw
   template: alopf21
@@ -5922,7 +5922,7 @@ alu_ops:
   flags: []
   opc: 0x30
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLW
 - name: decs_fb
   template: alopf21
@@ -5931,7 +5931,7 @@ alu_ops:
   flags: []
   opc: 0x32
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLB
 - name: decs_fh
   template: alopf21
@@ -5940,7 +5940,7 @@ alu_ops:
   flags: []
   opc: 0x32
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLH
 - name: decs_fw
   template: alopf21
@@ -5949,7 +5949,7 @@ alu_ops:
   flags: []
   opc: 0x32
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLW
 - name: shls_fb
   template: alopf21
@@ -5958,7 +5958,7 @@ alu_ops:
   flags: []
   opc: 0x18
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLB
 - name: shls_fh
   template: alopf21
@@ -5967,7 +5967,7 @@ alu_ops:
   flags: []
   opc: 0x18
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLH
 - name: shls_fw
   template: alopf21
@@ -5976,7 +5976,7 @@ alu_ops:
   flags: []
   opc: 0x18
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLW
 - name: shrs_fb
   template: alopf21
@@ -5985,7 +5985,7 @@ alu_ops:
   flags: []
   opc: 0x1a
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLB
 - name: shrs_fh
   template: alopf21
@@ -5994,7 +5994,7 @@ alu_ops:
   flags: []
   opc: 0x1a
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLH
 - name: shrs_fw
   template: alopf21
@@ -6003,7 +6003,7 @@ alu_ops:
   flags: []
   opc: 0x1a
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLW
 - name: scls_fb
   template: alopf21
@@ -6012,7 +6012,7 @@ alu_ops:
   flags: []
   opc: 0x14
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLB
 - name: scls_fh
   template: alopf21
@@ -6021,7 +6021,7 @@ alu_ops:
   flags: []
   opc: 0x14
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLH
 - name: scls_fw
   template: alopf21
@@ -6030,7 +6030,7 @@ alu_ops:
   flags: []
   opc: 0x14
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLW
 - name: scrs_fb
   template: alopf21
@@ -6039,7 +6039,7 @@ alu_ops:
   flags: []
   opc: 0x16
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLB
 - name: scrs_fh
   template: alopf21
@@ -6048,7 +6048,7 @@ alu_ops:
   flags: []
   opc: 0x16
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLH
 - name: scrs_fw
   template: alopf21
@@ -6057,7 +6057,7 @@ alu_ops:
   flags: []
   opc: 0x16
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLW
 - name: sars_fb
   template: alopf21
@@ -6066,7 +6066,7 @@ alu_ops:
   flags: []
   opc: 0x1c
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLB
 - name: sars_fh
   template: alopf21
@@ -6075,7 +6075,7 @@ alu_ops:
   flags: []
   opc: 0x1c
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLH
 - name: sars_fw
   template: alopf21
@@ -6084,7 +6084,7 @@ alu_ops:
   flags: []
   opc: 0x1c
   channels: [0, 3]
-  args: sss
+  args: ssss
   ales_opc2: FLW
 - name: movtq
   template: alf2
@@ -7471,7 +7471,7 @@ alu_ops:
   flags: []
   opc: 0x31
   channels: [0, 3]
-  args: dds
+  args: ddss
   ales_opc2: FLD
 - name: decd_fd
   template: alopf21
@@ -7480,7 +7480,7 @@ alu_ops:
   flags: []
   opc: 0x33
   channels: [0, 3]
-  args: dds
+  args: ddss
   ales_opc2: FLD
 - name: shld_fd
   template: alopf21
@@ -7489,7 +7489,7 @@ alu_ops:
   flags: []
   opc: 0x19
   channels: [0, 3]
-  args: dds
+  args: ddss
   ales_opc2: FLD
 - name: shrd_fd
   template: alopf21
@@ -7498,7 +7498,7 @@ alu_ops:
   flags: []
   opc: 0x1b
   channels: [0, 3]
-  args: dds
+  args: ddss
   ales_opc2: FLD
 - name: scld_fd
   template: alopf21
@@ -7507,7 +7507,7 @@ alu_ops:
   flags: []
   opc: 0x15
   channels: [0, 3]
-  args: dds
+  args: ddss
   ales_opc2: FLD
 - name: scrd_fd
   template: alopf21
@@ -7516,7 +7516,7 @@ alu_ops:
   flags: []
   opc: 0x17
   channels: [0, 3]
-  args: dds
+  args: ddss
   ales_opc2: FLD
 - name: sard_fd
   template: alopf21
@@ -7525,7 +7525,7 @@ alu_ops:
   flags: []
   opc: 0x1d
   channels: [0, 3]
-  args: dds
+  args: ddss
   ales_opc2: FLD
 - name: vfsi
   template: alf1

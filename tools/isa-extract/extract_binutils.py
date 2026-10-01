@@ -131,10 +131,19 @@ def parse_flags(tok):
     return sorted(n for n in names if n != "NO_MAS")
 
 
-def parse_arg_fmt(tok, defs):
+# Length of the arg_fmt array in each template struct. Shorter initializers
+# leave the remaining elements zero, i.e. SINGLE.
+ARG_FMT_LEN = {"alf1": 3, "alf2": 2, "alf3": 3, "alf7": 2, "alf8": 1,
+               "alf9": 1, "alf10": 1, "alopf11": 3, "alopf11_lit8": 3,
+               "alopf12": 2, "alopf13": 3, "alopf15": 1, "alopf16": 1,
+               "alopf21": 4, "aaopf1": 1}
+
+
+def parse_arg_fmt(tok, defs, templ):
     tok = defs.expand(tok)
     items = split_top(strip_braces(tok))
-    return "".join(FMT_LETTERS[defs.expand(i)] for i in items)
+    fmt = "".join(FMT_LETTERS[defs.expand(i)] for i in items)
+    return fmt.ljust(ARG_FMT_LEN[templ], "s")
 
 
 def parse_opc2(tok, defs):
@@ -171,7 +180,7 @@ def parse_alu_table(path, defs):
                      f"got {len(extra)}: {extra}")
         for key, tok in zip(layout, extra):
             if key == "arg_fmt":
-                op["args"] = parse_arg_fmt(tok, defs)
+                op["args"] = parse_arg_fmt(tok, defs, templ)
             elif key == "ales_opc2":
                 if tok.startswith("{"):
                     vals = split_top(strip_braces(tok))
@@ -217,7 +226,7 @@ def parse_manual_entries(path, defs):
             op["label"] = f["label"] == "EXPECT_LABEL"
         if "opc" in f:
             op["opc"] = defs.value(f["opc"])
-            op["args"] = parse_arg_fmt(f["args"], defs)
+            op["args"] = parse_arg_fmt(f["args"], defs, op["template"])
         if "id" in f:
             op["id"] = defs.value(f["id"])
         ops.append(op)
@@ -234,7 +243,7 @@ def parse_manual_entries(path, defs):
             "opc": defs.value(fields[6]),
             "channels": [i for i, c in enumerate(split_top(strip_braces(fields[7])))
                          if int(c) != 0],
-            "args": parse_arg_fmt(fields[8], defs),
+            "args": parse_arg_fmt(fields[8], defs, "alf3"),
         })
     return ops
 
@@ -350,8 +359,9 @@ def main():
             "aliases: other mnemonics binutils accepts for the identical "
             "encoding (e.g. plog_128 and plog_and for plog_0x80).",
             "args: operand register formats in table order "
-            "(s=32-bit, d=64-bit, q=128-bit, p=packed 128-bit). "
-            "Operand roles are not yet verified.",
+            "(s=32-bit, d=64-bit, q=128-bit, p=packed 128-bit), padded to "
+            "the template's array length as the C struct does. Operand roles "
+            "per format are described in spec/isa/bundle.md.",
         ],
         "alu_ops": alu,
         "manual_ops": manual,

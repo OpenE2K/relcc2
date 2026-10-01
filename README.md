@@ -61,5 +61,6 @@ The scripts in `tools/setup/` install the reference toolchains into
 | `setup-unipro.sh [DEB_DIR]` | Unipro's LLVM 20 with the Elbrus target, from the x86_64 debs in `x86_64/`, as `toolchains/unipro/bin/{clang,llc,…}` |
 | `build-binutils.sh` | MCST binutils built from `OpenE2K/binutils-gdb`, in `toolchains/binutils/bin/e2k-linux-*` |
 | `fetch-lcc.sh [VERSION] [TARGET]` | MCST lcc cross compiler (default 1.29.16, `e2k-v5`) from the archive at https://setwd.ws/sp, as `toolchains/lcc-VERSION-TARGET/{lcc,l++,ldis}`. It needs `bwrap` |
+| `build-qemu.sh [mcst\|community]` | qemu-e2k Linux user mode built from both QEMU submodules, as `toolchains/qemu-{mcst,community}/bin/qemu-e2k` |
 
 lcc includes a sysroot, so it can link complete programs for E2K.

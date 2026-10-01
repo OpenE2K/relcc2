@@ -53,8 +53,8 @@ codebase's size. relcc2 does not decompile anything (see decision 4).
 | MCST gdb 15.2 | submodule `OpenE2K/gdb` | DWARF numbering, return values, frames |
 | MCST glibc 2.35 | submodule `OpenE2K/glibc` | setjmp, contexts, TLS, ld.so, backtrace |
 | MCST Linux 6.1 | submodule `OpenE2K/linux` | Register layouts (WD, BR, CR0/CR1), hardware stack syscalls |
-| Community QEMU e2k | submodule `OpenE2K/qemu-e2k-community` | Instruction semantics (the owner co-developed it) |
-| MCST QEMU e2k | submodule `OpenE2K/qemu-e2k-mcst` | Instruction semantics, second opinion |
+| MCST QEMU e2k 11.0.1 (release 1.2) | submodule `OpenE2K/qemu-e2k-mcst` | Instruction semantics: **the reference** where the emulators disagree. Runs test programs (user mode) |
+| Community QEMU e2k 9.2.50 | submodule `OpenE2K/qemu-e2k-community` | Instruction semantics MCST's emulator lacks (the owner co-developed it; development has stalled). Also has `qemu-e2k32` |
 | MCST E2K GCC 11 runtime libs (GPL) | `internal-lcc-libs-open-source-1.29.16.tar.xz` in https://setwd.ws/sp/1.29/1.29.16/src/ (unpacked in `toolchains/src/`, not tracked) | libgcc (E2K unwinder `config/e2k/unwind-dw2-e2k.c`), libstdc++, libatomic, libquadmath |
 | lcc cross compilers | https://setwd.ws/sp (owner's archive; 1.19..1.31, stable 1.29.16, preview 1.31.05) | ABI oracle; includes a full sysroot |
 | Unipro LLVM 20.1.8 | x86_64 debs in `x86_64/` (untracked) | Second oracle; covers v3..v7 |
@@ -90,7 +90,21 @@ git submodule update --init
 tools/setup/setup-unipro.sh          # toolchains/unipro/bin/{clang,llc,...}
 tools/setup/build-binutils.sh        # toolchains/binutils/bin/e2k-linux-*
 tools/setup/fetch-lcc.sh             # toolchains/lcc-1.29.16-e2k-v5/{lcc,l++,ldis}
+tools/setup/build-qemu.sh            # toolchains/qemu-{mcst,community}/bin/qemu-e2k
 ```
+
+- `build-qemu.sh [mcst|community]` builds Linux user mode only. It fetches
+  ninja from PyPI into `toolchains/host/` if the host has none, and meson
+  downloads QEMU's subprojects into the submodules (ignored by their git).
+  A full build of both takes about 80 s.
+- Running E2K programs: `qemu-e2k -cpu elbrus-v5 -L <lcc>/opt/mcst/lcc-*/fs
+  ./prog` (`-L` is lcc's sysroot, needed for dynamic binaries; MCST's
+  default CPU is elbrus-v6). With lcc 1.29.16 `-march` v5 output, MCST's
+  emulator runs static and dynamic C and C++ programs (setjmp, varargs,
+  exceptions). The community emulator runs the dynamic ones but segfaults
+  on static binaries. v5 code on `-cpu elbrus-v3` fails as it should
+  (community: SIGILL; MCST: an assertion in `translate-lookahead.c`
+  instead of SIGILL).
 
 - lcc expects to live in `/opt/mcst/...`; the wrapper runs it under `bwrap`
   with the tree mounted there. No root needed. It compiles, assembles and
@@ -153,8 +167,8 @@ data in DWARF 64/65 (`%b[0]`, `%b[1]`).
 1. **ABI compatibility test suite** (like GCC's `compat` tests): generated
    caller/callee pairs for every rule in `calling-convention.md`, one side
    built with lcc and the other with the compiler under test, linked with
-   lcc, run on hardware or qemu-e2k user mode. Becomes the acceptance test
-   for the owner's GCC port. Needs SSH access or a qemu-e2k build.
+   lcc, run under MCST's qemu-e2k user mode (built; see Setup) and later
+   on hardware. Becomes the acceptance test for the owner's GCC port.
 2. **ELF, relocations, TLS models, PIC sequences** spec (binutils
    `bfd/elfxx-e2k.c`, glibc `ld.so`, guide 9.1).
 3. **"What a GCC port must decide"** document: register numbering and
@@ -165,9 +179,8 @@ data in DWARF 64/65 (`%b[0]`, `%b[1]`).
 
 ## Open questions for the owner
 
-- How to run the ABI compatibility suite: SSH to the 8CB/4C (owner to
-  provide an account), or build qemu-e2k user mode from
-  `OpenE2K/qemu-e2k-community` first.
+- SSH access to the 4C/8CB, to confirm qemu results on hardware (the
+  suite runs under qemu-e2k first).
 - `libxml2.so.2` in the repository root is a stale, untracked symlink into an
   old session's scratch directory; it can be deleted (the owner created it,
   so ask before removing).

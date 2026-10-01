@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Freestanding code exercising common compiler output on E2K: loops,
    branches, switches, calls, floating point, atomics and aggregates.  */
 

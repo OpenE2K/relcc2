@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Cross-check spec/isa/binutils-ops.yaml against the e2k_opcodes_new sheet.
 
 The sheet was generated from an older binutils that still shipped the

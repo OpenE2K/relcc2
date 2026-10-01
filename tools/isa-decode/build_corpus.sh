@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Build E2K object files from corpus/ for every ISA version:
 #   - corpus/*.c with the Unipro clang at -O1..-O3, assembled by MCST gas;
 #   - corpus/*.s (hand-written) with MCST gas directly, for the versions
@@ -37,9 +38,9 @@ for v in 3 4 5 6 7; do
 	done
 	for src in "$here"/corpus/*.s; do
 		name=$(basename "$src" .s)
-		# The first line of each .s file says which versions it is for,
+		# The first lines of each .s file say which versions it is for,
 		# e.g. "/* isets: 3-5".
-		range=$(sed -n '1s/.*isets: *\([0-9]\)-\([0-9]\).*/\1 \2/p' "$src")
+		range=$(sed -n '1,3s/.*isets: *\([0-9]\)-\([0-9]\).*/\1 \2/p' "$src")
 		set -- $range
 		[ "$v" -ge "${1:-3}" ] && [ "$v" -le "${2:-7}" ] || continue
 		"$BINUTILS/e2k-linux-as" -mcpu=elbrus-v$v -o "$out/$name-v$v.o" "$src"

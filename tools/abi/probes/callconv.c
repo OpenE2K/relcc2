@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Calling-convention probes. Compile to assembly with the reference
    compilers and read where each value is passed or returned:
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
 """A reference E2K decoder built from spec/isa.
 
 It decodes wide instructions using only spec/isa/bundle.md,

@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Download an MCST lcc cross compiler from the archive at setwd.ws/sp and
 # install it under toolchains/lcc-VERSION-TARGET, with a wrapper script.
 #

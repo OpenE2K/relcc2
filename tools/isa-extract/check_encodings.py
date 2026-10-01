@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Check spec/isa/binutils-ops.yaml against what gas actually emits.
 
 For every ALU operation entry, ISA version and allowed channel, this

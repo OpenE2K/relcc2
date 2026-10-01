@@ -40,6 +40,17 @@ OpenE2K/qemu-e2k-community    community QEMU e2k    github.com/OpenE2K/qemu-e2k
 OpenE2K/qemu-e2k-mcst         MCST QEMU e2k         git.openelbrus.ru/mcst/qemu
 ```
 
+## Licence
+
+- `spec/` is licensed under CC BY-SA 4.0; it adapts MCST's CC BY 4.0
+  programming guide. See [spec/NOTICE.md](spec/NOTICE.md).
+- Everything else in this repository (the tools) is licensed under the GNU
+  General Public License, version 3 or later. See [COPYING](COPYING).
+- The submodules under `OpenE2K/` keep their own licences.
+
+The GCC backend itself is written by hand against this specification and
+its tests, and is not part of this repository.
+
 ## Toolchains
 
 The scripts in `tools/setup/` install the reference toolchains into

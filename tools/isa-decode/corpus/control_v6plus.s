@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* isets: 6-7
    Control operations added in v6.  */
 

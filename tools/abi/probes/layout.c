@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Data layout probes for e2k64 (64-bit mode). Every assertion encodes a
    rule from spec/abi/data-layout.md; a reference compiler that disagrees
    fails to compile this file.  */

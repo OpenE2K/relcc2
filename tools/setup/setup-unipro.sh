@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Unpack the Unipro LLVM 20 debs (x86_64 host, Elbrus target) into
 # toolchains/unipro and build a stub libxml2.so.2 so the tools run without
 # libxml2 (only the Windows manifest code uses it).
@@ -6,8 +7,8 @@
 # Usage: tools/setup/setup-unipro.sh [DEB_DIR]
 #   DEB_DIR defaults to ./x86_64 (llvm20_*.deb, clang20_*.deb).
 #
-# Afterwards use toolchains/unipro/env.sh, or run toolchains/unipro/bin/clang
-# and llc directly (they are wrappers that set LD_LIBRARY_PATH).
+# Afterwards run toolchains/unipro/bin/clang, llc, ...
+# (wrappers that set LD_LIBRARY_PATH).
 set -e
 
 root=$(cd "$(dirname "$0")/../.." && pwd)

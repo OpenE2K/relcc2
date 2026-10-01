@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* isets: 3-7
    Hand-written bundles exercising syllables rarely produced by compilers.  */
 

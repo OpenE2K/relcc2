@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Compare e2kdis.py with MCST objdump on E2K object files.
 
 Usage: compare_objdump.py [--binutils DIR] FILE.o...

@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Build MCST binutils (as, ld, objdump, ...) for the e2k-linux target on the
 # host, from OpenE2K/binutils-gdb, into toolchains/binutils.
 #

@@ -1,0 +1,24 @@
+[submodule "OpenE2K/binutils-gdb"]
+	path = OpenE2K/binutils-gdb
+	url = https://github.com/OpenE2K/binutils-gdb
+	branch = binutils-mcst-2.41
+[submodule "OpenE2K/gdb"]
+	path = OpenE2K/gdb
+	url = https://github.com/OpenE2K/binutils-gdb
+	branch = gdb-15.2-mcst
+[submodule "OpenE2K/glibc"]
+	path = OpenE2K/glibc
+	url = https://github.com/OpenE2K/glibc
+	branch = glibc-2.35-mcst
+[submodule "OpenE2K/linux"]
+	path = OpenE2K/linux
+	url = https://github.com/OpenE2K/linux
+	branch = mcst-linux-6.1.y
+[submodule "OpenE2K/qemu-e2k-community"]
+	path = OpenE2K/qemu-e2k-community
+	url = https://github.com/OpenE2K/qemu-e2k
+	branch = e2k
+[submodule "OpenE2K/qemu-e2k-mcst"]
+	path = OpenE2K/qemu-e2k-mcst
+	url = https://git.openelbrus.ru/mcst/qemu.git
+	branch = mcst

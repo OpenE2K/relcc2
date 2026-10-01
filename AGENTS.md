@@ -148,7 +148,8 @@ python3 tools/isa-decode/compare_objdump.py toolchains/corpus/*.o
                                                   # or toolchains/lcc-1.29.16-e2k-v5/lcc
 python3 tools/abi/compat/gen.py toolchains/compat/gen
 python3 tools/abi/compat/run.py toolchains/compat/gen
-                                                  # 1,429 tests x 4 pairs, ~10 s:
+                                                  # qemu-e2k, v5: 1,429 tests per pair
+                                                  # (4 pairs with Unipro), ~10 s:
                                                   # 0 unexpected (lcc->lcc all pass)
 python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
 ```

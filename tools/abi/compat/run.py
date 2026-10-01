@@ -10,17 +10,24 @@ user mode). A program that doesn't finish is rerun one test at a time to
 find the tests that crash.
 
 Usage:
-  run.py GENDIR [-o OUTDIR] [--cc NAME=COMMAND]... [--runner COMMAND]
+  run.py GENDIR [-o OUTDIR] [--target T] [--cc NAME=COMMAND]...
+         [--runner COMMAND]
          [--pairs CALLER:CALLEE,...] [--known FILE] [-j N]
 
 Failures listed in known.txt (known differences of the reference
 compilers) are counted separately; any other failure makes the exit
 status 1.
 
-Default compilers: lcc (toolchains/lcc-1.29.16-e2k-v5) and unipro
-(toolchains/unipro), both at -O2 for elbrus-v5. --cc adds a compiler or
-replaces one of the same name; COMMAND is a shell-style command line that
-accepts -c FILE -o OUT. Use --pairs to limit the pairs, e.g.
+--target picks lcc by the suffix of its installed directory,
+/opt/mcst/lcc-1.29.16.e2k-TARGET.linux-6.1 (default v5.8c2; use v3 for
+code that runs on every CPU). Without /opt/mcst the lcc unpacked by
+fetch-lcc.sh in toolchains/lcc-1.29.16-e2k-v5 is used, for v5 only. The
+ISA version in TARGET also sets Unipro's -march and qemu-e2k's -cpu.
+
+Default compilers: lcc at -O2 and, if toolchains/unipro is installed,
+unipro at -O2. --cc adds a compiler or replaces one of the same name;
+COMMAND is a shell-style command line that accepts -c FILE -o OUT. Use
+--pairs to limit the pairs, e.g.
 --cc gcc='...' --pairs lcc:gcc,gcc:lcc,gcc:gcc
 """
 
@@ -37,32 +44,50 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-LCC_DIR = ROOT / "toolchains" / "lcc-1.29.16-e2k-v5"
-LCC = LCC_DIR / "lcc"
+LCC_VERSION = "1.29.16"
+UNIPRO = ROOT / "toolchains" / "unipro" / "bin" / "clang"
+
+# Set by find_lcc().
+LCC = None
+SYSROOT = None
+ENV = dict(os.environ)
 
 
-def lcc_sysroot():
-    found = sorted((LCC_DIR / "opt" / "mcst").glob("lcc-*/fs"))
-    return found[0] if found else None
+def find_lcc(target):
+    """Return (lcc binary, sysroot) for TARGET, e.g. v3 or v5.8c2."""
+    opt = Path(f"/opt/mcst/lcc-{LCC_VERSION}.e2k-{target}.linux-6.1")
+    if opt.is_dir():
+        return opt / "bin" / "lcc", opt / "fs"
+    local = ROOT / "toolchains" / f"lcc-{LCC_VERSION}-e2k-v5"
+    if isa_version(target) == 5 and (local / "lcc").exists():
+        found = sorted((local / "opt" / "mcst").glob("lcc-*/fs"))
+        return local / "lcc", found[0] if found else None
+    sys.exit(f"no lcc for target {target}: {opt} does not exist")
 
 
-def default_compilers():
-    fs = lcc_sysroot()
-    return {
-        "lcc": f"{LCC} -std=gnu11 -O2",
+def isa_version(target):
+    m = re.match(r"v(\d+)", target)
+    if not m:
+        sys.exit(f"bad target {target}: expected vN[.MODEL]")
+    return int(m.group(1))
+
+
+def default_compilers(target):
+    compilers = {"lcc": f"{LCC} -std=gnu11 -O2"}
+    if UNIPRO.exists():
         # Unipro's clang uses the host's headers unless given a sysroot.
-        "unipro": (f"{ROOT}/toolchains/unipro/bin/clang --target=e2k64-linux "
-                   f"-march=elbrus-v5 --sysroot={fs} -Wno-bad-lcc -std=gnu11 -O2"),
-    }
+        compilers["unipro"] = (
+            f"{UNIPRO} --target=e2k64-linux "
+            f"-march=elbrus-v{isa_version(target)} --sysroot={SYSROOT} "
+            f"-Wno-bad-lcc -std=gnu11 -O2")
+    return compilers
 
 
-def default_runner():
-    return (f"{ROOT}/toolchains/qemu-mcst/bin/qemu-e2k -cpu elbrus-v5 "
-            f"-L {lcc_sysroot()}")
-
-
-# Unipro's clang runs "lcc" from PATH to find libraries; give it ours.
-ENV = dict(os.environ, PATH=f"{LCC_DIR}:{os.environ.get('PATH', '')}")
+def default_runner(target):
+    qemu = ROOT / "toolchains" / "qemu-mcst" / "bin" / "qemu-e2k"
+    if not qemu.exists():
+        qemu = "qemu-e2k"
+    return f"{qemu} -cpu elbrus-v{isa_version(target)} -L {SYSROOT}"
 
 
 def sh(cmd, timeout=None):
@@ -142,6 +167,8 @@ def main():
     ap.add_argument("gendir", type=Path)
     ap.add_argument("-o", "--outdir", type=Path,
                     default=ROOT / "toolchains" / "compat")
+    ap.add_argument("--target", default="v5.8c2",
+                    help="lcc target directory suffix (default v5.8c2)")
     ap.add_argument("--cc", action="append", metavar="NAME=COMMAND")
     ap.add_argument("--runner", default=None)
     ap.add_argument("--pairs", help="CALLER:CALLEE,... (default: all)")
@@ -154,9 +181,13 @@ def main():
     ap.add_argument("-j", "--jobs", type=int, default=os.cpu_count())
     args = ap.parse_args()
 
-    compilers = default_compilers()
+    global LCC, SYSROOT
+    LCC, SYSROOT = find_lcc(args.target)
+    # Unipro's clang runs "lcc" from PATH to find libraries; give it ours.
+    ENV["PATH"] = f"{LCC.parent}:{ENV.get('PATH', '')}"
+    compilers = default_compilers(args.target)
     compilers.update(c.split("=", 1) for c in args.cc or [])
-    runner = args.runner or default_runner()
+    runner = args.runner or default_runner(args.target)
     units = (args.gendir / "units").read_text().split()
     if args.pairs:
         pairs = [tuple(p.split(":")) for p in args.pairs.split(",")]

@@ -91,7 +91,8 @@ tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     compiled to assembly and read)
 tools/abi/compat/   ABI compatibility suite: gen.py writes caller/callee
                     pairs, run.py builds every compiler pair and runs them
-                    under qemu-e2k, known.txt lists known differences
+                    under qemu-e2k or, with --remote, on hardware over SSH;
+                    known.txt lists known differences
 OpenE2K/       submodules (see above)
 toolchains/    untracked: installed toolchains, corpus builds, scratch output
 x86_64/        untracked: Unipro debs
@@ -151,6 +152,9 @@ python3 tools/abi/compat/run.py toolchains/compat/gen
                                                   # qemu-e2k, v5: 1,429 tests per pair
                                                   # (4 pairs with Unipro), ~10 s:
                                                   # 0 unexpected (lcc->lcc all pass)
+python3 tools/abi/compat/run.py toolchains/compat/gen --target v3 \
+    --remote claude@ringo.lan -o toolchains/compat/ringo-v3
+                                                  # on the 4C, ~15 s: 0 unexpected
 python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
 ```
 

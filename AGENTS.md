@@ -53,8 +53,8 @@ codebase's size. relcc2 does not decompile anything (see decision 4).
 | MCST gdb 15.2 | submodule `OpenE2K/gdb` | DWARF numbering, return values, frames |
 | MCST glibc 2.35 | submodule `OpenE2K/glibc` | setjmp, contexts, TLS, ld.so, backtrace |
 | MCST Linux 6.1 | submodule `OpenE2K/linux` | Register layouts (WD, BR, CR0/CR1), hardware stack syscalls |
-| Community QEMU e2k | submodule `OpenE2K/qemu-e2k-community` | Instruction semantics (the owner co-developed it) |
-| MCST QEMU e2k | submodule `OpenE2K/qemu-e2k-mcst` | Instruction semantics, second opinion |
+| MCST QEMU e2k 11.0.1 (release 1.2) | submodule `OpenE2K/qemu-e2k-mcst` | Instruction semantics: **the reference** where the emulators disagree. Runs test programs (user mode) |
+| Community QEMU e2k 9.2.50 | submodule `OpenE2K/qemu-e2k-community` | Instruction semantics MCST's emulator lacks (the owner co-developed it; development has stalled). Also has `qemu-e2k32` |
 | MCST E2K GCC 11 runtime libs (GPL) | `internal-lcc-libs-open-source-1.29.16.tar.xz` in https://setwd.ws/sp/1.29/1.29.16/src/ (unpacked in `toolchains/src/`, not tracked) | libgcc (E2K unwinder `config/e2k/unwind-dw2-e2k.c`), libstdc++, libatomic, libquadmath |
 | lcc cross compilers | https://setwd.ws/sp (owner's archive; 1.19..1.31, stable 1.29.16, preview 1.31.05) | ABI oracle; includes a full sysroot |
 | Unipro LLVM 20.1.8 | x86_64 debs in `x86_64/` (untracked) | Second oracle; covers v3..v7 |
@@ -89,6 +89,9 @@ tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas
 tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     compiled to assembly and read)
+tools/abi/compat/   ABI compatibility suite: gen.py writes caller/callee
+                    pairs, run.py builds every compiler pair and runs them
+                    under qemu-e2k, known.txt lists known differences
 OpenE2K/       submodules (see above)
 toolchains/    untracked: installed toolchains, corpus builds, scratch output
 x86_64/        untracked: Unipro debs
@@ -101,7 +104,16 @@ git submodule update --init
 tools/setup/setup-unipro.sh          # toolchains/unipro/bin/{clang,llc,...}
 tools/setup/build-binutils.sh        # toolchains/binutils/bin/e2k-linux-*
 tools/setup/fetch-lcc.sh             # toolchains/lcc-1.29.16-e2k-v5/{lcc,l++,ldis}
+tools/setup/build-qemu.sh            # toolchains/qemu-{mcst,community}/bin/qemu-e2k
 ```
+
+- `build-qemu.sh [mcst|community]` builds Linux user mode only. Run
+  programs with `qemu-e2k -cpu elbrus-vN -L <lcc>/opt/mcst/lcc-*/fs ./prog`
+  (`-L` is lcc's sysroot, needed for dynamic binaries).
+- Neither emulator can be fully trusted. MCST's is the reference where
+  they disagree; confirm anything important on hardware.
+- Never install well-known host tools (ninja, meson, compilers, libraries)
+  yourself, e.g. from PyPI. Ask the owner to install them on the host.
 
 - lcc expects to live in `/opt/mcst/...`. On the owner's workstation the
   cross compilers are installed there globally, one per target:
@@ -114,7 +126,9 @@ tools/setup/fetch-lcc.sh             # toolchains/lcc-1.29.16-e2k-v5/{lcc,l++,ld
   into `toolchains/` and its wrapper runs it under `bwrap` with the tree
   mounted at `/opt/mcst`. No root needed.
 - Unipro's debs target Debian and may not run on the owner's Gentoo system.
-- Unipro's tools need a `libxml2.so.2`; the setup script builds a stub.
+- Unipro's tools link against `libxml2.so.2` (only for Windows manifests).
+  Hosts with libxml2 2.14+ have only `libxml2.so.16`, so the setup script
+  builds a stub in `toolchains/unipro/stub`.
   Its clang needs `-march=elbrus-vN` (not `-mcpu`) and warns that `lcc` is
   missing (it uses lcc as the driver for linking); use `-S`/`-c`.
 - Use `toolchains/` for all scratch output, never `/tmp`.
@@ -130,6 +144,10 @@ python3 tools/isa-decode/compare_objdump.py toolchains/corpus/*.o
                                                   # 6,826 match, 10 known objdump bug
 /opt/mcst/lcc-1.29.16.e2k-v5.8c2.linux-6.1/bin/lcc -c tools/abi/probes/layout.c -o /dev/null
                                                   # or toolchains/lcc-1.29.16-e2k-v5/lcc
+python3 tools/abi/compat/gen.py toolchains/compat/gen
+python3 tools/abi/compat/run.py toolchains/compat/gen
+                                                  # 1,429 tests x 4 pairs, ~10 s:
+                                                  # 0 unexpected (lcc->lcc all pass)
 python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
 ```
 
@@ -155,7 +173,7 @@ python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
   (debug build, as a black box), Unipro's scheduling model, microbenchmarks
   on hardware, with a `measured_on` field per value.
 
-### ABI (spec/abi) — written, checked against lcc and Unipro output, not yet run on hardware
+### ABI (spec/abi) — written, checked by the compat suite under qemu-e2k, not yet run on hardware
 
 Key facts: arguments in 8-byte slots, slots 0..7 in registers (callee
 `%dr0..7`, caller `%db[0..7]`), 9–16-byte values on even slots, stack area
@@ -168,13 +186,23 @@ pairs of 64-bit registers; DWARF 0–63 = `%r0..63`, 64–127 = `%b[0..63]`;
 exceptions use `.eh_frame` only for FDE/LSDA lookup (CFI ignored) and pass
 data in DWARF 64/65 (`%b[0]`, `%b[1]`).
 
+Compat suite (`tools/abi/compat`): 1,429 generated tests per compiler pair
+(scalars, aggregates of 1–1024 bytes, packed/aligned/bit-field/union
+types, large results, long argument lists, variadic, unprototyped,
+integer extension, 300 random signatures). It is the acceptance test for
+the owner's GCC port:
+`run.py GENDIR --cc gcc='...' --pairs lcc:gcc,gcc:lcc,gcc:gcc`. Found so far
+(in `known.txt` and calling-convention.md): Unipro's unprototyped calls,
+Unipro callees not re-extending narrow arguments, Unipro's
+`va_arg(__int128)` at odd slots, and a possible tag trap when a callee
+spills a partly written slot (needs hardware). Still to add: C++
+exceptions and `setjmp` across compilers, `va_list` passed between
+compilers, and `-march` variants.
+
 ## Next steps (proposed, owner to choose)
 
-1. **ABI compatibility test suite** (like GCC's `compat` tests): generated
-   caller/callee pairs for every rule in `calling-convention.md`, one side
-   built with lcc and the other with the compiler under test, linked with
-   lcc, run on the 4C (v3; see Sources). Becomes the acceptance test for
-   the owner's GCC port.
+1. Extend the compat suite (see Current state), then run it on the 4C
+   (see Sources).
 2. **ELF, relocations, TLS models, PIC sequences** spec (binutils
    `bfd/elfxx-e2k.c`, glibc `ld.so`, guide 9.1).
 3. **"What a GCC port must decide"** document: register numbering and
@@ -185,9 +213,7 @@ data in DWARF 64/65 (`%b[0]`, `%b[1]`).
 
 ## Open questions for the owner
 
-- `libxml2.so.2` in the repository root is a stale, untracked symlink into an
-  old session's scratch directory; it can be deleted (the owner created it,
-  so ask before removing).
+- None right now.
 
 ## Gotchas
 

@@ -61,9 +61,20 @@ codebase's size. relcc2 does not decompile anything (see decision 4).
 | MCST's LLVM 13 port (lccrt) | https://github.com/OpenE2K/llvm-lccrt/releases/tag/v8.2 (x86 host binaries from OS Elbrus 8.2) | Its `liblccopt` plugin is lcc's code generator with full debug info. Planned black-box source for timing tables (run under gdb, dump data); never decompile into the repo |
 | Opcode spreadsheet | https://docs.google.com/spreadsheets/d/1p8K5DWBsXTpCDk3TdFwMaTFIadAFuxaH4zfnJXUxK94 | Generated from older binutils that still had the table generator. **Not independent of binutils** |
 
-Hardware: the owner has an Elbrus 4C (v3) and 8CB (v5) and may provide a
-limited SSH account; they know people with v6 machines. v7 is in
-development. Timings are the same for v1..v5 and differ from v6.
+Hardware: the owner has an Elbrus 4C (v3) and 8CB (v5); they know people
+with v6 machines. v7 is in development. Timings are the same for v1..v5 and
+differ from v6.
+
+- **4C (v3)**: `ssh -i secrets/id_ed25519 -o IdentitiesOnly=yes
+  claude@ringo.lan` (key in untracked `secrets/`, never commit or copy it).
+  4× E2S, 16 cores, 61 GiB RAM, ALT Linux, native lcc 1.29.16, gdb, perf.
+  It is a shared machine, not a container: keep parallelism low (about
+  `-j4`), work in `~/relcc2`, and don't fill `/tmp` (tmpfs).
+- Nearly every Elbrus system ships MCST's lcc as the default compiler (OS
+  Elbrus and ALT Linux), so tests may assume lcc on the target.
+- ALT Linux ships no 32-bit or protected-mode (`e2k128`) runtime. Keep those
+  modes in mind when generating code and tests, but leave them as an
+  intentionally untested branch; they are low priority.
 
 ## Repository layout
 
@@ -92,9 +103,17 @@ tools/setup/build-binutils.sh        # toolchains/binutils/bin/e2k-linux-*
 tools/setup/fetch-lcc.sh             # toolchains/lcc-1.29.16-e2k-v5/{lcc,l++,ldis}
 ```
 
-- lcc expects to live in `/opt/mcst/...`; the wrapper runs it under `bwrap`
-  with the tree mounted there. No root needed. It compiles, assembles and
-  links complete programs against its bundled sysroot.
+- lcc expects to live in `/opt/mcst/...`. On the owner's workstation the
+  cross compilers are installed there globally, one per target:
+  `/opt/mcst/lcc-1.29.16.e2k-<target>.linux-6.1/bin/{lcc,l++,ldis}` with
+  targets `v3`, `v3.4c`, `v4.1c+`, `v4.8c`, `v5.8c2`, `v6.16c`, `v6.2c3`.
+  Choose the target by directory, not with `-march`/`-mtune`. `v3` code runs
+  on all later CPUs; `v3.4c` code runs only on the 4C. They run directly
+  and link complete programs against their bundled sysroot.
+- `fetch-lcc.sh` is only for machines without `/opt/mcst`: it unpacks lcc
+  into `toolchains/` and its wrapper runs it under `bwrap` with the tree
+  mounted at `/opt/mcst`. No root needed.
+- Unipro's debs target Debian and may not run on the owner's Gentoo system.
 - Unipro's tools need a `libxml2.so.2`; the setup script builds a stub.
   Its clang needs `-march=elbrus-vN` (not `-mcpu`) and warns that `lcc` is
   missing (it uses lcc as the driver for linking); use `-S`/`-c`.
@@ -109,7 +128,8 @@ python3 tools/isa-extract/check_encodings.py      # 27,268 cases on v2..v7: all 
 tools/isa-decode/build_corpus.sh toolchains/corpus
 python3 tools/isa-decode/compare_objdump.py toolchains/corpus/*.o
                                                   # 6,826 match, 10 known objdump bug
-toolchains/lcc-1.29.16-e2k-v5/lcc -c tools/abi/probes/layout.c -o /dev/null
+/opt/mcst/lcc-1.29.16.e2k-v5.8c2.linux-6.1/bin/lcc -c tools/abi/probes/layout.c -o /dev/null
+                                                  # or toolchains/lcc-1.29.16-e2k-v5/lcc
 python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
 ```
 
@@ -153,8 +173,8 @@ data in DWARF 64/65 (`%b[0]`, `%b[1]`).
 1. **ABI compatibility test suite** (like GCC's `compat` tests): generated
    caller/callee pairs for every rule in `calling-convention.md`, one side
    built with lcc and the other with the compiler under test, linked with
-   lcc, run on hardware or qemu-e2k user mode. Becomes the acceptance test
-   for the owner's GCC port. Needs SSH access or a qemu-e2k build.
+   lcc, run on the 4C (v3; see Sources). Becomes the acceptance test for
+   the owner's GCC port.
 2. **ELF, relocations, TLS models, PIC sequences** spec (binutils
    `bfd/elfxx-e2k.c`, glibc `ld.so`, guide 9.1).
 3. **"What a GCC port must decide"** document: register numbering and
@@ -165,9 +185,6 @@ data in DWARF 64/65 (`%b[0]`, `%b[1]`).
 
 ## Open questions for the owner
 
-- How to run the ABI compatibility suite: SSH to the 8CB/4C (owner to
-  provide an account), or build qemu-e2k user mode from
-  `OpenE2K/qemu-e2k-community` first.
 - `libxml2.so.2` in the repository root is a stale, untracked symlink into an
   old session's scratch directory; it can be deleted (the owner created it,
   so ask before removing).

@@ -22,6 +22,11 @@ unipro callee ^ext/callee/(b|ch|sc|uc|ss|us)/
 # correctly, and long double and __float128 are read correctly.
 unipro callee ^variadic/(si128/fixed_[13579]$|mix_([3-9]|10)$)
 unipro callee ^unproto/unproto_va/si128/
+# The same through a va_list from the other compiler. Unipro doesn't align
+# at all, so a va_list from an lcc static variadic function, whose argument
+# area is only 8-byte aligned, breaks even at even slots.
+unipro callee ^valist/valist[a-z_]*/(si128/|mix$)
+unipro caller ^valist/valist_ptr[a-z_]*/si128/
 
 # Callees spill incoming argument registers with std. When an lcc caller
 # fills the last slot of an aggregate with a 32-bit write, the upper half may

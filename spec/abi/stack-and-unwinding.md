@@ -65,4 +65,9 @@ C++ exceptions use MCST's E2K `libgcc_s`:
 glibc implements `setjmp`/`longjmp`, `getcontext`/`setcontext` and
 `makecontext` in assembly and C with kernel support for the hardware
 stacks (`OpenE2K/glibc/sysdeps/unix/sysv/linux/e2k`). A compiler only needs
-to treat `setjmp` as returning twice. Not yet studied in detail.
+to treat `setjmp` as returning twice. The compat suite (`longjmp` unit)
+checks `longjmp` across frames built by another compiler, from recursion
+depths up to 200 (enough to spill register windows to the procedure
+stack), both from the callee itself and through a callback into the
+caller's compiler: lcc and Unipro interoperate (compat, hw). The internals
+are not yet studied in detail.

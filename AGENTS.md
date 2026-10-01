@@ -149,7 +149,7 @@ python3 tools/isa-decode/compare_objdump.py toolchains/corpus/*.o
                                                   # or toolchains/lcc-1.29.16-e2k-v5/lcc
 python3 tools/abi/compat/gen.py toolchains/compat/gen
 python3 tools/abi/compat/run.py toolchains/compat/gen
-                                                  # qemu-e2k, v5: 1,429 tests per pair
+                                                  # qemu-e2k, v5: 1,683 tests per pair
                                                   # (4 pairs with Unipro), ~10 s:
                                                   # 0 unexpected (lcc->lcc all pass)
 python3 tools/abi/compat/run.py toolchains/compat/gen --target v3 \
@@ -193,10 +193,11 @@ pairs of 64-bit registers; DWARF 0–63 = `%r0..63`, 64–127 = `%b[0..63]`;
 exceptions use `.eh_frame` only for FDE/LSDA lookup (CFI ignored) and pass
 data in DWARF 64/65 (`%b[0]`, `%b[1]`).
 
-Compat suite (`tools/abi/compat`): 1,429 generated tests per compiler pair
+Compat suite (`tools/abi/compat`): 1,683 generated tests per compiler pair
 (scalars, aggregates of 1–1024 bytes, packed/aligned/bit-field/union
 types, large results, long argument lists, variadic, unprototyped,
-integer extension, 300 random signatures). It is the acceptance test for
+integer extension, `va_list` across compilers, `longjmp` across
+compilers, 300 random signatures). It is the acceptance test for
 the owner's GCC port:
 `run.py GENDIR --cc gcc='...' --pairs lcc:gcc,gcc:lcc,gcc:gcc`. Found so far
 (in `known.txt` and calling-convention.md): Unipro's unprototyped calls,
@@ -204,9 +205,8 @@ Unipro callees not re-extending narrow arguments, Unipro's
 `va_arg(__int128)` at odd slots, and a tag trap when a callee spills a
 partly written slot (the trap is confirmed on the 4C by
 `tools/abi/probes/tagtrap.c`; the suite only hits it under qemu, which
-fills fresh registers with tagged values). Still to add: C++
-exceptions and `setjmp` across compilers, `va_list` passed between
-compilers, and `-march` variants.
+fills fresh registers with tagged values).
+Still to add: C++ exceptions across compilers and `-march` variants.
 
 ## Next steps (proposed, owner to choose)
 

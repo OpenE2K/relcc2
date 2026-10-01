@@ -17,6 +17,8 @@ Units:
   variadic    variadic callees reading fixed and variable arguments
   unproto     calls without a prototype, to fixed and variadic callees
   ext         narrow integer extension by callers and callees
+  valist      a va_list started by one compiler and read by the other
+  longjmp     longjmp across frames built by the other compiler
   random      random signatures over random aggregates (seeded)
 
 Usage: gen.py OUTDIR [--seed N] [--random-count N]
@@ -228,12 +230,15 @@ class Test:
 
     kind: plain, variadic (args[nfixed:] are variadic), unproto (caller has
     no prototype), unproto_va (no prototype, variadic callee), ext_arg,
-    ext_ret, reext (see Unit.emit_ext).
+    ext_ret, reext (see Unit.ext_callee), valist, valist_ptr (see
+    Unit.valist_callee), longjmp, longjmp_cb (see Unit.jmp_callee).
+    depth: recursion depth of the callee before it longjmps.
     """
 
-    def __init__(self, name, ret, args, kind="plain", nfixed=None):
+    def __init__(self, name, ret, args, kind="plain", nfixed=None, depth=0):
         self.name, self.ret, self.args, self.kind = name, ret, args, kind
         self.nfixed = len(args) if nfixed is None else nfixed
+        self.depth = depth
 
 
 class Unit:
@@ -301,6 +306,12 @@ class Unit:
             if t.kind.startswith("ext") or t.kind == "reext":
                 out.append(self.ext_callee(n, t))
                 continue
+            if t.kind.startswith("valist"):
+                out.append(self.valist_callee(n, t))
+                continue
+            if t.kind.startswith("longjmp"):
+                out.append(self.jmp_callee(n, t))
+                continue
             out.append(self.proto(n, t) + "\n{")
             for i in range(t.nfixed):
                 out.append(f"\tCHECK({n}, {i}, {t.args[i].tag}, a{i}, v{n}_{i});")
@@ -322,6 +333,12 @@ class Unit:
         for n, t in enumerate(self.tests):
             if t.kind.startswith("ext") or t.kind == "reext":
                 out.append(self.ext_caller(n, t))
+                continue
+            if t.kind.startswith("valist"):
+                out.append(self.valist_caller(n, t))
+                continue
+            if t.kind.startswith("longjmp"):
+                out.append(self.jmp_caller(n, t))
                 continue
             if t.kind.startswith("unproto"):
                 ret = t.ret.name if t.ret else "void"
@@ -395,6 +412,104 @@ class Unit:
                 f"\tunsigned long good = (unsigned long)(long)v{n}_0;\n"
                 f"\tunsigned long bad = good ^ ~((1UL << {bits}) - 1);\n"
                 f"\tif (callee_{n}(7, bad) != (long)v{n}_0) compat_fail({n}, -1);\n}}\n")
+
+    # va_list tests: the caller side has a variadic function fwd_N taking
+    # the fixed longs args[:nfixed] and the values args[nfixed:]; it starts
+    # a va_list and hands it to callee_N, built by the other compiler.
+    #   valist      callee_N(va_list) reads every value.
+    #   valist_ptr  callee_N(va_list *) reads the first half of the values,
+    #               then fwd_N reads the rest from the same va_list.
+    # With the suffix _static, fwd_N is static. lcc then lays out its
+    # argument area privately (not 16-byte aligned), and the va_list that
+    # escapes shows whether va_arg aligns by address or by slot index.
+
+    def va_split(self, t):
+        nva = len(t.args) - t.nfixed
+        if t.kind.startswith("valist_ptr"):
+            return t.nfixed + (nva + 1) // 2
+        return len(t.args)
+
+    def va_reads(self, n, t, lo, hi, ap):
+        return [f"\t{{ {t.args[i].name} x = va_arg({ap}, {t.args[i].name}); "
+                f"CHECK({n}, {i}, {t.args[i].tag}, x, v{n}_{i}); }}"
+                for i in range(lo, hi)]
+
+    def valist_callee(self, n, t):
+        ptr = t.kind.startswith("valist_ptr")
+        ap = "*ap" if ptr else "ap"
+        out = [f"long callee_{n}(va_list {'*' if ptr else ''}ap)\n{{"]
+        out += self.va_reads(n, t, t.nfixed, self.va_split(t), ap)
+        out.append("\treturn 7;\n}\n")
+        return "\n".join(out)
+
+    def valist_caller(self, n, t):
+        ptr = t.kind.startswith("valist_ptr")
+        static = "static " if t.kind.endswith("_static") else ""
+        fixed = [f"long a{i}" for i in range(t.nfixed)]
+        out = [f"long callee_{n}(va_list {'*' if ptr else ''});",
+               f"{static}long fwd_{n}({', '.join(fixed)}, ...)\n{{",
+               "\tva_list ap;",
+               f"\tva_start(ap, a{t.nfixed - 1});"]
+        out += [f"\tCHECK({n}, {i}, sl, a{i}, v{n}_{i});" for i in range(t.nfixed)]
+        out.append(f"\tlong r = callee_{n}({'&' if ptr else ''}ap);")
+        if ptr:
+            out += self.va_reads(n, t, self.va_split(t), len(t.args), "ap")
+        out += ["\tva_end(ap);", "\treturn r;", "}"]
+        vals = ", ".join(f"v{n}_{i}" for i in range(len(t.args)))
+        out.append(f"static void test_{n}(void)\n{{\n"
+                   f"\tif (fwd_{n}({vals}) != 7) compat_fail({n}, -1);\n}}\n")
+        return "\n".join(out)
+
+    # setjmp tests: test_N calls setjmp, then callee_N, built by the other
+    # compiler, which recurses t.depth times (deep enough to spill register
+    # windows to the procedure stack) and checks its arguments.
+    #   longjmp     callee_N calls longjmp itself.
+    #   longjmp_cb  callee_N calls back jump_N on the caller side, which
+    #               calls longjmp across callee_N's frames.
+    # Locals of test_N must survive, and later tests must still run.
+
+    def jmp_callee(self, n, t):
+        ps = ", ".join(self.params(t))
+        names = ", ".join(f"a{i}" for i in range(len(t.args)))
+        how = ("jmp_buf *env" if t.kind == "longjmp" else "void (*jump)(int)")
+        out = [f"void callee_{n}({how}, int depth{', ' + ps if ps else ''})\n{{",
+               "\tvolatile long frame[4] = { depth, depth + 1, depth + 2, depth + 3 };",
+               "\tif (depth > 0) {",
+               f"\t\tcallee_{n}({'env' if t.kind == 'longjmp' else 'jump'}, "
+               f"depth - 1{', ' + names if names else ''});",
+               f"\t\tcompat_fail({n}, -3);",
+               "\t}"]
+        out += [f"\tCHECK({n}, {i}, {ty.tag}, a{i}, v{n}_{i});"
+                for i, ty in enumerate(t.args)]
+        out.append(f"\tif (frame[3] != depth + 3) compat_fail({n}, -4);")
+        if t.kind == "longjmp":
+            out.append(f"\tlongjmp(*env, {n + 1});")
+        else:
+            out.append(f"\tjump({n + 1});")
+        out.append("}\n")
+        return "\n".join(out)
+
+    def jmp_caller(self, n, t):
+        ps = ", ".join(self.params(t, names=False))
+        vals = ", ".join(f"v{n}_{i}" for i in range(len(t.args)))
+        how = "jmp_buf *" if t.kind == "longjmp" else "void (*)(int)"
+        out = [f"void callee_{n}({how}, int{', ' + ps if ps else ''});",
+               f"static jmp_buf env_{n};"]
+        if t.kind == "longjmp_cb":
+            out.append(f"static void jump_{n}(int v)\n{{\n\tlongjmp(env_{n}, v);\n}}")
+        arg0 = f"&env_{n}" if t.kind == "longjmp" else f"jump_{n}"
+        out.append(
+            f"static void test_{n}(void)\n{{\n"
+            f"\tvolatile long keep = 0x5a5a5a5a5a5aL;\n"
+            f"\tint r = setjmp(env_{n});\n"
+            f"\tif (r == 0) {{\n"
+            f"\t\tcallee_{n}({arg0}, {t.depth}{', ' + vals if vals else ''});\n"
+            f"\t\tcompat_fail({n}, -1);\n"
+            f"\t\treturn;\n"
+            f"\t}}\n"
+            f"\tif (r != {n + 1} || keep != 0x5a5a5a5a5a5aL) compat_fail({n}, -2);\n"
+            f"}}\n")
+        return "\n".join(out)
 
 
 # Unit builders
@@ -554,6 +669,28 @@ def u_ext(u):
             u.add(f"callee/{ty.tag}/{k}", I64, [ty], "reext")
 
 
+def u_valist(u):
+    for kind in ("valist", "valist_ptr", "valist_static", "valist_ptr_static"):
+        for ty in VA_TYPES:
+            for k in (1, 2, 7, 8):
+                u.add(f"{kind}/{ty.tag}/fixed_{k}", I64, longs(k) + [ty, I32, ty, ty],
+                      kind, k)
+        for size in (3, 16, 24, 72):
+            s = arr_struct(CH, size)
+            u.add(f"{kind}/char{size}", I64, [I64, s, I32, s], kind, 1)
+        mix = [I32, DBL, I128, LDBL, PTR, CD, I64, F128, U32, CF]
+        u.add(f"{kind}/mix", I64, [I64] + mix + mix, kind, 1)
+
+
+def u_longjmp(u):
+    for kind in ("longjmp", "longjmp_cb"):
+        for depth in (0, 1, 2, 10, 50, 200):
+            u.add(f"{kind}/depth_{depth}", None, [], kind, depth=depth)
+            u.add(f"{kind}/args_{depth}", None, [I64, DBL, arr_struct(CH, 24), I128],
+                  kind, depth=depth)
+        u.add(f"{kind}/many_args", None, longs(12) + [LDBL, CD], kind, depth=3)
+
+
 def random_aggregate(rng, n, depth=0):
     fields = []
     for _ in range(rng.randint(1, 5)):
@@ -585,6 +722,7 @@ COMPAT_H = """\
 /* Generated by tools/abi/compat/gen.py. Shared by every unit. */
 #ifndef COMPAT_H
 #define COMPAT_H
+#include <setjmp.h>
 #include <stdarg.h>
 #include <string.h>
 
@@ -641,6 +779,8 @@ UNITS = {
     "variadic": u_variadic,
     "unproto": u_unproto,
     "ext": u_ext,
+    "valist": u_valist,
+    "longjmp": u_longjmp,
 }
 
 

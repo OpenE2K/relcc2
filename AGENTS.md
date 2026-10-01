@@ -104,7 +104,9 @@ tools/setup/build-qemu.sh            # toolchains/qemu-{mcst,community}/bin/qemu
 - lcc expects to live in `/opt/mcst/...`; the wrapper runs it under `bwrap`
   with the tree mounted there. No root needed. It compiles, assembles and
   links complete programs against its bundled sysroot.
-- Unipro's tools need a `libxml2.so.2`; the setup script builds a stub.
+- Unipro's tools link against `libxml2.so.2` (only for Windows manifests).
+  Hosts with libxml2 2.14+ have only `libxml2.so.16`, so the setup script
+  builds a stub in `toolchains/unipro/stub`.
   Its clang needs `-march=elbrus-vN` (not `-mcpu`) and warns that `lcc` is
   missing (it uses lcc as the driver for linking); use `-S`/`-c`.
 - Use `toolchains/` for all scratch output, never `/tmp`.
@@ -175,9 +177,6 @@ data in DWARF 64/65 (`%b[0]`, `%b[1]`).
 ## Open questions for the owner
 
 - SSH access to the 4C/8CB: the owner will arrange it later.
-- `libxml2.so.2` in the repository root is a stale, untracked symlink into an
-  old session's scratch directory; it can be deleted (the owner created it,
-  so ask before removing).
 
 ## Gotchas
 

@@ -14,8 +14,10 @@ runtime libraries for E2K; the compiler is the missing piece. Nobody has
 published a GCC port (MCST had a gccgo port but released no source). Rust is
 already covered by Unipro's LLVM, which MCST and Unipro develop together.
 
-The project is called relcc2. relcc (2020) was the owner's earlier attempt to
-decompile MCST's lcc; it stalled on the codebase's size.
+relcc2 is a research project: "RE" stands for research and "L" for Elbrus,
+as in MCST's lcc. The original relcc (2020) stood for "reverse-engineered
+lcc": the owner's earlier attempt to decompile lcc, which stalled on the
+codebase's size. relcc2 does not decompile anything (see decision 4).
 
 ## Decisions (do not revisit without the owner)
 

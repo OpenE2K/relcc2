@@ -26,8 +26,11 @@ unipro callee ^unproto/unproto_va/si128/
 # Callees spill incoming argument registers with std. When an lcc caller
 # fills the last slot of an aggregate with a 32-bit write, the upper half may
 # hold a diagnostic tag and the store raises exc_diag_operand
-# (calling-convention.md, "Unused parts of a slot"). Happens at -O0; qemu-e2k
-# loops on it, so the tests time out.
+# (calling-convention.md, "Unused parts of a slot"). Happens at -O0 under
+# qemu-e2k, which fills fresh registers with tagged values and loops on the
+# exception, so the tests time out. These tests pass on the 4C (v3), where
+# no tag is left there; the trap itself is confirmed on hardware by
+# tools/abi/probes/tagtrap.c.
 unipro callee ^structs/char(9|1[0-2]|1[7-9]|20|2[5-8]|3[3-6]|4[1-4]|49|5[0-2]|5[7-9]|60)/
 unipro callee ^structs/A_(si_[35]|ss_[59])/
 unipro callee ^floats/fff/

@@ -24,12 +24,16 @@ Each rule is marked with where it comes from:
 | **gdb**, **glibc**, **kernel**, **libgcc** | MCST's GPL sources: `OpenE2K/gdb`, `OpenE2K/glibc`, `OpenE2K/linux`, and the E2K libgcc in lcc's `internal-lcc-libs-open-source` tarball |
 | **qemu** | `OpenE2K/qemu-e2k-mcst` and `OpenE2K/qemu-e2k-community` (source or behaviour) |
 | **compat** | Checked by the compatibility suite `tools/abi/compat`: caller and callee built by different compilers, run under MCST's qemu-e2k |
+| **hw** | Run on hardware: Elbrus 4C (v3), by the compat suite (`run.py --remote`) or a probe in `tools/abi/probes` |
 
 Where lcc and Unipro disagree, lcc is the reference: it built the system.
 
-Not yet verified on hardware. The compatibility suite runs mixed lcc and
-Unipro programs under qemu-e2k; neither emulator can be fully trusted, so
-its results still need confirming on real machines.
+The compatibility suite runs mixed lcc and Unipro programs under qemu-e2k
+and on an Elbrus 4C (v3). On the 4C every pair gives the same results as
+under qemu except the tag trap in "Unused parts of a slot", which needs a
+diagnostic tag that qemu puts in fresh registers and the 4C does not. Other
+rules are marked **compat** rather than **hw** until a hardware run is
+recorded against them; v5 and v6 hardware runs are still to do.
 
 ## Compatibility suite
 

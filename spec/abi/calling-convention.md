@@ -53,7 +53,7 @@ Arguments form a list of 8-byte **slots**:
   (low half first). `_Complex double` occupies two slots (real first).
 - `float` is passed in the low 32 bits of its slot; `double` in the whole slot.
 
-### Unused parts of a slot (lcc, qemu; not verified on hardware)
+### Unused parts of a slot (lcc, qemu, compat, hw)
 
 Bytes of a slot that hold no argument data are undefined, and the callee
 must not depend on them. On E2K they may be worse than garbage. When an
@@ -61,17 +61,32 @@ aggregate larger than 8 bytes is passed in registers and its last slot
 holds only 1–4 bytes (sizes 9–12, 17–20, …, 57–60), lcc writes that slot
 with a 32-bit operation while `WD.dbl = 0`. That writes only the low half
 of the register and leaves the upper half, including its tag, as it was.
-In MCST's qemu-e2k the upper half can then carry a diagnostic tag, and a
-non-speculative operation that reads the whole 64-bit register (for
-example `std` to spill it) raises `exc_diag_operand`. A callee should
-access such a slot only at the width of the data in it, or with
+If the upper half carries a diagnostic tag, a non-speculative operation
+that reads the whole 64-bit register (for example `std` to spill it)
+raises `exc_diag_operand`, which Linux delivers as `SIGILL`. A callee
+should access such a slot only at the width of the data in it, or with
 speculative operations.
 
-Found by the compat suite: every such aggregate passed from lcc `-O2` to
-Unipro `-O0`, which spills incoming argument registers with `std`. lcc
-`-O0` callers and Unipro `-O2` callees are not affected. qemu-e2k loops on
-the exception instead of delivering a signal, so the test times out.
-Whether hardware raises the exception here is not yet known.
+The mechanism is confirmed on hardware by `tools/abi/probes/tagtrap.c`:
+on an Elbrus 4C (v3), a speculative load from a bad address leaves a
+diagnostic tag; a 32-bit `adds` into that register under `dbl = 0` keeps
+the old upper half, and a following `std` dies with `SIGILL`. Under
+`dbl = 1` the same `adds` zero-extends and the `std` succeeds.
+
+Whether a real call hits it depends on what the upper half last held.
+MCST's qemu-e2k fills every register that `setwd` newly allocates with a
+diagnostic "empty" value, so the compat suite fails for every such
+aggregate passed from lcc `-O2` to Unipro `-O0` (which spills incoming
+argument registers with `std`); qemu loops on the exception instead of
+delivering a signal, so these tests time out. lcc `-O0` callers and
+Unipro `-O2` callees are not affected. On the 4C the same programs pass:
+there the registers still hold whatever an earlier frame left, which in
+these tests was never tagged. qemu models the cleaning as a hardware
+feature that the `CU_HW0.rf_clean_dsbl` bit turns off, and MCST Linux
+declares that bit between a field marked "since iset v5" and the v6
+fields, so v5 and later machines may clean registers as qemu does
+(inferred; not yet run on v5). Either way, a stale tag from an earlier
+speculative load can reach such a slot on any machine.
 
 ### Integer promotion (guide 9.5.1, 9.5.2; lcc)
 

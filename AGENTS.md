@@ -88,7 +88,7 @@ tools/setup/   install reference toolchains into toolchains/
 tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas
 tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
-                    compiled to assembly and read)
+                    compiled to assembly and read; tagtrap.c runs on hardware)
 tools/abi/compat/   ABI compatibility suite: gen.py writes caller/callee
                     pairs, run.py builds every compiler pair and runs them
                     under qemu-e2k or, with --remote, on hardware over SSH;
@@ -180,7 +180,7 @@ python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
   (debug build, as a black box), Unipro's scheduling model, microbenchmarks
   on hardware, with a `measured_on` field per value.
 
-### ABI (spec/abi) — written, checked by the compat suite under qemu-e2k, not yet run on hardware
+### ABI (spec/abi) — written, checked by the compat suite under qemu-e2k and on the 4C (v3)
 
 Key facts: arguments in 8-byte slots, slots 0..7 in registers (callee
 `%dr0..7`, caller `%db[0..7]`), 9–16-byte values on even slots, stack area
@@ -201,15 +201,19 @@ the owner's GCC port:
 `run.py GENDIR --cc gcc='...' --pairs lcc:gcc,gcc:lcc,gcc:gcc`. Found so far
 (in `known.txt` and calling-convention.md): Unipro's unprototyped calls,
 Unipro callees not re-extending narrow arguments, Unipro's
-`va_arg(__int128)` at odd slots, and a possible tag trap when a callee
-spills a partly written slot (needs hardware). Still to add: C++
+`va_arg(__int128)` at odd slots, and a tag trap when a callee spills a
+partly written slot (the trap is confirmed on the 4C by
+`tools/abi/probes/tagtrap.c`; the suite only hits it under qemu, which
+fills fresh registers with tagged values). Still to add: C++
 exceptions and `setjmp` across compilers, `va_list` passed between
 compilers, and `-march` variants.
 
 ## Next steps (proposed, owner to choose)
 
-1. Extend the compat suite (see Current state), then run it on the 4C
-   (see Sources).
+1. Extend the compat suite (see Current state). It runs on the 4C with
+   `run.py --target v3 --remote ...`; all pairs match qemu except the
+   tag-trap tests, which pass on the 4C. Run it on v5 (8CB) when
+   available, which may clean registers like qemu.
 2. **ELF, relocations, TLS models, PIC sequences** spec (binutils
    `bfd/elfxx-e2k.c`, glibc `ld.so`, guide 9.1).
 3. **"What a GCC port must decide"** document: register numbering and

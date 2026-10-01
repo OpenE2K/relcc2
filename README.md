@@ -1,9 +1,12 @@
 # relcc2
 
-An open-source compiler backend for the Elbrus (E2K) architecture.
+A free (GPL) GCC backend for the Elbrus (E2K) architecture.
 
-The work starts with a written specification of the ISA and ABI. A clean LLVM
-backend will be built on top of it.
+The work starts with a written, backend-neutral specification of the ISA and
+ABI, with machine-readable data and tools that check it against the
+reference toolchains. The GCC port is built on top of it. MCST already
+publishes GPL ports of binutils, glibc, gdb, Linux and the GCC runtime
+libraries for E2K; the compiler itself is the missing piece.
 
 ## Layout
 

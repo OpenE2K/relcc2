@@ -58,6 +58,7 @@ codebase's size. relcc2 does not decompile anything (see decision 4).
 | MCST E2K GCC 11 runtime libs (GPL) | `internal-lcc-libs-open-source-1.29.16.tar.xz` in https://setwd.ws/sp/1.29/1.29.16/src/ (unpacked in `toolchains/src/`, not tracked) | libgcc (E2K unwinder `config/e2k/unwind-dw2-e2k.c`), libstdc++, libatomic, libquadmath |
 | lcc cross compilers | https://setwd.ws/sp (owner's archive; 1.19..1.31, stable 1.29.16, preview 1.31.05) | ABI oracle; includes a full sysroot |
 | Unipro LLVM 20.1.8 | x86_64 debs in `x86_64/` (untracked) | Second oracle; covers v3..v7 |
+| MCST's LLVM 13 port (lccrt) | https://github.com/OpenE2K/llvm-lccrt/releases/tag/v8.2 (x86 host binaries from OS Elbrus 8.2) | Its `liblccopt` plugin is lcc's code generator with full debug info. Planned black-box source for timing tables (run under gdb, dump data); never decompile into the repo |
 | Opcode spreadsheet | https://docs.google.com/spreadsheets/d/1p8K5DWBsXTpCDk3TdFwMaTFIadAFuxaH4zfnJXUxK94 | Generated from older binutils that still had the table generator. **Not independent of binutils** |
 
 Hardware: the owner has an Elbrus 4C (v3) and 8CB (v5) and may provide a
@@ -161,6 +162,15 @@ data in DWARF 64/65 (`%b[0]`, `%b[1]`).
    ports to study (SPARC for windows; ia64 for bundling, speculation,
    `sel-sched`). A map for the owner, not code.
 4. Timing/scheduling data; APB; protected (`e2k128`) and 32-bit modes.
+
+## Open questions for the owner
+
+- How to run the ABI compatibility suite: SSH to the 8CB/4C (owner to
+  provide an account), or build qemu-e2k user mode from
+  `OpenE2K/qemu-e2k-community` first.
+- `libxml2.so.2` in the repository root is a stale, untracked symlink into an
+  old session's scratch directory; it can be deleted (the owner created it,
+  so ask before removing).
 
 ## Gotchas
 

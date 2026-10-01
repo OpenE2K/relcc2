@@ -125,7 +125,9 @@ tools/setup/build-qemu.sh            # toolchains/qemu-{mcst,community}/bin/qemu
 - `fetch-lcc.sh` is only for machines without `/opt/mcst`: it unpacks lcc
   into `toolchains/` and its wrapper runs it under `bwrap` with the tree
   mounted at `/opt/mcst`. No root needed.
-- Unipro's debs target Debian and may not run on the owner's Gentoo system.
+- Unipro's debs target Debian; they work on the owner's Gentoo system.
+  `setup-unipro.sh` unpacks them with `ar` and `tar` when `dpkg-deb` is
+  missing.
 - Unipro's tools link against `libxml2.so.2` (only for Windows manifests).
   Hosts with libxml2 2.14+ have only `libxml2.so.16`, so the setup script
   builds a stub in `toolchains/unipro/stub`.

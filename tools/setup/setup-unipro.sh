@@ -15,10 +15,24 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 debs=${1:-$root/x86_64}
 out=$root/toolchains/unipro
 
+# Without dpkg (e.g. on Gentoo) unpack by hand: a .deb is an ar archive
+# holding data.tar.*.
+unpack() {
+	if command -v dpkg-deb >/dev/null; then
+		dpkg-deb -x "$1" "$2"
+		return
+	fi
+	tmp=$(mktemp -d "$out/deb.XXXXXX")
+	(cd "$tmp" && ar x "$1")
+	tar -xf "$tmp"/data.tar.* -C "$2"
+	rm -rf "$tmp"
+}
+
+debs=$(cd "$debs" && pwd)
 rm -rf "$out"
 mkdir -p "$out/pkg" "$out/stub" "$out/bin"
 for deb in "$debs"/llvm20_*.deb "$debs"/clang20_*.deb; do
-	dpkg-deb -x "$deb" "$out/pkg"
+	unpack "$deb" "$out/pkg"
 done
 llvm=$out/pkg/usr/lib/llvm-20
 

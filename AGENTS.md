@@ -186,7 +186,8 @@ Key facts: arguments in 8-byte slots, slots 0..7 in registers (callee
 `%dr0..7`, caller `%db[0..7]`), 9–16-byte values on even slots, stack area
 always reserved for all slots at the caller's `USD`; results ≤ 64 bytes in
 registers, larger ones written to the caller's argument area (no hidden
-pointer); variadic calls store every argument (fixed ones too) in memory;
+pointer); variadic calls store the last fixed and all variadic arguments
+in memory, and `va_arg` aligns 16-byte values by address;
 unprototyped calls pass both ways (Unipro gets this wrong); callers extend
 narrow integers to 64 bits and lcc callees re-extend; window units are
 pairs of 64-bit registers; DWARF 0–63 = `%r0..63`, 64–127 = `%b[0..63]`;
@@ -205,7 +206,11 @@ Unipro callees not re-extending narrow arguments, Unipro's
 `va_arg(__int128)` at odd slots, and a tag trap when a callee spills a
 partly written slot (the trap is confirmed on the 4C by
 `tools/abi/probes/tagtrap.c`; the suite only hits it under qemu, which
-fills fresh registers with tagged values).
+fills fresh registers with tagged values). The `valist` unit showed that
+`va_arg` must align 16-byte values by address, because lcc's `static`
+variadic functions have an 8-byte-aligned slot area; probes made while
+studying it showed that lcc callers store only the last fixed and the
+variadic arguments.
 Still to add: C++ exceptions across compilers and `-march` variants.
 
 ## Next steps (proposed, owner to choose)

@@ -111,17 +111,37 @@ compilers extend as callers.)
 - No other stack allocation may happen between filling the area and the
   call.
 
-## Variadic functions and calls without a prototype (guide 9.5.1; lcc, unipro)
+## Variadic functions and calls without a prototype (guide 9.5.1; lcc, unipro, compat, hw)
 
-- For a call to a **variadic** function, the caller stores **every
-  argument, including the fixed ones,** to its memory slot. It may also put
-  them in registers; both compilers do.
-- lcc's variadic callees read all arguments, fixed ones included, from
-  memory. `va_list` is a pointer into the slot area.
-- `va_arg` follows the slot rules: a 9–16-byte type (`__int128`,
-  `long double`, `__float128`, `_Complex double`, aggregates) starts at an
-  even slot. Unipro's `va_arg(ap, __int128)` doesn't skip the odd slot and
-  reads one slot early; its callers place the value correctly (compat).
+- For a call to a **variadic** function, the caller stores the **last
+  fixed argument and every variadic argument** to its memory slot, and
+  also puts the arguments in registers as usual. Fixed arguments before the
+  last one need only be in their registers: lcc stores exactly the last
+  fixed argument onward; Unipro stores every argument.
+- A variadic callee therefore takes fixed arguments other than the last
+  from registers (or from the stack for slots 8 and above), and the last
+  fixed argument and the variadic ones from memory, as lcc does. A callee
+  that read the earlier fixed arguments from memory would read garbage
+  when called from lcc. (Unipro's variadic callees store their incoming
+  registers to the slots themselves, so they work either way.)
+- `va_list` is a plain pointer to the next slot; `va_start(ap, last)` sets
+  it to the slot after `last`. It can be passed to a function built by
+  another compiler (compat: `valist` unit).
+- `va_arg` of a 9–16-byte type (`__int128`, `long double`, `__float128`,
+  `_Complex double`, aggregates) first rounds the pointer up to a 16-byte
+  **address** (lcc: `ap + (ap & 15)`). For a normal call the slot area is
+  16-byte aligned, so this is the same as "start at an even slot", and
+  callers place such values there. It differs for `static` variadic
+  functions: at `-O1` and above lcc gives them a private calling sequence
+  whose slot area is only 8-byte aligned, and puts a 16-byte value at the
+  next 16-byte address, which may be an odd slot. A `va_list` from such a
+  function that reaches code built by another compiler (for example
+  `vprintf`) is read correctly only if `va_arg` aligns by address.
+- Unipro's `va_arg(ap, __int128)` doesn't align at all, so it reads one
+  slot early at odd slots, and for a `va_list` from an lcc `static`
+  variadic function also at even slots; its callers place the value
+  correctly (compat). `long double`, `__float128` and `_Complex double`
+  are read correctly.
 - A call **without a prototype** must place the arguments both in registers
   and in memory, so that it works whether the callee is variadic or not.
   lcc does this; **Unipro's clang does not** (registers only), so such calls

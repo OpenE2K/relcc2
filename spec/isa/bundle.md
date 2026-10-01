@@ -98,7 +98,7 @@ An HS where everything except `lng` is zero is an empty instruction (`nop`).
 | 8–15 | `src2` |
 | 0–7 | `dst`, `src3` for stores, or a predicate destination |
 
-### Operand encodings [checked for window registers; literals decoded]
+### Operand encodings [checked for window registers and src3 literals; other literals decoded]
 
 Applies to `src1`, `src2`, `src3` and `dst` bytes:
 
@@ -127,36 +127,54 @@ not from the encoding.
 |---|---|---|
 | ALOPF1, ALOPF11 | src1, src2, dst | ALOPF11: ALES = `opc2 << 8 \| opce` |
 | ALOPF21 | src1, src2, src3, dst | src3 in ALES bits 0–7; ALES bits 8–15 = `opc2` |
-| ALOPF2, ALOPF12, ALOPF22 | src2, dst | `opce` in the src1 field; ALOPF12 also has ALES |
+| ALOPF2, ALOPF12, ALOPF22 | src2, dst | `opce` in the src1 field; ALOPF12 also has ALES; ALOPF22 has ALES `0x01c0` |
 | ALOPF7 | src1, src2 → predicate | `cmpopce` in dst bits 5–7, predicate number in bits 0–4 |
 | ALOPF17 | src1, src2 → predicate | ALES = `0x0200 \| cmpopce`; dst bits 5–7 are zero |
 | ALOPF8 | src2 → predicate | src1 field = `0xc0` (none); `cmpopce` in dst bits 5–7 |
-| ALOPF3 [decoded], ALOPF13 [source] | src1 (address), src2 (offset), src3 (data, in the dst byte) | stores; ALOPF13 also has ALES |
-| ALOPF11_LIT8 [decoded] | src1, src2, 8-bit literal, dst | literal in ALES bits 0–7 |
-| ALOPF12_PSHUFH [decoded] | src2, 8-bit literal, dst | literal in ALES bits 0–7 |
+| ALOPF3, ALOPF13 | src1 (address), src2 (offset), src3 (data, in the dst byte) | stores; ALOPF13 also has ALES = `opc2 << 8 \| opce` |
+| ALOPF11_LIT8 | src1, src2, 8-bit literal, dst | literal in ALES bits 0–7 |
+| ALOPF12_PSHUFH | src2, 8-bit literal, dst | `opce` in the src1 field; literal in ALES bits 0–7 |
 | ALOPF12_IBRANCHD, ALOPF12_ICALLD [decoded] | src2 (target), dst | v6+. `icalld` keeps `wbs` in the src1 field; the condition comes from `SS.ctcond` |
-| ALOPF15 [decoded] | src2 → state register | register number in the dst byte (`rws`/`rwd`) |
-| ALOPF16 [decoded] | state register → dst | register number in the src1 field (`rrs`/`rrd`) |
-| ALOPF10, ALOPF19 [source] | AAU store/load (`staa*`/`ldaa*`): `%aadD [ %aastiI + literal ]` | ALS bits 8–23 form a 16-bit field: `lt` bits 0–1 (LTS number + 1, or 0 for none), `am` bit 2, `incr` bits 4–6, `ind` bits 7–10, `d` bits 11–15 |
-| AAURR, AAURW [decoded] | AAU register read/write | Same opcodes as `ldaa*`/`staa*` with MAS `0x3f` in CS1; ALS bits 8–23 select the register (`registers.yaml`) |
+| ALOPF15 | src2 → state register | register number in the dst byte, `opce` in the src1 field, ALES `0x01c0` (`rws`/`rwd`) |
+| ALOPF16 | state register → dst | register number in the src1 field, the table's `src2` value in the src2 field, ALES `0x01c0` (`rrs`/`rrd`) |
+| ALOPF10, ALOPF19 | AAU store/load (`staa*`/`ldaa*`): `%aadD [ %aastiI + literal ]`; the data (store) is in the dst byte | ALS bits 8–23 form a 16-bit field: `lt` bits 0–1 (LTS number + 1, or 0 for none), `am` bit 2, `incr` bits 4–6, `ind` bits 7–10, `d` bits 11–15. ALES `0x01c0` (`0x02c0` for `staaqp`/`ldaaqp`) |
+| AAURR, AAURW | AAU register read/write | Same opcodes as `ldaa*`/`staa*` with MAS `0x3f` in CS1; ALS bits 8–23 select the register (`registers.yaml`) |
 
 When the table lists fewer formats than the struct's array holds, the
 remaining operands are 32-bit (`s`), as C zero-initialises them. The
 extractor pads `args` accordingly.
 
-### Operations that take two channels [source; not yet modelled]
+On v7, the `_lt3` forms (ALOPF21_LT_PACK_CODE) take src3 as a literal; gas
+always encodes it as a 32-bit literal in an LTS (`110110ll`).
 
-Some quad operations occupy two adjacent channels:
+The operand formats in the table are not always exact: `plog`/`qplog` are
+listed with 64-bit operands (`ARGS_DDDD`), although `qplog` works on 128-bit
+packed registers (the older generator output has `ARGS_PPPP`). gas accepts
+either register width.
 
-- **Before v7:** both halves are encoded explicitly. Channels j and j+1 get
-  register numbers N and N+1.
-- **From v7:** only the lower channel is encoded, and the upper one is
-  reserved implicitly (see the `implicit_paired_alc_delta` comment in
+### Operations that take two channels [checked]
+
+Operations with a 128-bit (`q`) operand in certain positions occupy a pair of
+channels. Which pair follows from the format and operand formats alone:
+
+| Operation | Pairs |
+|---|---|
+| 128-bit result: ALOPF11 with dst `q`, or ALOPF2/12/22 with dst `q` | (0, 1) and (3, 4) if the operation is allowed in ALC1; otherwise (0, 2) and (3, 5) |
+| 128-bit store data: ALOPF13 with src3 `q`; `staaq`, `aaurwq`, `ldaaq`, `aaurrq` | (2, 5) |
+
+The operation may be written with either channel of its pair.
+
+- **Before v7:** both channels are encoded with the same opcode. In the upper
+  one, every `q` operand names the odd half (N+1) of the register pair.
+  The exception is a `q` src1 of a load (ALOPF11 with MAS) or of a pair-(2, 5)
+  operation, which is the same in both channels.
+- **From v7:** only the lower channel is encoded; the upper one is reserved
+  implicitly (offset 1, 2 or 3; see `implicit_paired_alc_delta` in
   `include/opcode/e2k.h`).
 
-Binutils special-cases these by name, and its list is incomplete. The
-checker found `movt{c,r,rc}q`, `cudtoap`, `ldod{w,r,p}q` and `getsod` as
-well. The full list is in `PAIRED` in `check_encodings.py`.
+objdump hides the upper half only for a hard-coded list of names, so for
+other paired operations (`movt{c,r,rc}q`, `cudtoap`, `ldod{w,r,p}q`,
+`getsod`) it prints both channels.
 
 ## SS: stubs syllable [decoded for type 0, except `dtbp`]
 

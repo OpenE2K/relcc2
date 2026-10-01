@@ -37,13 +37,10 @@ one with gas for every ISA version and allowed channel, and compares the
 bytes. It also exercises the wide-instruction layout in
 [bundle.md](bundle.md).
 
-Against binutils 2.41-29.023 it passes for all 24,238 cases on v2–v7. Not
-covered yet:
-
-- formats with memory, AAU or state-register operands, merges and
-  `ibranchd`/`icalld`, listed in the tool's output;
-- operations that take two channels;
-- `_lt3` forms, whose src3 must be a literal.
+Against binutils 2.41-29.023 it passes for all 27,268 cases on v2–v7,
+including operations that occupy two channels and the v7 `_lt3` forms. Only
+merges and `ibranchd`/`icalld` are not encoded by it; both are covered by the
+decoder check below.
 
 ## Decoder check against objdump
 

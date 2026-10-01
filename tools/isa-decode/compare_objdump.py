@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare e2kdis.py with MCST objdump on E2K object files.
 
-Usage: compare_objdump.py BINUTILS_DIR FILE.o...
+Usage: compare_objdump.py [--binutils DIR] FILE.o...
 
 The ISA version is taken from "-vN" in each file name (as produced by
 build_corpus.sh). For every wide instruction, the lines printed by both
@@ -61,10 +61,13 @@ def normalize(lines, canonical):
 
 
 def main():
-    binutils = Path(sys.argv[1])
+    args = sys.argv[1:]
+    binutils = Path(__file__).resolve().parents[2] / "toolchains" / "binutils" / "bin"
+    if args[:1] == ["--binutils"]:
+        binutils, args = Path(args[1]), args[2:]
     total = collections.Counter()
     shown = 0
-    for obj in map(Path, sys.argv[2:]):
+    for obj in map(Path, args):
         iset = int(re.findall(r"-v(\d)", obj.name)[-1])
         canonical = e2kdis.Spec(iset).canonical
         with tempfile.NamedTemporaryFile() as tmp:

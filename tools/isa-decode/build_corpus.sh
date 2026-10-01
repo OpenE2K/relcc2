@@ -5,7 +5,7 @@
 #     given by the "isets: N-M" marker on their first line.
 #
 # Usage: build_corpus.sh OUTDIR
-# Environment:
+# Environment (defaults point into toolchains/, see tools/setup/):
 #   CLANG     Unipro clang (an x86_64 host build with the Elbrus target)
 #   BINUTILS  directory containing e2k-linux-as
 #
@@ -18,10 +18,10 @@
 set -e
 
 out=${1:?usage: $0 OUTDIR}
-: "${CLANG:?set CLANG to the Unipro clang}"
-: "${BINUTILS:?set BINUTILS to the directory with e2k-linux-as}"
-
 here=$(cd "$(dirname "$0")" && pwd)
+root=$(cd "$here/../.." && pwd)
+CLANG=${CLANG:-$root/toolchains/unipro/bin/clang}
+BINUTILS=${BINUTILS:-$root/toolchains/binutils/bin}
 mkdir -p "$out"
 
 for v in 3 4 5 6 7; do

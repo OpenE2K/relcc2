@@ -318,7 +318,8 @@ def check_iset(binutils, ops, iset, tmp):
 def main():
     root = Path(__file__).resolve().parents[2]
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("binutils", type=Path,
+    ap.add_argument("--binutils", type=Path,
+                    default=root / "toolchains" / "binutils" / "bin",
                     help="directory containing e2k-linux-as and e2k-linux-objcopy")
     ap.add_argument("--ops", type=Path,
                     default=root / "spec" / "isa" / "binutils-ops.yaml")

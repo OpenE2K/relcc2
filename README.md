@@ -26,10 +26,24 @@ Proprietary compilers are used only as black-box oracles: we compare their
 output and observe their behaviour. Their code is never copied into this
 repository.
 
-The reference trees are expected next to the repository, untracked:
+The reference trees are expected inside the repository directory, untracked:
 
 ```
 OpenE2K/binutils-gdb   https://github.com/OpenE2K/binutils-gdb
+OpenE2K/gdb            (gdb-15.2-mcst branch of the same repository)
 OpenE2K/glibc
 OpenE2K/linux
 ```
+
+## Toolchains
+
+The scripts in `tools/setup/` install the reference toolchains into
+`toolchains/` (untracked). The tools in this repository look for them there.
+
+| Script | Installs |
+|---|---|
+| `setup-unipro.sh [DEB_DIR]` | Unipro's LLVM 20 with the Elbrus target, from the x86_64 debs in `x86_64/`, as `toolchains/unipro/bin/{clang,llc,…}` |
+| `build-binutils.sh` | MCST binutils built from `OpenE2K/binutils-gdb`, in `toolchains/binutils/bin/e2k-linux-*` |
+| `fetch-lcc.sh [VERSION] [TARGET]` | MCST lcc cross compiler (default 1.29.16, `e2k-v5`) from the archive at https://setwd.ws/sp, as `toolchains/lcc-VERSION-TARGET/{lcc,l++,ldis}`. It needs `bwrap` |
+
+lcc includes a sysroot, so it can link complete programs for E2K.

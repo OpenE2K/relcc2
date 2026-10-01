@@ -31,7 +31,7 @@ or per format. gas links them by name.
 
 ## Encoding check against gas
 
-`tools/isa-extract/check_encodings.py <dir with e2k-linux-as>` predicts the
+`tools/isa-extract/check_encodings.py` predicts the
 ALS and ALES syllables of every operation from this database, assembles each
 one with gas for every ISA version and allowed channel, and compares the
 bytes. It also exercises the wide-instruction layout in

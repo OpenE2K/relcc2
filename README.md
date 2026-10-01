@@ -26,13 +26,15 @@ Proprietary compilers are used only as black-box oracles: we compare their
 output and observe their behaviour. Their code is never copied into this
 repository.
 
-The reference trees are expected inside the repository directory, untracked:
+The reference sources are git submodules (`git submodule update --init`):
 
 ```
-OpenE2K/binutils-gdb   https://github.com/OpenE2K/binutils-gdb
-OpenE2K/gdb            (gdb-15.2-mcst branch of the same repository)
-OpenE2K/glibc
-OpenE2K/linux
+OpenE2K/binutils-gdb          MCST binutils 2.41    github.com/OpenE2K/binutils-gdb
+OpenE2K/gdb                   MCST gdb 15.2         same repository, gdb-15.2-mcst branch
+OpenE2K/glibc                 MCST glibc 2.35       github.com/OpenE2K/glibc
+OpenE2K/linux                 MCST Linux 6.1        github.com/OpenE2K/linux
+OpenE2K/qemu-e2k-community    community QEMU e2k    github.com/OpenE2K/qemu-e2k
+OpenE2K/qemu-e2k-mcst         MCST QEMU e2k         git.openelbrus.ru/mcst/qemu
 ```
 
 ## Toolchains

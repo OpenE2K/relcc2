@@ -53,14 +53,35 @@ Arguments form a list of 8-byte **slots**:
   (low half first). `_Complex double` occupies two slots (real first).
 - `float` is passed in the low 32 bits of its slot; `double` in the whole slot.
 
+### Unused parts of a slot (lcc, qemu; not verified on hardware)
+
+Bytes of a slot that hold no argument data are undefined, and the callee
+must not depend on them. On E2K they may be worse than garbage. When an
+aggregate larger than 8 bytes is passed in registers and its last slot
+holds only 1–4 bytes (sizes 9–12, 17–20, …, 57–60), lcc writes that slot
+with a 32-bit operation while `WD.dbl = 0`. That writes only the low half
+of the register and leaves the upper half, including its tag, as it was.
+In MCST's qemu-e2k the upper half can then carry a diagnostic tag, and a
+non-speculative operation that reads the whole 64-bit register (for
+example `std` to spill it) raises `exc_diag_operand`. A callee should
+access such a slot only at the width of the data in it, or with
+speculative operations.
+
+Found by the compat suite: every such aggregate passed from lcc `-O2` to
+Unipro `-O0`, which spills incoming argument registers with `std`. lcc
+`-O0` callers and Unipro `-O2` callees are not affected. qemu-e2k loops on
+the exception instead of delivering a signal, so the test times out.
+Whether hardware raises the exception here is not yet known.
+
 ### Integer promotion (guide 9.5.1, 9.5.2; lcc)
 
 Integer arguments narrower than 64 bits are extended to 64 bits by the
 caller: sign extension for signed types, zero extension for unsigned ones
 (`_Bool`, `char`, `short`, `int`). lcc's callees nevertheless extend
 arguments again before using them as 64-bit values, so they don't depend
-on it; Unipro's callees do depend on it. A new compiler should extend in
-both places.
+on it; Unipro's callees depend on it for `_Bool`, `char` and `short` (not
+for `int`). A new compiler should extend in both places. (compat: both
+compilers extend as callers.)
 
 ## Stack argument area (guide 9.4; lcc, unipro)
 
@@ -82,6 +103,10 @@ both places.
   them in registers; both compilers do.
 - lcc's variadic callees read all arguments, fixed ones included, from
   memory. `va_list` is a pointer into the slot area.
+- `va_arg` follows the slot rules: a 9–16-byte type (`__int128`,
+  `long double`, `__float128`, `_Complex double`, aggregates) starts at an
+  even slot. Unipro's `va_arg(ap, __int128)` doesn't skip the odd slot and
+  reads one slot early; its callers place the value correctly (compat).
 - A call **without a prototype** must place the arguments both in registers
   and in memory, so that it works whether the callee is variadic or not.
   lcc does this; **Unipro's clang does not** (registers only), so such calls
@@ -99,5 +124,6 @@ both places.
   entry stack pointer, i.e. into the caller's argument area. The caller
   must reserve an area of at least the result size. There is no hidden
   pointer argument.
-- Integer results narrower than 64 bits are extended to 64 bits (guide; lcc
-  extends `char`, `short` and `_Bool` results).
+- Integer results narrower than 64 bits are extended to 64 bits (guide;
+  compat: lcc and Unipro extend `_Bool`, `char`, `short` and `int`
+  results).

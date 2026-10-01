@@ -78,6 +78,9 @@ tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas
 tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     compiled to assembly and read)
+tools/abi/compat/   ABI compatibility suite: gen.py writes caller/callee
+                    pairs, run.py builds every compiler pair and runs them
+                    under qemu-e2k, known.txt lists known differences
 OpenE2K/       submodules (see above)
 toolchains/    untracked: installed toolchains, corpus builds, scratch output
 x86_64/        untracked: Unipro debs
@@ -121,6 +124,10 @@ tools/isa-decode/build_corpus.sh toolchains/corpus
 python3 tools/isa-decode/compare_objdump.py toolchains/corpus/*.o
                                                   # 6,826 match, 10 known objdump bug
 toolchains/lcc-1.29.16-e2k-v5/lcc -c tools/abi/probes/layout.c -o /dev/null
+python3 tools/abi/compat/gen.py toolchains/compat/gen
+python3 tools/abi/compat/run.py toolchains/compat/gen
+                                                  # 1,429 tests x 4 pairs, ~10 s:
+                                                  # 0 unexpected (lcc->lcc all pass)
 python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
 ```
 
@@ -146,7 +153,7 @@ python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
   (debug build, as a black box), Unipro's scheduling model, microbenchmarks
   on hardware, with a `measured_on` field per value.
 
-### ABI (spec/abi) — written, checked against lcc and Unipro output, not yet run on hardware
+### ABI (spec/abi) — written, checked by the compat suite under qemu-e2k, not yet run on hardware
 
 Key facts: arguments in 8-byte slots, slots 0..7 in registers (callee
 `%dr0..7`, caller `%db[0..7]`), 9–16-byte values on even slots, stack area
@@ -159,13 +166,22 @@ pairs of 64-bit registers; DWARF 0–63 = `%r0..63`, 64–127 = `%b[0..63]`;
 exceptions use `.eh_frame` only for FDE/LSDA lookup (CFI ignored) and pass
 data in DWARF 64/65 (`%b[0]`, `%b[1]`).
 
+Compat suite (`tools/abi/compat`): 1,429 generated tests per compiler pair
+(scalars, aggregates of 1–1024 bytes, packed/aligned/bit-field/union
+types, large results, long argument lists, variadic, unprototyped,
+integer extension, 300 random signatures). It is the acceptance test for
+the owner's GCC port:
+`run.py GENDIR --cc gcc='...' --pairs lcc:gcc,gcc:lcc,gcc:gcc`. Found so far
+(in `known.txt` and calling-convention.md): Unipro's unprototyped calls,
+Unipro callees not re-extending narrow arguments, Unipro's
+`va_arg(__int128)` at odd slots, and a possible tag trap when a callee
+spills a partly written slot (needs hardware). Still to add: C++
+exceptions and `setjmp` across compilers, `va_list` passed between
+compilers, and `-march` variants.
+
 ## Next steps (proposed, owner to choose)
 
-1. **ABI compatibility test suite** (like GCC's `compat` tests): generated
-   caller/callee pairs for every rule in `calling-convention.md`, one side
-   built with lcc and the other with the compiler under test, linked with
-   lcc, run under MCST's qemu-e2k user mode (built; see Setup) and later
-   on hardware. Becomes the acceptance test for the owner's GCC port.
+1. Extend the compat suite (see Current state), then run it on hardware.
 2. **ELF, relocations, TLS models, PIC sequences** spec (binutils
    `bfd/elfxx-e2k.c`, glibc `ld.so`, guide 9.1).
 3. **"What a GCC port must decide"** document: register numbering and

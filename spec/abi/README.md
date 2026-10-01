@@ -22,12 +22,30 @@ Each rule is marked with where it comes from:
 | **lcc** | Observed in the output of lcc 1.29.16 for `tools/abi/probes/` |
 | **unipro** | Observed in the output of Unipro's clang 20.1.8 for the same probes |
 | **gdb**, **glibc**, **kernel**, **libgcc** | MCST's GPL sources: `OpenE2K/gdb`, `OpenE2K/glibc`, `OpenE2K/linux`, and the E2K libgcc in lcc's `internal-lcc-libs-open-source` tarball |
-| **qemu** | `OpenE2K/qemu-e2k-community` |
+| **qemu** | `OpenE2K/qemu-e2k-mcst` and `OpenE2K/qemu-e2k-community` (source or behaviour) |
+| **compat** | Checked by the compatibility suite `tools/abi/compat`: caller and callee built by different compilers, run under MCST's qemu-e2k |
 
 Where lcc and Unipro disagree, lcc is the reference: it built the system.
 
-Not yet verified on hardware. The probes only show what the compilers emit;
-running mixed-compiler tests on real machines is the next step.
+Not yet verified on hardware. The compatibility suite runs mixed lcc and
+Unipro programs under qemu-e2k; neither emulator can be fully trusted, so
+its results still need confirming on real machines.
+
+## Compatibility suite
+
+```
+python3 tools/abi/compat/gen.py toolchains/compat/gen
+python3 tools/abi/compat/run.py toolchains/compat/gen
+```
+
+`gen.py` writes caller/callee pairs for the rules in
+calling-convention.md (scalars, aggregates of every size, layout
+attributes, large results, long argument lists, variadic and unprototyped
+calls, integer extension) plus seeded random signatures. `run.py` builds
+every ordered pair of compilers (`--cc NAME=COMMAND` adds one, e.g. a GCC
+port), links with lcc and runs each program under `--runner` (qemu-e2k by
+default). Known differences of the reference compilers are listed in
+`tools/abi/compat/known.txt`; any other failure fails the run.
 
 ## Probes
 

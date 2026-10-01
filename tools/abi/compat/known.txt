@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Known ABI differences of reference compilers, found by the compat suite.
+# run.py reports failures matching a line here as "known" and the rest as
+# unexpected. lcc is the reference and has no entries.
+#
+# Format: COMPILER ROLE REGEX  # reason
+#   COMPILER also matches variants named COMPILER-SUFFIX (unipro-O0).
+#   ROLE is caller or callee: the side built by COMPILER that is at fault.
+#   REGEX matches UNIT/TEST names (Python re.search).
+
+# Calls without a prototype pass arguments in registers only, so variadic
+# callees, which read every argument from memory, see garbage
+# (calling-convention.md, "Variadic functions").
+unipro caller ^unproto/unproto_va/
+
+# Callees use char, short and _Bool arguments without re-extending them,
+# relying on the caller (calling-convention.md, "Integer promotion").
+unipro callee ^ext/callee/(b|ch|sc|uc|ss|us)/
+
+# va_arg(ap, __int128) does not skip an odd slot, so it reads one slot early
+# whenever the value starts at an odd slot. Its callers place the value
+# correctly, and long double and __float128 are read correctly.
+unipro callee ^variadic/(si128/fixed_[13579]$|mix_([3-9]|10)$)
+unipro callee ^unproto/unproto_va/si128/
+
+# Callees spill incoming argument registers with std. When an lcc caller
+# fills the last slot of an aggregate with a 32-bit write, the upper half may
+# hold a diagnostic tag and the store raises exc_diag_operand
+# (calling-convention.md, "Unused parts of a slot"). Happens at -O0; qemu-e2k
+# loops on it, so the tests time out.
+unipro callee ^structs/char(9|1[0-2]|1[7-9]|20|2[5-8]|3[3-6]|4[1-4]|49|5[0-2]|5[7-9]|60)/
+unipro callee ^structs/A_(si_[35]|ss_[59])/
+unipro callee ^floats/fff/
+unipro callee ^layout/P_c_l/(arg_ret|after_1_long)$

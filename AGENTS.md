@@ -59,7 +59,7 @@ codebase's size. relcc2 does not decompile anything (see decision 4).
 | MCST libffi 3.3 (MIT) | `libffi-3.3-29.018.tar.xz`, same place and script (`toolchains/src/libffi-3.3-29.018/src/e2k/`) | An independent hand-written implementation of the calling convention (argument slots, results, varargs, closures): cross-check for `spec/abi/calling-convention.md` |
 | MCST gcov 4.7.3 | `gcov-4.7.3-29.018.tar.xz`, same place and script | GCC 4.7's gcov tool without E2K changes; only says which coverage format lcc uses |
 | lcc cross compilers | https://setwd.ws/sp (owner's archive; 1.19..1.31, stable 1.29.16, preview 1.31.05) | ABI oracle; includes a full sysroot. 1.31.05 (`tools/setup/fetch-lcc.sh 1.31.05 e2k-v3`) is a second lcc oracle |
-| lcc's user manual | `doc/lcc/` in every lcc tree (e.g. `/opt/mcst/lcc-1.29.16.e2k-v3.linux-6.1/doc/lcc`; 1.31.05 has changelogs since 1.24) | MCST's, not openly licensed: take facts only (mark **lcc-doc**) and check them with probes. Changelogs and notes gave the atomics, inline-asm, macro and per-generation facts |
+| lcc's user manual | `doc/lcc/` in every lcc tree (e.g. `/opt/mcst/lcc-1.29.16.e2k-v3.linux-6.1/doc/lcc`; 1.31.05 has changelogs since 1.24) | MCST publishes it with the compilers (free downloads at dev.mcst.ru/download; setwd.ws is the owner's archive), so it is a usable source (owner's decision); mark **lcc-doc**, quote facts rather than text, and check them with probes where possible. Changelogs and notes gave the atomics, inline-asm, macro and per-generation facts |
 | Unipro LLVM 20.1.8 | x86_64 debs in `x86_64/` (untracked) | Second oracle; covers v3..v7 |
 | MCST's LLVM 13 port (lccrt) | https://github.com/OpenE2K/llvm-lccrt/releases/tag/v8.2 (x86 host binaries from OS Elbrus 8.2) | Its `liblccopt` plugin is lcc's code generator with full debug info. Planned black-box source for timing tables (run under gdb, dump data); never decompile into the repo |
 | Opcode spreadsheet | https://docs.google.com/spreadsheets/d/1p8K5DWBsXTpCDk3TdFwMaTFIadAFuxaH4zfnJXUxK94 | Generated from older binutils that still had the table generator. **Not independent of binutils** |
@@ -300,9 +300,6 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 
 ## Open questions for the owner
 
-- lcc's user manual is MCST's but not openly licensed. Facts from it are
-  used with the **lcc-doc** mark and checked by probes where possible;
-  is that acceptable under decision 4?
 - `setwd dbl = 1` (recommended in the plan, D7) or `dbl = 0` like lcc?
 - The community qemu zero-extends 32-bit FP results under `dbl = 1`
   (`is_alop_affected_by_dbl`); the 4C and MCST's qemu don't. A bug in the

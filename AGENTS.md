@@ -113,6 +113,7 @@ tools/setup/build-binutils.sh        # toolchains/binutils/bin/e2k-linux-*
 tools/setup/fetch-lcc.sh             # toolchains/lcc-1.29.16-e2k-v5/{lcc,l++,ldis}
 tools/setup/build-qemu.sh            # toolchains/qemu-{mcst,community}/bin/qemu-e2k
 tools/setup/fetch-lcc-libs.sh        # toolchains/src/lcc-1.29.16/ (MCST libgcc etc.)
+tools/setup/build-gcc-docs.sh        # toolchains/gcc-docs/{info,html}: GCC manuals
 ```
 
 - `build-qemu.sh [mcst|community]` builds Linux user mode only. Run

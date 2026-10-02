@@ -308,10 +308,25 @@ restored from the chain stack on return. A buffer overflow on the user
 stack can still corrupt other arrays and address-taken locals there,
 including function pointers, but cannot redirect a return.
 
-Neither lcc nor Unipro emits a check for `-fstack-protector-all` (both
-accept the option and ignore it). glibc still stores a canary at TP − 8
-(`THREAD_SET_STACK_GUARD`); a compiler that chooses to implement the
-protector should read it there.
+lcc 1.29 and Unipro accept every `-fstack-protector*` option and emit no
+check. lcc 1.31 implements them (its changelog says so), but differently
+from GCC (lcc 1.31.05, `tools/abi/probes/stackprot.c`):
+
+- The canary is the **constant** 32-bit word `0x000d0aff` (bytes `ff 0a
+  0d 00`, a terminator canary), not glibc's random guard. It is stored
+  with `stw` in the top 4 bytes of the frame, above the locals.
+- Before returning, the function reloads it, compares with `cmpesb` and
+  calls `__stack_chk_fail` on a mismatch; if that returns, the function
+  returns normally.
+- In 1.31.05 plain `-fstack-protector` protects **every** function, even
+  one without arrays (GCC's `-all` behaviour; a leaf function gets a
+  frame just for the canary). `-fstack-protector-strong`, `-all` and
+  `-explicit` emit nothing. This looks like a bug.
+
+No layout rule depends on this: the canary is private to each frame. glibc
+stores a random canary at TP − 8 (`THREAD_SET_STACK_GUARD`); a compiler
+that implements the protector should use it (GCC's usual TLS guard),
+since a constant canary only stops overflows through string functions.
 
 ## Unipro
 

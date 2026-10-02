@@ -58,7 +58,8 @@ codebase's size. relcc2 does not decompile anything (see decision 4).
 | MCST E2K GCC 11 runtime libs (GPL) | `internal-lcc-libs-open-source-1.29.16.tar.xz` in https://setwd.ws/sp/1.29/1.29.16/src/ (`tools/setup/fetch-lcc-libs.sh` unpacks it to `toolchains/src/lcc-1.29.16/`, not tracked) | libgcc (E2K unwinder `config/e2k/unwind-dw2-e2k.c`), libstdc++, libatomic, libquadmath. The GCC port will use the unwinder and libgcc E2K files (owner's decision) |
 | MCST libffi 3.3 (MIT) | `libffi-3.3-29.018.tar.xz`, same place and script (`toolchains/src/libffi-3.3-29.018/src/e2k/`) | An independent hand-written implementation of the calling convention (argument slots, results, varargs, closures): cross-check for `spec/abi/calling-convention.md` |
 | MCST gcov 4.7.3 | `gcov-4.7.3-29.018.tar.xz`, same place and script | GCC 4.7's gcov tool without E2K changes; only says which coverage format lcc uses |
-| lcc cross compilers | https://setwd.ws/sp (owner's archive; 1.19..1.31, stable 1.29.16, preview 1.31.05) | ABI oracle; includes a full sysroot |
+| lcc cross compilers | https://setwd.ws/sp (owner's archive; 1.19..1.31, stable 1.29.16, preview 1.31.05) | ABI oracle; includes a full sysroot. 1.31.05 (`tools/setup/fetch-lcc.sh 1.31.05 e2k-v3`) is a second lcc oracle |
+| lcc's user manual | `doc/lcc/` in every lcc tree (e.g. `/opt/mcst/lcc-1.29.16.e2k-v3.linux-6.1/doc/lcc`; 1.31.05 has changelogs since 1.24) | MCST's, not openly licensed: take facts only (mark **lcc-doc**) and check them with probes. Changelogs and notes gave the atomics, inline-asm, macro and per-generation facts |
 | Unipro LLVM 20.1.8 | x86_64 debs in `x86_64/` (untracked) | Second oracle; covers v3..v7 |
 | MCST's LLVM 13 port (lccrt) | https://github.com/OpenE2K/llvm-lccrt/releases/tag/v8.2 (x86 host binaries from OS Elbrus 8.2) | Its `liblccopt` plugin is lcc's code generator with full debug info. Planned black-box source for timing tables (run under gdb, dump data); never decompile into the repo |
 | Opcode spreadsheet | https://docs.google.com/spreadsheets/d/1p8K5DWBsXTpCDk3TdFwMaTFIadAFuxaH4zfnJXUxK94 | Generated from older binutils that still had the table generator. **Not independent of binutils** |
@@ -86,7 +87,8 @@ differ from v6.
 spec/isa/      ISA spec: bundle.md (wide instruction format), binutils-ops.yaml
                (every operation), registers.yaml (state and AAU registers)
 spec/abi/      ABI spec for e2k64: data layout, registers + DWARF, calling
-               convention, stacks and unwinding, ELF/relocations/PIC/TLS
+               convention, stacks and unwinding, ELF/relocations/PIC/TLS,
+               atomics, source-level conventions (macros, asm, options)
 spec/NOTICE.md attribution and licence of spec/
 doc/           plans for the owner: gcc-port-plan.md (how to write the GCC port)
 tools/setup/   install reference toolchains into toolchains/
@@ -94,7 +96,8 @@ tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas
 tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
 tools/isa-timing/   latency/hazard microbenchmarks run on hardware over SSH
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
-                    compiled to assembly and read; tagtrap.c, dbl.c,
+                    compiled to assembly and read, as are atomics.c,
+                    asmops.c and stackprot.c; tagtrap.c, dbl.c,
                     dso/run.sh and elfops/run.sh run on hardware)
 tools/abi/compat/   ABI compatibility suite: gen.py writes caller/callee
                     pairs, run.py builds every compiler pair and runs them
@@ -221,7 +224,21 @@ only and no linker relaxation. MCST ld problems: `R_E2K_ISLOCAL` can't be
 linked, an ifunc referenced with `@GOTOFF` in a PIE fails silently, a
 static link with an ifunc crashes ld; gold (not shipped) breaks dynamic
 links. No stack protector is needed (return addresses live in the
-chain stack).
+chain stack); lcc 1.31's `-fstack-protector` uses a constant canary
+`0x000d0aff` and protects every function, and its `-strong`/`-all` do
+nothing.
+
+Atomics (`atomics.md`, lcc output, MAS meanings from MCST qemu): every
+read-modify-write is a lock-wait load (MAS 0x7, ALC0) plus wait-unlock
+store (MAS 0x2) with `rbranch` (= `ibranch ? %MLOCK`), whatever the
+order; fences and seq_cst/release accesses use `wait ld_c, st_c`.
+16-byte atomics are libatomic calls with a lock on v3/v4 and inline
+`ldqp`/`stqp` on v5+; mixing them on one object breaks. Source-level
+conventions (`source-compat.md`): define `__e2k__`, `__iset__`,
+`__ptr64__`, never `__LCC__` (glibc's headers key lcc-only code on it);
+asm `r` = register or even pair, `x` = extended register; lcc treats
+`swapcontext` as returns-twice and zero-inits maybe-uninitialised locals
+against tag traps.
 
 Other measured facts: `setwd dbl` affects only 32-bit integer ALU ops
 (loads always write the whole register, FP ops never extend; lcc uses
@@ -283,6 +300,9 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 
 ## Open questions for the owner
 
+- lcc's user manual is MCST's but not openly licensed. Facts from it are
+  used with the **lcc-doc** mark and checked by probes where possible;
+  is that acceptable under decision 4?
 - `setwd dbl = 1` (recommended in the plan, D7) or `dbl = 0` like lcc?
 - The community qemu zero-extends 32-bit FP results under `dbl = 1`
   (`is_alop_affected_by_dbl`); the 4C and MCST's qemu don't. A bug in the

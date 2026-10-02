@@ -46,12 +46,13 @@ python3 tools/abi/compat/run.py toolchains/compat/gen
 calling-convention.md (scalars, aggregates of every size, layout
 attributes, large results, long argument lists, variadic and unprototyped
 calls, integer extension, `va_list` passed between compilers, `longjmp`
-across compilers) plus seeded random signatures. `run.py` builds every
-ordered pair of compilers (`--cc NAME=COMMAND` adds one, e.g. a GCC
-port, and `--cxx NAME=COMMAND` its C++ compiler for C++ units), links
+across compilers, C++ exceptions) plus seeded random signatures.
+`run.py` builds every ordered pair of compilers (`--cc NAME=COMMAND` adds
+one, e.g. a GCC port, and `--cxx NAME=COMMAND` its C++ compiler), links
 with lcc (`l++` for C++) and runs each program under `--runner` (qemu-e2k
-by default) or on hardware over SSH (`--remote`). Known differences of the reference compilers are listed in
-`tools/abi/compat/known.txt`; any other failure fails the run.
+by default) or on hardware over SSH (`--remote`). Known differences of
+the reference compilers are listed in `tools/abi/compat/known.txt`; any
+other failure fails the run.
 
 ## Probes
 

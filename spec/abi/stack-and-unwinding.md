@@ -59,6 +59,20 @@ C++ exceptions use MCST's E2K `libgcc_s`:
   libgcc checks the CPU at run time.
 - glibc's unwinder interface also looks up `_Unwind_GetPCSP`, an E2K
   extension returning the chain stack position of a frame.
+- Unipro's clang compiles C++ against lcc's libstdc++ headers (it finds
+  them through the `lcc` driver on `PATH`), and both link with `l++`, so
+  they share one C++ runtime and the Itanium C++ ABI. The compat suite
+  (`eh` unit) throws and catches across compilers, also through and
+  out of frames of the other compiler with cleanups to run, and with
+  rethrow: scalars, `long double`, `__int128`, structs of every kind,
+  class hierarchies caught by base reference (including a second base,
+  which needs a pointer adjustment), types whose vtable and `type_info`
+  come from only one compiler, and `std::exception` and `std::string`.
+  lcc and Unipro interoperate (compat, hw).
+- The runtime aligns exception objects to 16 bytes (the `__aligned__` of
+  `_Unwind_Exception`), not to a larger `alignas`: an `alignas(32)` object
+  lands at an address that is 16 mod 32 (compat, hw). A compiler must not
+  assume more than 16 for a caught object.
 
 ## setjmp/longjmp, contexts
 

@@ -12,6 +12,7 @@ code.
 | [calling-convention.md](calling-convention.md) | Calls, argument passing, results, varargs |
 | [stack-and-unwinding.md](stack-and-unwinding.md) | User stack, hardware stacks, exceptions, backtraces |
 | [elf.md](elf.md) | ELF header, sections, relocations, PIC and PLT, TLS |
+| [atomics.md](atomics.md) | Atomic read-modify-write, memory orders, 16-byte atomics |
 
 ## Sources
 
@@ -21,6 +22,7 @@ Each rule is marked with where it comes from:
 |---|---|
 | **guide** | MCST, "Руководство по эффективному программированию на платформе «Эльбрус»", chapter 9 (CC BY 4.0) |
 | **lcc** | Observed in the output of lcc 1.29.16 for `tools/abi/probes/` (1.31.05 where the text says so; `tools/setup/fetch-lcc.sh 1.31.05 e2k-v3`) |
+| **lcc-doc** | lcc 1.31.05's user documentation (`/opt/mcst/doc/lcc` in the `lcc` package at setwd.ws/sp/1.31/1.31.05/native/: changelogs since 1.24, option reference, notes on incompatible changes). It is MCST's, not openly licensed: only facts are taken from it, and each is checked with a probe where possible |
 | **unipro** | Observed in the output of Unipro's clang 20.1.8 for the same probes |
 | **libffi** | MCST's libffi 3.3 E2K port (`src/e2k/`, MIT licence; `tools/setup/fetch-lcc-libs.sh`): an independent implementation of the calling convention by MCST, built with lcc and run against lcc code under qemu |
 | **binutils** | MCST's GPL binutils, `OpenE2K/binutils-gdb` (`bfd/elfxx-e2k.c`, `gas/config/tc-e2k.c`) |

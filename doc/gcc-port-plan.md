@@ -512,7 +512,11 @@ Caveat: rotating loops (M7) also want `%b[]`; at that point outgoing
 registers must be printed as `%rN` with the final window size (ia64's
 renaming approach), or the loop's rotating area placed elsewhere.
 
-**Call-clobbered**: globals (except `%g12`, `%g13`, fixed), the outgoing
+**Static chain** (for nested functions and trampolines): use `%g12`,
+which MCST's libffi already uses for its closures
+(`spec/abi/registers.md`).
+
+**Call-clobbered**: globals (except `%g13`, fixed; `%g12` as the static chain), the outgoing
 registers, `%ctpr1–3`, `%lsr`. Window registers `%r*` are preserved by
 hardware: mark them call-saved, and the prologue never saves them.
 Predicates are also preserved (each call gets a fresh predicate file).

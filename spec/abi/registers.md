@@ -64,7 +64,7 @@ units). (kernel `e2k_wd_t`, `e2k_br_t`; unipro, lcc)
 |---|---|---|
 | Window registers | Saved automatically by the call mechanism, except the parameter area, which a call may change | guide 9.3.1.2 |
 | `%g13` | Thread pointer (TLS) | guide 9.3.1.4 |
-| `%g12` | Reserved | guide 9.3.1.4 |
+| `%g12` | Reserved by the guide; used as the **static chain** by MCST's libffi (its closure trampolines load the closure address into `%g12` and jump; Go closures receive it there; its testsuite defines `STATIC_CHAIN_REG "%g12"`). In protected mode it is the thread pointer | guide 9.3.1.4, libffi |
 | Other globals | Scratch: not preserved across calls | guide 9.3.1.4 |
 | Predicates `%pred0`–`%pred31` | Saved and restored automatically; each call gets a fresh predicate file | guide 9.3.2, 9.5.3 |
 | `%ctpr1`–`%ctpr3` | Scratch: not preserved across calls. Returns go through `%ctpr3` | guide 9.3.3 |

@@ -29,7 +29,7 @@ callee:
 - Tail calls: `ct` to a function without `call` keeps the current window, so
   arguments are placed in the caller's own `%dr0..` (unipro).
 
-## Argument slots (guide 9.5.1; lcc, unipro)
+## Argument slots (guide 9.5.1; lcc, unipro, libffi)
 
 Arguments form a list of 8-byte **slots**:
 
@@ -39,11 +39,17 @@ Arguments form a list of 8-byte **slots**:
 | 9–16 bytes | next **even** slot (an odd slot is skipped) | 2 |
 | 17 bytes or more | next even slot | (size + 7) / 8 |
 
+Placement depends on the size only, not on the type's alignment: a
+9-byte `struct { char c[9]; }` also starts at an even slot (libffi
+`calc_arg_alignment`, checked against lcc).
+
 - **Slots 0–7 are passed in registers**: slot *i* in the callee's `%dr<i>`
   (the caller's `%db[i]`). Later slots are passed in memory only.
 - An argument that would start in a register slot but not fit entirely in
   slots 0–7 goes entirely to memory. Example: seven `long`s and then a
   16-byte struct: the struct skips slot 7 and goes to slots 8–9 in memory.
+- Slots are assigned in order and never backfilled: a later small argument
+  does not go into a skipped slot (slot 7 above stays unused).
 - Aggregates are passed by value in slots, packed as in memory: a 3-byte
   struct occupies the low bytes of one slot; `struct { float a, b; }` and
   `_Complex float` share one slot (`a` in the low half); a 72-byte struct
@@ -65,7 +71,11 @@ If the upper half carries a diagnostic tag, a non-speculative operation
 that reads the whole 64-bit register (for example `std` to spill it)
 raises `exc_diag_operand`, which Linux delivers as `SIGILL`. A callee
 should access such a slot only at the width of the data in it, or with
-speculative operations.
+speculative operations: a speculative store `std,sm` of such a register
+does not trap and stores the low half intact (the upper half becomes an
+arbitrary diagnostic pattern, `4afafafa` on the 4C; hw,
+`tools/abi/probes/tagtrap.c` variant d). MCST's libffi spills incoming
+argument registers this way (`std,sm` throughout `src/e2k/call.S`).
 
 The mechanism is confirmed on hardware by `tools/abi/probes/tagtrap.c`:
 on an Elbrus 4C (v3), a speculative load from a bad address leaves a
@@ -110,6 +120,10 @@ compilers extend as callers.)
   reads it with `getsp 0`.
 - No other stack allocation may happen between filling the area and the
   call.
+- The area belongs to the callee for the duration of the call: it may
+  store its register arguments into their slots (Unipro's variadic
+  callees and libffi's closures do) and use the area as scratch. A caller
+  must not expect its contents to survive the call.
 
 ## Variadic functions and calls without a prototype (guide 9.5.1; lcc, unipro, compat, hw)
 
@@ -147,18 +161,22 @@ compilers extend as callers.)
   lcc does this; **Unipro's clang does not** (registers only), so such calls
   from Unipro code into lcc-compiled variadic functions are broken.
 
-## Results (guide 9.5.2; gdb, lcc, unipro)
+## Results (guide 9.5.2; gdb, lcc, unipro, libffi)
 
 - Results of **up to 64 bytes** are returned in the callee's `%dr0`…`%dr7`
   (the caller's `%db[0]`…), packed into slots as for arguments. Examples:
   `struct { long a[8]; }` uses `%dr0`–`%dr7`; a 3-byte struct, `struct
   { float a, b; }` and `_Complex float` use `%dr0`; `__int128`,
-  `__float128` and `_Complex double` use `%dr0`/`%dr1`.
+  `__float128` and `_Complex double` use `%dr0`/`%dr1`; `_Complex long
+  double` (32 bytes) uses `%dr0`–`%dr3` (libffi, checked against lcc).
 - `long double`: mantissa in `%dr0`, exponent in `%r1`.
 - Results **larger than 64 bytes** are written by the callee to memory at its
   entry stack pointer, i.e. into the caller's argument area. The caller
   must reserve an area of at least the result size. There is no hidden
-  pointer argument.
+  pointer argument. The result area overlaps the arguments passed in
+  memory, so the callee must finish reading them before it writes the
+  result (libffi's closures build the result in a separate buffer and
+  copy it last, `src/e2k/ffi.c`).
 - Integer results narrower than 64 bits are extended to 64 bits (guide;
   compat: lcc and Unipro extend `_Bool`, `char`, `short` and `int`
   results).

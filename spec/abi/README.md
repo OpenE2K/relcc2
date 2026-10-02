@@ -22,6 +22,7 @@ Each rule is marked with where it comes from:
 | **guide** | MCST, "Руководство по эффективному программированию на платформе «Эльбрус»", chapter 9 (CC BY 4.0) |
 | **lcc** | Observed in the output of lcc 1.29.16 for `tools/abi/probes/` |
 | **unipro** | Observed in the output of Unipro's clang 20.1.8 for the same probes |
+| **libffi** | MCST's libffi 3.3 E2K port (`src/e2k/`, MIT licence; `tools/setup/fetch-lcc-libs.sh`): an independent implementation of the calling convention by MCST, built with lcc and run against lcc code under qemu |
 | **binutils** | MCST's GPL binutils, `OpenE2K/binutils-gdb` (`bfd/elfxx-e2k.c`, `gas/config/tc-e2k.c`) |
 | **gdb**, **glibc**, **kernel**, **libgcc** | MCST's GPL sources: `OpenE2K/gdb`, `OpenE2K/glibc`, `OpenE2K/linux`, and the E2K libgcc in lcc's `internal-lcc-libs-open-source` tarball |
 | **qemu** | `OpenE2K/qemu-e2k-mcst` and `OpenE2K/qemu-e2k-community` (source or behaviour) |

@@ -70,3 +70,27 @@ probe_c:
 	  std,2	%r0, 0x0, %r3
 	}
 	.size	probe_c, .- probe_c
+! D: as B, but spill with a speculative store (std,sm).
+	.global	probe_d
+	.type	probe_d, #function
+	.align	8
+probe_d:
+	{
+	  setwd	wsz = 0x4, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3; ipd 2
+	  ldd,0,sm	%r1, 0x0, %r3
+	}
+	{
+	  nop 5
+	}
+	{
+	  adds,0	0x0, %r2, %r3
+	}
+	{
+	  nop 1
+	}
+	{
+	  ct	%ctpr3
+	  std,2,sm	%r0, 0x0, %r3
+	}
+	.size	probe_d, .- probe_d

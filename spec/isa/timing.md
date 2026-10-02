@@ -1,0 +1,120 @@
+# Operation timing and pipeline hazards
+
+Latencies, control-transfer preparation delays and interlock behaviour,
+measured on hardware by `tools/isa-timing/bench.py`. The data is in
+[timing-e2s.yaml](timing-e2s.yaml) (generated; do not edit).
+
+Status: **[hw]** on an Elbrus 4C (E2S, elbrus-v3, 750 MHz). v1–v5 are
+said to share timings (AGENTS.md); v6 differs (e.g. load→use 5, binutils
+`bfd/elfxx-e2k.c` `build_plt_entry`) and is not measured yet.
+
+## Method
+
+- Cycles are read from `%clkr` (readable from user code, counts core
+  cycles: 750.0 MHz against the wall clock).
+- **Back-to-back cost**: a chain of dependent copies of one operation, one
+  per wide instruction, so each waits for the previous result. Overhead
+  is cancelled by the difference between chains of 64 and 32.
+- **Scheduled latency**: the same chain with each operation followed by
+  `nop`s so the next one issues `gap` cycles later; the latency is the
+  smallest gap at which a step costs exactly `gap` cycles (no stall). This
+  is the value a scheduler needs.
+- **Hazards**: a producer and a consumer `D` cycles apart (`D = 0`: same
+  wide instruction), checking whether the consumer sees the new value.
+  `.ignore strict_delay` keeps gas from inserting delays.
+
+The guide's numbers (chapter 6.1) are in the second column for comparison.
+
+## Latencies
+
+| Producer → consumer | Guide | Scheduled latency | Back-to-back |
+|---|---|---|---|
+| integer add/sub, logic, shift, `sxt` (32 or 64-bit) | 1 | 1 | 1 |
+| combined integer (`add_addd`, `shl_addd`; ALC1/4) | 2 | 2 | 5 |
+| integer multiply (`muls`, `muld`) | 4 | 4 | 5 |
+| FP add, multiply (single and double) | 4 | 4 | 5 |
+| combined FP (`fmul_addd`) | 8 | 8 | 9 |
+| `fdivs` | 11 | 11 | 13 |
+| `fdivd` | 14 | 14 | 17 |
+| `fsqrts` | — | 12 | 13 |
+| `sdivs`, `sdivd` | — | 11 | 13 |
+| `ldd`, L1 hit, any of ALC0/2/3/5 → next load's address | 3 | 3 | 5 |
+| `ldd` → integer op | 3 | 3 | — |
+| integer op → load address | — | 1 | — |
+| FP add → integer op | 4 + 2 | 6 | — |
+| integer multiply → integer op | 4 + 2 | 6 | — |
+| integer op → FP add | 1 + 1 | **1** (no penalty) | — |
+| FP add → FP multiply | 4 | 4 | — |
+| compare → predicated ALU op | 2 | 2 | — |
+| compare → `ct ? pred` | 3 | 3 | — |
+| `disp` → `ct` | 5 | 5 | — |
+| `return` → `ct` | 6 | 6 | — |
+| `movtd` → `ct` | 9 | 9 | — |
+
+The scheduled latencies match the guide except that integer → FP has no
+extra cycle on the 4C.
+
+## Stalls cost more than the latency
+
+The pipeline interlocks, but an early consumer is expensive. For a
+4-cycle producer, a consumer placed `g` cycles later costs:
+
+| g | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| cycles | 5 | 6 | 7 | 4 | 5 |
+
+So for `g` below the latency the cost is about `g + latency`, not
+`latency`: issuing one cycle early loses almost a whole latency. The
+dividers and square root behave periodically (period 4: `fdivs` costs 11,
+12, 13, 14, 11, ... for `g` = 3, 4, 5, 6, 7). The combined integer
+operations cost 5 back-to-back despite a latency of 2. Consequences for a
+compiler: model latencies exactly, and fill a known gap with `nop N` (or
+independent work) rather than relying on the interlock. This is why lcc
+pads with `nop`s.
+
+## Memory
+
+Pointer chase, back-to-back cost per load (one pointer per 64-byte line,
+random order); includes TLB effects and varies between runs by several
+cycles above 1 MiB:
+
+| Working set | 16 KiB | 256 KiB | 2 MiB | 16 MiB | 128 MiB |
+|---|---|---|---|---|---|
+| cycles | 5 | 9 | 15–22 | 108–124 | 167–185 |
+
+## Hazards (interlocking)
+
+| Producer → consumer | Interlocked? | Detail |
+|---|---|---|
+| ALU, multiply, divide, load → register use | yes | values correct at any distance ≥ 1 |
+| compare → predicated ALU op, `ct ? pred`, `ibranch ? pred` | yes | correct at distance ≥ 1 |
+| `disp`, `movtd` → `ct` | yes | correct at distance ≥ 1 |
+| `rws %fpcr` → `rrs %fpcr` | yes | |
+| `rws %pfpfr` (rounding mode) → FP operation | yes | |
+| FP operation → `rrs %pfpfr` (exception flags) | yes | |
+| **`rwd %lsr` → `rrd %lsr`** | **no** | old value at distance 1–3, new from 4 |
+| anything in the same wide instruction | — | every operation reads the state from before the wide instruction (distance 0 sees the old value) |
+
+gas, for operations written outside braces (its `strict_delay` mode,
+`gas/config/tc-e2k.c`), inserts `nop 2` after compares and `ccto*`,
+`nop 5` or `wait all_e=1` after writes to the system registers flagged
+in `include/opcode/e2k/state-regs.def` (`%psr`, `%cwd`, `%psp`, `%pcsp`,
+`%usd`, segment registers and others), and `nop 4` after reading `%cud`
+and `%gd`. On the 4C the compare padding is not needed for correctness
+(it saves the stall cost above); the system-register cases are
+privileged and not tested here.
+
+Where the floating-point state lives (glibc `sysdeps/e2k/fpu`): the
+rounding mode and exception flags of ordinary (scalar and packed)
+operations are in `%pfpfr` (rounding in bits 13–14:
+`FE_TONEAREST` 0, `FE_DOWNWARD` 0x2000, `FE_UPWARD` 0x4000,
+`FE_TOWARDZERO` 0x6000; flags in bits 0–5, `FE_INEXACT` 0x20); `%fpcr` and
+`%fpsr` are the x87-style control and status words for 80-bit operations.
+
+## Not measured yet
+
+- v4, v5, v6 (the 8CB is v5).
+- Predicate logic (`andp` etc. in PLS, "½ cycle"), loop mode registers
+  other than `%lsr` (`%ilcr`), APB.
+- Packed (vector) operations, conversions, 128-bit operations.
+- Throughput (operations per cycle per channel) as opposed to latency.

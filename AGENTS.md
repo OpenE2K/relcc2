@@ -90,6 +90,7 @@ doc/           plans for the owner: gcc-port-plan.md (how to write the GCC port)
 tools/setup/   install reference toolchains into toolchains/
 tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas
 tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
+tools/isa-timing/   latency/hazard microbenchmarks run on hardware over SSH
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     compiled to assembly and read; tagtrap.c and dso/run.sh
                     run on hardware)
@@ -184,9 +185,13 @@ python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
   `rbgc`), `vfbg`, `puttsd`, `%bgrpred` (gas doesn't accept them), v7 `dtbp`
   and ctcond type 11, `staa`/`ldaa`/`incr` decoding (hidden by an objdump
   bug; encoding is checked).
-- No timing data yet (latencies, bypasses). Planned sources: lcc's lccopt
-  (debug build, as a black box), Unipro's scheduling model, microbenchmarks
-  on hardware, with a `measured_on` field per value.
+- Timing measured on the 4C (v3) by `tools/isa-timing/bench.py`
+  (`spec/isa/timing.md`, data in `timing-e2s.yaml`, with `measured_on`):
+  scheduled latencies match the guide (int 1, FP/mul 4, L1 load 3,
+  `disp`→`ct` 5, ...) except int→FP has no penalty; a stall costs about a
+  whole latency extra; everything user code touches is interlocked except
+  `rwd %lsr` → `rrd %lsr` (4 cycles). Other generations, packed ops and
+  throughput are not measured yet.
 
 ### ABI (spec/abi) — written, checked by the compat suite under qemu-e2k and on the 4C (v3)
 
@@ -239,10 +244,9 @@ bytes only. Still to add: `-march` variants.
    tag-trap tests, which pass on the 4C. Run it on v5 (8CB) when
    available, which may clean registers like qemu.
 2. The relcc2 work listed in `doc/gcc-port-plan.md` section 11: DejaGnu
-   boards for qemu-e2k and the 4C; the full list of non-interlocked
-   hazards (compare → predicate use, state registers; gas's
-   `strict_delay` rules are a start); measured timing tables per
-   generation; data-speculation and loop-mode specs.
+   boards for qemu-e2k and the 4C; timing on v5 (8CB) and other
+   generations with `tools/isa-timing/bench.py`; data-speculation and
+   loop-mode specs.
 3. APB; protected (`e2k128`) and 32-bit modes.
 4. ELF leftovers (`spec/abi/elf.md`, "Not covered yet"): `@ISLOCAL`,
    `@DYNOPT`, ifunc, gold.

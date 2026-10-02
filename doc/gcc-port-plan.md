@@ -211,7 +211,7 @@ executed by `ct`.
 | 32 predicate registers, each one bit; compares write them; ALU ops can be predicated through CDS syllables; control transfers take conditions | `spec/isa/bundle.md` (PLS, CDS, ctcond) | `BImode` predicate class, `define_cond_exec`, conditional branches on predicates |
 | Control transfer = prepare (`disp`/`movtd`/`return` into `%ctpr1–3`) then `ct`/`call`; prepare→`ct` latency 5 cycles (`disp`), 6 (`return`), 9 (`movtd`); also an immediate `ibranch label ? cond` with no preparation | guide 6.1, ch. 10.9–10.10; `bundle.md` CS0/SS | Simplest correct start: `ibranch` for jumps; later split prepare/transfer so the scheduler can hoist `disp` |
 | One wide instruction per cycle: 6 ALU channels, each op allowed only in some channels; ≤ 4 32-bit literal slots; 1 control transfer and 1 prepare; 3 predicate-logic ops; store/load channel restrictions | `bundle.md`, `spec/isa/binutils-ops.yaml` (`channels` per op) | DFA description (section 7) |
-| **Register results are interlocked, predicate and state-register results are not**: an op whose register operand is not ready stalls the machine (guide 6.1, "пропустит несколько тактов"; gas adds no delay after a multiply or load). But gas's `strict_delay` mode, active for ops written *outside* braces, inserts `nop 2` (or a per-opcode count) after compares that write predicates and after `ccto*`, `nop 5` (or `wait all_e=1`) after state-register writes (`rws`/`rwd`), and `nop 4` after some state-register reads (`gas/config/tc-e2k.c`, `no_strict_delay`) | guide 6.1, MCST gas | In braceless output (M0–M3) gas inserts these delays itself — so **don't** emit lcc's `.ignore strict_delay` until the scheduler handles them. From M4 the scheduler must respect these distances itself (section 7.4) |
+| **The pipeline interlocks almost everything, but stalls are expensive**: register results, compare → predicate users, `disp`/`movtd` → `ct`, `%fpcr`/`%pfpfr` were all correct at distance 1 on the 4C; the only non-interlocked case found is `rwd %lsr` → `rrd %lsr` (needs 4 cycles). An operand that arrives `k` cycles late costs about a whole extra latency, not `k` cycles (`spec/isa/timing.md`). gas's `strict_delay` mode (ops outside braces) pads compares and privileged state-register accesses anyway | `spec/isa/timing.md` [hw], guide 6.1, MCST gas | One op per wide instruction is correct. Scheduling with exact latencies is what makes code fast; keep gas's padding (no `.ignore strict_delay`) until the scheduler places `nop`s itself (section 7.4) |
 | **gas assigns channels itself** if you omit `,N`, and treats an op outside braces as its own wide instruction (checked: `addd`, `addd`, `ldd` in one brace group were placed in channels 1, 2, 0) | tested with MCST gas | Early milestones print plain ops; channel numbers are never required |
 | `setwd dbl=1` makes 32-bit ops zero-extend into the full register; `dbl=0` leaves the upper half untouched (including a stale diagnostic tag that traps when stored) | `registers.md`, `calling-convention.md` "Unused parts of a slot" | Recommend `dbl=1` (D7) |
 | Speculative mode (`,sm`): faults become a tagged result; a non-speculative use of a tagged value traps | guide 10.2, `calling-convention.md` | Control speculation needs no check instruction (section 7.6) |
@@ -400,9 +400,9 @@ produce slow code: correctness first, then the VLIW work.
   makes each one a wide instruction and picks the channel.
 - Start every file with `.ignore ld_st_style` like lcc and Unipro so
   stores are written *address, offset, data* (`bundle.md`, "Assembler
-  syntax notes"). Do **not** copy lcc's `.ignore strict_delay`: without
-  it, gas pads the non-interlocked delays (compare → predicate use,
-  state-register access) for you.
+  syntax notes"). Do **not** copy lcc's `.ignore strict_delay` yet: without
+  it, gas pads compares and state-register accesses for you, which avoids
+  costly stalls in braceless code.
 
 ### M1. Straight-line code and branches, `-O0`/`-O1` (3–6 weeks)
 
@@ -556,9 +556,8 @@ Predicate *logic* (`andp`, `landp` in PLS syllables, "½ cycle") and the
 
 Interlocks make the M1/M2 forms correct (the hardware waits for the
 prepared target, guide 4.4 "неподготовленный переход"); M5 makes them
-fast. The compare that produces a branch's predicate is the exception:
-its result is not interlocked (gas pads it in braceless code, see
-section 2). C6x's "real insn + shadow" pairs
+fast. The same holds for the compare that produces a branch's predicate
+(interlocked, latency 3, `spec/isa/timing.md`). C6x's "real insn + shadow" pairs
 tied with `record_delay_slot_pair` (c6x.cc:5118, haifa-sched.cc:730) are
 the closest existing model of "these two must be N cycles apart", but
 for E2K a plain dependence with latency 5 between the `disp` insn and the
@@ -667,13 +666,16 @@ Written in `.md` with `define_automaton`, `define_cpu_unit`,
   with a script in the port, as C6x does with `gensched.sh`
   (`c6x/t-c6x:21–37`).
 - **Latencies** (`define_insn_reservation` latency and `define_bypass`):
-  start with guide 6.1's table: integer 1, combined integer 2, FP and
-  integer multiply 4, combined FP 8, `fdivs`/`fdivd` 11/14, load 3 (L1
-  hit), compare→predicate logic 1, compare→predicated op 2,
-  compare→`ct` 3, `disp`→`ct` 5, `return`→`ct` 6, `movtd`→`ct` 9, FP→int +2,
-  int→FP +1. Measured per-generation tables are relcc2's next step
-  (section 11). v6 and later differ (e.g. load→use 5, binutils comment in
-  `bfd/elfxx-e2k.c` `build_plt_entry`).
+  use the measured table in `spec/isa/timing.md` (data in
+  `spec/isa/timing-e2s.yaml`, from `tools/isa-timing/bench.py`): integer
+  1, combined integer 2, FP and integer multiply 4, combined FP 8,
+  `fdivs`/`fdivd` 11/14, `fsqrts` 12, `sdiv` 11, load 3 (L1 hit),
+  compare→predicated op 2, compare→`ct` 3, `disp`→`ct` 5, `return`→`ct` 6,
+  `movtd`→`ct` 9, FP or multiply → integer +2; integer → FP has no penalty
+  on the 4C (the guide says +1). These match guide 6.1 otherwise. A stall
+  costs about a whole latency extra, so latencies must be exact. v6 and
+  later differ (e.g. load→use 5, binutils comment in `bfd/elfxx-e2k.c`
+  `build_plt_entry`) and still need measuring.
 - **Size**: keep automata small by splitting independent resources into
   separate `define_automaton`s (ALU channels, literals, control); C6x
   uses 7 automata with `ndfa`, `collapse-ndfa`, `no-comb-vect`
@@ -730,17 +732,17 @@ the earlier group. C6x computes the same gaps (`reorg_emit_nops`,
 c6x.cc:4989), though it emits separate nop instructions because its
 pipeline is not interlocked.
 
-For register results `nop N` is only an optimisation (the hardware
-stalls). For the **non-interlocked hazards** — compare → predicate use
-(2 cycles to a predicated op, 3 to a control transfer), state-register
-writes and reads — it is required once ops are inside braces, because gas
-then stops padding. Within one block the scheduler already honours the
-DFA latencies; across block boundaries it does not, so a final pass must
-check distances and add `nop`s. ia64's write tracker (`rws_sum`,
-`group_barrier_needed`, ia64.cc:6255–7096) and C6x's
-`reorg_emit_nops` (which pads to `earliest_bb_end`) are models for that
-pass. The full list of such hazards is something relcc2 should
-document (section 11).
+Because a stall costs about a whole latency extra (`spec/isa/timing.md`),
+`nop N` matters for speed even though the hardware interlocks: within a
+block the scheduler already keeps producers and consumers apart by the
+DFA latency, but across block boundaries it does not, so a final pass
+should check distances and add `nop`s. ia64's write tracker (`rws_sum`,
+`group_barrier_needed`, ia64.cc:6255–7096) and C6x's `reorg_emit_nops`
+(which pads to `earliest_bb_end`) are models for that pass.
+
+For correctness, the only non-interlocked hazard measured on the 4C is
+`rwd %lsr` → `rrd %lsr` (4 cycles); loop-mode code (7.7) must respect it.
+Privileged state registers (which gas pads) don't appear in user code.
 
 If later passes could insert labels inside a group, wrap each group in a
 `SEQUENCE` as C6x does (`c6x_gen_bundles`, c6x.cc:4622).
@@ -922,9 +924,9 @@ Useful next pieces of relcc2 work for the port, in rough order:
 
 1. **DejaGnu board files** for qemu-e2k and for ssh to the 4C, and a
    script to run GCC's testsuite with them.
-2. **Timing tables** per generation (latencies, bypasses), measured on
-   the 4C with microbenchmarks and compared with the guide — the input for
-   the DFA (7.2).
+2. **Timing tables** for more generations (v5 on the 8CB, v4/v6 via the
+   community) with `tools/isa-timing/bench.py`; the 4C (v3) table is in
+   `spec/isa/timing.md`.
 3. **Channel/resource data** from `binutils-ops.yaml` in a form easy to
    turn into reservations (data only; the generator that writes `.md`
    belongs in the port).
@@ -952,5 +954,3 @@ Decided by the owner:
 Open:
 
 - `dbl = 1` (recommended, D7) or `dbl = 0` like lcc?
-- The full list of non-interlocked hazards (section 7.4); relcc2 can
-  measure it on the 4C.

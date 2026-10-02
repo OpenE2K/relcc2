@@ -313,6 +313,25 @@ paths (e.g. the DWARF register ranges in `_Unwind_SetGR`).
 Until libgcc builds (M3), link against the system's `libgcc_s.so.1`
 from lcc's sysroot.
 
+Source-level and runtime interface rules from lcc's own documentation,
+written up in `spec/abi/source-compat.md` and `spec/abi/atomics.md`:
+
+- Define `__e2k__`, `__iset__`, `__ptr64__` and, with `-mtune`, the
+  `__elbrus_<cpu>__` macros (`TARGET_CPU_CPP_BUILTINS`), but **never
+  `__LCC__`**: glibc's installed headers use it to choose lcc-only code,
+  and the plain-GCC branch is the one that suits the port.
+- Inline asm: `r` is one register or an even-aligned pair (9–16 bytes),
+  `x` one extended register; operands print as the bare register name
+  (`%r2`). Register variables use `%xgN` for extended registers.
+- Atomics (`sync.md`): read-modify-write = a lock-wait load (MAS `0x7`,
+  ALC0) and a wait-unlock store (MAS `0x2`) with `rbranch` back, which
+  gas assembles as `ibranch ? %MLOCK`; fences = `wait ld_c = 1,
+  st_c = 1`. Under `-march=elbrus-v3` 16-byte atomics must call
+  libatomic, like lcc.
+- lcc treats `swapcontext` as returns-twice and zero-initialises
+  possibly uninitialised locals at `-O1`+ to avoid tag traps; the port
+  should consider both.
+
 ---
 
 ## 4. Building and running the cross compiler

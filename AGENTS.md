@@ -84,6 +84,7 @@ spec/isa/      ISA spec: bundle.md (wide instruction format), binutils-ops.yaml
 spec/abi/      ABI spec for e2k64: data layout, registers + DWARF, calling
                convention, stacks and unwinding, ELF/relocations/PIC/TLS
 spec/NOTICE.md attribution and licence of spec/
+doc/           plans for the owner: gcc-port-plan.md (how to write the GCC port)
 tools/setup/   install reference toolchains into toolchains/
 tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas
 tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
@@ -95,7 +96,9 @@ tools/abi/compat/   ABI compatibility suite: gen.py writes caller/callee
                     under qemu-e2k or, with --remote, on hardware over SSH;
                     known.txt lists known differences
 OpenE2K/       submodules (see above)
-toolchains/    untracked: installed toolchains, corpus builds, scratch output
+toolchains/    untracked: installed toolchains, corpus builds, scratch output;
+               gcc/ (GCC mainline, blobless clone) and gcc-tilegx/ (worktree
+               at 54a5f478487, the last commit with TILE-Gx) as references
 x86_64/        untracked: Unipro debs
 ```
 
@@ -232,11 +235,12 @@ bytes only. Still to add: `-march` variants.
    `run.py --target v3 --remote ...`; all pairs match qemu except the
    tag-trap tests, which pass on the 4C. Run it on v5 (8CB) when
    available, which may clean registers like qemu.
-2. **"What a GCC port must decide"** document: register numbering and
-   classes, fixed/scratch registers, window sizing, and which existing
-   ports to study (SPARC for windows; ia64 for bundling, speculation,
-   `sel-sched`). A map for the owner, not code.
-3. Timing/scheduling data; APB; protected (`e2k128`) and 32-bit modes.
+2. The relcc2 work listed in `doc/gcc-port-plan.md` section 11: DejaGnu
+   boards for qemu-e2k and the 4C; the full list of non-interlocked
+   hazards (compare → predicate use, state registers; gas's
+   `strict_delay` rules are a start); measured timing tables per
+   generation; data-speculation and loop-mode specs.
+3. APB; protected (`e2k128`) and 32-bit modes.
 4. ELF leftovers (`spec/abi/elf.md`, "Not covered yet"): `@ISLOCAL`,
    `@DYNOPT`, ifunc, gold.
 

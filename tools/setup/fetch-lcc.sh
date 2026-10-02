@@ -4,8 +4,9 @@
 # install it under toolchains/lcc-VERSION-TARGET, with a wrapper script.
 #
 # Usage: tools/setup/fetch-lcc.sh [VERSION] [TARGET]
-#   VERSION defaults to 1.29.16, TARGET to e2k-v5 (others: e2k-v3, e2k-v4,
-#   e2k-v6, or CPU-specific ones such as e2k-v5.8c2; see the archive).
+#   VERSION defaults to 1.29.16 (1.31.05 is the newest), TARGET to e2k-v5
+#   (others: e2k-v3, e2k-v4, e2k-v6, or CPU-specific ones such as
+#   e2k-v5.8c2; see the archive).
 #
 # lcc looks for its components under a fixed /opt/mcst/lcc-... path. The
 # wrapper toolchains/lcc-VERSION-TARGET/lcc uses bwrap to mount the unpacked
@@ -19,7 +20,11 @@ target=${2:-e2k-v5}
 root=$(cd "$(dirname "$0")/../.." && pwd)
 series=$(echo "$version" | cut -d. -f1-2)
 name=lcc-$version.$target.linux-6.1
-url=https://setwd.ws/sp/$series/$version/cross-sp-$version.$target.linux-6.1_64.tar.xz
+base=https://setwd.ws/sp/$series/$version
+# 1.31 renamed the archives to cross-sp-public-osl-*.
+url=$base/cross-sp-$version.$target.linux-6.1_64.tar.xz
+curl -fsI "$url" >/dev/null 2>&1 ||
+	url=$base/cross-sp-public-osl-$version.$target.linux-6.1_64.tar.xz
 out=$root/toolchains/lcc-$version-$target
 
 command -v bwrap >/dev/null || { echo "bwrap (bubblewrap) is required" >&2; exit 1; }

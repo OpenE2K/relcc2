@@ -111,6 +111,19 @@ operations are in `%pfpfr` (rounding in bits 13–14:
 `FE_TOWARDZERO` 0x6000; flags in bits 0–5, `FE_INEXACT` 0x20); `%fpcr` and
 `%fpsr` are the x87-style control and status words for 80-bit operations.
 
+## Differences between generations (lcc-doc, not measured)
+
+lcc's changelogs name scheduling changes it made for later CPUs, which
+`bench.py` should check when it runs there:
+
+- v5: floating-point operations in channel 5 need special scheduling
+  (lcc 1.26).
+- v6: the bypass from a store to a following load was removed (lcc 1.26),
+  so a load that reads what a store just wrote waits longer.
+- Elbrus-48C (v7): prepare-to-transfer delays differ;
+  `-mset-prepare-ct-delays-e48c` applies them and is on with
+  `-mtune=elbrus-48c` (lcc 1.31).
+
 ## Not measured yet
 
 - v4, v5, v6 (the 8CB is v5).

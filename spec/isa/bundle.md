@@ -329,6 +329,18 @@ Array prefetch programs consist of pairs of 64-bit `apb` entries (API_L,
 API_R). They are not wide instructions; the disassembler recognises them when
 `mdl` doesn't match the syllables HS declares. See `print_apb_instr`.
 
+What each generation's APB can do, from lcc's changelogs (lcc 1.30–1.31
+documentation; not checked):
+
+| ISA | Capability |
+|---|---|
+| v2–v4 | Only loads whose address is aligned to their size; lcc proves alignment statically or by versioning the loop at run time |
+| v5 | Unaligned loads; 64-bit `AAIND` registers; loads of different sizes from one array can share one prefetch area |
+| v6 | Strides that are not a multiple of the load size; the head of a prefetch area can advance several times per iteration |
+
+Loops on v5+ also have a 64-bit hardware loop counter (lcc 1.25), so lcc
+no longer splits loops whose trip count may not fit in 32 bits.
+
 ## Bundling restrictions [source: gas]
 
 gas rejects these combinations within one wide instruction:

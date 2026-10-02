@@ -213,7 +213,7 @@ executed by `ct`.
 | One wide instruction per cycle: 6 ALU channels, each op allowed only in some channels; ≤ 4 32-bit literal slots; 1 control transfer and 1 prepare; 3 predicate-logic ops; store/load channel restrictions | `bundle.md`, `spec/isa/binutils-ops.yaml` (`channels` per op) | DFA description (section 7) |
 | **The pipeline interlocks almost everything, but stalls are expensive**: register results, compare → predicate users, `disp`/`movtd` → `ct`, `%fpcr`/`%pfpfr` were all correct at distance 1 on the 4C; the only non-interlocked case found is `rwd %lsr` → `rrd %lsr` (needs 4 cycles). An operand that arrives `k` cycles late costs about a whole extra latency, not `k` cycles (`spec/isa/timing.md`). gas's `strict_delay` mode (ops outside braces) pads compares and privileged state-register accesses anyway | `spec/isa/timing.md` [hw], guide 6.1, MCST gas | One op per wide instruction is correct. Scheduling with exact latencies is what makes code fast; keep gas's padding (no `.ignore strict_delay`) until the scheduler places `nop`s itself (section 7.4) |
 | **gas assigns channels itself** if you omit `,N`, and treats an op outside braces as its own wide instruction (checked: `addd`, `addd`, `ldd` in one brace group were placed in channels 1, 2, 0) | tested with MCST gas | Early milestones print plain ops; channel numbers are never required |
-| `setwd dbl=1` makes 32-bit ops zero-extend into the full register; `dbl=0` leaves the upper half untouched (including a stale diagnostic tag that traps when stored) | `registers.md`, `calling-convention.md` "Unused parts of a slot" | Recommend `dbl=1` (D7) |
+| `setwd dbl=1` makes 32-bit ops zero-extend into the full register; `dbl=0` leaves the upper half untouched (including a stale diagnostic tag that traps when stored) | `registers.md`, `calling-convention.md` "Unused parts of a slot" | `dbl=0` like lcc (owner's decision, D7) |
 | Speculative mode (`,sm`): faults become a tagged result; a non-speculative use of a tagged value traps | guide 10.2, `calling-convention.md` | Control speculation needs no check instruction (section 7.6) |
 | Rotating registers, loop counters, loop mode, array prefetch (APB) | guide 4.5, 10.11 | Advanced; GCC has no rotating-register support anywhere (section 7.7) |
 | Calls, results, varargs, extension rules, ELF, relocations, PIC, TLS, `.eh_frame` | `spec/abi/*.md` | Implement as specified; verify with the compat suite |
@@ -712,8 +712,11 @@ Written in `.md` with `define_automaton`, `define_cpu_unit`,
   1, combined integer 2, FP and integer multiply 4, combined FP 8,
   `fdivs`/`fdivd` 11/14, `fsqrts` 12, `sdiv` 11, load 3 (L1 hit),
   compare→predicated op 2, compare→`ct` 3, `disp`→`ct` 5, `return`→`ct` 6,
-  `movtd`→`ct` 9, FP or multiply → integer +2; integer → FP has no penalty
-  on the 4C (the guide says +1). These match guide 6.1 otherwise. A stall
+  `movtd`→`ct` 9, FP or multiply → integer +2. Crossing between the
+  channel clusters ALC0–2 and ALC3–5 costs +1 for integer and load
+  results and +2 for FP-class ones (the guide's "integer → FP +1" is this
+  crossing); model it with `define_bypass` or by tracking the cluster.
+  These match guide 6.1. A stall
   costs about a whole latency extra, so latencies must be exact. v6 and
   later differ (e.g. load→use 5, binutils comment in `bfd/elfxx-e2k.c`
   `build_plt_entry`) and still need measuring.

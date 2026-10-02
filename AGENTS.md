@@ -197,7 +197,9 @@ python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
 - Timing measured on the 4C (v3) by `tools/isa-timing/bench.py`
   (`spec/isa/timing.md`, data in `timing-e2s.yaml`, with `measured_on`):
   scheduled latencies match the guide (int 1, FP/mul 4, L1 load 3,
-  `disp`→`ct` 5, ...) except int→FP has no penalty; a stall costs about a
+  `disp`→`ct` 5, ...); crossing between the clusters ALC0–2 and ALC3–5
+  costs +1 for integer/load results and +2 for FP ones (the guide's
+  int→FP +1 is this crossing); a stall costs about a
   whole latency extra; everything user code touches is interlocked except
   `rwd %lsr` → `rrd %lsr` (4 cycles). Other generations, packed ops and
   throughput are not measured yet.

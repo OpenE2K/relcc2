@@ -82,13 +82,14 @@ differ from v6.
 spec/isa/      ISA spec: bundle.md (wide instruction format), binutils-ops.yaml
                (every operation), registers.yaml (state and AAU registers)
 spec/abi/      ABI spec for e2k64: data layout, registers + DWARF, calling
-               convention, stacks and unwinding
+               convention, stacks and unwinding, ELF/relocations/PIC/TLS
 spec/NOTICE.md attribution and licence of spec/
 tools/setup/   install reference toolchains into toolchains/
 tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas
 tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
-                    compiled to assembly and read; tagtrap.c runs on hardware)
+                    compiled to assembly and read; tagtrap.c and dso/run.sh
+                    run on hardware)
 tools/abi/compat/   ABI compatibility suite: gen.py writes caller/callee
                     pairs, run.py builds every compiler pair and runs them
                     under qemu-e2k or, with --remote, on hardware over SSH;
@@ -194,6 +195,16 @@ pairs of 64-bit registers; DWARF 0–63 = `%r0..63`, 64–127 = `%b[0..63]`;
 exceptions use `.eh_frame` only for FDE/LSDA lookup (CFI ignored) and pass
 data in DWARF 64/65 (`%b[0]`, `%b[1]`).
 
+ELF (`spec/abi/elf.md`, run on the 4C): `e_flags` top byte is the ISA
+version or CPU model, `EF_E2K_INCOMPAT` marks non-forward-compatible code;
+64-bit literals hold their halves swapped and PC-relative fields count
+from the bundle start; no GOT register (each function does `rrd %ip` +
+`_GLOBAL_OFFSET_TABLE_` literal); calls go through `disp` and the PLT,
+which runs in the callee's new window and clobbers `%dr8`+ and `%ctpr1`;
+lazy binding calls `_dl_fixup(link_map, reloc_offset)` directly; TLS is
+variant I with TP in `%g13`, `__tls_get_addr(module, offset)`, GD/IE/LE
+only and no linker relaxation.
+
 Compat suite (`tools/abi/compat`): 1,853 generated tests per compiler pair
 (scalars, aggregates of 1–1024 bytes, packed/aligned/bit-field/union
 types, large results, long argument lists, variadic, unprototyped,
@@ -220,13 +231,13 @@ bytes only. Still to add: `-march` variants.
    `run.py --target v3 --remote ...`; all pairs match qemu except the
    tag-trap tests, which pass on the 4C. Run it on v5 (8CB) when
    available, which may clean registers like qemu.
-2. **ELF, relocations, TLS models, PIC sequences** spec (binutils
-   `bfd/elfxx-e2k.c`, glibc `ld.so`, guide 9.1).
-3. **"What a GCC port must decide"** document: register numbering and
+2. **"What a GCC port must decide"** document: register numbering and
    classes, fixed/scratch registers, window sizing, and which existing
    ports to study (SPARC for windows; ia64 for bundling, speculation,
    `sel-sched`). A map for the owner, not code.
-4. Timing/scheduling data; APB; protected (`e2k128`) and 32-bit modes.
+3. Timing/scheduling data; APB; protected (`e2k128`) and 32-bit modes.
+4. ELF leftovers (`spec/abi/elf.md`, "Not covered yet"): `@ISLOCAL`,
+   `@DYNOPT`, ifunc, gold.
 
 ## Open questions for the owner
 

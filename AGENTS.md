@@ -71,7 +71,9 @@ differ from v6.
   claude@ringo.lan` (key in untracked `secrets/`, never commit or copy it).
   4× E2S, 16 cores, 61 GiB RAM, ALT Linux, native lcc 1.29.16, gdb, perf.
   It is a shared machine, not a container: keep parallelism low (about
-  `-j4`), work in `~/relcc2`, and don't fill `/tmp` (tmpfs).
+  `-j4`), work in `~/relcc2`, and don't fill `/tmp` (tmpfs). When a task
+  is done, remove what you created (`~/relcc2`, `~/dso-probe`,
+  `~/elfops-probe`); the account's own dotfiles stay.
 - Nearly every Elbrus system ships MCST's lcc as the default compiler (OS
   Elbrus and ALT Linux), so tests may assume lcc on the target.
 - ALT Linux ships no 32-bit or protected-mode (`e2k128`) runtime. Keep those
@@ -215,7 +217,19 @@ from the bundle start; no GOT register (each function does `rrd %ip` +
 which runs in the callee's new window and clobbers `%dr8`+ and `%ctpr1`;
 lazy binding calls `_dl_fixup(link_map, reloc_offset)` directly; TLS is
 variant I with TP in `%g13`, `__tls_get_addr(module, offset)`, GD/IE/LE
-only and no linker relaxation.
+only and no linker relaxation. MCST ld problems: `R_E2K_ISLOCAL` can't be
+linked, an ifunc referenced with `@GOTOFF` in a PIE fails silently, a
+static link with an ifunc crashes ld; gold (not shipped) breaks dynamic
+links. No stack protector is needed (return addresses live in the
+chain stack).
+
+Other measured facts: `setwd dbl` affects only 32-bit integer ALU ops
+(loads always write the whole register, FP ops never extend; lcc uses
+`dbl = 0`, Unipro `dbl = 1`); `std,sm` of a register with a tagged upper
+half doesn't trap. MCST's libffi (`src/e2k/`) agrees with
+calling-convention.md on every rule and filled its gaps (no slot
+backfill, callee owns the argument area, large results overlap memory
+arguments, `%g12` as static chain).
 
 Compat suite (`tools/abi/compat`): 1,853 generated tests per compiler pair
 (scalars, aggregates of 1–1024 bytes, packed/aligned/bit-field/union
@@ -223,7 +237,9 @@ types, large results, long argument lists, variadic, unprototyped,
 integer extension, `va_list` across compilers, `longjmp` across
 compilers, C++ exceptions across compilers, 300 random signatures). It is
 the acceptance test for the owner's GCC port:
-`run.py GENDIR --cc gcc='...' --cxx gcc='...' --pairs lcc:gcc,gcc:lcc,gcc:gcc`. Found so far
+`run.py GENDIR --cc gcc='...' --cxx gcc='...'
+--pairs lcc:gcc,gcc:lcc,gcc:gcc`. lcc's v3 code also passes it under qemu
+as v5, v6 and v7 (`--runner`). Found so far
 (in `known.txt` and calling-convention.md): Unipro's unprototyped calls,
 Unipro callees not re-extending narrow arguments, Unipro's
 `va_arg(__int128)` at odd slots, and a tag trap when a callee spills a
@@ -236,6 +252,21 @@ studying it showed that lcc callers store only the last fixed and the
 variadic arguments.
 C++ exceptions interoperate; the runtime aligns exception objects to 16
 bytes only. Still to add: `-march` variants.
+
+### GCC port planning (doc/gcc-port-plan.md)
+
+A plan for the owner, written for someone new to GCC: pipeline and
+backend anatomy, files to create (LoongArch's 2022 series as the model),
+cross-build commands against lcc's sysroot, milestones M0–M8, design
+decisions, VLIW scheduling, and what to take from ia64, TILE-Gx, C6x and
+SPARC (with file:line references into `toolchains/gcc`). Owner's
+decisions so far: use MCST's unwinder and libgcc E2K files; default
+`-march=elbrus-v3`, forward compatible; `%g12` as static chain. Key
+facts behind it: MCST gas assigns channels and pads delays for ops
+outside braces, so a first port can print one op per line; GCC has no
+loop-rotation support and only sel-sched does check-free control
+speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
+(gccint) into `toolchains/gcc-docs/`.
 
 ## Next steps (proposed, owner to choose)
 
@@ -252,7 +283,10 @@ bytes only. Still to add: `-march` variants.
 
 ## Open questions for the owner
 
-- None right now.
+- `setwd dbl = 1` (recommended in the plan, D7) or `dbl = 0` like lcc?
+- The community qemu zero-extends 32-bit FP results under `dbl = 1`
+  (`is_alop_affected_by_dbl`); the 4C and MCST's qemu don't. A bug in the
+  owner's emulator, found by reading its source.
 
 ## Gotchas
 

@@ -43,6 +43,10 @@ codebase's size. relcc2 does not decompile anything (see decision 4).
    disagree, follow lcc and note the difference.
 6. **Assembler syntax** is that of MCST's GNU binutils port (gas). MCST no
    longer ships a separate assembler; don't call it "las syntax".
+7. **The port does what lcc does** wherever there is a choice (code and
+   assembly conventions: `setwd dbl = 0`, `.ignore strict_delay` with
+   compiler-inserted delays, ...). Specs and plans should describe lcc's
+   way first.
 
 ## Sources
 
@@ -277,10 +281,14 @@ backend anatomy, files to create (LoongArch's 2022 series as the model),
 cross-build commands against lcc's sysroot, milestones M0–M8, design
 decisions, VLIW scheduling, and what to take from ia64, TILE-Gx, C6x and
 SPARC (with file:line references into `toolchains/gcc`). Owner's
-decisions so far: use MCST's unwinder and libgcc E2K files; default
-`-march=elbrus-v3`, forward compatible; `%g12` as static chain. Key
-facts behind it: MCST gas assigns channels and pads delays for ops
-outside braces, so a first port can print one op per line; GCC has no
+decisions so far: follow lcc's conventions wherever there is a choice
+(`setwd dbl = 0`; `.ignore strict_delay` with the compiler inserting
+every delay, `.accept strict_delay` around user asm); use MCST's
+unwinder and libgcc E2K files; default `-march=elbrus-v3`, forward
+compatible; `%g12` as static chain. Key facts behind it: MCST gas
+assigns channels to ops outside braces, so a first port can print one op
+per line, and the hardware interlocks everything but `%lsr`, so such code
+is correct without padding, only slow; GCC has no
 loop-rotation support and only sel-sched does check-free control
 speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 (gccint) into `toolchains/gcc-docs/`.
@@ -300,7 +308,6 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 
 ## Open questions for the owner
 
-- `setwd dbl = 1` (recommended in the plan, D7) or `dbl = 0` like lcc?
 - The community qemu zero-extends 32-bit FP results under `dbl = 1`
   (`is_alop_affected_by_dbl`); the 4C and MCST's qemu don't. A bug in the
   owner's emulator, found by reading its source.

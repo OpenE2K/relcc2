@@ -417,11 +417,14 @@ produce slow code: correctness first, then the VLIW work.
   x){return x+1;}` prints something gas accepts.
 - Print **one operation per line, no braces, no channel numbers**: gas
   makes each one a wide instruction and picks the channel.
-- Start every file with `.ignore ld_st_style` like lcc and Unipro so
-  stores are written *address, offset, data* (`bundle.md`, "Assembler
-  syntax notes"). Do **not** copy lcc's `.ignore strict_delay` yet: without
-  it, gas pads compares and state-register accesses for you, which avoids
-  costly stalls in braceless code.
+- Start every file with `.ignore ld_st_style` and `.ignore strict_delay`
+  like lcc (owner's decision: follow lcc, D9). The first makes stores
+  *address, offset, data* (`bundle.md`, "Assembler syntax notes"); the
+  second stops gas from padding compares and state-register accesses, so
+  the compiler owns all delays. That is safe from the start because the
+  hardware interlocks everything user code touches except `rwd %lsr` →
+  `rrd %lsr` (`spec/isa/timing.md`); early braceless code just stalls
+  (slow, not wrong) until the scheduler (M4) places `nop`s.
 
 ### M1. Straight-line code and branches, `-O0`/`-O1` (3–6 weeks)
 
@@ -620,20 +623,26 @@ lcc always emits `dbl = 0` (every lcc function above starts with
 `setwd ..., dbl = 0x0`), which is also how pre-v3 CPUs behave; that is
 why the emulator must support both.
 
-Recommend **`dbl = 1`** for GCC:
+**Decision (owner): `dbl = 0`, like lcc** (the port follows lcc's
+conventions throughout). Consequences:
 
-- GCC's RTL often uses a 32-bit operation and then needs the 64-bit
-  value; with `dbl = 1` the upper half is known to be zero, which you can
-  tell GCC, saving explicit zero-extensions.
-- Writing whole registers avoids the diagnostic-tag trap from partly
-  written registers (`calling-convention.md`, "Unused parts of a slot",
-  confirmed on the 4C).
-- The flag is saved per frame, so mixing with lcc code is safe.
+- After a 32-bit integer operation the upper half of the register is
+  unknown (old value and tag). Don't tell GCC that SImode operations
+  extend (no `WORD_REGISTER_OPERATIONS`-style assumption); emit `sxt`
+  (or a 64-bit operation) whenever a 64-bit value is needed, as lcc does.
+- Partly written registers can keep a diagnostic tag in the upper half,
+  and storing such a register with `std` traps (`calling-convention.md`,
+  "Unused parts of a slot", confirmed on the 4C). Spill and pass 32-bit
+  values with `stw`, or extend them first; `std,sm` does not trap on the
+  4C. lcc also zero-initialises locals that may be read uninitialised
+  (`source-compat.md`).
+- The flag is saved per frame, so it never leaks between functions.
 
-Caveats: 32-bit float results still leave the upper half alone, so
-don't assume anything about it there; the ABI still requires callers to
-**sign**-extend signed narrow arguments (emit `sxt`), and callees must
-not rely on the upper bits they receive (lcc re-extends).
+The ABI still requires callers to **sign**-extend signed narrow
+arguments (emit `sxt`), and callees must not rely on the upper bits they
+receive (lcc re-extends). Unipro's `dbl = 1` (zero-extending 32-bit
+integer ops) would have saved some extensions; it was rejected for
+uniformity with lcc.
 
 ### D8. Floating point
 
@@ -644,7 +653,14 @@ bypasses, not into register classes.
 
 ### D9. Assembly output conventions
 
-- `.ignore ld_st_style` at the top of every file.
+Owner's decision: emit what lcc emits.
+
+- `.ignore ld_st_style` and `.ignore strict_delay` at the top of every
+  file; the compiler inserts every delay itself (`nop N`, or independent
+  work), including the 4 cycles between `rwd %lsr` and `rrd %lsr`.
+- Wrap each user `asm` in `.accept strict_delay` … `.ignore
+  strict_delay` (lcc also adds `.ias_line N, "file"`), so gas pads
+  hand-written code that is not bundled.
 - Write `%empty` (gas), not `%empty.hi` (Unipro).
 
 ---
@@ -965,6 +981,8 @@ Useful next pieces of relcc2 work for the port, in rough order:
 
 Decided by the owner:
 
+- Follow lcc's conventions wherever there is a choice: `setwd dbl = 0`
+  (D7), `.ignore strict_delay` with compiler-inserted delays (D9).
 - Unwinder and E2K libgcc files: MCST's (3.3).
 - Default target: **`-march=elbrus-v3`**, forward compatible (no
   `EF_E2K_INCOMPAT`; `spec/abi/elf.md`). How MCST keeps v3 code working on
@@ -976,6 +994,3 @@ Decided by the owner:
   `calling-convention.md`), and v6 has longer load latencies
   (performance only).
 
-Open:
-
-- `dbl = 1` (recommended, D7) or `dbl = 0` like lcc?

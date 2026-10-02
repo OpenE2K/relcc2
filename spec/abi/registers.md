@@ -36,11 +36,27 @@ units). (kernel `e2k_wd_t`, `e2k_br_t`; unipro, lcc)
   hardware saves and restores the 80-bit extended parts of the window's
   registers when spilling. Both compilers clear `nfx` only in functions
   that use `long double` (lcc, unipro).
-- **`dbl`**: with `dbl = 1`, a 32-bit operation zero-extends its result
-  into the whole 64-bit register; with `dbl = 0`, the upper half is left
-  unchanged (`movt*s` are not affected). The flag is saved and restored per
-  frame (`cr1_hi.wdbl`). lcc uses `dbl = 0`, Unipro `dbl = 1`. Code must not
-  rely on the upper half of a 32-bit result either way.
+- **`dbl`** (v3+): with `dbl = 1`, 32-bit integer ALU operations
+  zero-extend their result into the whole 64-bit register; with
+  `dbl = 0`, they write only the low half and leave the upper half
+  (including its tag) unchanged. The flag is saved and restored per frame
+  (`cr1_hi.wdbl`). lcc uses `dbl = 0`, Unipro `dbl = 1`. Code must not rely
+  on the upper half of a 32-bit result either way. Measured on the 4C
+  (`tools/abi/probes/dbl.c`, hw; MCST's qemu agrees):
+
+  | Operation | `dbl = 0` | `dbl = 1` |
+  |---|---|---|
+  | `adds`, `shls`, `muls` (32-bit integer) | upper half kept | zero-extended |
+  | `ldw` | zero-extended | zero-extended |
+  | `sxt` | 64-bit result | 64-bit result |
+  | `fadds` (32-bit float) | upper half kept | upper half kept |
+  | `movts` | upper half kept | upper half kept |
+
+  MCST's qemu limits `dbl` to the integer operation group plus `gettags`,
+  `puttags` and `rrs` (`operations-descr.h`, `e2k_get_eff_dst_type`). The
+  community qemu applies it to every 32-bit ALU result except `movt*s`
+  (`translate.c`, `is_alop_affected_by_dbl`), which disagrees with the
+  hardware for `fadds`.
 
 ## Conventions
 

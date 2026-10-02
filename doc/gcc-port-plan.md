@@ -301,18 +301,17 @@ ABI constraints a GCC port must keep:
   with lcc-built libraries; follow `spec/abi/registers.md` (DWARF 0–63 =
   `%r0–63`, 64–127 = `%b[0–63]`).
 
-Options for the unwinder, to decide early because they affect
-upstreaming:
+**Decision (owner): use MCST's unwinder and libgcc E2K files.** MCST
+publishes them under GPLv3 with the runtime exception, in a public
+release. In the port they keep MCST's copyright notices; the commit that
+adds them should say where they come from (the DCO's clause (b) covers
+submitting work under a compatible free licence). Adapt rather than
+rewrite: drop the `-llcc` link in `t-linux` (GCC's own
+`__builtin_cpu_is` support replaces it) and check the `__LCC__`-only
+paths (e.g. the DWARF register ranges in `_Unwind_SetGR`).
 
-1. **At first, don't build the unwinder**: link against the system's
-   `libgcc_s.so.1` (it is in lcc's sysroot, `fs/lib64`) and only build
-   `libgcc.a` for arithmetic helpers. C works; C++ exceptions use MCST's
-   unwinder at run time.
-2. Write an E2K unwinder yourself from `spec/abi/stack-and-unwinding.md`.
-3. Use MCST's file. It is GPL, but it is MCST's code: under the DCO the
-   submitter must have the right to submit it (DCO clause (b)), and GCC
-   maintainers may still ask questions. This is a question for the owner
-   and possibly for the GCC steering committee, not a technical one.
+Until libgcc builds (M3), link against the system's `libgcc_s.so.1`
+from lcc's sysroot.
 
 ---
 
@@ -583,14 +582,34 @@ longer exists in GCC (removed 2021).
 
 ### D7. `setwd dbl`
 
-Recommend **`dbl=1`** (as Unipro does): every 32-bit result is
-zero-extended into the full 64-bit register. This tells GCC the upper
-half is known (you can describe it with the zero-extension hooks), and it
-avoids the diagnostic-tag trap from partly written registers
-(`calling-convention.md`, "Unused parts of a slot", confirmed on the 4C).
-The ABI still requires callers to **sign**-extend signed narrow
-arguments, so emit `sxt` for them; and callees must not rely on the
-upper bits they receive (lcc re-extends).
+`dbl` is a per-function flag set by `setwd` (v3 and later) that decides
+what a 32-bit integer operation does to the upper half of its 64-bit
+destination register (measured on the 4C, `spec/abi/registers.md`):
+
+| | `dbl = 0` (lcc) | `dbl = 1` (Unipro) |
+|---|---|---|
+| `adds`, `shls`, `muls`, other 32-bit integer ALU ops | write the low 32 bits only; the upper half (and its tag) stays as it was | zero-extend into all 64 bits |
+| loads (`ldw` etc.), `sxt`, 64-bit ops | whole register | whole register |
+| 32-bit float ops (`fadds`), `movts` | low half only | low half only |
+
+lcc always emits `dbl = 0` (every lcc function above starts with
+`setwd ..., dbl = 0x0`), which is also how pre-v3 CPUs behave; that is
+why the emulator must support both.
+
+Recommend **`dbl = 1`** for GCC:
+
+- GCC's RTL often uses a 32-bit operation and then needs the 64-bit
+  value; with `dbl = 1` the upper half is known to be zero, which you can
+  tell GCC, saving explicit zero-extensions.
+- Writing whole registers avoids the diagnostic-tag trap from partly
+  written registers (`calling-convention.md`, "Unused parts of a slot",
+  confirmed on the 4C).
+- The flag is saved per frame, so mixing with lcc code is safe.
+
+Caveats: 32-bit float results still leave the upper half alone, so
+don't assume anything about it there; the ABI still requires callers to
+**sign**-extend signed narrow arguments (emit `sxt`), and callees must
+not rely on the upper bits they receive (lcc re-extends).
 
 ### D8. Floating point
 
@@ -777,8 +796,16 @@ print `,N` with a punctuation code in the output templates.
   (`hwloop_optimize`, c6x.cc:5478, `set_modulo_params`,
   haifa-sched.cc:580) — the closest model for E2K's hardware loop mode.
   Selective scheduling can also pipeline (`-fsel-sched-pipelining`).
-- **Rotating registers**: GCC has **no support anywhere**; ia64 never
-  used its rotating registers (`n_rotate_regs = 0`, "No rotating register
+- **Rotating registers**: two different things share the name.
+  *Window shifting* — each call slides the register window, as SPARC's
+  `save`/`restore` and E2K's `call wbs=` do — is handled by hardware and
+  GCC models it with `INCOMING_REGNO`/`OUTGOING_REGNO` (D1). *Loop
+  rotation* — inside a loop, an instruction advances a base so that the
+  register written as `%b[0]` in one iteration is read as `%b[1]` in the
+  next (E2K `abn`, ia64 `br.ctop`), which lets overlapped iterations keep
+  their own copies without moves — is what software pipelining needs.
+  SPARC has no loop rotation. GCC has **no support for loop rotation
+  anywhere**; ia64 never used its rotating registers (`n_rotate_regs = 0`, "No rotating register
   support yet", ia64.cc:2769). Supporting E2K loop mode with rotation
   (`abn`/`abp`, `%b[]` rotation, prologue/epilogue predicates) is new
   compiler work — a research project for after the port works.
@@ -907,13 +934,23 @@ Useful next pieces of relcc2 work for the port, in rough order:
 6. Review of the port's output against `spec/` and lcc, and test
    triage.
 
-### Open questions for the owner
+### Decisions and open questions
 
-- Unwinder: write, reuse MCST's, or rely on the system `libgcc_s` (3.3)?
-- `dbl=1` (recommended, D7) or `dbl=0` like lcc?
-- Which ISA version is the default target (`-march=elbrus-v3`, the most
-  compatible, or newer)?
-- Which E2K hazards, if any, are *not* interlocked (e.g. some control
-  register updates)? The guide's example shows ALU stalls; PLT code in
-  binutils still inserts `nop`s before using a load result. relcc2 can
-  test this on the 4C.
+Decided by the owner:
+
+- Unwinder and E2K libgcc files: MCST's (3.3).
+- Default target: **`-march=elbrus-v3`**, forward compatible (no
+  `EF_E2K_INCOMPAT`; `spec/abi/elf.md`). How MCST keeps v3 code working on
+  later CPUs is not public, so forward compatibility is established by
+  testing: lcc's v3 code passes the whole compat suite (lcc → lcc,
+  1,853 tests) under MCST's qemu as v5, v6 and v7; the owner can test on v5 (8CB), and the community on
+  v4 and v6. Known differences to keep in mind: v5 and later may fill
+  fresh window registers with tagged values (the tag trap,
+  `calling-convention.md`), and v6 has longer load latencies
+  (performance only).
+
+Open:
+
+- `dbl = 1` (recommended, D7) or `dbl = 0` like lcc?
+- The full list of non-interlocked hazards (section 7.4); relcc2 can
+  measure it on the 4C.

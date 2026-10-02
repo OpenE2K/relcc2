@@ -13,6 +13,7 @@ code.
 | [stack-and-unwinding.md](stack-and-unwinding.md) | User stack, hardware stacks, exceptions, backtraces |
 | [elf.md](elf.md) | ELF header, sections, relocations, PIC and PLT, TLS |
 | [atomics.md](atomics.md) | Atomic read-modify-write, memory orders, 16-byte atomics |
+| [source-compat.md](source-compat.md) | Predefined macros, inline-asm constraints and register names, lcc options that change code |
 
 ## Sources
 

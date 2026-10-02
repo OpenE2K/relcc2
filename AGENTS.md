@@ -92,8 +92,8 @@ tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas
 tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
 tools/isa-timing/   latency/hazard microbenchmarks run on hardware over SSH
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
-                    compiled to assembly and read; tagtrap.c and dso/run.sh
-                    run on hardware)
+                    compiled to assembly and read; tagtrap.c, dbl.c,
+                    dso/run.sh and elfops/run.sh run on hardware)
 tools/abi/compat/   ABI compatibility suite: gen.py writes caller/callee
                     pairs, run.py builds every compiler pair and runs them
                     under qemu-e2k or, with --remote, on hardware over SSH;
@@ -248,8 +248,7 @@ bytes only. Still to add: `-march` variants.
    generations with `tools/isa-timing/bench.py`; data-speculation and
    loop-mode specs.
 3. APB; protected (`e2k128`) and 32-bit modes.
-4. ELF leftovers (`spec/abi/elf.md`, "Not covered yet"): `@ISLOCAL`,
-   `@DYNOPT`, ifunc, gold.
+4. ELF leftovers: `@PREF`, `@GOTPLT` (source only so far).
 
 ## Open questions for the owner
 

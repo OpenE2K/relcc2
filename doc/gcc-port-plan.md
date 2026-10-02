@@ -437,7 +437,9 @@ produce slow code: correctness first, then the VLIW work.
   soft-fp in libgcc, division (hardware on ALC5), all standard names the
   middle end wants.
 - PIC/PIE and TLS exactly as `spec/abi/elf.md` (GOT base via `rrd %ip` +
-  `_GLOBAL_OFFSET_TABLE_` literal in the same wide instruction).
+  `_GLOBAL_OFFSET_TABLE_` literal in the same wide instruction). In PIC
+  code reach ifunc symbols through `@GOT`: MCST ld cannot link a
+  `@GOTOFF` reference to an ifunc (`elf.md`, "Rarely used operators").
 - `libgcc` builds; `gcc.c-torture/execute` and `gcc.dg` pass with a
   DejaGnu board for qemu or the 4C (section 9).
 - `.eh_frame` with the encodings in `elf.md` (needed for C++ later).

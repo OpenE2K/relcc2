@@ -11,8 +11,9 @@ Run on hardware (Elbrus 4C, v3) by `tools/abi/probes/dso/run.sh`: a
 shared library with global and `static` TLS variables, used from a PIE, a
 non-PIE executable (with a copy relocation, an IE access and function
 pointer equality) and a fully static executable, with lazy and immediate
-binding (`LD_BIND_NOW=1`), all built by lcc 1.29.16 for `e2k-v3`. Unipro's PIC output can't be assembled with gas (see "Unipro"
-below), so only lcc's sequences are run.
+binding (`LD_BIND_NOW=1`), all built by lcc 1.29.16 for `e2k-v3`.
+Unipro's PIC output can't be assembled with gas (see "Unipro" below), so
+only lcc's sequences are run.
 
 ## ELF header (binutils, kernel)
 
@@ -142,9 +143,9 @@ DTP0 = start of the module's TLS segment.
 | 65 | `R_E2K_64_RELATIVE` | 64 | load base + A | dynamic |
 | 66 | `R_E2K_64_RELATIVE_LIT` | 64 literal | load base + A | dynamic: text relocation of a literal (shared library from non-PIC code) |
 | 67 | `R_E2K_64_IRELATIVE` | 64 | resolver(load base + A) | dynamic: ifunc |
-| 115 | `R_E2K_ISLOCAL` | 5-bit ALS operand | `0xc0` \| 1 if the symbol binds locally, else `0xc0` | `@ISLOCAL` |
-| 118 | `R_E2K_ISLOCAL32` | 32 literal | 1 if local, else 0 | `@ISLOCAL` |
-| 13, 257 | `R_E2K_32_DYNOPT`, `R_E2K_64_DYNOPT` | 32, 64 | S + A if defined in the same object file, else 0 | `@DYNOPT` |
+| 115 | `R_E2K_ISLOCAL` | 5-bit src1 of a compare | `0xc0` \| 1 if the symbol binds locally, else `0xc0` | `@ISLOCAL`; **cannot be linked** (see below) |
+| 118 | `R_E2K_ISLOCAL32` | 32 literal | 1 if the symbol binds locally, else 0 | `@ISLOCAL32` |
+| 13, 257 | `R_E2K_32_DYNOPT`, `R_E2K_64_DYNOPT` | 32, 64 | S + A if defined in the same input object file, else 0; no dynamic relocation | `@DYNOPT` (data only) |
 | 112 | `R_E2K_NONE` | – | none | **note: not 0**; 0 is `R_E2K_32_ABS` |
 | 119, 120 | `R_E2K_ALIGN_RELAX`, `R_E2K_MCSTBUG_140436_RELAX` | – | none (linker relaxation markers) | |
 
@@ -164,7 +165,9 @@ operand, `[ _f32s,_lts0 sym@GOT ]` or `[ _f64,_lts0 sym@GOTOFF ]`:
 `@GOT`, `@GOTOFF` (32-bit literal → `R_E2K_GOTOFF`, 64-bit literal →
 `R_E2K_64_GOTOFF_LIT`), `@GOTPLT`, `@PLT`, `@ABS`, `@PCREL`, `@TLS_LE`,
 `@TLS_IE`, `@TLS_GDMOD`, `@TLS_GDREL`, `@TLS_DTPREL` (data), `@SIZE`,
-`@ISLOCAL`, `@DYNOPT`. A bare symbol in a 64-bit literal gives
+`@ISLOCAL32` (32-bit literal), `@ISLOCAL` (only as the 5-bit first
+operand of a compare: `cmpedb,0 [ sym@ISLOCAL ], 0x1, %pred0`),
+`@DYNOPT` (data directives only). A bare symbol in a 64-bit literal gives
 `R_E2K_64_ABS_LIT`, except `_GLOBAL_OFFSET_TABLE_`, which gives
 `R_E2K_64_PC_LIT` (PC-relative to the bundle) unless written
 `_GLOBAL_OFFSET_TABLE_@ABS`. `disp %ctprN, sym` gives `R_E2K_DISP`.
@@ -318,12 +321,56 @@ GOT base as `_GLOBAL_OFFSET_TABLE_-.L0$pb` against a label on the
 gas rejects the label arithmetic, so its PIC assembly can only be
 assembled by its own integrated assembler.
 
+## Rarely used operators, ifunc and gold (binutils, hw)
+
+Nothing in glibc, the kernel, gdb or MCST's runtime libraries uses
+`@ISLOCAL`, `@ISLOCAL32` or `@DYNOPT`, and lcc emitted none of them for
+our probes. Behaviour of MCST ld 2.41, checked by
+`tools/abi/probes/elfops/run.sh` on the 4C:
+
+- **`R_E2K_ISLOCAL` cannot be linked.** Its howto declares a 1-bit field
+  while `relocate_section` computes `0xc0 | local`, so every use fails with
+  "relocation truncated to fit". Use `@ISLOCAL32`.
+- **`@ISLOCAL32`** (1 = binds locally):
+
+  | Symbol | non-PIE executable | PIE | shared library | shared library, `-Bsymbolic` |
+  |---|---|---|---|---|
+  | `static` | 1 | 1 | 1 | 1 |
+  | global, same object | 1 | 1 | **0** | 1 |
+  | global, `hidden` | 1 | 1 | 1 | 1 |
+  | global, another object of the link | 1 | 1 | **0** | 1 |
+  | function from another shared library | 1 | 1 | 1 | 1 |
+  | weak undefined | 0 | 0 | 0 | 0 |
+
+  So it is 0 for preemptible definitions and undefined weak symbols. It
+  is 1 for functions in other shared libraries (reached through the PLT),
+  which matches "a direct call is valid" rather than "defined here".
+- **`@DYNOPT`** gives the link-time value of symbols defined in the same
+  *input object file* and 0 for anything else, with no dynamic relocation.
+  So the value is a usable address only in a non-PIE executable; in a PIE
+  or shared library it lacks the load base and only tells "defined in
+  this object" (non-zero) apart from "elsewhere" (0).
+- **ifunc** (`__attribute__((ifunc))`, `STT_GNU_IFUNC`): works in a shared
+  library (exported as an `IFUNC` symbol, resolved by ld.so) and in a
+  non-PIE executable (`R_E2K_64_IRELATIVE`), lazily and with
+  `LD_BIND_NOW=1`, and the address taken in another object compares equal
+  (hw). It **fails in a PIE**: lcc takes the ifunc's address with
+  `R_E2K_64_GOTOFF_LIT`, which the ifunc branch of `relocate_section` does
+  not handle; it falls into a `default` that returns failure without a
+  message (a `FIXME` in the source says so), so ld exits with status 1
+  and prints nothing. A **static** link with an ifunc makes ld crash
+  (segmentation fault). A compiler should reach ifunc symbols through
+  `@GOT` in PIC code.
+- **gold** has an E2K backend (`gold/e2k.cc`, enabled in
+  `gold/configure.tgt`) but MCST does not ship it. Built from source and
+  given lcc's link lines, it links a static program correctly but breaks
+  dynamic ones: it has no copy-relocation support (a non-PIE executable
+  using a library variable gets a text relocation and computes a wrong
+  result) and the PIE dies with `SIGILL`. Its output has no
+  `DT_E2K_LAZY_GOT`, so ld.so would bind it eagerly. `ld.bfd` is the only
+  usable linker.
+
 ## Not covered yet
 
-- `@ISLOCAL`, `@DYNOPT`, `@PREF` and `@GOTPLT` are read from the source
-  only; lcc emitted none of them for the probes.
-- ifunc (`STT_GNU_IFUNC`, `R_E2K_64_IRELATIVE`) is read from the source
-  only.
-- gold (`OpenE2K/binutils-gdb/gold/e2k.cc`) is not studied; ld.bfd is the
-  reference.
+- `@PREF` and `@GOTPLT` are read from the source only.
 - 32-bit and protected modes (separate relocation types, `ldgd`, `%g12`).

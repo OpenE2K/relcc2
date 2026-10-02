@@ -297,10 +297,18 @@ emits no `.eh_frame` for C code at `-O2`. (MCST's readelf can't apply
 
 ## Stack protector (lcc, unipro, glibc)
 
+Not required. The protector guards the saved return address, and on E2K
+that lives in the chain stack, which a program can't write (see
+[stack-and-unwinding.md](stack-and-unwinding.md)); spilled registers are
+in the procedure stack, also out of reach, and the caller's `USD` is
+restored from the chain stack on return. A buffer overflow on the user
+stack can still corrupt other arrays and address-taken locals there,
+including function pointers, but cannot redirect a return.
+
 Neither lcc nor Unipro emits a check for `-fstack-protector-all` (both
-accept the option). glibc stores a canary at TP − 8
-(`THREAD_SET_STACK_GUARD`), which is where a compiler that implements the
-protector should read it.
+accept the option and ignore it). glibc still stores a canary at TP − 8
+(`THREAD_SET_STACK_GUARD`); a compiler that chooses to implement the
+protector should read it there.
 
 ## Unipro
 

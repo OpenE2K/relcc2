@@ -12,6 +12,7 @@ crash.
 
 Usage:
   run.py GENDIR [-o OUTDIR] [--target T] [--cc NAME=COMMAND]...
+         [--cxx NAME=COMMAND]...
          [--runner COMMAND | --remote [USER@]HOST [--ssh-key FILE]
           [--remote-dir DIR] [--remote-jobs N]]
          [--pairs CALLER:CALLEE,...] [--known FILE] [-j N]
@@ -31,6 +32,11 @@ unipro at -O2. --cc adds a compiler or replaces one of the same name;
 COMMAND is a shell-style command line that accepts -c FILE -o OUT. Use
 --pairs to limit the pairs, e.g.
 --cc gcc='...' --pairs lcc:gcc,gcc:lcc,gcc:gcc
+
+C++ units (gen.py writes them as .cc files) are built with each
+compiler's C++ command: lcc's l++ and Unipro's clang by default, others
+from --cxx NAME=COMMAND. They are linked with l++ and skipped for a pair
+whose compiler has no C++ command.
 
 With --remote the programs are copied to REMOTE_DIR on HOST (default
 relcc2/compat in the remote home) and run there, at most --remote-jobs at
@@ -90,6 +96,14 @@ def default_compilers(target):
             f"{UNIPRO} --target=e2k64-linux "
             f"-march=elbrus-v{isa_version(target)} --sysroot={SYSROOT} "
             f"-Wno-bad-lcc -std=gnu11 -O2")
+    return compilers
+
+
+def default_cxx(target):
+    compilers = {"lcc": f"{LCC.parent / 'l++'} -O2"}
+    if UNIPRO.exists():
+        compilers["unipro"] = default_compilers(target)["unipro"].replace(
+            "-std=gnu11", "-std=gnu++17")
     return compilers
 
 
@@ -243,6 +257,7 @@ def main():
     ap.add_argument("--target", default="v5.8c2",
                     help="lcc target directory suffix (default v5.8c2)")
     ap.add_argument("--cc", action="append", metavar="NAME=COMMAND")
+    ap.add_argument("--cxx", action="append", metavar="NAME=COMMAND")
     where = ap.add_mutually_exclusive_group()
     where.add_argument("--runner", default=None)
     where.add_argument("--remote", metavar="[USER@]HOST")
@@ -266,7 +281,11 @@ def main():
     ENV["PATH"] = f"{LCC.parent}:{ENV.get('PATH', '')}"
     compilers = default_compilers(args.target)
     compilers.update(c.split("=", 1) for c in args.cc or [])
+    cxx = {name: cmd for name, cmd in default_cxx(args.target).items()
+           if name in compilers}
+    cxx.update(c.split("=", 1) for c in args.cxx or [])
     units = (args.gendir / "units").read_text().split()
+    is_cxx = {u: (args.gendir / f"{u}_caller.cc").exists() for u in units}
     if args.pairs:
         pairs = [tuple(p.split(":")) for p in args.pairs.split(",")]
     else:
@@ -288,9 +307,12 @@ def main():
                          main_obj)] = ("lcc", "main")
         for cc, unit, side in itertools.product(compilers, units,
                                                 ("caller", "callee")):
-            src = args.gendir / f"{unit}_{side}.c"
+            if is_cxx[unit] and cc not in cxx:
+                continue
+            src = args.gendir / f"{unit}_{side}.{'cc' if is_cxx[unit] else 'c'}"
             obj = out / "obj" / cc / f"{unit}_{side}.o"
-            jobs[pool.submit(compile_one, compilers[cc], src, obj)] = (cc, f"{unit}_{side}")
+            cmd = cxx[cc] if is_cxx[unit] else compilers[cc]
+            jobs[pool.submit(compile_one, cmd, src, obj)] = (cc, f"{unit}_{side}")
         broken = set()
         for fut in cf.as_completed(jobs):
             ok, log = fut.result()
@@ -303,12 +325,15 @@ def main():
 
         # Link.
         def link(unit, caller, callee):
+            if is_cxx[unit] and (caller not in cxx or callee not in cxx):
+                return "skip"
             if (caller, f"{unit}_caller") in broken or \
                     (callee, f"{unit}_callee") in broken:
                 return None
             prog = out / "bin" / f"{caller}--{callee}" / unit
             prog.parent.mkdir(parents=True, exist_ok=True)
-            rc, log = sh([str(LCC), str(main_obj),
+            driver = LCC.parent / "l++" if is_cxx[unit] else LCC
+            rc, log = sh([str(driver), str(main_obj),
                           str(out / "obj" / caller / f"{unit}_caller.o"),
                           str(out / "obj" / callee / f"{unit}_callee.o"),
                           "-o", str(prog)])
@@ -332,7 +357,8 @@ def main():
     try:
         host.upload(out / "bin")
         with cf.ThreadPoolExecutor(run_jobs) as pool:
-            runs = {pool.submit(run, k, p): k for k, p in progs.items() if p}
+            runs = {pool.submit(run, k, p): k for k, p in progs.items()
+                if p and p != "skip"}
             for fut in cf.as_completed(runs):
                 results[runs[fut]] = fut.result()
     finally:
@@ -349,6 +375,9 @@ def main():
         row = f"{u:12}"
         for (a, b), pn in zip(pairs, pair_names):
             r = results.get((u, a, b))
+            if progs.get((u, a, b)) == "skip":
+                row += f"{'skip':>{width}}"
+                continue
             if r is None:
                 row += f"{'error':>{width}}"
                 unexpected += 1

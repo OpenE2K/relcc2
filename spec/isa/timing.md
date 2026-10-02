@@ -43,7 +43,7 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | integer op → load address | — | 1 | — |
 | FP add → integer op | 4 + 2 | 6 | — |
 | integer multiply → integer op | 4 + 2 | 6 | — |
-| integer op → FP add | 1 + 1 | **1** (no penalty) | — |
+| integer op → FP add | 1 + 1 | 1 in the same cluster, 2 across (see Clusters) | — |
 | FP add → FP multiply | 4 | 4 | — |
 | compare → predicated ALU op | 2 | 2 | — |
 | compare → `ct ? pred` | 3 | 3 | — |
@@ -51,8 +51,28 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | `return` → `ct` | 6 | 6 | — |
 | `movtd` → `ct` | 9 | 9 | — |
 
-The scheduled latencies match the guide except that integer → FP has no
-extra cycle on the 4C.
+The scheduled latencies match the guide. The guide's integer → FP "+1"
+appears only when the consumer is in the other cluster, and integer →
+integer pays it too: it is a cluster crossing, not a domain crossing.
+
+## Clusters
+
+The six ALU channels form two clusters, ALC0–2 and ALC3–5. A result
+reaches the other cluster later (scheduled latency, producer in ALC0 or
+ALC3, consumer in the channel shown):
+
+| Producer | Consumer in the same cluster | Consumer in the other cluster |
+|---|---|---|
+| integer ALU op (`addd`) | 1 to an integer op, FP op or load address (ALC1, ALC2: 1) | 2 (ALC3, ALC4; ALC3 → ALC0 also 2) |
+| `ldd`, L1 hit | 3 (to `addd` or the next load's address) | 4 |
+| FP add/multiply, integer `muld` | 4 to an FP op or `muld`; 6 to an integer op | 6 to any op |
+
+So integer and load results cost one extra cycle across clusters, and
+FP-class results two, which an FP → integer use pays anyway. All of these
+paths are interlocked (hazard tests `int_fp_use`, `fp_int_use` and their
+`_x` cross-cluster forms see the new value at distance 1). For a
+scheduler: give each result two latencies, own cluster and other cluster,
+and prefer placing a consumer in the producer's cluster.
 
 ## Stalls cost more than the latency
 
@@ -86,7 +106,7 @@ cycles above 1 MiB:
 
 | Producer → consumer | Interlocked? | Detail |
 |---|---|---|
-| ALU, multiply, divide, load → register use | yes | values correct at any distance ≥ 1 |
+| ALU, multiply, divide, load → register use | yes | values correct at any distance ≥ 1, also integer ↔ FP and across clusters |
 | compare → predicated ALU op, `ct ? pred`, `ibranch ? pred` | yes | correct at distance ≥ 1 |
 | `disp`, `movtd` → `ct` | yes | correct at distance ≥ 1 |
 | `rws %fpcr` → `rrs %fpcr` | yes | |

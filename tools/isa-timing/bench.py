@@ -132,6 +132,41 @@ SCHED = {
                              ("ldd,0 %dr2, 0x0, %dr2", 12)], 6),
     "faddd_to_fmuld": ("%dr4", [("faddd,0 %dr2, %dr5, %dr2", None),
                                 ("fmuld,0 %dr2, %dr4, %dr2", 12)], 8),
+    # Integer <-> FP crossings again, with other consumers and with the
+    # consumer in the other cluster (ALC0-2 vs ALC3-5): the guide gives
+    # int -> fp +1, which the ALC0 -> ALC0 case above does not show.
+    "addd_to_fmuld": ("%dr4", [("addd,0 %dr2, %dr5, %dr2", None),
+                               ("fmuld,0 %dr2, %dr4, %dr2", 12)], 6),
+    "adds_to_fadds": ("%dr6", [("adds,0 %r2, %r5, %r2", None),
+                               ("fadds,0 %r2, %r5, %r2", 12)], 6),
+    "addd_to_faddd_x": ("%dr4", [("addd,0 %dr2, %dr5, %dr2", None),
+                                 ("faddd,3 %dr2, %dr5, %dr2", 12)], 6),
+    "faddd_to_addd_x": ("%dr4", [("faddd,0 %dr2, %dr5, %dr2", None),
+                                 ("addd,3 %dr2, %dr5, %dr2", 12)], 10),
+    "addd_to_addd_x": ("%dr3", [("addd,0 %dr2, %dr5, %dr2", None),
+                                ("addd,3 %dr2, %dr5, %dr2", 12)], 6),
+    "faddd_to_faddd_x": ("%dr4", [("faddd,0 %dr2, %dr5, %dr2", None),
+                                  ("faddd,3 %dr2, %dr5, %dr2", 12)], 8),
+    "addd_to_addd_c1": ("%dr3", [("addd,0 %dr2, %dr5, %dr2", None),
+                                 ("addd,1 %dr2, %dr5, %dr2", 12)], 6),
+    "addd_to_addd_c2": ("%dr3", [("addd,0 %dr2, %dr5, %dr2", None),
+                                 ("addd,2 %dr2, %dr5, %dr2", 12)], 6),
+    "addd_to_addd_c4": ("%dr3", [("addd,0 %dr2, %dr5, %dr2", None),
+                                 ("addd,4 %dr2, %dr5, %dr2", 12)], 6),
+    "addd3_to_addd0": ("%dr3", [("addd,3 %dr2, %dr5, %dr2", None),
+                                ("addd,0 %dr2, %dr5, %dr2", 12)], 6),
+    "faddd_to_faddd_c1": ("%dr4", [("faddd,0 %dr2, %dr5, %dr2", None),
+                                   ("faddd,1 %dr2, %dr5, %dr2", 12)], 8),
+    "faddd_to_faddd_c4": ("%dr4", [("faddd,0 %dr2, %dr5, %dr2", None),
+                                   ("faddd,4 %dr2, %dr5, %dr2", 12)], 8),
+    "ldd_to_addd_x": ("%dr1", [("ldd,0 %dr2, 0x0, %dr2", None),
+                               ("addd,3 %dr2, %dr5, %dr2", 12)], 8),
+    "ldd_to_ldd_x": ("%dr1", [("ldd,0 %dr2, 0x0, %dr2", None),
+                              ("ldd,3 %dr2, 0x0, %dr2", 12)], 8),
+    "addd_to_ldd_x": ("%dr1", [("addd,0 %dr2, %dr5, %dr2", None),
+                               ("ldd,3 %dr2, 0x0, %dr2", 12)], 6),
+    "muld_to_muld_x": ("%dr3", [("muld,0 %dr2, %dr3, %dr2", None),
+                                ("muld,3 %dr2, %dr3, %dr2", 12)], 8),
 }
 SCHED_STEPS = 32
 
@@ -448,6 +483,21 @@ def hz_kernel(name, d):
                 f"\t{{\n\t  addd,0 0x0, 0x0, %dr0\n\t}}\n"
                 f"\t{{\n\t  addd,0 0x0, 0x1, %dr0 ? %pred1\n\t}}\n{settle}"
                 f"\t{{\n\t  ct\t%ctpr3\n\t}}")
+    elif name in ("int_fp_use", "fp_int_use", "int_fp_use_x", "fp_int_use_x"):
+        # Cross-domain interlock check with a value that changes, so a stale
+        # read is visible: %dr7 starts as +0.0; the producer makes it 1.0
+        # (integer copy) or 2.0 (FP add); the consumer doubles it (FP) or
+        # copies it (integer). New value: 0x4000000000000000, old: 0.
+        setup = ["addd,3 0x0, 0x3ff0000000000000, %dr4", "addd,4 0x0, 0x0, %dr7",
+                 "addd,1 0x0, 0x0, %dr8"]
+        ch = "3" if name.endswith("_x") else "0"
+        if name.startswith("int_fp"):
+            producer = "addd,0 %dr4, 0x0, %dr7"
+            consumer = f"faddd,{ch} %dr7, %dr7, %dr8"
+        else:
+            producer = "faddd,0 %dr4, %dr4, %dr7"
+            consumer = f"addd,{ch} %dr7, 0x0, %dr8"
+        tail = f"{settle}\t{{\n\t  ct\t%ctpr3\n\t  addd,0 0x0, %dr8, %dr0\n\t}}"
     elif name in ("muld_use", "ldd_use", "fdivd_use", "sdivd_use"):
         # Interlock check: the consumer must see the produced value.
         setup = ["addd,0 0x0, 0x7, %dr5", "addd,1 0x0, %dr1, %dr6",
@@ -511,6 +561,10 @@ HZ = {
     "sdivd_use": "sdivd -> use (interlock check)",
     "disp_ct": "disp -> ct",
     "movtd_ct": "movtd -> ct",
+    "int_fp_use": "addd -> faddd, same cluster (new value 0x4000000000000000)",
+    "int_fp_use_x": "addd,0 -> faddd,3, other cluster",
+    "fp_int_use": "faddd -> addd, same cluster (new value 0x4000000000000000)",
+    "fp_int_use_x": "faddd,0 -> addd,3, other cluster",
 }
 HZ_EXPECT = {"muld_use": 49, "ldd_use": None, "fdivd_use": 0x3ff0000000000000,
              "sdivd_use": 1}
@@ -560,7 +614,8 @@ rdclk:
     for name in HZ:
         for d in HZ_DISTANCES:
             if name in ("muld_use", "ldd_use", "fdivd_use", "sdivd_use",
-                        "disp_ct", "movtd_ct", "fpcr_rrs", "lsr_rrd",
+                        "int_fp_use", "fp_int_use", "int_fp_use_x",
+                        "fp_int_use_x", "disp_ct", "movtd_ct", "fpcr_rrs", "lsr_rrd",
                         "pfpfr_round", "fadd_pfpfr") and d == 0:
                 continue
             asm.append(hz_kernel(name, d))

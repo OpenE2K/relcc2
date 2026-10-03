@@ -376,6 +376,18 @@ our probes. Behaviour of MCST ld 2.41, checked by
   and prints nothing. A **static** link with an ifunc makes ld crash
   (segmentation fault). A compiler should reach ifunc symbols through
   `@GOT` in PIC code.
+- **`@GOTPLT`** ("inlined PLT entries" in `elfxx-e2k.c`): `ldd` of
+  `[ _f32s,_lts0 f@GOTPLT ]` from the GOT base (lcc's `rrd %ip` +
+  `_GLOBAL_OFFSET_TABLE_` idiom) gives the function's `.got.plt` slot;
+  `movtd` to a CTPR and `call` through it calls the function without a
+  PLT entry, which is what `-fno-plt` code would do (neither lcc, which
+  has no `-fno-plt`, nor Unipro emits it). `gotplt.s` on the 4C: correct
+  results from a non-PIE executable, a PIE, a PIE linked `-z now` and a
+  shared library, the first call through lazy binding included. ld
+  makes the slot an `R_E2K_64_JMP_SLOT` in `.rela.plt` (the same slot a
+  PLT call would use) for a function from another object and for a
+  preemptible one in a shared library; for a function the executable
+  defines it needs no dynamic relocation.
 - **gold** has an E2K backend (`gold/e2k.cc`, enabled in
   `gold/configure.tgt`) but MCST does not ship it. Built from source and
   given lcc's link lines, it links a static program correctly but breaks
@@ -387,5 +399,8 @@ our probes. Behaviour of MCST ld 2.41, checked by
 
 ## Not covered yet
 
-- `@PREF` and `@GOTPLT` are read from the source only.
+- `@PREF` is read from the source only: it is not an operator but the
+  relocation (`R_E2K_PREF`) gas emits for a symbol in `pref %iprN,
+  sym` (instruction prefetch into a prefetch register, CS0); no
+  compiler we have emits `pref`.
 - 32-bit and protected modes (separate relocation types, `ldgd`, `%g12`).

@@ -458,10 +458,10 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
    generations with `tools/isa-timing/bench.py`; loop-mode and
    speculation leftovers (`spec/isa/loops.md`, `speculation.md`, "Not
    checked yet").
-3. APB leftovers (`spec/isa/apb.md`, "Not checked yet"): AAU stores in
-   other formats, and v5+ on hardware. Protected (`e2k128`) and 32-bit
+3. APB leftovers (`spec/isa/apb.md`, "Not checked yet"): AAU stores
+   into areas `mova` reads, and v5+ on hardware. Protected (`e2k128`) and 32-bit
    modes.
-4. ELF leftovers: `@PREF`, `@GOTPLT` (source only so far).
+4. ELF leftovers: `@PREF` (`pref %iprN, sym`; source only so far).
 
 ## Open questions for the owner
 

@@ -32,6 +32,25 @@ units). (kernel `e2k_wd_t`, `e2k_br_t`; unipro, lcc)
 | `setbp psz=P` | `psz` | Rotating predicate area size |
 | `call ..., wbs=W` | `wbs` | The callee's window starts at pair W of the caller's window |
 
+Window size limits (Elbrus 4C; `tools/abi/probes/winsize.c`, and the
+proof-of-concept backend's probe, `docs/spec-poc-findings.md` A2):
+
+- A callee's `setwd wsz` must be **at least the part of the caller's
+  window it inherits**, `caller wsz − wbs` pairs; otherwise `setwd` raises
+  SIGILL (caller `wsz = 8`: with `wbs = 4` the callee needs `wsz ≥ 4`, with
+  `wbs = 6` it needs 2, with `wbs = 7` 1). lcc always hands over exactly 4
+  pairs (the 8 argument registers, `wsz = 8`, `wbs = 4`, or `wsz = 0x10`,
+  `wbs = 0xc`) and never uses `wsz` below 4, so the convention is: callers
+  pass at most 4 pairs, callees use `wsz ≥ 4`.
+- The largest window is **112 pairs** (224 registers, the whole stack part
+  of the register file), also after spills; 113 traps. Registers above
+  `%r63` are reachable only through `%b[]`.
+- gas accepts `rbs` 0–63 only.
+- Operations in the wide instruction with `setwd` may already use the new
+  window: `{ setwd wsz = 8; addd %r0, 5, %r12 }` works (lcc puts `getsp
+  ..., %r3` there), but `%b[]` in the instruction with `setbn` still uses
+  the old rotating base.
+
 `setwd` also sets two window flags (qemu, kernel):
 
 - **`nfx`**: the kernel's `WD.fx` is its inverse. With `nfx = 0` the

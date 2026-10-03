@@ -383,6 +383,9 @@ disassembling; the first four also by the proof-of-concept backend,
   `#object` (SPARC style); `.align` in bytes; 64-bit data as `.uadword`
   (constants) or `.dword` (relocated values such as pointers), 32-bit as
   `.uaword`; strings as `.ascii`. gas also accepts `.quad` and `.8byte`.
+  lcc emits no `.machine` or other target directive: the target reaches
+  gas only on its command line (`e2k-linux-as -mcpu=elbrus-v3 -mptr64`),
+  which also sets the ELF `e_flags` ([elf.md](../abi/elf.md)).
   Every object gets a weak absolute marker symbol naming the compiler
   (`elbrus_optimizing_compiler_v1.29.16_Jan_22_2026 = 0x0`); nothing
   depends on it.

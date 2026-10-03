@@ -19,6 +19,8 @@ said to share timings (AGENTS.md); v6 differs (e.g. load→use 5, binutils
   `nop`s so the next one issues `gap` cycles later; the latency is the
   smallest gap at which a step costs exactly `gap` cycles (no stall). This
   is the value a scheduler needs.
+- **Memory** latencies come from a pointer chase pinned with `--numa
+  CPU:MEM` (`numactl`), see Memory.
 - **Hazards**: a producer and a consumer `D` cycles apart (`D = 0`: same
   wide instruction), checking whether the consumer sees the new value.
   `.ignore strict_delay` keeps gas from inserting delays.
@@ -50,10 +52,41 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | `disp` → `ct` | 5 | 5 | — |
 | `return` → `ct` | 6 | 6 | — |
 | `movtd` → `ct` | 9 | 9 | — |
+| packed integer (`paddw`, `pandd`, `pcmpeqw`, `pmaxsh`, `psllw`, `pshufb`) | 4 (FP class) | 1 | — |
+| packed multiply, `psadbw` (`pmullh`; ALC1/4) | 4 | 2 | — |
+| packed integer → integer op | 4 + 2 | 4 | — |
+| packed integer → FP add | 4 | 1 | — |
+| conversions `fdtoid`, `idtofd`, `fstofd` | — | 5 | — |
+| conversion `fdtofs` | — | 6 | — |
+| `fdtoid` → integer op | — | 6 | — |
+| integer op → `idtofd` | — | 1 | — |
+| FP compare into a register (`fcmpeqd`) | — | 2; 4 to an integer op | — |
+| `lzcnts`, `scls`, `getfs` | 1 | 1 | — |
+| compare → `andp` (reading the `%pred`) | 1 | 1 | — |
+| `andp` → `andp` | 0.5 | 0 inside one wide instruction (`@p4` → next CLP), 1 through a `%pred` | — |
+| `andp` → predicated ALU op | 2 | 2 | — |
+| `andp` → `ct ? pred` | 3 | 3 | — |
+| FP compare (`fcmpltdb`) → predicated ALU op | — | 4 | — |
+| FP compare → `ct ? pred` | — | 5 | — |
+| load, L2 hit | 11 | 9 | 9 |
+| load from memory, own NUMA node | ~100 | about 105–110 | 108–115 |
 
-The scheduled latencies match the guide. The guide's integer → FP "+1"
-appears only when the consumer is in the other cluster, and integer →
-integer pays it too: it is a cluster crossing, not a domain crossing.
+The scheduled latencies of scalar integer, FP, control and predicate
+operations match the guide. Differences:
+
+- The guide's integer → FP "+1" appears only when the consumer is in the
+  other cluster, and integer → integer pays it too: it is a cluster
+  crossing, not a domain crossing (see Clusters).
+- Packed integer operations are not 4-cycle FP-class operations on the
+  4C: most take 1 cycle (multiply and `psadbw` 2) to another packed or FP
+  operation. Their results reach integer operations at 4, like an FP
+  compare into a register: the FP-side → integer penalty is +3 for the
+  1-cycle ones and +2 otherwise.
+- Conversions take 5 (`fdtofs` 6), and their results reach integer
+  operations at 6.
+- FP compares into predicates are two cycles slower than integer
+  compares (4 to a predicated operation, 5 to `ct`).
+- An L2 hit is 9, not 11. The 4C (E2S) has no L3.
 
 ## Clusters
 
@@ -94,13 +127,26 @@ pads with `nop`s.
 
 ## Memory
 
-Pointer chase, back-to-back cost per load (one pointer per 64-byte line,
-random order); includes TLB effects and varies between runs by several
-cycles above 1 MiB:
+The 4C has 64 KiB of L1 data cache and 2 MiB of L2 per core, no L3, and
+four NUMA nodes (one per E2S chip, four cores each). A random pointer
+chase (one pointer per 64-byte line) with a gap after each load gives
+the scheduled latency; each run continues the chase where the last one
+stopped, so the lines are not cached again. Run with `--numa 1:1`
+(CPUs and memory of node 1) and `--numa 1:3` (memory of node 3), buffers
+in 2 MiB transparent huge pages unless noted:
 
-| Working set | 16 KiB | 256 KiB | 2 MiB | 16 MiB | 128 MiB |
-|---|---|---|---|---|---|
-| cycles | 5 | 9 | 15–22 | 108–124 | 167–185 |
+| Working set | Latency, local memory | Remote memory (other chip) |
+|---|---|---|
+| 256 KiB (L2) | 9 | 9 |
+| 8 MiB, 64 MiB (memory) | about 105–110 | about 190–235 |
+| 64 MiB in 4 KiB pages | about 125 (+15: TLB miss) | about 250 |
+
+The memory latency is not fixed: it varies by about ±5 cycles between
+gaps and runs, and a consumer issued earlier stalls until the data
+arrives (the cost stays flat at the latency until the gap exceeds it).
+Without pinning, the results mix local and remote memory, which is why
+earlier runs showed 108–212 cycles. A compiler should schedule for an
+L1 hit (3) and leave longer latencies to prefetching, as lcc does.
 
 ## Hazards (interlocking)
 
@@ -108,6 +154,9 @@ cycles above 1 MiB:
 |---|---|---|
 | ALU, multiply, divide, load → register use | yes | values correct at any distance ≥ 1, also integer ↔ FP and across clusters |
 | compare → predicated ALU op, `ct ? pred`, `ibranch ? pred` | yes | correct at distance ≥ 1 |
+| compare → `andp`, `andp` → predicated ALU op | yes | correct at distance ≥ 1 |
+| `andp` → `andp` in the same wide instruction (a CLP reading `@p4` written by an earlier CLP) | — | sees the new value: predicate logic chains inside one instruction |
+| compare → `andp` through `%spred0` in the same instruction | ? | read the old (false) value both on the 4C and under qemu; how `%spred` is meant to be used is not known yet |
 | `disp`, `movtd` → `ct` | yes | correct at distance ≥ 1 |
 | `rws %fpcr` → `rrs %fpcr` | yes | |
 | `rws %pfpfr` (rounding mode) → FP operation | yes | |
@@ -147,7 +196,6 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
 ## Not measured yet
 
 - v4, v5, v6 (the 8CB is v5).
-- Predicate logic (`andp` etc. in PLS, "½ cycle"), loop mode registers
-  other than `%lsr` (`%ilcr`), APB.
-- Packed (vector) operations, conversions, 128-bit operations.
+- Loop mode registers other than `%lsr` (`%ilcr`), APB.
+- 128-bit operations (v5+), `%spred`.
 - Throughput (operations per cycle per channel) as opposed to latency.

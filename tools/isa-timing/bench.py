@@ -20,7 +20,7 @@ measurement:
 
 Usage:
   bench.py [--target T] [--remote [USER@]HOST] [--ssh-key FILE]
-           [--out DIR] [--yaml FILE]
+           [--out DIR] [--yaml FILE] [--numa CPU:MEM]
 
 --target picks lcc as in tools/abi/compat/run.py (default v3). Results
 are printed as tables; --yaml writes them as data (see
@@ -167,7 +167,50 @@ SCHED = {
                                ("ldd,3 %dr2, 0x0, %dr2", 12)], 6),
     "muld_to_muld_x": ("%dr3", [("muld,0 %dr2, %dr3, %dr2", None),
                                 ("muld,3 %dr2, %dr3, %dr2", 12)], 8),
+    # Packed (64-bit SIMD) integer operations; the guide puts them in the
+    # FP class with its +2 to integer consumers.
+    "paddw": ("%dr3", [("paddw,0 %dr2, %dr5, %dr2", None)], 8),
+    "pandd": ("%dr3", [("pandd,0 %dr2, %dr2, %dr2", None)], 8),
+    "pcmpeqw": ("%dr3", [("pcmpeqw,0 %dr2, %dr5, %dr2", None)], 8),
+    "pmaxsh": ("%dr3", [("pmaxsh,0 %dr2, %dr5, %dr2", None)], 8),
+    "psllw": ("%dr3", [("psllw,1 %dr2, %dr5, %dr2", None)], 8),
+    "pmullh": ("%dr3", [("pmullh,1 %dr2, %dr3, %dr2", None)], 8),
+    "psadbw": ("%dr3", [("psadbw,1 %dr2, %dr5, %dr2", None)], 8),
+    "pshufb": ("%dr3", [("pshufb,0 %dr2, %dr2, %dr5, %dr2", None)], 8),
+    "paddw_to_addd": ("%dr3", [("paddw,0 %dr2, %dr5, %dr2", None),
+                               ("addd,0 %dr2, %dr5, %dr2", 12)], 10),
+    "addd_to_paddw": ("%dr3", [("addd,0 %dr2, %dr5, %dr2", None),
+                               ("paddw,0 %dr2, %dr5, %dr2", 12)], 6),
+    "paddw_to_faddd": ("%dr4", [("paddw,0 %dr2, %dr5, %dr2", None),
+                                ("faddd,0 %dr2, %dr5, %dr2", 12)], 8),
+    "pmullh_to_addd": ("%dr3", [("pmullh,1 %dr2, %dr3, %dr2", None),
+                                ("addd,1 %dr2, %dr5, %dr2", 12)], 10),
+    # Other integer operations in restricted channels.
+    "lzcnts": ("%dr3", [("lzcnts,1 %r2, %r2", None)], 6),
+    "scls": ("%dr3", [("scls,0 %r2, 0x1, %r2", None)], 6),
+    "getfs": ("%dr3", [("getfs,0 %r2, %r5, %r2", None)], 6),
+    # Conversions and FP compares into a register.
+    "fdtoid": ("%dr4", [("fdtoid,0 %dr2, %dr2", None)], 8),
+    "idtofd": ("%dr3", [("idtofd,0 %dr2, %dr2", None)], 8),
+    "fstofd": ("%dr6", [("fstofd,0 %r2, %dr2", None)], 8),
+    "fdtofs": ("%dr4", [("fdtofs,0 %dr2, %r2", None)], 8),
+    "fdtoid_to_addd": ("%dr4", [("fdtoid,0 %dr2, %dr2", None),
+                                ("addd,0 %dr2, %dr5, %dr2", 12)], 10),
+    "addd_to_idtofd": ("%dr3", [("addd,0 %dr2, %dr5, %dr2", None),
+                                ("idtofd,0 %dr2, %dr2", 12)], 6),
+    "fcmpeqd": ("%dr4", [("fcmpeqd,0 %dr2, %dr5, %dr2", None)], 8),
+    "fcmpeqd_to_addd": ("%dr4", [("fcmpeqd,0 %dr2, %dr5, %dr2", None),
+                                 ("addd,0 %dr2, %dr5, %dr2", 12)], 10),
 }
+
+# Scheduled load latency beyond L1: a pointer chase through a buffer of
+# each size with every load followed by a gap; the knee is the latency.
+# (bytes, huge): huge = 2 MiB transparent huge pages (no TLB misses to
+# speak of); the last entry repeats a size with 4 KiB pages.
+CHASE_SCHED_SIZES = [(256 << 10, 1), (1 << 20, 1), (8 << 20, 1),
+                     (64 << 20, 1), (64 << 20, 0)]
+CHASE_SCHED_GAPS = list(range(1, 21)) + [24, 28, 32, 40, 60, 80, 100,
+                                         120, 140, 160, 180, 200, 240]
 SCHED_STEPS = 32
 
 # Pointer-chase sizes for the memory hierarchy (bytes of buffer).
@@ -245,8 +288,11 @@ def nop_field(d):
     return text
 
 
-def sched_kernel(name, gap):
-    init, step, _ = SCHED[name]
+CHASE_SCHED = {"chase": ("%dr1", [("ldd,0 %dr2, 0x0, %dr2", None)], None)}
+
+
+def sched_kernel(name, gap, table=SCHED):
+    init, step, _ = table[name]
     fn = f"sched_{name}_{gap}"
     body = []
     for _ in range(SCHED_STEPS):
@@ -316,6 +362,34 @@ def ctl_kernel(kind, d):
             prep = "\t  cmpedb,0 %dr3, 0x0, %pred0\n"
             blocks.append(f"\t{{\n{prep}{nop_field(d)}"
                           f"\t{{\n\t  addd,0 %dr5, 0x1, %dr5 ? %pred0\n\t}}\n{nxt}:")
+            continue
+        elif kind in ("cmp_andp", "andp_alu", "andp_ct", "andp_andp",
+                      "fcmp_alu", "fcmp_ct"):
+            # Predicate logic. %dr3 = 1, so every predicate is false and
+            # predicated consumers do nothing; ct falls through.
+            cmp = "\t  cmpedb,0 %dr3, 0x0, %pred0\n"
+            andp = ("\t  pass %pred0, @p0\n\t  pass %pred0, @p1\n"
+                    "\t  andp @p0, @p1, @p4\n\t  pass @p4, %pred2\n")
+            alu = "\t{\n\t  addd,0 %dr5, 0x1, %dr5 ? %pred2\n\t}\n"
+            if kind == "cmp_andp":
+                text = f"\t{{\n{cmp}{nop_field(d)}\t{{\n{andp}{nop_field(4)}{alu}"
+            elif kind in ("fcmp_alu", "fcmp_ct"):
+                fc = "\t  fcmpltdb,0 %dr3, %dr3, %pred2\n"
+                use = (alu if kind == "fcmp_alu"
+                       else "\t{\n\t  ct\t%ctpr2 ? %pred2\n\t}\n")
+                text = f"\t{{\n{fc}{nop_field(d)}{use}"
+            else:
+                text = f"\t{{\n{cmp}{nop_field(4)}\t{{\n{andp}{nop_field(d)}"
+                if kind == "andp_alu":
+                    text += alu
+                elif kind == "andp_ct":
+                    text += "\t{\n\t  ct\t%ctpr2 ? %pred2\n\t}\n"
+                else:
+                    text += ("\t{\n\t  pass %pred2, @p0\n\t  pass %pred2, @p1\n"
+                             "\t  andp @p0, @p1, @p4\n\t  pass @p4, %pred3\n"
+                             f"{nop_field(4)}"
+                             "\t{\n\t  addd,0 %dr5, 0x1, %dr5 ? %pred3\n\t}\n")
+            blocks.append(text + f"{nxt}:")
             continue
         elif kind == "movtd":
             # The label address is set up before the prepare, far enough
@@ -498,6 +572,38 @@ def hz_kernel(name, d):
             producer = "faddd,0 %dr4, %dr4, %dr7"
             consumer = f"addd,{ch} %dr7, 0x0, %dr8"
         tail = f"{settle}\t{{\n\t  ct\t%ctpr3\n\t  addd,0 0x0, %dr8, %dr0\n\t}}"
+    elif name in ("cmp_andp_hz", "andp_pred_alu", "cmp_spred_andp", "clp_chain"):
+        # Predicate logic correctness. %pred0 starts false and %pred1
+        # false; the result 1 means the consumer saw the new value.
+        setup = ["addd,0 0x0, 0x0, %dr5"]
+        setup2 = ["cmpedb,0 %dr5, 0x1, %pred0", "cmpedb,1 %dr5, 0x1, %pred1"]
+        use = (f"{settle}\t{{\n\t  addd,0 0x0, 0x0, %dr0\n\t}}\n"
+               "\t{\n\t  addd,0 0x0, 0x1, %dr0 ? %pred1\n\t}\n"
+               f"{settle}\t{{\n\t  ct\t%ctpr3\n\t}}")
+        if name == "cmp_andp_hz":
+            producer = "cmpedb,0 %dr5, 0x0, %pred0"
+            consumer = ("pass %pred0, @p0\n\t  pass %pred0, @p1\n"
+                        "\t  andp @p0, @p1, @p4\n\t  pass @p4, %pred1")
+        elif name == "andp_pred_alu":
+            setup2.append("cmpedb,3 %dr5, 0x0, %pred2")
+            producer = ("pass %pred2, @p0\n\t  pass %pred2, @p1\n"
+                        "\t  andp @p0, @p1, @p4\n\t  pass @p4, %pred1")
+            consumer = "addd,0 0x0, 0x1, %dr6 ? %pred1"
+            use = (f"{settle}\t{{\n\t  ct\t%ctpr3\n\t  addd,0 0x0, %dr6, %dr0\n\t}}")
+            setup.append("addd,1 0x0, 0x0, %dr6")
+        elif name == "cmp_spred_andp":
+            # Same wide instruction only: the CLP reads the compare of this
+            # instruction through %spred0 (ALC0's compare result).
+            producer = "cmpedb,0 %dr5, 0x0, %pred0"
+            consumer = ("pass %spred0, @p0\n\t  pass %spred0, @p1\n"
+                        "\t  andp @p0, @p1, @p4\n\t  pass @p4, %pred1")
+        else:  # clp_chain: a CLP reads @p4 written by the CLP before it
+            setup2 = ["cmpedb,0 %dr5, 0x0, %pred0", "cmpedb,1 %dr5, 0x1, %pred1"]
+            producer = ("pass %pred0, @p0\n\t  pass %pred0, @p1\n"
+                        "\t  andp @p0, @p1, @p4\n"
+                        "\t  andp @p4, @p1, @p5\n\t  pass @p5, %pred1")
+            consumer = ""
+        tail = use
     elif name in ("muld_use", "ldd_use", "fdivd_use", "sdivd_use"):
         # Interlock check: the consumer must see the produced value.
         setup = ["addd,0 0x0, 0x7, %dr5", "addd,1 0x0, %dr1, %dr6",
@@ -565,6 +671,10 @@ HZ = {
     "int_fp_use_x": "addd,0 -> faddd,3, other cluster",
     "fp_int_use": "faddd -> addd, same cluster (new value 0x4000000000000000)",
     "fp_int_use_x": "faddd,0 -> addd,3, other cluster",
+    "cmp_andp_hz": "compare -> andp reading its %pred",
+    "andp_pred_alu": "andp -> ALU op predicated on its result",
+    "cmp_spred_andp": "compare -> andp via %spred in the same instruction",
+    "clp_chain": "andp -> andp via @p4 in the same instruction",
 }
 HZ_EXPECT = {"muld_use": 49, "ldd_use": None, "fdivd_use": 0x3ff0000000000000,
              "sdivd_use": 1}
@@ -603,8 +713,14 @@ rdclk:
             asm.append(sched_kernel(name, gap))
             decl.append(f"long sched_{name}_{gap}(long, void *);")
             sched_rows.append(f'\t{{"{name}", {gap}, {fixed}, sched_{name}_{gap}}},')
+    chase_rows = []
+    for gap in CHASE_SCHED_GAPS:
+        asm.append(sched_kernel("chase", gap, CHASE_SCHED))
+        decl.append(f"long sched_chase_{gap}(long, void *);")
+        chase_rows.append(f'\t{{{gap}, sched_chase_{gap}}},')
     for d in CTL_DISTANCES:
-        for kind in ("disp", "movtd", "cmp_ct", "cmp_alu"):
+        for kind in ("disp", "movtd", "cmp_ct", "cmp_alu", "cmp_andp",
+                     "andp_alu", "andp_ct", "andp_andp", "fcmp_alu", "fcmp_ct"):
             asm.append(ctl_kernel(kind, d))
             decl.append(f"long ctl_{kind}_{d}(long, void *);")
             ctl_rows.append(f'\t{{"{kind}", {d}, 16, ctl_{kind}_{d}}},')
@@ -613,7 +729,10 @@ rdclk:
         ctl_rows.append(f'\t{{"return", {d}, 8, ctl_return_{d}}},')
     for name in HZ:
         for d in HZ_DISTANCES:
+            if name in ("cmp_spred_andp", "clp_chain") and d != 0:
+                continue
             if name in ("muld_use", "ldd_use", "fdivd_use", "sdivd_use",
+                        "andp_pred_alu",
                         "int_fp_use", "fp_int_use", "int_fp_use_x",
                         "fp_int_use_x", "disp_ct", "movtd_ct", "fpcr_rrs", "lsr_rrd",
                         "pfpfr_round", "fadd_pfpfr") and d == 0:
@@ -626,6 +745,7 @@ rdclk:
     (out / "main.c").write_text(f"""/* Generated by tools/isa-timing/bench.py. */
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/mman.h>
 unsigned long rdclk(void);
 {chr(10).join(decl)}
 typedef long (*kern)(long, void *);
@@ -634,6 +754,9 @@ static struct {{ const char *name; int ops; kern f1, f2; }} lat[] = {{
 }};
 static struct {{ const char *name; int gap, fixed; kern f; }} sched[] = {{
 {chr(10).join(sched_rows)}
+}};
+static struct {{ int gap; kern f; }} chase_sched[] = {{
+{chr(10).join(chase_rows)}
 }};
 static struct {{ const char *kind; int d, blocks; kern f; }} ctl[] = {{
 {chr(10).join(ctl_rows)}
@@ -655,12 +778,29 @@ static unsigned long best(kern f, long n, void *p)
 	return b;
 }}
 
-/* A random cyclic pointer chain through SIZE bytes, one pointer per
-   64-byte line. Returns the start. */
-static void **chain(size_t size)
+/* Like best(), but each run continues the chase where the previous one
+   stopped (the kernels return the last pointer), so repeated runs don't
+   revisit cached lines. */
+static unsigned long bestc(kern f, long n, void **q)
 {{
-	size_t n = size / 64, i;
-	char *buf = aligned_alloc(64, size);
+	unsigned long b = ~0UL;
+	for (int r = 0; r < {REPS}; r++) {{
+		unsigned long t0 = rdclk();
+		*q = (void *)f(n, *q);
+		unsigned long t = rdclk() - t0;
+		if (t < b) b = t;
+	}}
+	return b;
+}}
+
+/* A random cyclic pointer chain through SIZE bytes, one pointer per
+   64-byte line, in 2 MiB pages if HUGE, else in 4 KiB pages. Returns
+   the start. */
+static void **chain(size_t size, int huge)
+{{
+	size_t n = size / 64, i, al = 2 << 20;
+	char *buf = aligned_alloc(al, (size + al - 1) / al * al);
+	madvise(buf, size, huge ? MADV_HUGEPAGE : MADV_NOHUGEPAGE);
 	size_t *perm = malloc(n * sizeof *perm);
 	for (i = 0; i < n; i++) perm[i] = i;
 	srand(1);
@@ -687,13 +827,14 @@ int main(void)
 	}}
 	size_t sizes[] = {{ {sizes} }};
 	for (unsigned i = 0; i < sizeof sizes / sizeof sizes[0]; i++) {{
-		void **p = chain(sizes[i]);
+		void **p = chain(sizes[i], 1), *q = p;
 		long m = n / 8;
-		best(lat_ldd_l1_ch0_{K2}, m, p);
-		unsigned long t1 = best(lat_ldd_l1_ch0_{K1}, m, p),
-			      t2 = best(lat_ldd_l1_ch0_{K2}, m, p);
+		bestc(lat_ldd_l1_ch0_{K2}, m, &q);
+		unsigned long t1 = bestc(lat_ldd_l1_ch0_{K1}, m, &q),
+			      t2 = bestc(lat_ldd_l1_ch0_{K2}, m, &q);
 		printf("chase %zu %.3f\\n", sizes[i],
 		       (double)(t2 - t1) / ((double)m * ({K2} - {K1})));
+		free(p);
 	}}
 	for (unsigned i = 0; i < sizeof sched / sizeof sched[0]; i++) {{
 		long m = n / 4;
@@ -701,6 +842,20 @@ int main(void)
 			      t0 = best(sched[i].f, m / 2, cell);
 		printf("sched %s %d %d %.3f\\n", sched[i].name, sched[i].gap,
 		       sched[i].fixed, (double)(t - t0) / ((double)(m - m / 2) * {SCHED_STEPS}));
+	}}
+	size_t csizes[] = {{ {", ".join(str(x) for x, _ in CHASE_SCHED_SIZES)} }};
+	int chuge[] = {{ {", ".join(str(h) for _, h in CHASE_SCHED_SIZES)} }};
+	for (unsigned i = 0; i < sizeof csizes / sizeof csizes[0]; i++) {{
+		void **p = chain(csizes[i], chuge[i]), *q = p;
+		long m = csizes[i] > (4 << 20) ? 40 : 400;
+		for (unsigned j = 0; j < sizeof chase_sched / sizeof chase_sched[0]; j++) {{
+			unsigned long t = bestc(chase_sched[j].f, m, &q),
+				      t0 = bestc(chase_sched[j].f, m / 2, &q);
+			printf("chsched %zu%s %d %.3f\\n", csizes[i], chuge[i] ? "" : "-4k",
+			       chase_sched[j].gap,
+			       (double)(t - t0) / ((double)(m - m / 2) * {SCHED_STEPS}));
+		}}
+		free(p);
 	}}
 	for (unsigned i = 0; i < sizeof ctl / sizeof ctl[0]; i++) {{
 		unsigned long t = best(ctl[i].f, n / 4, cell);
@@ -730,7 +885,11 @@ def run(args, prog, sysroot):
         subprocess.run(ssh + [args.remote, f"mkdir -p {rdir}"], check=True)
         subprocess.run(["scp", "-q"] + ssh[1:] + [str(prog), f"{args.remote}:{rdir}/"],
                        check=True)
-        cmd = ssh + [args.remote, f"{rdir}/{prog.name}"]
+        wrap = ""
+        if args.numa:
+            cpu, mem = args.numa.split(":")
+            wrap = f"numactl --cpunodebind={cpu} --preferred={mem} "
+        cmd = ssh + [args.remote, f"{wrap}{rdir}/{prog.name}"]
     else:
         isa = re.match(r"v(\d+)", args.target).group(1)
         cmd = ["qemu-e2k", "-cpu", f"elbrus-v{isa}", "-L", str(sysroot), str(prog)]
@@ -750,13 +909,15 @@ def knee(points):
 
 
 def parse(text):
-    res = {"lat": {}, "sched": {}, "chase": {}, "ctl": {}, "hz": {}}
+    res = {"lat": {}, "sched": {}, "chase": {}, "chsched": {}, "ctl": {}, "hz": {}}
     for line in text.splitlines():
         f = line.split()
         if f[0] == "lat":
             res["lat"][f[1]] = float(f[2])
         elif f[0] == "sched":
             res["sched"].setdefault(f[1], []).append((int(f[2]), int(f[3]), float(f[4])))
+        elif f[0] == "chsched":
+            res["chsched"].setdefault(f[1], []).append((int(f[2]), float(f[3])))
         elif f[0] == "chase":
             res["chase"][int(f[1])] = float(f[2])
         elif f[0] == "ctl":
@@ -775,6 +936,15 @@ def sched_latency(pts):
     return None
 
 
+def chase_latency(pts):
+    """Smallest gap at which a chased load no longer stalls; memory times
+    vary, so allow 2% plus the loop overhead."""
+    for gap, t in pts:
+        if t <= gap * 1.02 + 0.6:
+            return gap
+    return None
+
+
 def report(res):
     print("Back-to-back cost (cycles per chain step, stalling):")
     for name, v in res["lat"].items():
@@ -783,6 +953,12 @@ def report(res):
     for name, pts in res["sched"].items():
         print(f"  {name:15} {sched_latency(pts)!s:>3}   " +
               " ".join(f"{g}:{t:.1f}" for g, _, t in pts))
+    if res["chsched"]:
+        print("Pointer chase with a gap after each load (scheduled latency):")
+        for size, pts in res["chsched"].items():
+            kib = f"{int(size.split('-')[0]) >> 10} KiB" + (" 4k" if "-4k" in size else "")
+            print(f"  {kib:>13}  latency {chase_latency(pts)}   " +
+                  " ".join(f"{g}:{t:.1f}" for g, t in pts))
     print("Pointer chase (cycles per load):")
     for size, v in res["chase"].items():
         print(f"  {size >> 10:8} KiB {v:7.2f}")
@@ -801,6 +977,7 @@ def write_yaml(path, res, args):
              "# Generated by tools/isa-timing/bench.py; see spec/isa/timing.md.",
              f"measured_on: {args.machine!r}",
              f"lcc_target: {args.target}",
+             f"numa: {args.numa or 'not pinned'}",
              f"date: {datetime.date.today().isoformat()}",
              "back_to_back:"]
     for name, v in res["lat"].items():
@@ -815,6 +992,12 @@ def write_yaml(path, res, args):
     lines.append("pointer_chase_cycles:")
     for size, v in res["chase"].items():
         lines.append(f"  {size}: {v:.2f}")
+    lines.append("pointer_chase_scheduled:")
+    for size, pts in res["chsched"].items():
+        lines.append(f"  {size!r}:")
+        lines.append(f"    latency: {chase_latency(pts)}")
+        lines.append("    cycles_per_load_by_gap: {" +
+                     ", ".join(f"{g}: {t:.2f}" for g, t in pts) + "}")
     lines.append("control_prepare:")
     for kind, pts in res["ctl"].items():
         lines.append(f"  {kind}:")
@@ -839,6 +1022,9 @@ def main():
                     default=SSH_KEY if SSH_KEY.exists() else None)
     ap.add_argument("--out", type=Path, default=ROOT / "toolchains" / "isa-timing")
     ap.add_argument("--yaml", type=Path)
+    ap.add_argument("--numa", metavar="CPU:MEM",
+                    help="with --remote: run on NUMA node CPU, allocating "
+                    "on node MEM (numactl --preferred)")
     ap.add_argument("--machine", default="unspecified",
                     help="description recorded in --yaml output")
     args = ap.parse_args()

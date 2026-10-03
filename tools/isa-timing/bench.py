@@ -202,6 +202,24 @@ SCHED = {
     "fcmpeqd": ("%dr4", [("fcmpeqd,0 %dr2, %dr5, %dr2", None)], 8),
     "fcmpeqd_to_addd": ("%dr4", [("fcmpeqd,0 %dr2, %dr5, %dr2", None),
                                  ("addd,0 %dr2, %dr5, %dr2", 12)], 10),
+    # Other operations a C compiler emits.
+    "sxt": ("%dr3", [("sxt,0 0x2, %dr2, %dr2", None)], 4),
+    "merged": ("%dr3", [("merged,0 %dr2, %dr5, %dr2, %pred0", None)], 4),
+    "popcntd": ("%dr3", [("popcntd,1 %dr2, %dr2", None)], 6),
+    "lzcntd": ("%dr3", [("lzcntd,1 %dr2, %dr2", None)], 6),
+    "bitrevd": ("%dr3", [("bitrevd,0 %dr2, %dr2", None)], 6),
+    "umulhd": ("%dr3", [("umulhd,0 %dr2, %dr3, %dr2", None)], 8),
+    # 80-bit operations; the chain value is made a real 80-bit 1.0 first
+    # (an init with a space is an operation writing %dr2).
+    "fxaddxx": ("fdtofx,0 %dr4, %dr2", [("fxaddxx,0 %dr2, %dr5, %dr2", None)], 10),
+    "fxmulxx": ("fdtofx,0 %dr4, %dr2", [("fxmulxx,0 %dr2, %dr2, %dr2", None)], 10),
+    "fxdivxx": ("fdtofx,0 %dr4, %dr2", [("fxdivxx,5 %dr2, %dr2, %dr2", None)], 24),
+    "movfi_movif": ("fdtofx,0 %dr4, %dr2", [("movfi,1 %dr2, %r6", None),
+                                            ("movif,1 %dr2, %r6, %dr2", 12)], 8),
+    "fxaddxx_to_addd": ("fdtofx,0 %dr4, %dr2", [("fxaddxx,0 %dr2, %dr5, %dr2", None),
+                                                ("addd,0 %dr2, %dr5, %dr2", 12)], 10),
+    "fdtofx_fxtofd": ("%dr4", [("fdtofx,0 %dr2, %dr2", None),
+                               ("fxtofd,0 %dr2, %dr2", 12)], 8),
 }
 
 # Scheduled load latency beyond L1: a pointer chase through a buffer of
@@ -247,7 +265,10 @@ def lat_kernel(name, k):
 	}}
 	{{
 	  nop 5
-	  addd,0 0x0, {init}, %dr2
+	  {init if " " in init else f"addd,0 0x0, {init}, %dr2"}
+	}}
+	{{
+	  nop 7
 	}}
 .L{fn}:
 {chr(10).join(body)}
@@ -320,7 +341,10 @@ def sched_kernel(name, gap, table=SCHED):
 	}}
 	{{
 	  nop 5
-	  addd,0 0x0, {init}, %dr2
+	  {init if " " in init else f"addd,0 0x0, {init}, %dr2"}
+	}}
+	{{
+	  nop 7
 	}}
 .L{fn}:
 {"".join(body)}	{{

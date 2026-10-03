@@ -61,6 +61,12 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | integer op → `idtofd` | — | 1 | — |
 | FP compare into a register (`fcmpeqd`) | — | 2; 4 to an integer op | — |
 | `lzcnts`, `scls`, `getfs` | 1 | 1 | — |
+| `sxt`, `merged`, `popcntd`, `lzcntd`, `bitrevd` | 1 | 1 | — |
+| `umulhd` (high half of a 128-bit product) | 4 | 4 | — |
+| 80-bit `fxaddxx` / `fxmulxx` / `fxdivxx` | — | 5 / 4 / 16 | — |
+| `fxaddxx` → integer op | — | 7 | — |
+| `movfi` → `movif` (unpack and repack an 80-bit value) | — | 4 | — |
+| `fdtofx` → `fxtofd` | — | 5 | — |
 | compare → `andp` (reading the `%pred`) | 1 | 1 | — |
 | `andp` → `andp` | 0.5 | 0 inside one wide instruction (`@p4` → next CLP), 1 through a `%pred` | — |
 | `andp` → predicated ALU op | 2 | 2 | — |

@@ -127,6 +127,15 @@ elements 0, 1, 2 (and 7 in element 3 with `strmd` 1) [hw]. So a
 pipelined loop's AAU stores need no address correction for the
 prologue.
 
+A **quad store counts as two stores** (v3 has only the AAU one in
+64-bit mode, `staaq`; `stgdq` and `stapq` address through
+protected-mode descriptors [source]): with `strmd` 0 the last iteration
+drops it, with 2 it stores, and with 1, which would keep only its first
+half, the `loop_mode` instruction raises SIGILL (`ILL_ILLOPC`) in that
+iteration [hw]. A `strmd` count must therefore never split a quad
+store. Word stores (`staaw`) count
+as one and advance by 4 bytes [hw].
+
 **Loads are never suppressed**: an ordinary `ldd` in a `loop_mode`
 instruction that reads past an array in epilogue iterations faults,
 whatever `ldmc` (0, 1) and `ldovl` (0, 1, 2, 255) say. Loads that may
@@ -276,5 +285,6 @@ kept out of `loops.c`.
 ## Not checked yet
 
 - `abg` semantics on hardware (see above: not to be run casually).
-- What `ldovl` does; quad stores under the store rules.
+- What `ldovl` does; v5+ quad stores (`stqp`, `staaqp`) under the
+  store rules.
 - v5+ (`%lsr1`, `%ilcr1`, 64-bit counts).

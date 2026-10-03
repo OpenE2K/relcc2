@@ -257,6 +257,15 @@ any store, **including its `incr`**: a suppressed `staa` doesn't advance
 the index, so the first iteration after the prologue stores at element 0
 ([loops.md](loops.md)).
 
+Other formats on the 4C (`aastores{w,q}*`): `staaw` stores the low 32
+bits of its register and steps 4 bytes; `staaq %qrN` stores `%drN` at
+the lower and `%drN+1` at the higher address and steps 16 bytes (the
+area 16-byte aligned). In loop mode a `staaq` counts as two stores for
+`strmd`, and splitting it raises SIGILL ([loops.md](loops.md)). With
+its data ready it costs what a `staad` does; with the data written by
+integer ops two cycles before, the loop took 4 more cycles per
+iteration (one stall step; not analysed further) [hw].
+
 ## How lcc uses APB [lcc, guide]
 
 - At `-O2` and above (not `-O1`), also when software pipelining is
@@ -326,7 +335,7 @@ program receives signals.
 
 ## Not checked yet
 
-- AAU stores in other formats (`staab`…`staaq`), with a literal, or
+- AAU stores in byte and half format (`staab`, `staah`), with a literal, or
   into areas also read by `mova`. (`mova` in epilogue iterations:
   disabled unless `%lsr.ldmc`, [loops.md](loops.md).)
 - v5+ (64-bit indices, unaligned areas, `movaqp`); timing on other

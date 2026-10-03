@@ -297,7 +297,8 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   makes the old `%b[0]` the new `%b[2]`, `abp` the old `%pred0` the new
   `%pred1`; a one-instruction loop runs one iteration per cycle;
   AAU stores obey the store rules and a dropped one doesn't advance its
-  index; `mova` stops in epilogue iterations unless `ldmc`; `vlc` = 0 with an exit predicate makes a while loop; calls
+  index; a quad store (`staaq`) counts as two for `strmd`, and splitting
+  it is SIGILL; `mova` stops in epilogue iterations unless `ldmc`; `vlc` = 0 with an exit predicate makes a while loop; calls
   don't change `%lsr` but a callee's loop does (save it around them);
   counts and rotation survive signals and page faults; lcc peels the
   prologue and uses no `pcnt`/`ecnt` in counted loops. Array prefetch

@@ -297,7 +297,7 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   makes the old `%b[0]` the new `%b[2]`, `abp` the old `%pred0` the new
   `%pred1`; a one-instruction loop runs one iteration per cycle;
   AAU stores obey the store rules and a dropped one doesn't advance its
-  index; `vlc` = 0 with an exit predicate makes a while loop; calls
+  index; `mova` stops in epilogue iterations unless `ldmc`; `vlc` = 0 with an exit predicate makes a while loop; calls
   don't change `%lsr` but a callee's loop does (save it around them);
   counts and rotation survive signals and page faults; lcc peels the
   prologue and uses no `pcnt`/`ecnt` in counted loops. Array prefetch
@@ -449,7 +449,7 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
    speculation leftovers (`spec/isa/loops.md`, `speculation.md`, "Not
    checked yet").
 3. APB leftovers (`spec/isa/apb.md`, "Not checked yet"): AAU stores in
-   other formats, `ldmc`/`ldovl`, and v5+ on hardware. Protected (`e2k128`) and 32-bit
+   other formats, and v5+ on hardware. Protected (`e2k128`) and 32-bit
    modes.
 4. ELF leftovers: `@PREF`, `@GOTPLT` (source only so far).
 

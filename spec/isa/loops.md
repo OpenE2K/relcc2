@@ -37,8 +37,8 @@ Status markers:
 | 32–36 | `ecnt` | epilogue counter: extra iterations after `lcnt` runs out |
 | 37 | `vlc` | the counter is valid; without it the loop never ends [hw] |
 | 38 | `over` | set by the `alc` that ended the loop; read as `%lcntex` |
-| 39 | `ldmc` | loads manual control (array-prefetch `mova` only, below) |
-| 40–47 | `ldovl` | load overlap (no effect on ordinary loads [hw]) |
+| 39 | `ldmc` | loads manual control: 1 keeps `mova` working in epilogue iterations [hw] |
+| 40–47 | `ldovl` | load overlap (no effect seen on ordinary loads or `mova` [hw]) |
 | 48–52 | `pcnt` | prologue counter |
 | 53–59 | `strmd` | how many stores of the last iteration still write |
 | 60 | `semc` | side effects manual control: no store suppression at all |
@@ -131,9 +131,17 @@ prologue.
 instruction that reads past an array in epilogue iterations faults,
 whatever `ldmc` (0, 1) and `ldovl` (0, 1, 2, 255) say. Loads that may
 run past the data must be speculative (`ld,sm`, [speculation.md](speculation.md)),
-as lcc's are. In MCST's qemu `ldmc` and `vlc`/`lcnt` gate only
-array-prefetch `mova`s: `mova` is enabled when `!loop_mode || ldmc ||
-!vlc || lcnt > 0` [source].
+as lcc's are.
+
+**Array-prefetch reads** (`mova` in a `loop_mode` instruction) are
+disabled in epilogue iterations unless `ldmc` = 1: with `lcnt` 5 and
+`ecnt` 2, a `movad` of the stream 1, 2, 3, … returned 1–5 and then left
+its destination unchanged (5, 5) with `ldmc` = 0, and continued (6, 7)
+with `ldmc` = 1; `ldovl` 0, 1, 2 or 255 changed nothing [hw:
+`tools/isa-probes/apb-loop.c`, `loopE`]. MCST's qemu has the same rule
+(`mova` enabled when `!loop_mode || ldmc || !vlc || lcnt > 0`,
+`translate-mova.c`) [source]. So epilogue iterations need no guard for
+reads past the end of an array stream.
 
 **Rotation.** `setbn rsz = R, rbs = B, rcur = C` makes `%b[]` a ring of
 2(R + 1) 64-bit registers starting at window register 2B (`%b[n]` is
@@ -247,6 +255,5 @@ The rest of `loops.c` matches the 4C under the community qemu.
 ## Not checked yet
 
 - `abg` (global register rotation; lcc doesn't use it).
-- `ldovl` and `ldmc` with array prefetch (`mova` in epilogue
-  iterations); quad stores under the store rules.
+- What `ldovl` does; quad stores under the store rules.
 - v5+ (`%lsr1`, `%ilcr1`, 64-bit counts).

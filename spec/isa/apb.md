@@ -327,7 +327,8 @@ program receives signals.
 ## Not checked yet
 
 - AAU stores in other formats (`staab`…`staaq`), with a literal, or
-  into areas also read by `mova`.
+  into areas also read by `mova`. (`mova` in epilogue iterations:
+  disabled unless `%lsr.ldmc`, [loops.md](loops.md).)
 - v5+ (64-bit indices, unaligned areas, `movaqp`); timing on other
   generations.
 - `dcd`, `dpl = 1`, the meaning of `%aabf`, epilogue (`ecnt`) behaviour

@@ -37,7 +37,7 @@ codebase's size. relcc2 does not decompile anything (see decision 4).
    concept: never submitted upstream and not the owner's port, which is
    still written by hand (how strictly to keep the two apart is the
    owner's call). Its main product is findings about the spec: record
-   each in `doc/spec-poc-findings.md`, then fix it in `spec/` or `doc/`
+   each in `docs/spec-poc-findings.md`, then fix it in `spec/` or `doc/`
    with the usual source marks, so the owner's port
    benefits through the spec, not through the experiment's code. Nothing
    from `toolchains/gcc-claude` is copied into this repository.
@@ -110,8 +110,9 @@ spec/abi/      ABI spec for e2k64: data layout, registers + DWARF, calling
                convention, stacks and unwinding, ELF/relocations/PIC/TLS,
                atomics, source-level conventions (macros, asm, options)
 spec/NOTICE.md attribution and licence of spec/
-doc/           plans for the owner: gcc-port-plan.md (how to write the GCC port),
-               spec-poc-findings.md (spec problems found by toolchains/gcc-claude)
+doc/           plans for the owner: gcc-port-plan.md (how to write the GCC port)
+docs/          spec-poc-findings.md: spec problems found by toolchains/gcc-claude
+               (kept by the agent working there)
 tools/setup/   install reference toolchains into toolchains/
 tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas
 tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump

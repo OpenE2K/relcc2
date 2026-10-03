@@ -3,7 +3,18 @@
 How lcc compiles the GNU `__atomic_*`/`__sync_*` builtins (and so C11
 `<stdatomic.h>` and C++ `<atomic>`), and the one rule that binds every
 compiler: 16-byte atomics. Probe: `tools/abi/probes/atomics.c`
-(assembly only). Nothing here is checked on hardware yet.
+(assembly only).
+
+On hardware (Elbrus 4C, by the proof-of-concept backend,
+`docs/spec-poc-findings.md` A2b): 8 threads, half running a function
+built by lcc and half the same function built with these sequences by
+another compiler, on shared objects: `fetch_add` on `long`, `int`,
+`short`, `char`, strong and weak CAS loops on `long` and `int`, and an
+exchange spinlock guarding a plain counter. All counts were exact in
+three runs of 1.6 million increments each, while a plain-increment
+control lost about half. So the lock protocol below is atomic in
+hardware and code from different compilers interoperates. Fences and
+the 16-byte rule are not checked on hardware.
 
 Code from different compilers interoperates as long as each one's
 read-modify-write is really atomic in hardware; the lock protocol below
@@ -11,7 +22,7 @@ is the only hardware way to do that for 1–8 bytes (and for 16 bytes on
 v5+). The exception is a size that one compiler does in hardware and
 another through a library lock (16 bytes, see below).
 
-## Read-modify-write: locked load and unlocking store (lcc, qemu, binutils)
+## Read-modify-write: locked load and unlocking store (lcc, qemu, binutils, hw)
 
 Every exchange, fetch-op, compare-exchange and test-and-set is a retry
 loop around a **locked load** and an **unlocking store**. lcc's

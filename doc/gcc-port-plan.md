@@ -669,8 +669,22 @@ the extended part is lost when the window spills (measured on the 4C);
 lcc sets `nfx=0` in every function that uses `long double`. 80-bit
 operations follow `%fpcr`/`%fpsr` (x87 control and status words), not
 `%pfpfr`, so rounding-mode patterns and `fenv` support must handle both
-(`spec/abi/registers.md`). Integer↔FP latency penalties (+1/+2 cycles) go into the DFA's
-bypasses, not into register classes.
+(`spec/abi/registers.md`). Cross-domain and cross-cluster latency
+penalties (FP→integer +2, crossing between ALC0–2 and ALC3–5 +1 or +2,
+`spec/isa/timing.md`) go into the DFA's bypasses, not into register
+classes.
+
+The one-register model above is what lcc does, and it is what inline
+asm's `x` constraint and `%xgN` register variables name
+(`spec/abi/source-compat.md`). The proof-of-concept backend instead kept
+`long double` in a pair of ordinary registers (mantissa, exponent),
+packing with `movif` before and unpacking with `movfi` after each
+80-bit operation: no `nfx = 0`, ordinary 64-bit spills, and results
+bit-identical to lcc on the 4C, but `x` operands then need an extended
+register assembled before the asm and split after it. Pick one before
+M3; lcc's model costs `nfx = 0` and two-part spills (`std` + `sth` of
+`movfi`'s result), the pair model costs a `movif`/`movfi` (4 cycles)
+around every operation.
 
 ### D9. Assembly output conventions
 
@@ -683,6 +697,50 @@ Owner's decision: emit what lcc emits.
   strict_delay` (lcc also adds `.ias_line N, "file"`), so gas pads
   hand-written code that is not bundled.
 - Write `%empty` (gas), not `%empty.hi` (Unipro).
+
+### D10. What GCC needs that its defaults get wrong
+
+Found by the proof-of-concept backend (`docs/spec-poc-findings.md`),
+each one cost it a debugging session:
+
+- **`DEFAULT_PCC_STRUCT_RETURN` 0**, or every struct is returned in
+  memory and all struct results break.
+- **`PROMOTE_MODE` must agree with `TARGET_PROMOTE_FUNCTION_MODE`**
+  (narrow integers to `DImode` in both), or expand asserts on call
+  results. `TARGET_SUPPORTS_WIDE_INT` 1 (16-byte `__int128` constants).
+- **Narrow arguments:** the ABI wants callers to extend and callees to
+  extend again, but GCC asks one hook (`promote_function_mode`,
+  `for_return` 0) for both sides. The proof of concept answers
+  "promoted" except while the current function's own parameters are being
+  laid out (`INIT_CUMULATIVE_INCOMING_ARGS` to `function_arg_advance`), so
+  GCC re-extends the incoming register.
+- **Division traps** (SIGFPE on divide by zero, `spec/isa/semantics.md`),
+  but RTL PRE hoists a plain `(set (reg) (div ...))` out of a loop above
+  a call that exits, because it refuses to move only insns that clobber a
+  hard register (`pr38819` at `-fPIC` on the 4C). The proof of concept
+  makes its divide patterns clobber `%ctpr2`. The E2K way to hoist a
+  division safely is the speculative form (`sdivs,sm`).
+- **Results over 64 bytes** are written by the callee at its entry stack
+  pointer, with no hidden pointer, a convention GCC doesn't have. What
+  worked: `TARGET_STRUCT_VALUE_RTX` gives the callee the address of a
+  local buffer (behind an opaque copy, or `dse1` deletes the stores into
+  it) and the epilogue copies the buffer to the entry USD, which also
+  avoids the overlap with memory arguments; for the caller it returns a
+  global register, and the `call` expander (operand 3 is the result
+  size) copies the result from the caller's USD after the call.
+  `REG_PARM_STACK_SPACE` grows to the result size so the caller reserves
+  enough; `STACK_PARMS_IN_REG_PARM_AREA` keeps stack arguments at their
+  slot offsets. A decision for you before M2.
+- **PIC jump tables:** GCC emits them as offsets from the table
+  (`ADDR_DIFF_VEC`) and leaves adding the table address to the port's
+  `tablejump` expander.
+- Facts from `spec/isa/semantics.md` that are GCC settings:
+  `SHIFT_COUNT_TRUNCATED` 1; `fmul_add*` are not fused (only with
+  `-ffp-contract=fast`, never `fma`); `fmax`/`fmin` are x86-style, not C's;
+  FP `lt`/`le` signal on quiet NaNs and `eq`/`uod` don't; integer compares
+  have no `ne`/`gt`/`ge` forms.
+- GCC 17 defaults to C23, where `int f();` takes no arguments: run the
+  compat suite's `unproto` unit with `-std=gnu17` in the `--cc` command.
 
 ---
 
@@ -778,6 +836,17 @@ output:
   (e.g. after a call). All hooks: `gcc/target.def:934–1620`.
 - Turn scheduling on at `-O1` in `common/config/e2k/e2k-common.cc` (TILE-Gx
   does, `common/config/tilegx/tilegx-common.cc:31`).
+- **Operations in one cycle read the old values.** Every operation in a
+  wide instruction reads the registers as they were before it, but Haifa
+  by default treats insns issued in one cycle as ordered: its
+  dependence-breaking transformation moved `std %r1, 0, %r0` after `addd
+  %r1, 8, %r1` *in the same cycle* and rewrote the address to `%r1 - 8`,
+  which is wrong in a bundle (found by the proof-of-concept backend,
+  `gcc.c-torture/execute/loop-2e` at -O1). Set
+  `TARGET_SCHED_EXPOSED_PIPELINE` to true (replacements then apply from
+  the next cycle), and make output dependences cost at least 1 in
+  `TARGET_SCHED_ADJUST_COST` (two writes of one register can't share a
+  wide instruction).
 
 ### 7.4 Printing wide instructions
 

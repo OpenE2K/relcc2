@@ -35,6 +35,7 @@ Arguments form a list of 8-byte **slots**:
 
 | Argument size | Placement | Slots |
 |---|---|---|
+| 0 (empty GNU C `struct {}`) | none: the next argument takes the slot (lcc) | 0 |
 | 1–8 bytes | next free slot | 1 |
 | 9–16 bytes | next **even** slot (an odd slot is skipped) | 2 |
 | 17 bytes or more | next even slot | (size + 7) / 8 |
@@ -133,8 +134,11 @@ caller: sign extension for signed types, zero extension for unsigned ones
 (`_Bool`, `char`, `short`, `int`). lcc's callees nevertheless extend
 arguments again before using them as 64-bit values, so they don't depend
 on it; Unipro's callees depend on it for `_Bool`, `char` and `short` (not
-for `int`). A new compiler should extend in both places. (compat: both
-compilers extend as callers.)
+for `int`). A new compiler should extend in both places: the compat
+suite's `ext` unit passes garbage above the value and fails a callee that
+trusts the caller. (compat: both compilers extend as callers.) The rule
+covers memory slots too: lcc writes a narrow argument in slot 8 and up as
+`sxt` and a full 64-bit `std`, not `stb`/`sth`/`stw`.
 
 ## Stack argument area (guide 9.4; lcc, unipro)
 
@@ -142,7 +146,8 @@ compilers extend as callers.)
   negative size, before the call. Its size is `8 × slots` rounded up to 16
   bytes, **including the slots passed in registers** (the guide's
   "reserved area"). Both compilers reserve at least this much for every
-  call that passes arguments.
+  call that passes arguments. A call without arguments reserves nothing
+  (lcc: no `getsp`).
 - Slot *i* is at offset `8 × i` from the stack pointer (`USD`) at the time
   of the call, which is the callee's stack pointer on entry. The callee
   reads it with `getsp 0`.
@@ -169,9 +174,10 @@ compilers extend as callers.)
 - `va_list` is a plain pointer to the next slot; `va_start(ap, last)` sets
   it to the slot after `last`. It can be passed to a function built by
   another compiler (compat: `valist` unit).
-- `va_arg` of a 9–16-byte type (`__int128`, `long double`, `__float128`,
-  `_Complex double`, aggregates) first rounds the pointer up to a 16-byte
-  **address** (lcc: `ap + (ap & 15)`). For a normal call the slot area is
+- `va_arg` of any type larger than 8 bytes (`__int128`, `long double`,
+  `__float128`, `_Complex double`, aggregates of any size; checked with a
+  24-byte struct) first rounds the pointer up to a 16-byte **address**
+  (lcc: `ap + (ap & 15)`). For a normal call the slot area is
   16-byte aligned, so this is the same as "start at an even slot", and
   callers place such values there. It differs for `static` variadic
   functions: at `-O1` and above lcc gives them a private calling sequence

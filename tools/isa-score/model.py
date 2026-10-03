@@ -44,6 +44,7 @@ MEASURED_ISETS = {1, 2, 3, 4, 5}
 CLASSES = {
     "int":    dict(lat=1, to_int=1, fpside=False),
     "cint":   dict(lat=2, to_int=2, fpside=False),   # add_addd etc.
+    "getsp":  dict(lat=2, to_int=2, fpside=False),   # timing.md (pmu.c)
     "load":   dict(lat=3, to_int=3, fpside=False),   # L1 hit
     "idiv":   dict(lat=11, to_int=11, fpside=False),
     "imul":   dict(lat=4, to_int=6, fpside=True),
@@ -80,7 +81,7 @@ BAP_TO_MOVA = 22    # apb.md, data in the caches
 # integer-side operation (ALU or load, not a store) issues in the same
 # channel PORT_DISTANCE cycles after it.
 PORT_DISTANCE = 2
-INT_SIDE = {"int", "cint", "load", "idiv"}
+INT_SIDE = {"int", "cint", "getsp", "load", "idiv"}
 STALL_QUANTUM = 4   # timing.md: an early consumer waits in 4-cycle steps
 
 
@@ -98,6 +99,8 @@ FP_PREFIXES = ("fadd", "fsub", "fmul", "fmin", "fmax", "fscale", "frcp",
 def classify(name):
     """Latency class of an ALU operation by mnemonic."""
     n = name
+    if n == "getsp":
+        return "getsp"
     if n.startswith("mova"):
         return "mova"
     if n.startswith(("aaurr", "apurr")):

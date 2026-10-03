@@ -15,7 +15,7 @@ Little-endian. Checked by `tools/abi/probes/layout.c` (lcc, unipro).
 | pointers | 8 | 8 | `%dr` | |
 | `float` | 4 | 4 | `%r` | IEEE single |
 | `double` | 8 | 8 | `%dr` | IEEE double |
-| `long double`, `__float80` | 16 | 16 | `%xr` | 80-bit x87-style extended in the low 10 bytes |
+| `long double`, `__float80` | 16 | 16 | `%xr` | 80-bit x87 extended in the low 10 bytes (mantissa, then sign and exponent); stores write only those 10 bytes, so bytes 10–15 are undefined (hw) |
 | `__float128` | 16 | 16 | `%qr` / two `%dr` | IEEE quad; arithmetic is in libgcc (`__multf3`, …) |
 | `_Complex float` | 8 | 4 | | |
 | `_Complex double` | 16 | 8 | | |

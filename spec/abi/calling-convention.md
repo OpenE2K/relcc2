@@ -54,8 +54,11 @@ Placement depends on the size only, not on the type's alignment: a
   struct occupies the low bytes of one slot; `struct { float a, b; }` and
   `_Complex float` share one slot (`a` in the low half); a 72-byte struct
   occupies 9 slots in memory.
-- `long double` occupies two slots (mantissa in the first, 16-bit exponent in
-  the second), aligned to an even slot. So do `__int128` and `__float128`
+- `long double` occupies two slots (mantissa in the first, 16-bit sign and
+  exponent in the second), aligned to an even slot. lcc callers
+  sign-extend the exponent word to 64 bits and lcc returns it
+  sign-extended from 16 bits (`sxt 0x5`); lcc callees use only bits 0–15
+  (hw: garbage above them is ignored). So do `__int128` and `__float128`
   (low half first). `_Complex double` occupies two slots (real first).
 - `float` is passed in the low 32 bits of its slot; `double` in the whole slot.
 

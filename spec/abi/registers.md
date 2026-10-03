@@ -2,8 +2,10 @@
 
 ## Register file (guide 9.3.1)
 
-The register file holds 256 64-bit registers (each also has an 80-bit
-extended part used by `%xr` operations).
+The register file holds 256 64-bit registers. Each also has an extended
+part: 16 bits on v1–v4, making an 80-bit register for `long double`, and
+64 bits on v5+, which also holds 128-bit packed values (lcc-doc). See
+"Extended parts and `long double`" below.
 
 | Part | Registers | Addressed as |
 |---|---|---|
@@ -33,9 +35,10 @@ units). (kernel `e2k_wd_t`, `e2k_br_t`; unipro, lcc)
 `setwd` also sets two window flags (qemu, kernel):
 
 - **`nfx`**: the kernel's `WD.fx` is its inverse. With `nfx = 0` the
-  hardware saves and restores the 80-bit extended parts of the window's
-  registers when spilling. Both compilers clear `nfx` only in functions
-  that use `long double` (lcc, unipro).
+  hardware saves and restores the extended parts of the window's
+  registers when spilling; with `nfx = 1` a spilled window comes back with
+  them cleared (hw, qemu: `tools/abi/probes/ldouble.c`). Both compilers
+  clear `nfx` only in functions that use `long double` (lcc, unipro).
 - **`dbl`** (v3+): with `dbl = 1`, 32-bit integer ALU operations
   zero-extend their result into the whole 64-bit register; with
   `dbl = 0`, they write only the low half and leave the upper half
@@ -94,3 +97,41 @@ the callee.
 numbers them differently produces libraries that are incompatible with
 lcc's libgcc and libstdc++ at run time; the libgcc source notes this
 happened with an old `e2k-linux-gcc`.
+
+## Extended parts and `long double` (lcc, hw, qemu)
+
+Checked by `tools/abi/probes/ldouble.c` on the 4C (v3) and under MCST's
+qemu as v3 and v5.
+
+- lcc keeps a `long double` in one register: the 64-bit mantissa (with
+  the explicit integer bit, as on x87) in the ordinary part and the
+  sign and 15-bit exponent in the extended part. `movif mant, exp, dst`
+  builds it from two registers; the mantissa is then read as the ordinary
+  register and `movfi src, dst` reads the 16-bit part. Arithmetic uses the
+  `fx*` operations (`fxaddxx`, `fxmulsx`, `fxdivxx`, `fxsqrtixx`, ...;
+  the suffix letters give the operand formats: `x` 80-bit, `d` double, `s`
+  single), conversions `fxtofd`, `fdtofx`, `idtofx`, `fxtoidtr`,
+  compares `fxcmp*xb` into predicates. Loads and stores go through the
+  two parts: `ldd`/`ldh`, then `movif`; `std` of the mantissa and `sth`
+  of `movfi`'s result. lcc's v5 code is the same.
+- **A `long double` kept in a window register across a call needs
+  `nfx = 0`** in the function that owns the window: with `nfx = 1` the
+  16-bit part reads back as 0 after the window has been spilled to the
+  procedure stack (a deep call), though it survives a call that does not
+  spill (hw, qemu). lcc sets `nfx = 0` in every function that touches
+  `long double` and keeps such values in window registers across calls.
+  Global registers are not spilled.
+- The arithmetic is x87 extended precision exactly: 64-bit mantissa,
+  round to nearest even, denormals down to 2^-16445, overflow to
+  infinity; `sqrtl(2)` is correctly rounded. Unnormals and pseudo-NaNs
+  raise invalid and give the x87 "indefinite" NaN (`ffff c000…`); a
+  pseudo-denormal is normalised (hw, and MCST's qemu agrees).
+- 80-bit operations take their rounding mode and precision control from
+  **`%fpcr`** (the x87 control word: RC bits 10–11, PC bits 8–9, default
+  `0x037f`) and record exceptions in **`%fpsr`** (x87 status word), not
+  in `%pfpfr`, which controls `float`/`double` and packed operations.
+  With PC = double, `1.0L/3` is rounded to 53 bits, as on x87 (hw). glibc's
+  `fesetround`, `feclearexcept` and `fetestexcept` update and read both
+  registers, so C code sees one environment. **MCST's qemu gets this
+  wrong**: it applies `%pfpfr` to 80-bit operations, ignores precision
+  control and sets `%pfpfr` flags.

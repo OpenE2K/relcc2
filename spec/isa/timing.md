@@ -178,7 +178,9 @@ rounding mode and exception flags of ordinary (scalar and packed)
 operations are in `%pfpfr` (rounding in bits 13–14:
 `FE_TONEAREST` 0, `FE_DOWNWARD` 0x2000, `FE_UPWARD` 0x4000,
 `FE_TOWARDZERO` 0x6000; flags in bits 0–5, `FE_INEXACT` 0x20); `%fpcr` and
-`%fpsr` are the x87-style control and status words for 80-bit operations.
+`%fpsr` are the x87-style control and status words that 80-bit operations
+use instead (hw; MCST's qemu wrongly uses `%pfpfr` for them; see
+`spec/abi/registers.md`, "Extended parts and `long double`").
 
 ## Differences between generations (lcc-doc, not measured)
 

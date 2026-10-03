@@ -35,10 +35,41 @@ CPUs and ISA versions, as lcc's `-mtune` and `-march` take them
 v5; `elbrus-12c`, `elbrus-16c`, `elbrus-2c3` v6; `elbrus-48c`, `elbrus-8v7`
 v7. `-march=elbrus-v3`..`v7` (v2, `elbrus-2c+`, was dropped in 1.30).
 `-mtune` overrides `-march` and marks the binary as runnable on that CPU
-only (`EF_E2K_INCOMPAT`, [elf.md](elf.md)). At run time lcc offers
-`__builtin_cpu_is("elbrus-8c2")`, `__builtin_cpu_name()` and
-`__builtin_e2k_cpu_iset()` (0 if unknown), backed by `liblcc`
-(`__builtin_cpu_init`).
+only (`EF_E2K_INCOMPAT`, [elf.md](elf.md)). Run-time CPU checks are
+below.
+
+## CPU detection at run time (lcc, lcc-doc)
+
+lcc's builtins (`builtin_mcst.html`): `__builtin_cpu_init ()`,
+`__builtin_cpu_is ("elbrus-8c2")`, `__builtin_cpu_name ()`,
+`__builtin_cpu_arch ()` (deprecated) and `__builtin_e2k_cpu_iset ()`
+(the ISA version, 0 if unknown). `__builtin_cpu_supports` is not
+supported ("unknown built-in function").
+
+`__builtin_cpu_is` compiles to a load from a 64-byte object
+**`__cpu_info`** (hidden visibility) and a compare [lcc]:
+
+| Offset | Holds | `__builtin_cpu_is` names |
+|---|---|---|
+| +0 | ISA version | `elbrus-v2` … `elbrus-v7`: 2 … 7 (deprecated forms) |
+| +4 | lcc's CPU code | `elbrus-s` 2, `elbrus-2c+` 3, `elbrus-4c` 4, `elbrus-2cm` 5, `elbrus-8c` 6, `elbrus-1c+` 7, `elbrus-8c2` 8, `elbrus-12c` 9, `elbrus-16c` 10, `elbrus-2c3` 11, `elbrus-48c` 12, `elbrus-8v7` 13 |
+
+These codes are not `%idr`'s model numbers
+([semantics.md](../isa/semantics.md), "Other facts"). `__cpu_info` and
+`__cpu_init`, which fills it, are defined in lcc's proprietary
+`liblcc.a` (`cpuinfo_init.o`; `__cpu_init` runs as a `.ctors.65434`
+constructor, priority 101), which lcc's driver always links.
+
+**MCST's static glibc needs it.** glibc is built by lcc and calls
+`__builtin_cpu_is` when it checks a library's `e_flags` against the CPU
+(`runtime_compatible_host`, `sysdeps/unix/sysv/linux/e2k/ldsodefs.h`).
+`ld-linux.so.2` has its own local copy, but `libc.a`'s `dl-load.o`
+leaves `__cpu_info` undefined, so a static link by another compiler that
+pulls in `dlopen`, NSS or iconv fails ("hidden symbol `__cpu_info'
+isn't defined") unless something else defines and fills it. The
+proof-of-concept backend's libgcc does that from `%idr`, matching lcc's
+values under qemu (v3, v5, v6) and on the 4C
+(`docs/spec-poc-findings.md` A10).
 
 ## Inline assembly (lcc-doc, lcc)
 
@@ -59,6 +90,15 @@ Constraints, as lcc 1.28+ defines them:
   constraint: `%0` becomes `%r2` for a `long`, an `__int128` pair or an
   `x` operand (`asmops.c`). The operation decides the width (`fxsqrtixx
   %1, %0` in mathinline.h); no operand modifiers are used.
+- An `x` value must be copied only with `movx` (or rebuilt with
+  `movif` from its two halves): a 64-bit copy (`addd`) drops the 16-bit
+  extended part. lcc packs an `x` input with `movif`, emits `movx r, r`
+  after an asm with an `x` output before reading it with `movfi`, and
+  switches such functions to `setwd nfx = 0` [lcc]. The `movx` after the
+  output turned out unnecessary on the 4C and under MCST's qemu
+  (`docs/spec-poc-findings.md` A12); why lcc emits it is not known.
+  glibc's `bits/mathinline.h`, the only user of `x` in the sysroot, is
+  included only under `__LCC__`.
 - lcc accepts `_Pragma("asm_inline")` before an `asm` (it allows lcc to
   schedule the asm with surrounding code, `-masm-inline`), and checks the
   asm's text unless `-mno-asm-check`. Other compilers ignore the pragma.
@@ -124,3 +164,26 @@ Register names for `-ffixed-<reg>` and `-fcall-used-<reg>` (as in GCC):
   `-mset-prepare-ct-delays-e48c` applies the 48C's prepare-to-transfer
   delays (default with `-mtune=elbrus-48c`), so those delays differ on
   that CPU.
+
+## GNU extensions lcc lacks (lcc)
+
+lcc 1.29.16 rejects GNU nested functions (and so nonlocal `goto` out of
+them; `error #65: expected a ";"`), `__builtin_setjmp` /
+`__builtin_longjmp` and `__builtin_apply` ("unknown built-in function").
+No E2K code depends on them and there is no ABI to match, so a new
+compiler may leave them out at first. Implementing them needs
+trampolines (an executable stack, `%g12` loaded before a jump through a
+CTPR) and, for nonlocal `goto` and `__builtin_longjmp`, unwinding the
+chain stack, which glibc's `longjmp` does through the kernel
+([stack-and-unwinding.md](stack-and-unwinding.md)).
+
+## Headers (source)
+
+The e2k `bits/fenv.h` in lcc's sysroot (and in `OpenE2K/glibc`,
+`sysdeps/e2k/fpu/bits/fenv.h`) defines `femode_t` only under
+`__GLIBC_USE (IEC_60559_BFP_EXT)`, while `fenv.h` declares `fegetmode`
+under `__GLIBC_USE (IEC_60559_BFP_EXT_C2X)`, as x86's copy does for
+both. So `#include <fenv.h>` fails under `-std=c23` / `gnu23` (GCC's
+default) without `_GNU_SOURCE`: "unknown type name 'femode_t'". A GCC
+port needs `-std=gnu17` or `-D_GNU_SOURCE` for its test runs and to
+build libquadmath, or a fixincludes rule.

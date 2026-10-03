@@ -207,10 +207,35 @@ covers memory slots too: lcc writes a narrow argument in slot 8 and up as
 - Results **larger than 64 bytes** are written by the callee to memory at its
   entry stack pointer, i.e. into the caller's argument area. The caller
   must reserve an area of at least the result size. There is no hidden
-  pointer argument. The result area overlaps the arguments passed in
+  pointer argument (except for the C++ classes below). The result area overlaps the arguments passed in
   memory, so the callee must finish reading them before it writes the
   result (libffi's closures build the result in a separate buffer and
   copy it last, `src/e2k/ffi.c`).
 - Integer results narrower than 64 bits are extended to 64 bits (guide;
   compat: lcc and Unipro extend `_Bool`, `char`, `short` and `int`
   results).
+
+## C++ classes that are not trivially copyable (lcc: l++ 1.29.16 `-O1`)
+
+A class that is "non-trivial for the purposes of calls" in the Itanium
+C++ ABI (a non-trivial copy or move constructor, or a non-trivial
+destructor; GCC's `TREE_ADDRESSABLE`) can't be passed or returned in
+registers, because it must stay at one address:
+
+- **Result**: returned through a **hidden pointer in argument slot 0**,
+  whatever its size (24 bytes and 128 bytes probed). The caller passes
+  the address of the object to build in `%db[0]` and the real arguments
+  move up one slot (`S mk3 (long, long)`: the callee gets the address in
+  `%r0` and the arguments in `%r1`, `%r2`); the callee constructs the
+  object there. The caller uses its own copy of the address afterwards,
+  not `%dr0`. A class with only a non-trivial destructor counts too.
+- **Argument**: passed by invisible reference: the caller makes a
+  temporary and passes its address in the argument's own slot
+  (`take (long, S, long)`: `%r1` points to the copy). This part comes
+  from GCC's C++ front end.
+
+Trivially copyable classes follow the C rules above. The C rule applied
+to these classes breaks objects that point into themselves
+(`std::string`'s short-string buffer): the proof-of-concept backend's
+`to_string` returned a string with a null `c_str ()` until it used the
+hidden pointer (`docs/spec-poc-findings.md` A9).

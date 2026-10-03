@@ -58,6 +58,12 @@ benchmarks.
   `perf_event_max_sample_rate` (100,000 per second on the 4C): a period
   of 1 records 668 of 142,000 instructions, so exact per-instruction
   counts can't come from sampling.
+- Where samples land: an EXEC sample is on the instruction itself; a
+  `TICKS` or `IB_NO_COMMAND` sample taken during a taken transfer's
+  bubble is on the target and, less often, on the next one or two
+  instructions. So per-block cycles put a taken `ibranch`'s cost in
+  its target block, and per-site taken counts come from EXEC −
+  `NO_CT_TAKEN` samples at the transfer (`tools/isa-score/profile.py`).
 - Hardware breakpoints (`perf stat -e mem:ADDR:x`) count only the first
   hit after each kernel entry (3 counted for 21 calls): the kernel
   disarms the breakpoint on a hit and re-arms it through a single-step
@@ -72,14 +78,14 @@ empty loop (`pmu.c`).
 |---|---|---|
 | `TICKS` (0x272) | cycles | `add8`: 8; `nop 7`: 8 |
 | `EXEC` (0x313) | wide instructions executed (a `nop N` instruction is 1) | `add8`: 8; `nop 7`: 1 |
-| `NO_CT_TAKEN` (0x220) | executed instructions without a taken transfer | |
 | `BUB_B_NOP` (0x21a) | cycles of `nop N` waits | `nop 7`: 7 |
 | `BUB_B` (0x219) | cycles phase B is held (nops, stalls) | |
 | `BUB_E2` (0x211) | **interlock stall steps; each costs 4 cycles** | `ldd` used 2 cycles early: 1 step, +4 cycles; `muld` used 3 early: 2 steps, +8 |
 | `BUB_E2_MEM`, `BUB_E2_ALUn_MEM` (0x230, 0x231…) | steps waiting for a load result | `ld_use`: 1 |
 | `BUB_E2_OPND`, `BUB_E2_ALUn_OPND` (0x23c, 0x248…) | steps waiting for an arithmetic result, by consumer channel | `mul_use`: 2 in ALC1 |
 | `CONF_ALUn_OUT` (0x240–0x242, 0x350–0x352) | write-back conflicts in ALC n (timing.md) | `muld,0` then `addd,0` 2 cycles later: 1; `addd,2` instead: 0 |
-| `IB_NO_COMMAND` (0x218) | cycles without an instruction to issue | two taken `ibranch`: 12 (6 each, as control-transfer.md) |
+| `IB_NO_COMMAND` (0x218) | cycles without an instruction to issue: taken `ibranch`es (6 each) and taken `ct`s waiting for their CTPR, nothing else in cached code (control-transfer.md, "Instruction fetch") | two taken `ibranch`: 12; a taken `ct` 1 cycle after its `disp`: 3 |
+| `NO_CT_TAKEN` (0x220/0x320) | executed instructions without a taken transfer, so EXEC − `NO_CT_TAKEN` = taken transfers | gcc-claude CoreMark: 1.136 G sampled at transfer sites, 1.137 G from `perf stat` |
 | `RBRANCH` (0x217) | taken `rbranch`, both `%MLOCK` and `%dt_al` | failed DAM check: 1; `%dt_al` on a diagnostic: 1 |
 | `TRAPS` (0x216) | interrupts | 0 for hardware register-file spills |
 | `BUB_B_RF_SPILLFILL` (0x267), `BUB_B_CHAIN_SPILLFILL` (0x266) | register-file and chain-stack spill/fill stalls | 64-deep recursion: about 4 and 2 per level; 2-deep: 0 |

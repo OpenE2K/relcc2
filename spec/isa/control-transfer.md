@@ -185,9 +185,39 @@ stall is paid (monitors, `stall_*`). So padding with `nop` before an
 early (5 cycles before for `disp`, 9 for `movtd`) and keep `ibranch` for
 rarely taken branches or when no CTPR is free.
 
+### Instruction fetch [hw: monitors]
+
+The `IB_NO_COMMAND` monitor counts cycles with no instruction ready to
+issue ([monitors.md](monitors.md)). In loops that fit the instruction
+buffer (`tools/isa-probes/pmu.c`, `fetch_*`, `cmpib_*`, `wide*`,
+`ctipd_*`) only two things produce them:
+
+- a **taken `ibranch`: 6 cycles**, forward or backward, wherever its
+  condition comes from;
+- a **taken `ct` whose CTPR is not ready yet**: the wait (5 cycles after
+  `disp`, 9 after `movtd`, minus the distance) is counted here too.
+
+Free: a not-taken `ibranch` (it only waits, exactly, for its condition:
+compare → `ibranch` 3), a not-taken `ct`, any prepare (`disp` with `ipd`
+0, 1 or 2, `return`), the `ipd` of the transfer's own instruction, and
+straight-line code of wide instructions (up to 40 bytes each, one per
+cycle, also right after a taken branch).
+
+Whole programs agree (the 4C, CoreMark, `tools/isa-score/profile.py`):
+gcc-claude's code branches with conditional `ibranch`; 6 cycles per
+taken `ibranch` (sampled: 377 M of them) predicts 2.14 G cycles, and
+the monitor counts 2.07 G (11% of the run). Unipro's clang has no taken
+`ibranch`; its 0.98 G bubble cycles (6%) are `switch` dispatches that
+`ct` through a CTPR written by `movtd` one instruction earlier (8 cycles
+early) and conditional `ct`s 2–3 cycles after their `disp`. lcc prepares
+early and loses 1.3%. So: prepare every transfer that may be taken at
+least its delay ahead, `movtd` 9 cycles ahead, and keep `ibranch` for
+transfers that are rarely taken.
+
 Not measured: targets that are not in the instruction cache (the effect
-of `ipd` and `pref`), other generations, the v6+ same-CTPR case, the
-48C's different delays (lcc's `-mset-prepare-ct-delays-e48c`, timing.md).
+of `ipd` and `pref` there), other generations, the v6+ same-CTPR case,
+the 48C's different delays (lcc's `-mset-prepare-ct-delays-e48c`,
+timing.md).
 
 ## How lcc uses it [lcc]
 

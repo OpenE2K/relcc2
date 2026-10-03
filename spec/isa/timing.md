@@ -142,6 +142,15 @@ a compiler: model latencies exactly, and fill a known gap with `nop N`
 (or independent work) rather than relying on the interlock. This is why
 lcc pads with `nop`s.
 
+Each 4-cycle step is one repeat of the pipeline's E2 phase, which the
+`BUB_E2` monitor counts ([monitors.md](monitors.md)). Also measured
+there (`tools/isa-probes/pmu.c`): a stalled instruction's own `nop N`
+cycles come after the stall, not during it; a load in a stalled
+instruction delivers its result at its normal latency from the
+instruction's real issue; two loads in one instruction, 0 to 256 bytes
+apart, don't delay each other. Transfers wait exactly, not in steps
+([control-transfer.md](control-transfer.md)).
+
 ## Write-back conflicts
 
 An FP-side result (FP add or multiply, integer multiply) on its way to

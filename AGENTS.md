@@ -107,6 +107,7 @@ spec/isa/      ISA spec: bundle.md (wide instruction format), control-transfer.m
                (branches, calls, CTPRs), semantics.md (what operations
                compute), apb.md (array prefetch), speculation.md
                (speculative operations, diagnostic values, DAM),
+               loops.md (loop mode, %lsr, rotation),
                monitors.md (performance counters through perf),
                binutils-ops.yaml
                (every operation), registers.yaml (state and AAU registers)
@@ -132,8 +133,9 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     apb-lcc.c) and speculation probe (spec.c;
                     gen_spec.py writes spec.s and spec-cases.h) and
                     monitor events (pmu.c, gen_pmu.py; pmu.h is a
-                    helper for counting in any probe), run on
-                    hardware
+                    helper for counting in any probe) and loop
+                    mode (loops.c; gen_loops.py writes loops.s and
+                    loops-cases.h), run on hardware
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     compiled to assembly and read, as are atomics.c,
                     asmops.c and stackprot.c; tagtrap.c, dbl.c,
@@ -285,7 +287,16 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   counts wide instructions, `TICKS` cycles, `BUB_E2` 4-cycle stall
   steps, `CONF_ALUn_OUT` write-back conflicts, plus DAM, L1 and spill
   events; sampling is throttled and breakpoints miss hits, so neither
-  gives exact per-address counts. Array prefetch
+  gives exact per-address counts. Loop mode (`spec/isa/loops.md`, hw):
+  a loop with `alc` and `ct ? %NOT_LOOP_END` runs `lcnt + ecnt`
+  iterations (`vlc` = 0: endless), `rwd %lsr` needs 4 cycles before the
+  loop (else one extra iteration) and also sets `%ilcr`; `%pcntN` is
+  true while `pcnt ≤ N`, `%lcntex` only after the loop; `loop_mode`
+  stores are dropped while `pcnt > 0` and in the last iteration from
+  store number `strmd` on (`semc` turns it off), loads never; `abn`
+  makes the old `%b[0]` the new `%b[2]`, `abp` the old `%pred0` the new
+  `%pred1`; a one-instruction loop runs one iteration per cycle; lcc
+  peels the prologue and uses no `pcnt`/`ecnt`. Array prefetch
   (`spec/isa/apb.md`, hw): the program format, what a `mova` reads
   (`base + AAIND + disp + step × n + ind`, zero-extended, diagnostic
   instead of a fault), latency 5, and the correctness rules: a call, a
@@ -430,8 +441,9 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
    available, which may clean registers like qemu.
 2. The relcc2 work listed in `doc/gcc-port-plan.md` section 11: DejaGnu
    boards for qemu-e2k and the 4C; timing on v5 (8CB) and other
-   generations with `tools/isa-timing/bench.py`; loop-mode spec;
-   speculation leftovers (`spec/isa/speculation.md`, "Not checked yet").
+   generations with `tools/isa-timing/bench.py`; loop-mode and
+   speculation leftovers (`spec/isa/loops.md`, `speculation.md`, "Not
+   checked yet").
 3. APB leftovers (`spec/isa/apb.md`, "Not checked yet"): AAU stores
    (`staa`/`incr`) and v5+ on hardware. Protected (`e2k128`) and 32-bit
    modes.

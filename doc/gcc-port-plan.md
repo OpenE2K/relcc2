@@ -912,31 +912,109 @@ print `,N` with a punctuation code in the output templates.
 
 ### 7.6 Speculation
 
-- **Control speculation** (moving an operation above the branch that
-  guards it): mark it `,sm`; a fault becomes a tagged result that only
-  traps if a non-speculative operation uses it. No check instruction is
-  needed. GCC's Haifa scheduler always inserts a check for speculative
-  instructions (`create_check_block_twin`, haifa-sched.cc:8347); only the
-  **selective scheduler** has a mode without checks,
+The machine side is in `spec/isa/speculation.md` (measured on the 4C).
+What it means for GCC, from the cheapest step to the hardest:
+
+**1. Speculative forms of instructions.** Every ALU, FP and load pattern
+needs a variant with `,sm`. Wrap them the way ia64 does (`unspec`-wrapped
+speculative loads, ia64.md:440–708), or give the main patterns an
+attribute that the output template turns into `,sm`. Stores, divisions
+in the default mode, branches and anything with a side effect never get
+one.
+
+**2. What may be speculated without a check.** E2K needs no check
+instruction for control speculation: a faulting speculative operation
+gives a diagnostic value, and the program fails only if that value
+reaches a non-speculative use, which happens only on the path where the
+original operation would have run and faulted anyway. So the port can
+treat a speculative load as **not trapping**: in GCC's terms, a moved
+load needs no `BEGIN_CONTROL` check. The exceptions, all measured:
+
+- Loads: use the semi-speculative form (`ld,sm`, MAS mod 0, lcc's
+  default). It returns real data from valid pages the process hasn't
+  touched (the kernel pages them in), so its result is always usable
+  when the guard holds. The fully speculative form (mod 3) can return a
+  diagnostic for such a page and then needs recovery code; leave it out.
+  Cost to keep in mind: the first speculative load into each invalid
+  region traps into the kernel once (about 5,000 cycles), and a load
+  from a valid page not touched yet is paged in even if never used.
+- `volatile` and atomic accesses, and loads with a MAS (lock loads):
+  never speculated.
+- FP operations: a speculative FP operation that would raise a flag
+  not already set gives a diagnostic instead. That is harmless while the
+  flags are sticky-set (the kernel's start state) but turns into SIGILL
+  after `feclearexcept`. Speculate FP only under `-fno-trapping-math`,
+  and then only if we accept that hazard (to be decided; lcc's
+  `-fspec-fp` is on by default, but lcc kept FP divisions under their
+  branch in our probes).
+- Integer division: `sdivd,sm` by zero gives a diagnostic; safe to
+  speculate as such, but lcc doesn't, and it is rarely worth it (11+
+  cycles).
+- The signal changes: a program that faults in speculated code gets
+  SIGILL at the first non-speculative use instead of SIGSEGV/SIGBUS/
+  SIGFPE. Tests that catch those signals must be built without
+  speculation (lcc: `-fno-semi-spec-ld`, `-fno-spec-fp`).
+
+**3. Where GCC can use it.**
+
+- *If-conversion* (`ifcvt.cc`) is the biggest win: E2K code is mostly
+  if-converted (lcc's `-O3` CoreMark issues 2.5 operations per cycle,
+  Unipro's clang 1). GCC's `noce_*` paths only convert a branch arm that
+  `may_trap_or_fault_p` says cannot trap. Making that answer "no" for
+  E2K loads that will be emitted speculatively needs either a GCC
+  change (a target hook saying "this insn can be made non-trapping"
+  plus a way to mark it `,sm`) or a port-specific if-conversion pass
+  after ifcvt. With predication (`define_cond_exec`) the remaining
+  stores and calls stay predicated, as lcc does.
+- *Interblock scheduling* (`sched-rgn`, `-fsched-spec-load-dangerous`)
+  moves loads above branches only when told they can't trap; the same
+  "can be made non-trapping" answer plus emitting `,sm` on moved insns
+  (`TARGET_SCHED_SPECULATE_INSN`) covers it. GCC's Haifa scheduler
+  inserts checks for `BEGIN_CONTROL` speculation
+  (`create_check_block_twin`, haifa-sched.cc:8347); E2K needs none, so
+  the port should present moved loads as safe rather than as
+  control-speculative.
+- *Selective scheduling* (sel-sched) has a mode without checks,
   `SEL_SCHED_SPEC_DONT_CHECK_CONTROL` (sel-sched.cc:3208), used by ia64
-  with `-msel-sched-dont-check-control-spec`. The hooks to implement are
-  ia64's: `TARGET_SCHED_SET_SCHED_FLAGS` (ia64.cc:8072),
-  `TARGET_SCHED_SPECULATE_INSN` (8368, returns the speculative form of a
-  load as an `unspec`-wrapped pattern), `TARGET_SCHED_GET_INSN_SPEC_DS`,
-  `TARGET_SCHED_SKIP_RTX_P`, and the sched-context hooks (selective
-  scheduling keeps several states).
-  Caveat: non-load operations (division, FP) can also fault; their `,sm`
-  forms are needed too if they are moved.
-- **Data speculation** (moving a load above a store that might alias):
-  E2K has a load + later check that reloads (guide 4.5; the `%MLOCK`
-  branch condition in `bundle.md` "ctcond"). This matches ia64's `ld.a` +
-  `chk.a`/`ld.c` (ia64.md:440–708; hooks `TARGET_SCHED_NEEDS_BLOCK_P`,
-  `TARGET_SCHED_GEN_SPEC_CHECK`, ia64.cc:8531–8571). The E2K details
-  (which MAS/flags, check semantics) are not yet in `spec/`; relcc2 needs
-  to work them out first.
-- Selective scheduling is enabled by ia64 at `-O3` only (ia64.cc:6182);
-  it is maintained (MAINTAINERS lists ISP RAS) but used by few targets, so
-  expect bugs.
+  with `-msel-sched-dont-check-control-spec`; hooks as ia64's
+  (`TARGET_SCHED_SET_SCHED_FLAGS` ia64.cc:8072,
+  `TARGET_SCHED_SPECULATE_INSN` 8368, `TARGET_SCHED_GET_INSN_SPEC_DS`,
+  `TARGET_SCHED_SKIP_RTX_P`, sched-context hooks). Enabled by ia64 at
+  `-O3` only (ia64.cc:6182); maintained by ISP RAS but used by few
+  targets, so expect bugs.
+
+**4. Data speculation (DAM).** E2K's lock load + check load map onto
+ia64's advanced load + check (`ld.a` + `ld.c`/`chk.a`):
+
+| ia64 | E2K |
+|---|---|
+| `ld.a r` (advanced load, enters the ALAT) | `ldd,0,sm ..., %rN, mas=0x4` in ALC0/ALC3 (enters the DAM) |
+| `ld.c r` (check: reload if the entry is gone) | `ldd,5 ..., %rN, mas=0x3` in ALC2/ALC5, same register and address |
+| `chk.a r, recovery` (branch to recovery code) | the check plus `rbranch recovery` in the same wide instruction |
+| ALAT invalidation by stores | DAM entry removed by any overlapping store |
+
+GCC's Haifa scheduler already does `BEGIN_DATA` speculation for ia64
+with these hooks: `TARGET_SCHED_NEEDS_BLOCK_P` (does a check need a
+recovery block: only if consumers were moved above the check),
+`TARGET_SCHED_GEN_SPEC_CHECK` (ia64.cc:8531–8571), and the
+advanced-load/check patterns (ia64.md:440–708). Constraints the E2K
+patterns must express:
+
+- The check's destination register is the lock load's and nothing may
+  write it in between (an overwrite keeps the entry, and the check then
+  returns the overwritten value: silent wrong data). Model the pair as
+  one register that is live from the lock load to the check.
+- The check goes in ALC2 or ALC5 (it also occupies a store channel), the
+  lock load in ALC0 or ALC3, and `rbranch` in the check's instruction.
+- The table holds at least 32 entries; keep fewer pairs outstanding.
+- Traps clear it (a failed check, so correct but slow); calls don't, and
+  entries are keyed by physical register, so clear it (`mmurw 0,
+  %dam_inv`) on exit from a function that used it, as lcc does, and
+  never let a check run without its own lock load on every path.
+
+lcc pipelines loops with it (`-fswp-dam-cc`, default at `-O3`, about +5%
+speed for 1–2% more code per its changelog). For GCC it comes after
+control speculation and modulo scheduling (M6/M7).
 
 ### 7.7 Loops
 
@@ -1105,8 +1183,9 @@ Useful next pieces of relcc2 work for the port, in rough order:
 3. **Channel/resource data** from `binutils-ops.yaml` in a form easy to
    turn into reservations (data only; the generator that writes `.md`
    belongs in the port).
-4. **Data speculation** spec: the E2K load/check (`%MLOCK`, MAS values)
-   semantics, so section 7.6 can be implemented.
+4. **Speculation leftovers** (`spec/isa/speculation.md`, done for v3):
+   the other MAS lock/check forms, fully speculative loads' recovery,
+   unmasked FP exceptions under `,sm`, v5+.
 5. **Loop mode and rotation** spec details for 7.7.
 6. Review of the port's output against `spec/` and lcc, and test
    triage.

@@ -315,8 +315,10 @@ the achieved schedule, static or weighted by the run: on CoreMark and
 Linpack it ranks lcc > Unipro clang > gcc-claude, as the 4C does; the
 possible/achieved score does not. `validate/` (about a minute on the
 4C) puts every kernel within 1% (one within 3%); on the benchmarks the
-model is within 6%, except gcc-claude's CoreMark (11%, instruction-fetch
-bubbles after taken transfers, not modelled). v6/v7 use v3 latencies.
+model is within 6% once `profile.py` measures which transfers were
+taken (a second sampled run, EXEC − `NO_CT_TAKEN`): fetch bubbles are
+taken `ibranch`es (6 cycles) and taken `ct`s waiting for a late
+prepare, nothing else (control-transfer.md, "Instruction fetch"). v6/v7 use v3 latencies.
 
 ### ABI (spec/abi) — written, checked by the compat suite under qemu-e2k and on the 4C (v3)
 

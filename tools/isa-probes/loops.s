@@ -2240,6 +2240,384 @@ loop_aastoresq:
 	}
 	.size	loop_aastoresq, .-loop_aastoresq
 
+	.global	loop_aastoresb
+	.type	loop_aastoresb, #function
+	.align	8
+loop_aastoresb:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  setbn	rsz = 0x3, rbs = 0x8, rcur = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr10
+	  addd,1	0x0, 0x0, %dr11
+	  addd,2	0x0, 0x0, %dr12
+	  addd,3	0x0, 0x0, %dr13
+	}
+	{
+	  addd,0	0x0, 0x100, %dr16
+	  addd,1	0x0, 0x101, %dr17
+	  addd,2	0x0, 0x102, %dr18
+	  addd,3	0x0, 0x103, %dr19
+	  addd,4	0x0, 0x104, %dr20
+	  addd,5	0x0, 0x105, %dr21
+	}
+	{
+	  addd,0	0x0, 0x106, %dr22
+	  addd,1	0x0, 0x107, %dr23
+	  disp	%ctpr1, .Laastoresb_loop
+	}
+	{
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  rrd,0	%lsr, %dr4
+	}
+	{
+	  rrd,0	%ilcr, %dr5
+	}
+	{
+	  nop 5
+	}
+	{
+	  aaurwd,2	%dr2, %aad0
+	  addd,0	0x0, 0x0, %dr24
+	}
+	{
+	  aaurwd,5	%dr24, %aasti1
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr8
+	}
+.Laastoresb_loop:
+	{
+	  addd,3	%dr10, 0x1, %dr10
+	}
+	{
+	  nop 1
+	}
+	{
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  staab,5	%r10, %aad0[ %aasti1 ]
+	  incr,5	%aaincr0
+	}
+	{
+	  rrd,0	%clkr, %dr9
+	}
+	{
+	  rrd,0	%lsr, %dr6
+	}
+	{
+	  rrd,0	%ilcr, %dr7
+	}
+	{
+	  nop 5
+	}
+	{
+	  std,2	%dr0, 0x0, %dr10
+	  std,5	%dr0, 0x8, %dr11
+	}
+	{
+	  std,2	%dr0, 0x10, %dr12
+	  std,5	%dr0, 0x18, %dr13
+	}
+	{
+	  std,2	%dr0, 0x20, %dr4
+	  std,5	%dr0, 0x28, %dr5
+	}
+	{
+	  std,2	%dr0, 0x30, %dr6
+	  std,5	%dr0, 0x38, %dr7
+	}
+	{
+	  std,2	%dr0, 0x40, %dr16
+	  std,5	%dr0, 0x48, %dr17
+	}
+	{
+	  std,2	%dr0, 0x50, %dr18
+	  std,5	%dr0, 0x58, %dr19
+	}
+	{
+	  std,2	%dr0, 0x60, %dr20
+	  std,5	%dr0, 0x68, %dr21
+	}
+	{
+	  std,2	%dr0, 0x70, %dr22
+	  std,5	%dr0, 0x78, %dr23
+	}
+	{
+	  subd,0	%dr9, %dr8, %dr0
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	loop_aastoresb, .-loop_aastoresb
+
+	.global	loop_aastoresh
+	.type	loop_aastoresh, #function
+	.align	8
+loop_aastoresh:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  setbn	rsz = 0x3, rbs = 0x8, rcur = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr10
+	  addd,1	0x0, 0x0, %dr11
+	  addd,2	0x0, 0x0, %dr12
+	  addd,3	0x0, 0x0, %dr13
+	}
+	{
+	  addd,0	0x0, 0x100, %dr16
+	  addd,1	0x0, 0x101, %dr17
+	  addd,2	0x0, 0x102, %dr18
+	  addd,3	0x0, 0x103, %dr19
+	  addd,4	0x0, 0x104, %dr20
+	  addd,5	0x0, 0x105, %dr21
+	}
+	{
+	  addd,0	0x0, 0x106, %dr22
+	  addd,1	0x0, 0x107, %dr23
+	  disp	%ctpr1, .Laastoresh_loop
+	}
+	{
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  rrd,0	%lsr, %dr4
+	}
+	{
+	  rrd,0	%ilcr, %dr5
+	}
+	{
+	  nop 5
+	}
+	{
+	  aaurwd,2	%dr2, %aad0
+	  addd,0	0x0, 0x0, %dr24
+	}
+	{
+	  aaurwd,5	%dr24, %aasti1
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr8
+	}
+.Laastoresh_loop:
+	{
+	  addd,3	%dr10, 0x1, %dr10
+	}
+	{
+	  nop 1
+	}
+	{
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  staah,5	%r10, %aad0[ %aasti1 ]
+	  incr,5	%aaincr0
+	}
+	{
+	  rrd,0	%clkr, %dr9
+	}
+	{
+	  rrd,0	%lsr, %dr6
+	}
+	{
+	  rrd,0	%ilcr, %dr7
+	}
+	{
+	  nop 5
+	}
+	{
+	  std,2	%dr0, 0x0, %dr10
+	  std,5	%dr0, 0x8, %dr11
+	}
+	{
+	  std,2	%dr0, 0x10, %dr12
+	  std,5	%dr0, 0x18, %dr13
+	}
+	{
+	  std,2	%dr0, 0x20, %dr4
+	  std,5	%dr0, 0x28, %dr5
+	}
+	{
+	  std,2	%dr0, 0x30, %dr6
+	  std,5	%dr0, 0x38, %dr7
+	}
+	{
+	  std,2	%dr0, 0x40, %dr16
+	  std,5	%dr0, 0x48, %dr17
+	}
+	{
+	  std,2	%dr0, 0x50, %dr18
+	  std,5	%dr0, 0x58, %dr19
+	}
+	{
+	  std,2	%dr0, 0x60, %dr20
+	  std,5	%dr0, 0x68, %dr21
+	}
+	{
+	  std,2	%dr0, 0x70, %dr22
+	  std,5	%dr0, 0x78, %dr23
+	}
+	{
+	  subd,0	%dr9, %dr8, %dr0
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	loop_aastoresh, .-loop_aastoresh
+
+	.global	loop_aastores_lit
+	.type	loop_aastores_lit, #function
+	.align	8
+loop_aastores_lit:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  setbn	rsz = 0x3, rbs = 0x8, rcur = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr10
+	  addd,1	0x0, 0x0, %dr11
+	  addd,2	0x0, 0x0, %dr12
+	  addd,3	0x0, 0x0, %dr13
+	}
+	{
+	  addd,0	0x0, 0x100, %dr16
+	  addd,1	0x0, 0x101, %dr17
+	  addd,2	0x0, 0x102, %dr18
+	  addd,3	0x0, 0x103, %dr19
+	  addd,4	0x0, 0x104, %dr20
+	  addd,5	0x0, 0x105, %dr21
+	}
+	{
+	  addd,0	0x0, 0x106, %dr22
+	  addd,1	0x0, 0x107, %dr23
+	  disp	%ctpr1, .Laastores_lit_loop
+	}
+	{
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  rrd,0	%lsr, %dr4
+	}
+	{
+	  rrd,0	%ilcr, %dr5
+	}
+	{
+	  nop 5
+	}
+	{
+	  aaurwd,2	%dr2, %aad0
+	  addd,0	0x0, 0x0, %dr24
+	}
+	{
+	  aaurwd,5	%dr24, %aasti1
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr8
+	}
+.Laastores_lit_loop:
+	{
+	  addd,3	%dr10, 0x1, %dr10
+	}
+	{
+	  nop 1
+	}
+	{
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  staad,5	%dr10, %aad0[ %aasti1 + 0x8 ]
+	  incr,5	%aaincr0
+	}
+	{
+	  rrd,0	%clkr, %dr9
+	}
+	{
+	  rrd,0	%lsr, %dr6
+	}
+	{
+	  rrd,0	%ilcr, %dr7
+	}
+	{
+	  nop 5
+	}
+	{
+	  std,2	%dr0, 0x0, %dr10
+	  std,5	%dr0, 0x8, %dr11
+	}
+	{
+	  std,2	%dr0, 0x10, %dr12
+	  std,5	%dr0, 0x18, %dr13
+	}
+	{
+	  std,2	%dr0, 0x20, %dr4
+	  std,5	%dr0, 0x28, %dr5
+	}
+	{
+	  std,2	%dr0, 0x30, %dr6
+	  std,5	%dr0, 0x38, %dr7
+	}
+	{
+	  std,2	%dr0, 0x40, %dr16
+	  std,5	%dr0, 0x48, %dr17
+	}
+	{
+	  std,2	%dr0, 0x50, %dr18
+	  std,5	%dr0, 0x58, %dr19
+	}
+	{
+	  std,2	%dr0, 0x60, %dr20
+	  std,5	%dr0, 0x68, %dr21
+	}
+	{
+	  std,2	%dr0, 0x70, %dr22
+	  std,5	%dr0, 0x78, %dr23
+	}
+	{
+	  subd,0	%dr9, %dr8, %dr0
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	loop_aastores_lit, .-loop_aastores_lit
+
 	.global	loop_aastoresq_c
 	.type	loop_aastoresq_c, #function
 	.align	8

@@ -160,6 +160,15 @@ def main():
                               "addd,1\t%dr10, 0x100, %dr27"], ["nop 1"],
                       BACK + ["staaq,5\t%qr26, %aad0[ %aasti1 ]",
                               "incr,5\t%aaincr0"]], pre=aau)
+    # Byte and half formats, and a doubleword store with a literal
+    # offset (one element further).
+    for f, r in (("b", "%r10"), ("h", "%r10")):
+        add(f"aastores{f}", [count, ["nop 1"],
+                             BACK + [f"staa{f},5\t{r}, %aad0[ %aasti1 ]",
+                                     "incr,5\t%aaincr0"]], pre=aau)
+    add("aastores_lit", [count, ["nop 1"],
+                         BACK + ["staad,5\t%dr10, %aad0[ %aasti1 + 0x8 ]",
+                                 "incr,5\t%aaincr0"]], pre=aau)
     # The same quad store of data set before the loop, for its cost.
     add("aastoresq_c", [count, ["nop 1"],
                         BACK + ["staaq,5\t%qr28, %aad0[ %aasti1 ]",

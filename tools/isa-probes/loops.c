@@ -224,6 +224,10 @@ main (void)
   run ("aastores_nolm", loop_aastores_nolm, lsr (5, 2, 1, 3, 0, 0), 0);
   run ("aastoresw", loop_aastoresw, lsr (5, 2, 1, 3, 0, 0), 0);
   run ("aastoresw", loop_aastoresw, lsr (5, 2, 1, 3, 1, 0), 0);
+  run ("aastoresb", loop_aastoresb, lsr (5, 0, 1, 0, 0, 0), 0);
+  run ("aastoresb", loop_aastoresb, lsr (5, 2, 1, 3, 1, 0), 0);
+  run ("aastoresh", loop_aastoresh, lsr (5, 2, 1, 3, 1, 0), 0);
+  run ("aastores_lit", loop_aastores_lit, lsr (5, 2, 1, 3, 1, 0), 0);
   run ("aastoresq", loop_aastoresq, lsr (5, 0, 1, 0, 0, 0), 0);
   run ("aastoresq", loop_aastoresq, lsr (5, 2, 1, 3, 0, 0), 0);
   run ("aastoresq", loop_aastoresq, lsr (5, 2, 1, 3, 1, 0), 0);

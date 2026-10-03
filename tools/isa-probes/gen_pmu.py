@@ -13,6 +13,7 @@ Registers: %dr0 count, %dr1 p (an 8-aligned buffer of 64 longs, in L1),
 %dr3 = 1, %dr5 = 0, %pred1 false.
 """
 
+import re
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -23,7 +24,9 @@ def kernel(name, body, extra=""):
     '%%REC' in an operation names a recovery block that branches back
     to the instruction after the one holding it; '%%LOOP' names the
     loop head; '%%NEXT' the instruction after the next ct %ctpr2;
-    '%%FWD' the instruction after the one holding it.
+    '%%FWD' the instruction after the one holding it; '%%OUT' an
+    out-of-line block that ibranches back to the instruction after the
+    group holding the marker '%%RET'.
     EXTRA: code placed after the function's return (called routines)."""
     lab = f".L{name}"
     out = [f"\n\t.global\tpmu_{name}\n\t.type\tpmu_{name}, #function\n"
@@ -39,7 +42,15 @@ def kernel(name, body, extra=""):
     out.append(f"{lab}_loop:\n")
     rec = False
     nxt = 0
+    out_used = False
     for g in body:
+        if "%%RET" in g:
+            g = [o for o in g if o != "%%RET"]
+            wi(*[o.replace("%%OUT", f"{lab}_out") for o in g])
+            out.append(f"{lab}_ret:\n")
+            continue
+        out_used |= any("%%OUT" in o for o in g)
+        g = [o.replace("%%OUT", f"{lab}_out") for o in g]
         wi(*[o.replace("%%REC", f"{lab}_rec").replace("%%LOOP", f"{lab}_loop")
              .replace("%%NEXT", f"{lab}_next{nxt}")
              .replace("%%FWD", f"{lab}_fwd{nxt}") for o in g])
@@ -60,6 +71,9 @@ def kernel(name, body, extra=""):
     if rec:
         out.append(f"{lab}_rec:\n")
         wi(f"ibranch\t{lab}_back")
+    if out_used:
+        out.append(f"{lab}_out:\n")
+        wi(f"ibranch\t{lab}_ret")
     out.append(extra)
     out.append(f"\t.size\tpmu_{name}, .-pmu_{name}\n")
     return "".join(out)
@@ -190,6 +204,108 @@ def main():
         + [["addd,0\t%dr8, 0x1, %dr9", "ct\t%ctpr2"]])
     add("nostall_ibranch", ld + [["nop 2"],
                                  ["addd,0\t%dr8, 0x1, %dr9", "ibranch\t%%FWD"]])
+    # Instruction fetch: a prepare, or a branch not taken, followed by 8
+    # plain instructions.  Does it cost fetch cycles (IB_NO_COMMAND)?
+    add8 = [["addd,0\t%dr5, 0x1, %dr7"]] * 8
+    for ipd in (0, 1, 2):
+        add(f"fetch_disp_ipd{ipd}", [[f"disp\t%ctpr2, pmu_leaf; ipd {ipd}"]]
+            + add8)
+    add("fetch_disp_near", [["disp\t%ctpr2, %%FWD"]] + add8)
+    add("fetch_return", [["return\t%ctpr3"]] + add8)
+    add("fetch_ibranch_false", [["ibranch\t%%FWD ? %pred1"]] + add8)
+    add("fetch_ct_false", [["disp\t%ctpr2, pmu_leaf"], ["nop 5"],
+                           ["ct\t%ctpr2 ? %pred1"]] + add8)
+    add("fetch_add9", [["addd,0\t%dr5, 0x1, %dr7"]] + add8)
+    # Wide instructions (W ALU operations, the first four with a 32-bit
+    # literal, at most four per instruction) after a taken ibranch or
+    # straight on: does fetch keep up?
+    for w in (1, 2, 4, 6):
+        fat = [[f"addd,{c}\t%dr5, 0x{0x12345678 + c:x}, %dr{8 + c}"
+                if c < 4 else f"addd,{c}\t%dr5, %dr3, %dr{8 + c}"
+                for c in range(w)]] * 8
+        add(f"wide{w}_straight", fat)
+        add(f"wide{w}_after_ibranch", [["ibranch\t%%FWD"]] + fat)
+    # A load in an instruction that stalls (an operand from the other
+    # cluster 1 cycle early): is its result late for a consumer at the
+    # load's latency?  And the same instruction without the stall.
+    for tag, first in (("stalled", [["addd,3\t%dr5, 0x1, %dr10"]]),
+                       ("free", [["addd,3\t%dr5, 0x1, %dr10"], ["nop"]])):
+        for ld in ("ldh", "ldd"):
+            dst = "%dr8"
+            add(f"ldstall_{tag}_{ld}", first + [
+                ["addd,0\t%dr10, 0x1, %dr11", f"{ld},2\t%dr1, 0x0, {dst}"],
+                ["nop 1"], ["addd,1\t%dr8, 0x1, %dr9"]])
+    # The same with the nop in the stalled instruction itself (`nop 2`
+    # in its header): do its nop cycles pass during the stall?
+    for tag, first in (("stalled", [["addd,3\t%dr5, 0x1, %dr10"]]),
+                       ("free", [["addd,3\t%dr5, 0x1, %dr10"], ["nop"]])):
+        for n in (1, 2, 3):
+            add(f"stallnop_{tag}_n{n}", first + [
+                ["addd,0\t%dr10, 0x1, %dr11", "ldd,2\t%dr1, 0x0, %dr8",
+                 f"nop {n}"], ["addd,1\t%dr8, 0x1, %dr9"]])
+    # gcc-claude's matrix_mul_matrix loop body (0x16808 in the bench
+    # build), addresses masked to stay in the buffer; variants drop parts.
+    def mm(cross=True, sxt34=True, mul=True):
+        w1 = ["andd,0\t%dr20, 0x3e, %dr24", "andd,1\t%dr21, 0x3e, %dr26",
+              "adds,2\t%r5, 0x1, %r28", "adds,3\t%r5, %r5, %r29"]
+        w2 = ["ldh,0\t%dr1, %dr24, %dr24", "ldh,2\t%dr1, %dr26, %dr26",
+              "nop 2"]
+        if cross:
+            w2.append("cmpesb,1\t%r27, %r28, %pred0")
+        if sxt34:
+            w2 += ["sxt,3\t0x6, %r28, %dr20", "sxt,4\t0x6, %r29, %dr21"]
+        body = [w1, w2, ["sxt,0\t0x1, %r24, %dr24", "sxt,1\t0x1, %r26, %dr26"]]
+        if mul:
+            body += [["muls,0\t%r24, %r26, %r24", "nop 5"],
+                     ["adds,0\t%r24, %r25, %r24"]]
+        return body
+    add("mm_full", mm())
+    add("mm_nocmp", mm(cross=False))
+    add("mm_nosxt34", mm(sxt34=False))
+    add("mm_nomul", mm(mul=False))
+    add("mm_bare", mm(cross=False, sxt34=False))
+    # The same in global registers (gcc-claude's choice), and a load to
+    # a global used 3 cycles later.
+    def glob(body):
+        m = {"%dr20": "%dg20", "%dr21": "%dg21", "%dr24": "%dg24",
+             "%dr26": "%dg26", "%r24": "%g24", "%r26": "%g26",
+             "%r28": "%g28", "%r29": "%g29", "%r25": "%g25"}
+        return [[re.sub(r"%d?r\d+", lambda x: m.get(x.group(0), x.group(0)), o)
+                 for o in g] for g in body]
+    add("mm_glob", glob(mm()))
+    add("mm_glob_bare", glob(mm(cross=False, sxt34=False)))
+    # Two loads in one instruction, OFF bytes apart, both used 3 cycles
+    # later: do some distances conflict?
+    for off in (0, 2, 4, 8, 16, 32, 64, 128, 256):
+        add(f"ld2_off{off}", [["ldh,0\t%dr1, 0x0, %dr8",
+                               f"ldh,2\t%dr1, {off:#x}, %dr9", "nop 2"],
+                              ["sxt,0\t0x1, %r8, %dr10", "sxt,1\t0x1, %r9, %dr11"]])
+        add(f"ld2d_off{off}", [["ldd,0\t%dr1, 0x0, %dr8",
+                                f"ldd,3\t%dr1, {off & ~7:#x}, %dr9", "nop 2"],
+                               ["addd,0\t%dr8, 0x1, %dr10",
+                                "addd,1\t%dr9, 0x1, %dr11"]])
+    add("ld_use3_win", [["ldd,0\t%dr1, 0x0, %dr8", "nop 2"],
+                        ["addd,0\t%dr8, 0x1, %dr9"]])
+    add("ld_use3_glob", [["ldd,0\t%dr1, 0x0, %dg24", "nop 2"],
+                         ["addd,0\t%dg24, 0x1, %dr9"]])
+    add("add_use1_glob", [["addd,0\t%dr5, 0x1, %dg24"],
+                          ["addd,0\t%dg24, 0x1, %dr9"]])
+    # A conditional ibranch D cycles after the compare that sets its
+    # predicate, condition false and true.
+    for cond, tag in (("%pred2", "false"), ("%pred3", "true")):
+        for d in range(5):
+            gap = [[f"nop {d - 1}" if d > 1 else "nop"]] if d else []
+            add(f"cmpib_{tag}_d{d}", [["cmpedb,0\t%dr3, 0x0, %pred2",
+                                       "cmpedb,1\t%dr3, 0x1, %pred3"]] + gap
+                + [[f"ibranch\t%%FWD ? {cond}"]] + add8)
+    # A taken ct to an out-of-line block (which ibranches back, +6),
+    # with the instruction prefetch depth ipd of the disp's and of the
+    # ct's instruction set to 0, 1 or 2.
+    for dipd in (0, 1, 2):
+        for cipd in (0, 1, 2):
+            add(f"ctipd_d{dipd}_c{cipd}", [
+                [f"disp\t%ctpr2, %%OUT; ipd {dipd}"], ["nop 5"],
+                ["ct\t%ctpr2", f"ipd {cipd}", "%%RET"]])
     # Two taken ibranches (to a block that branches back).
     add("ibranch2", [["ibranch\t%%REC"]])
     # A call to a function that returns at once.  The call empties the

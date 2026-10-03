@@ -26,7 +26,7 @@ measurement:
 Usage:
   bench.py [--target T] [--remote [USER@]HOST] [--ssh-key FILE]
            [--remote-dir DIR] [--out DIR] [--yaml FILE] [--memory]
-           [--numa CPU:MEM] [--only KIND,...]
+           [--numa CPU:MEM] [--only KIND,...] [--results FILE]
 
 --target picks lcc as in tools/abi/compat/run.py (default v3). Results
 are printed as tables; --yaml writes them as data (see

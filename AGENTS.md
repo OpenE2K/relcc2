@@ -102,7 +102,8 @@ tools/isa-timing/   latency/hazard microbenchmarks run on hardware over SSH
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     compiled to assembly and read, as are atomics.c,
                     asmops.c and stackprot.c; tagtrap.c, dbl.c,
-                    dso/run.sh and elfops/run.sh run on hardware)
+                    ldouble.c, dso/run.sh and elfops/run.sh run on
+                    hardware)
 tools/abi/compat/   ABI compatibility suite: gen.py writes caller/callee
                     pairs, run.py builds every compiler pair and runs them
                     under qemu-e2k or, with --remote, on hardware over SSH;
@@ -250,6 +251,12 @@ asm `r` = register or even pair, `x` = extended register; lcc treats
 `swapcontext` as returns-twice and zero-inits maybe-uninitialised locals
 against tag traps.
 
+`long double` (`ldouble.c`, hw): exact x87 extended arithmetic in one
+register (mantissa + 16-bit extended part, `movif`/`movfi`); the extended
+part survives a window spill only with `nfx = 0`; 80-bit ops use
+`%fpcr`/`%fpsr` (rounding, x87 precision control, flags), not `%pfpfr`;
+stores write only 10 bytes.
+
 Other measured facts: `setwd dbl` affects only 32-bit integer ALU ops
 (loads always write the whole register, FP ops never extend; lcc uses
 `dbl = 0`, Unipro `dbl = 1`); `std,sm` of a register with a tagged upper
@@ -319,6 +326,10 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
   owner's emulator, found by reading its source.
 
 ## Gotchas
+
+- MCST's qemu applies `%pfpfr` (rounding, flags) to 80-bit operations
+  and ignores x87 precision control; the hardware uses `%fpcr`/`%fpsr`.
+  Check `long double` rounding and flags on hardware.
 
 - Unipro's assembly needs fixes to assemble with MCST gas: write `%empty`
   instead of `%empty.hi`, compile with `-fno-addrsig` and `-fno-PIC` (gas

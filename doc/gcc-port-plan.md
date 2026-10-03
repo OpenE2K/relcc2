@@ -646,9 +646,16 @@ uniformity with lcc.
 
 ### D8. Floating point
 
-Same registers as integers (no separate FP class). `long double` is
-80-bit x87-style in the register's extended part; functions using it set
-`nfx=0`. Integer↔FP latency penalties (+1/+2 cycles) go into the DFA's
+Same registers as integers (no separate FP class). `long double`
+(`XFmode`) lives in one register: mantissa in the ordinary 64 bits, sign
+and exponent in the 16-bit extended part (`movif`/`movfi` pack and
+unpack it; loads and stores are `ldd`+`ldh`, `std`+`sth`). A function
+that keeps one in a window register across a call must set `nfx=0`, or
+the extended part is lost when the window spills (measured on the 4C);
+lcc sets `nfx=0` in every function that uses `long double`. 80-bit
+operations follow `%fpcr`/`%fpsr` (x87 control and status words), not
+`%pfpfr`, so rounding-mode patterns and `fenv` support must handle both
+(`spec/abi/registers.md`). Integer↔FP latency penalties (+1/+2 cycles) go into the DFA's
 bypasses, not into register classes.
 
 ### D9. Assembly output conventions

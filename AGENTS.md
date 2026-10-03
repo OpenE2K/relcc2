@@ -207,7 +207,7 @@ python3 tools/isa-decode/compare_objdump.py toolchains/corpus/*.o
                                                   # or toolchains/lcc-1.29.16-e2k-v5/lcc
 python3 tools/abi/compat/gen.py toolchains/compat/gen
 python3 tools/abi/compat/run.py toolchains/compat/gen
-                                                  # qemu-e2k, v5: 1,853 tests per pair
+                                                  # qemu-e2k, v5: 1,931 tests per pair
                                                   # (4 pairs with Unipro), ~10 s:
                                                   # 0 unexpected (lcc->lcc all pass)
 python3 tools/abi/compat/run.py toolchains/compat/gen --target v3 \
@@ -402,11 +402,12 @@ calling-convention.md on every rule and filled its gaps (no slot
 backfill, callee owns the argument area, large results overlap memory
 arguments, `%g12` as static chain).
 
-Compat suite (`tools/abi/compat`): 1,853 generated tests per compiler pair
+Compat suite (`tools/abi/compat`): 1,931 generated tests per compiler pair
 (scalars, aggregates of 1–1024 bytes, packed/aligned/bit-field/union
 types, large results, long argument lists, variadic, unprototyped,
 integer extension, `va_list` across compilers, `longjmp` across
-compilers, C++ exceptions across compilers, 300 random signatures). It is
+compilers, C++ exceptions across compilers, C++ classes that are not
+trivially copyable as results and arguments, 300 random signatures). It is
 the acceptance test for the owner's GCC port:
 `run.py GENDIR --cc gcc='...' --cxx gcc='...'
 --pairs lcc:gcc,gcc:lcc,gcc:gcc`. lcc's v3 code also passes it under qemu
@@ -447,8 +448,7 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 
 0. `docs/spec-poc-findings.md` (the PoC agent's file, untracked): all
    entries so far are folded into `spec/` and `doc/` and removed from it;
-   new ones continue as I8, A15, P6. Left from A9: compat tests with
-   non-trivially-copyable C++ classes as results and arguments.
+   new ones continue as I8, A15, P6.
 1. Extend the compat suite (see Current state). It runs on the 4C with
    `run.py --target v3 --remote ...`; all pairs match qemu except the
    tag-trap tests, which pass on the 4C. Run it on v5 (8CB) when

@@ -239,3 +239,12 @@ to these classes breaks objects that point into themselves
 (`std::string`'s short-string buffer): the proof-of-concept backend's
 `to_string` returned a string with a null `c_str ()` until it used the
 hidden pointer (`docs/spec-poc-findings.md` A9).
+
+The compat suite's `cxxclass` unit checks both rules across compilers
+(lcc and Unipro, under qemu and on the 4C): classes with a user copy
+constructor (8–128 bytes), only a non-trivial destructor, a pointer into
+themselves, move-only, polymorphic, and `std::string`, as results (also
+with stack arguments and from member functions, the callee building the
+object at the caller's address) and as arguments (in a register slot,
+on the stack, two at once, each destroyed once by the caller), with
+trivially copyable controls.

@@ -43,7 +43,11 @@ matches every gap measured on the 4C (`selftest.py`). It also models the
 write-back conflict found while validating: an FP-side result going to
 an integer operation is a cycle late when an integer operation or load
 issues in the same channel 2 cycles after its producer
-(`spec/isa/timing.md`). A loop's achieved cost is its initiation
+(`spec/isa/timing.md`). A conditional transfer is assumed not taken
+unless it is a back edge: not taken, it needs its `disp` only 2 cycles
+before it, not 5 (measured with the monitors; on lcc's CoreMark this
+assumption took the model from 10% too slow to within 1%). A loop's
+achieved cost is its initiation
 interval, from simulating three iterations, plus a one-time entry cost.
 
 **Possible** list-schedules the block's operations: the ALU channels each

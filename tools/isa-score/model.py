@@ -69,6 +69,9 @@ PRED_LAT = {"icmpp": (2, 3, 1), "fcmpp": (4, 5, 3), "plog": (2, 3, 1)}
 
 # Prepare -> transfer through a CTPR.
 CTP_LAT = {"disp": 5, "sdisp": 5, "return": 6, "movtd": 9, "ldisp": 3}
+# A conditional ct that is not taken waits for its CTPR only this long
+# after a disp (monitors.md, ct_false_dK in tools/isa-probes/gen_pmu.py).
+CTP_LAT_NOT_TAKEN = 2
 
 BAP_TO_MOVA = 22    # apb.md, data in the caches
 

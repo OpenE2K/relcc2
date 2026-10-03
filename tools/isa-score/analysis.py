@@ -392,12 +392,24 @@ def achieved(block, seed=None, iterations=1, trace=None):
                     if key not in avail:
                         continue
                     p, pch, pis = avail[key]
-                    r = pis + latency(p, op, key, pch, op.chan)
+                    lat = latency(p, op, key, pch, op.chan)
+                    # A conditional exit is assumed not taken (the
+                    # compiler's likely path falls through); a back edge
+                    # is assumed taken.
+                    if key[0] == "c" and op.unit == "ct" and op.preds \
+                            and not block.back_edge \
+                            and p.name in ("disp", "sdisp"):
+                        lat = min(lat, model.CTP_LAT_NOT_TAKEN)
+                    r = pis + lat
                     if (id(p), pis) in late and not model.is_fp_consumer(op.name) \
                             and key not in op.data:
                         r += 1
                     if r > issue:
-                        w = r - issue if key[0] == "c" else model.stall(r - issue)
+                        # A transfer waits exactly for its CTPR and its
+                        # condition (control-transfer.md); other
+                        # operations stall in 4-cycle steps.
+                        w = r - issue if key[0] == "c" or op.unit == "ct" \
+                            else model.stall(r - issue)
                         if w > wait:
                             wait, why = w, f"{key} from {p.name} ({r - issue} early)"
             if trace is not None:

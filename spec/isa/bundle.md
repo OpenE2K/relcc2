@@ -359,6 +359,34 @@ gas rejects these combinations within one wide instruction:
 - **`%empty`** is gas's name for the `%empty.hi` destination (`0xdf`). Unipro's
   clang writes `%empty.hi`, which gas rejects.
 
+What a compiler can rely on (MCST gas 2.41-29, checked by assembling and
+disassembling; the first four also by the proof-of-concept backend,
+`docs/spec-poc-findings.md` I3):
+
+- **Literals.** A bare constant, symbol or relocation operator is
+  accepted as src2 without the `[ _f64,_lts0 ... ]` decoration
+  (`0x12345678`, `-1`, `sym`, `sym+8`, `sym@GOT`, `sym@GOTOFF`,
+  `x@TLS_LE`, `x@TLS_IE`, `x@TLS_GDMOD`, `x@TLS_GDREL`); gas picks the
+  literal syllables and the smallest form (`-1` becomes `_f16s 0xffff`,
+  a symbol `_f64`).
+- **Register widths.** The width prefix is ignored for operands whose
+  width the operation fixes: `addd %r0, %r1, %r2` assembles as `addd %dr0,
+  %dr1, %dr2`.
+- **Channels and braces.** Without braces each operation is its own wide
+  instruction; inside braces gas still assigns channels to operations
+  written without `,N`. `nop N` inside braces sets the header's `nop`.
+- **Operands.** `merged a, b, dst, ~%predN` takes a negated predicate;
+  `getsp %rN, %drM` and `getsp 0, %drM` (read the stack pointer) work; a
+  constant address works as `ldd 0x0, sym, %dr4` / `std 0x0, sym, %dr4`.
+- **What lcc emits** (1.29.16): `.ignore ld_st_style` and `.ignore
+  strict_delay` at the top of every file; `.type sym, #function` /
+  `#object` (SPARC style); `.align` in bytes; 64-bit data as `.uadword`
+  (constants) or `.dword` (relocated values such as pointers), 32-bit as
+  `.uaword`; strings as `.ascii`. gas also accepts `.quad` and `.8byte`.
+  Every object gets a weak absolute marker symbol naming the compiler
+  (`elbrus_optimizing_compiler_v1.29.16_Jan_22_2026 = 0x0`); nothing
+  depends on it.
+
 ## Known objdump bugs
 
 - `staa*`/`ldaa*` without a memory specifier are printed as `aaurw*`/`aaurr*`

@@ -139,6 +139,15 @@ L2 hit 9 cycles (the guide says 11), memory on the local node about
 105–110 (+15 with 4 KiB pages, from TLB misses), on another node about
 190–235.
 
+## Array prefetch
+
+Measured by `tools/isa-probes/apb.c`, not `bench.py`; details in
+[apb.md](apb.md#timing-hw). A `mova` result is ready 5 cycles after
+issue, in any channel and for a consumer in either cluster; a consumer
+issued earlier stalls a fixed 4 cycles, as above. The first `mova` after
+`bap` issues without a stall 22 cycles after it when the data is in the
+caches.
+
 ## Hazards (interlocking)
 
 | Producer → consumer | Interlocked? | Detail |
@@ -189,6 +198,6 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
 ## Not measured yet
 
 - v4, v5, v6 (the 8CB is v5).
-- Loop mode registers other than `%lsr` (`%ilcr`), APB.
+- Loop mode registers other than `%lsr` (`%ilcr`); APB throughput.
 - 128-bit operations (v5+), `%spred`.
 - Throughput (operations per cycle per channel) as opposed to latency.

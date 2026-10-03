@@ -323,23 +323,15 @@ Present only with an SS of type 0, selected by `SS.aa0`–`aa3`.
   | 1–5 | `ind` |
   | 0 | `am` |
 
-## APB instructions [source]
+## APB instructions [hw]
 
-Array prefetch programs consist of pairs of 64-bit `apb` entries (API_L,
-API_R). They are not wide instructions; the disassembler recognises them when
-`mdl` doesn't match the syllables HS declares. See `print_apb_instr`.
-
-What each generation's APB can do, from lcc's changelogs (lcc 1.30–1.31
-documentation; not checked):
-
-| ISA | Capability |
-|---|---|
-| v2–v4 | Only loads whose address is aligned to their size; lcc proves alignment statically or by versioning the loop at run time |
-| v5 | Unaligned loads; 64-bit `AAIND` registers; loads of different sizes from one array can share one prefetch area |
-| v6 | Strides that are not a multiple of the load size; the head of a prefetch area can advance several times per iteration |
-
-Loops on v5+ also have a 64-bit hardware loop counter (lcc 1.25), so lcc
-no longer splits loops whose trip count may not fit in 32 bits.
+An array prefetch program is a sequence of 16-byte APB instructions, not
+wide instructions: a left half (APS0, APLS0) and a right half (APS1,
+APLS1), each a 32-bit field word and a 32-bit `disp`. objdump prints the
+halves as `apb` (API_L, API_R) and recognises them only when the bytes
+don't parse as a wide instruction (`print_apb_instr`). Field layout,
+semantics and generations: [apb.md](apb.md). Programs written by gas
+from `fapb` lines ran as described there on the 4C.
 
 ## Bundling restrictions [source: gas]
 

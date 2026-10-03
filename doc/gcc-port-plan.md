@@ -727,7 +727,8 @@ Written in `.md` with `define_automaton`, `define_cpu_unit`,
   integer ops take 1 cycle (multiply 2) to packed/FP consumers and 4 to
   integer ones; conversions 5 (6 to integer); FP compare → predicated op
   4, → `ct` 5; `andp` chains inside one wide instruction (0) and costs 1
-  through a `%pred`, 2 to a predicated op and 3 to `ct`; L2 hit 9. A stall
+  through a `%pred`, 2 to a predicated op and 3 to `ct`. Schedule loads
+  for an L1 hit, as lcc does. A stall
   costs about a whole latency extra, so latencies must be exact. v6 and
   later differ (e.g. load→use 5, binutils comment in `bfd/elfxx-e2k.c`
   `build_plt_entry`) and still need measuring.

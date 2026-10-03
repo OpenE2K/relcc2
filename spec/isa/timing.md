@@ -19,8 +19,6 @@ said to share timings (AGENTS.md); v6 differs (e.g. load→use 5, binutils
   `nop`s so the next one issues `gap` cycles later; the latency is the
   smallest gap at which a step costs exactly `gap` cycles (no stall). This
   is the value a scheduler needs.
-- **Memory** latencies come from a pointer chase pinned with `--numa
-  CPU:MEM` (`numactl`), see Memory.
 - **Hazards**: a producer and a consumer `D` cycles apart (`D = 0`: same
   wide instruction), checking whether the consumer sees the new value.
   `.ignore strict_delay` keeps gas from inserting delays.
@@ -68,8 +66,6 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | `andp` → `ct ? pred` | 3 | 3 | — |
 | FP compare (`fcmpltdb`) → predicated ALU op | — | 4 | — |
 | FP compare → `ct ? pred` | — | 5 | — |
-| load, L2 hit | 11 | 9 | 9 |
-| load from memory, own NUMA node | ~100 | about 105–110 | 108–115 |
 
 The scheduled latencies of scalar integer, FP, control and predicate
 operations match the guide. Differences:
@@ -86,7 +82,7 @@ operations match the guide. Differences:
   operations at 6.
 - FP compares into predicates are two cycles slower than integer
   compares (4 to a predicated operation, 5 to `ct`).
-- An L2 hit is 9, not 11. The 4C (E2S) has no L3.
+- Loads beyond L1 are not scheduled for (see Memory).
 
 ## Clusters
 
@@ -127,26 +123,14 @@ pads with `nop`s.
 
 ## Memory
 
-The 4C has 64 KiB of L1 data cache and 2 MiB of L2 per core, no L3, and
-four NUMA nodes (one per E2S chip, four cores each). A random pointer
-chase (one pointer per 64-byte line) with a gap after each load gives
-the scheduled latency; each run continues the chase where the last one
-stopped, so the lines are not cached again. Run with `--numa 1:1`
-(CPUs and memory of node 1) and `--numa 1:3` (memory of node 3), buffers
-in 2 MiB transparent huge pages unless noted:
-
-| Working set | Latency, local memory | Remote memory (other chip) |
-|---|---|---|
-| 256 KiB (L2) | 9 | 9 |
-| 8 MiB, 64 MiB (memory) | about 105–110 | about 190–235 |
-| 64 MiB in 4 KiB pages | about 125 (+15: TLB miss) | about 250 |
-
-The memory latency is not fixed: it varies by about ±5 cycles between
-gaps and runs, and a consumer issued earlier stalls until the data
-arrives (the cost stays flat at the latency until the gap exceeds it).
-Without pinning, the results mix local and remote memory, which is why
-earlier runs showed 108–212 cycles. A compiler should schedule for an
-L1 hit (3) and leave longer latencies to prefetching, as lcc does.
+Compilers schedule every load for an L1 hit (3 cycles); lcc does too.
+Longer latencies cannot be scheduled for and are left to the interlock,
+prefetching and APB, so `bench.py` measures them only with `--memory`
+(pinned with `--numa CPU:MEM`). For reference, on the 4C (64 KiB L1D and
+2 MiB L2 per core, no L3, four NUMA nodes), a random pointer chase gave:
+L2 hit 9 cycles (the guide says 11), memory on the local node about
+105–110 (+15 with 4 KiB pages, from TLB misses), on another node about
+190–235.
 
 ## Hazards (interlocking)
 

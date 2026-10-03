@@ -205,9 +205,9 @@ python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
   `rwd %lsr` → `rrd %lsr` (4 cycles). Also measured: packed integer ops
   (1 cycle, 4 to integer consumers; the guide says FP class), conversions
   (5), FP compares (+2 over integer ones), predicate logic (as the guide;
-  `andp` chains within one instruction), L2 9, memory ~105–110 local and
-  ~190–235 on another node (`--numa`). Other generations, 128-bit ops
-  and throughput are not measured yet.
+  `andp` chains within one instruction). Loads are scheduled for L1;
+  `--memory` measures beyond-L1 latency for reference only. Other
+  generations, 128-bit ops and throughput are not measured yet.
 
 ### ABI (spec/abi) — written, checked by the compat suite under qemu-e2k and on the 4C (v3)
 

@@ -11,9 +11,11 @@ basic block, compares
   on the chosen ISA version.
 
 The ratio says how far a compiler is from what the machine allows,
-without judging the algorithm. The score is static (every block counts
-once) and needs no hardware and no emulator; how fast a program really
-runs is measured by running it on the hardware.
+without judging the algorithm. `score.py` is static (every block counts
+once) and needs no hardware and no emulator. `profile.py` weights the
+same blocks by a run on the hardware, using the performance monitors
+(`spec/isa/monitors.md`), and compares the model with the measured
+cycles block by block.
 
 ```
 tools/isa-score/score.py PROGRAM
@@ -24,6 +26,30 @@ tools/isa-score/score.py PROGRAM --function f --explain 0x10450
 Options: `--iset N` (default: the ISA version in the ELF header),
 `--function NAME` (repeatable), `--top N`, `--json FILE` (every block's
 numbers).
+
+```
+tools/isa-score/profile.py PROGRAM [ARGS...] --remote claude@ringo.lan \
+    --remote-dir relcc2/<dir>       # run on the 4C, weight, compare
+tools/isa-score/profile.py PROGRAM --samples FILE [--stat FILE]
+                                    # again from a saved run
+```
+
+`profile.py` runs the program under `perf record` sampling two monitors
+every `--period` events (default 100,003): EXEC (wide instructions) and
+TICKS (cycles). The monitors record the exact instruction (EXEC samples
+spread evenly over a block's instructions), so a block's EXEC samples ÷
+its length × the period estimate how often it ran, and its TICKS
+samples × the period the cycles spent in it. It reports, for the
+program's own blocks weighted by those counts: measured cycles, the
+model's achieved and possible cycles, operations per cycle of each, and
+the possible/achieved score weighted by the run; per function and per
+block, measured against achieved (where they differ, the model is wrong
+or the block waited for memory); and a `perf stat` breakdown of the run
+(instructions per cycle, interlock stall steps × 4, `nop` cycles,
+cycles without an instruction to issue, spills). Counts are estimates:
+a block with n EXEC samples has about 1/√n relative error. It uses
+`perf record -m 32`, since every `perf record` of one account shares a
+locked-memory quota and a second one with the default buffer fails.
 
 To compare compilers' schedulers, compare **operations per cycle** of
 the achieved schedule on the same program: on CoreMark and Linpack it
@@ -87,27 +113,44 @@ Preparations (`disp`) are assumed hoistable in the possible schedule.
 `validate/validate.py --remote claude@ringo.lan --remote-dir
 relcc2/<dir>` builds nine kernels (sum, dot product, saxpy, byte hash,
 branches, polynomial, list walk, copy, an empty function) with lcc at
-`-O0`, `-O2` and `-O3`; on the machine it single-steps each kernel once
-under gdb (`validate/count.py`) to learn how often each wide instruction
-runs, and times each kernel with `%clkr`; the prediction is the static
-per-block cycles weighted by those counts. The table below was produced
-with execution counts from an earlier qemu-based counter (since
-removed); the gdb counter has not completed a run yet. On the Elbrus 4C
-every kernel was within 2% (a call and return adds 6 cycles the model
-doesn't count):
+`-O0`, `-O2` and `-O3`; on the machine it runs each 20,000 times under
+`profile.py`'s sampling, and times each with `%clkr`. The prediction is
+the static per-block cycles weighted by the sampled counts. On the
+Elbrus 4C (about a minute):
 
 | Kernel | -O0 | -O2 | -O3 |
 |---|---|---|---|
-| sum | 6672 / 6678 | 283 / 284 | 529 / 532 |
-| dot | 9231 / 9237 | 2089 / 2080 | 2075 / 2074 |
-| saxpy | 12304 / 12310 | 538 / 545 | 554 / 554 |
-| hash | 34832 / 34838 | 5148 / 5145 | 4113 / 4116 |
-| branchy | 17168 / 17174 | 1044 / 1049 | 1044 / 1049 |
-| poly | 27151 / 27157 | 2101 / 2104 | 2101 / 2105 |
-| list | 6160 / 6166 | 1551 / 1563 | 1551 / 1563 |
-| copy | 7184 / 7190 | 540 / 539 | 178 / 181 |
+| sum | 6672 / 6688 / 6678 | 282 / 282 / 284 | 528 / 530 / 532 |
+| dot | 9231 / 9247 / 9237 | 2081 / 2076 / 2080 | 2071 / 2085 / 2074 |
+| saxpy | 12305 / 12315 / 12310 | 537 / 537 / 544 | 552 / 552 / 554 |
+| hash | 34831 / 34864 / 34838 | 5143 / 5150 / 5145 | 4111 / 4120 / 4116 |
+| branchy | 17167 / 17194 / 17174 | 1042 / 1046 / 1049 | 1042 / 1057 / 1049 |
+| poly | 27150 / 27186 / 27157 | 2097 / 2098 / 2104 | 2097 / 2104 / 2104 |
+| list | 6161 / 6171 / 6166 | 1551 / 1558 / 1563 | 1551 / 1564 / 1563 |
+| copy | 7183 / 7196 / 7190 | 538 / 541 / 539 | 177 / 183 / 181 |
 
-(predicted / measured cycles per call, lcc 1.29.16, data in L1.)
+(predicted / sampled / `%clkr` cycles per call, lcc 1.29.16, data in
+L1; `%clkr` includes the call and return, about 6 cycles.) Every kernel
+is within 1%, `copy -O3` within 3%.
+
+On whole benchmarks (`profile.py`, the 4C, CoreMark with 2,000
+iterations, Linpack at size 200 with `--period 10007`; lcc 1.29.16,
+Unipro's clang 20, gcc-claude snapshot db34161a6cd):
+
+| Build | Measured cycles | Measured / achieved | Operations per cycle, run | Score regs / flow, run | Cycles without an instruction to issue |
+|---|---|---|---|---|---|
+| lcc `-O3` CoreMark | 13.32 G | 1.00 | 2.77 | 0.89 / 0.89 | 1.3% |
+| Unipro `-O2` CoreMark | 15.63 G | 1.02 | 1.01 | 0.89 / 0.71 | 6.3% |
+| gcc-claude `-O2` CoreMark | 18.20 G | 1.11 | 0.60 | 0.78 / 0.62 | 11.4% |
+| lcc `-O3` Linpack | 8.35 M | 1.01 | 3.67 | 0.70 / 0.70 | |
+| Unipro `-O2` Linpack | 37.8 M | 0.94 | 0.56 | 0.84 / 0.12 | 0.4% |
+| gcc-claude `-O2` Linpack | 47.7 M | 1.04 | 0.48 | 0.58 / 0.15 | 1.9% |
+
+The model's remaining error follows instruction-fetch bubbles
+(`IB_NO_COMMAND`: cycles after taken transfers and returns with no
+instruction ready), which it does not model; gcc-claude's code has the
+most. Weighted by the run, operations per cycle rank the compilers as
+their measured speed does.
 
 The possible schedule cannot be measured; it is a bound on what a
 scheduler could do with the same operations.
@@ -120,7 +163,9 @@ scheduler could do with the same operations.
 - Loop analysis covers loops whose body is one basic block (lcc's
   `loop_mode` loops and other loops compiled into one block). Other
   loops are scored block by block.
-- Not modelled: cache misses, the call and return themselves (about 6
-  cycles), taken `ibranch` costs other than on a loop's back edge, the
+- Not modelled: cache misses, instruction-fetch bubbles after taken
+  transfers (`IB_NO_COMMAND`, up to 11% of a run, see above), the call
+  and return themselves (about 6 cycles), taken `ibranch` costs other
+  than on a loop's back edge, the
   store/load channel pairs gas forbids, and branch targets in the bad
   page offsets of `CPU_HWBUG_CODE_PLACEMENT`.

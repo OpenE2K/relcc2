@@ -2,8 +2,8 @@
 /* Driver for validate.py: calls every kernel directly CALLS times and
    prints the median %clkr cycles of one call, minus the cost of reading
    the clock.  The measured cycles include the call and the return
-   (k_empty shows how much).  With the argument "count" it calls each
-   kernel once, for count.py to single-step under gdb.  */
+   (k_empty shows how much).  With an argument R it calls each kernel R
+   times and prints nothing, for profile.py to sample.  */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +32,7 @@ static unsigned char s[4 * N];
 static int ia[N], ib[N];
 static struct node list[N];
 static unsigned long t[CALLS], clk;
-static int calls = CALLS;
+static long repeat;
 
 static int
 cmp (const void *p, const void *q)
@@ -51,14 +51,17 @@ median (void)
 #define TIME(name, level, call) \
   do \
     { \
-      for (int c = 0; c < calls; c++) \
+      for (long r = 0; r < repeat; r++) \
+        call; \
+      if (repeat) \
+        break; \
+      for (int c = 0; c < CALLS; c++) \
         { \
           unsigned long t0 = rdclk (); \
           call; \
           t[c] = rdclk () - t0; \
         } \
-      if (calls == CALLS) \
-        printf ("%s_%s %s %lu\n", #name, #level, #level, median () - clk); \
+      printf ("%s_%s %s %lu\n", #name, #level, #level, median () - clk); \
     } \
   while (0)
 
@@ -77,7 +80,7 @@ int
 main (int argc, char **argv)
 {
   if (argc > 1)
-    calls = 1;
+    repeat = atol (argv[1]);
   for (int i = 0; i < N; i++)
     {
       a[i] = i * 7;
@@ -96,6 +99,7 @@ main (int argc, char **argv)
     }
   clk = median ();
   LEVEL (O0) LEVEL (O2) LEVEL (O3)
-  printf ("calls %d\n", CALLS);
+  if (!repeat)
+    printf ("calls %d\n", CALLS);
   return 0;
 }

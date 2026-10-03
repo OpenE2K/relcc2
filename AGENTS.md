@@ -29,6 +29,17 @@ codebase's size. relcc2 does not decompile anything (see decision 4).
    and tools in this repository, and may review, explain and test, but must
    **not write code intended for GCC itself** (no `gcc/config/e2k` patches,
    `.md` files or target hooks). Produce material the owner codes against.
+
+   **Exception: the proof-of-concept backend in `toolchains/gcc-claude`.**
+   The owner asked an agent to implement an experimental GCC backend from
+   the spec, to find errors and missing data in `spec/` and the port
+   plan. In that tree only, agents may write GCC code. It is a proof of
+   concept: never submitted upstream and not the owner's port, which is
+   still written by hand (how strictly to keep the two apart is the
+   owner's call). Its main product is findings about the spec: fix them
+   in `spec/` or `doc/` with the usual source marks, so the owner's port
+   benefits through the spec, not through the experiment's code. Nothing
+   from `toolchains/gcc-claude` is copied into this repository.
 3. **Licensing:** `spec/` is CC BY-SA 4.0 (it adapts MCST's CC BY 4.0
    programming guide; attribution in `spec/NOTICE.md`). Everything else is
    GPL-3.0-or-later; every tool file starts with an SPDX header. Generated
@@ -111,7 +122,9 @@ tools/abi/compat/   ABI compatibility suite: gen.py writes caller/callee
 OpenE2K/       submodules (see above)
 toolchains/    untracked: installed toolchains, corpus builds, scratch output;
                gcc/ (GCC mainline, blobless clone) and gcc-tilegx/ (worktree
-               at 54a5f478487, the last commit with TILE-Gx) as references
+               at 54a5f478487, the last commit with TILE-Gx) as references;
+               gcc-claude/ (experimental agent-written E2K backend, see
+               decision 2)
 x86_64/        untracked: Unipro debs
 ```
 

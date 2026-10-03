@@ -22,7 +22,7 @@ def kernel(name, body, extra=""):
     """BODY: wide instructions (lists of operations) of one iteration.
     '%%REC' in an operation names a recovery block that branches back
     to the instruction after the one holding it; '%%LOOP' names the
-    loop head.
+    loop head; '%%NEXT' the instruction after the next ct %ctpr2.
     EXTRA: code placed after the function's return (called routines)."""
     lab = f".L{name}"
     out = [f"\n\t.global\tpmu_{name}\n\t.type\tpmu_{name}, #function\n"
@@ -37,12 +37,16 @@ def kernel(name, body, extra=""):
     wi("nop 5")
     out.append(f"{lab}_loop:\n")
     rec = False
+    nxt = 0
     for g in body:
         wi(*[o.replace("%%REC", f"{lab}_rec").replace("%%LOOP", f"{lab}_loop")
-             for o in g])
+             .replace("%%NEXT", f"{lab}_next{nxt}") for o in g])
         if any("%%REC" in o for o in g):
             rec = True
             out.append(f"{lab}_back:\n")
+        if any(o.startswith("ct\t%ctpr2") for o in g):
+            out.append(f"{lab}_next{nxt}:\n")
+            nxt += 1
     wi("subd,3\t%dr0, 0x1, %dr0")
     wi("cmpedb,3\t%dr0, 0x0, %pred0")
     wi("nop 2")
@@ -139,6 +143,25 @@ def main():
     add("dt_al_ok", [["ldd,2,sm\t%dr1, 0x0, %dr8, mas=0x3"], ["nop 2"],
                      ["rbranch\t%%REC ? %dt_al1", "addd,1,sm\t%dr8, 0x0, %dr9"],
                      ["nop 2"]])
+    # A conditional ct soon after its disp: does it wait for the CTPR
+    # when the condition is false?  And when true (it goes to the next
+    # instruction)?
+    # ct_dK: K cycles of nop between them (the ct issues K + 1 cycles after
+    # the disp; 4 is late enough).
+    for cond, tag in (("%pred1", "false"), ("~%pred1", "true")):
+        for d in range(5):
+            gap = [[f"nop {d - 1}" if d > 1 else "nop"]] if d else []
+            add(f"ct_{tag}_d{d}", [["disp\t%ctpr2, %%NEXT"]] + gap
+                + [[f"ct\t%ctpr2 ? {cond}"]])
+    # A compare D cycles before the ct it conditions (the CTPR prepared
+    # well before): %pred2 = (1 == 0) false, %pred3 = (1 == 1) true.
+    for cond, tag in (("%pred2", "false"), ("%pred3", "true")):
+        for d in range(5):
+            gap = [[f"nop {d - 1}" if d > 1 else "nop"]] if d else []
+            add(f"cmpct_{tag}_d{d}", [["disp\t%ctpr2, %%NEXT"], ["nop 5"],
+                                      ["cmpedb,0\t%dr3, 0x0, %pred2",
+                                       "cmpedb,1\t%dr3, 0x1, %pred3"]] + gap
+                + [[f"ct\t%ctpr2 ? {cond}"]])
     # Two taken ibranches (to a block that branches back).
     add("ibranch2", [["ibranch\t%%REC"]])
     # A call to a function that returns at once.  The call empties the

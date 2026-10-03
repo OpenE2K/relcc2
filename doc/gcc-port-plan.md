@@ -213,7 +213,7 @@ executed by `ct`.
 | One wide instruction per cycle: 6 ALU channels, each op allowed only in some channels; ≤ 4 32-bit literal slots; 1 control transfer and 1 prepare; 3 predicate-logic ops; store/load channel restrictions | `bundle.md`, `spec/isa/binutils-ops.yaml` (`channels` per op) | DFA description (section 7) |
 | **The pipeline interlocks almost everything, but stalls are expensive**: register results, compare → predicate users, `disp`/`movtd` → `ct`, `%fpcr`/`%pfpfr` were all correct at distance 1 on the 4C; the only non-interlocked case found is `rwd %lsr` → `rrd %lsr` (needs 4 cycles). An operand that arrives `k` cycles late costs about a whole extra latency, not `k` cycles (`spec/isa/timing.md`). gas's `strict_delay` mode (ops outside braces) pads compares and privileged state-register accesses anyway | `spec/isa/timing.md` [hw], guide 6.1, MCST gas | One op per wide instruction is correct. Scheduling with exact latencies is what makes code fast; keep gas's padding (no `.ignore strict_delay`) until the scheduler places `nop`s itself (section 7.4) |
 | **gas assigns channels itself** if you omit `,N`, and treats an op outside braces as its own wide instruction (checked: `addd`, `addd`, `ldd` in one brace group were placed in channels 1, 2, 0) | tested with MCST gas | Early milestones print plain ops; channel numbers are never required |
-| `setwd dbl=1` makes 32-bit ops zero-extend into the full register; `dbl=0` leaves the upper half untouched (including a stale diagnostic tag that traps when stored) | `registers.md`, `calling-convention.md` "Unused parts of a slot" | `dbl=0` like lcc (owner's decision, D7) |
+| `setwd dbl=1` makes 32-bit ops zero-extend into the full register; `dbl=0` leaves the upper half untouched (including a stale diagnostic tag that traps when stored) | `registers.md`, `calling-convention.md` "Unused parts of a slot" | per function like lcc: `dbl=1` where unsigned 32-bit results need zero-extending, else `dbl=0` (owner's decision, D7) |
 | Speculative mode (`,sm`): faults become a tagged result; a non-speculative use of a tagged value traps | guide 10.2, `calling-convention.md` | Control speculation needs no check instruction (section 7.6) |
 | Rotating registers, loop counters, loop mode, array prefetch (APB) | guide 4.5, 10.11 | Advanced; GCC has no rotating-register support anywhere (section 7.7) |
 | Calls, results, varargs, extension rules, ELF, relocations, PIC, TLS, `.eh_frame` | `spec/abi/*.md` | Implement as specified; verify with the compat suite |
@@ -640,30 +640,37 @@ functions whose unsigned 32-bit results must be zero-extended (about
 18% of functions in GCC's `gcc.c-torture/execute` tests, lcc 1.29.16
 and 1.31.05; `registers.md`): `unsigned addu (unsigned a, unsigned b)`
 becomes a bare `adds` under `dbl = 1`, while the signed version is
-`adds` + `sxt` under `dbl = 0`. The decision below was taken when we
-believed lcc always used `dbl = 0`; following lcc exactly would mean
-choosing per function.
+`adds` + `sxt` under `dbl = 0`.
 
-**Decision (owner): `dbl = 0`, like lcc** (the port follows lcc's
-conventions throughout). Consequences:
+**Decision (owner): choose `dbl` per function, as lcc does**: `dbl = 1`
+where the function needs unsigned 32-bit results zero-extended, `dbl = 0`
+otherwise. The flag is saved per frame, so it never leaks between
+functions, and the ABI is the same either way. How to get there:
 
-- After a 32-bit integer operation the upper half of the register is
-  unknown (old value and tag). Don't tell GCC that SImode operations
-  extend (no `WORD_REGISTER_OPERATIONS`-style assumption); emit `sxt`
-  (or a 64-bit operation) whenever a 64-bit value is needed, as lcc does.
+- Start with `dbl = 0` everywhere (it is always correct with the rules
+  below); add the per-function choice as an optimisation once the port
+  works.
+- The choice has to be made before instruction selection relies on it,
+  e.g. right after expand, by looking for zero extensions of 32-bit
+  results, and kept in the function's `machine_function`. Patterns can
+  then test it: under `dbl = 1` a zero extension of a 32-bit integer
+  operation's result is free.
+- Under `dbl = 0`, after a 32-bit integer operation the upper half of the
+  register is unknown (old value and tag). Don't tell GCC that SImode
+  operations extend; emit `sxt` (or a 64-bit operation) whenever a 64-bit
+  value is needed, as lcc does.
+- Under either setting 32-bit FP operations (`fadds`) and `movts` keep
+  the upper half, and signed values still need `sxt`.
 - Partly written registers can keep a diagnostic tag in the upper half,
   and storing such a register with `std` traps (`calling-convention.md`,
   "Unused parts of a slot", confirmed on the 4C). Spill and pass 32-bit
   values with `stw`, or extend them first; `std,sm` does not trap on the
   4C. lcc also zero-initialises locals that may be read uninitialised
   (`source-compat.md`).
-- The flag is saved per frame, so it never leaks between functions.
 
 The ABI still requires callers to **sign**-extend signed narrow
 arguments (emit `sxt`), and callees must not rely on the upper bits they
-receive (lcc re-extends). Unipro's `dbl = 1` (zero-extending 32-bit
-integer ops) would have saved some extensions; it was rejected for
-uniformity with lcc.
+receive (lcc re-extends).
 
 ### D8. Floating point
 
@@ -1104,8 +1111,9 @@ Useful next pieces of relcc2 work for the port, in rough order:
 
 Decided by the owner:
 
-- Follow lcc's conventions wherever there is a choice: `setwd dbl = 0`
-  (D7), `.ignore strict_delay` with compiler-inserted delays (D9).
+- Follow lcc's conventions wherever there is a choice: `setwd dbl` per
+  function (D7), `.ignore strict_delay` with compiler-inserted delays
+  (D9).
 - Unwinder and E2K libgcc files: MCST's (3.3).
 - Default target: **`-march=elbrus-v3`**, forward compatible (no
   `EF_E2K_INCOMPAT`; `spec/abi/elf.md`). How MCST keeps v3 code working on

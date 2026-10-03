@@ -103,6 +103,29 @@ fields, so v5 and later machines may clean registers as qemu does
 (inferred; not yet run on v5). Either way, a stale tag from an earlier
 speculative load can reach such a slot on any machine.
 
+Which operations trap on such a register (a speculative `ldd` from a bad
+address leaves the whole register tagged, then a 32-bit `adds` writes
+the low half under `dbl = 0`), Elbrus 4C. The operation rows come from
+the proof-of-concept backend's probe (`docs/spec-poc-findings.md`, A1),
+the copy rows from `tagtrap.c` variants e and f (hw):
+
+| Operation reading the register | Result |
+|---|---|
+| any non-speculative 64-bit read: `addd`, `ord`, `shld`, `cmpedb`, `merged`, `faddd`, `std` | **SIGILL** |
+| 32-bit reads: `adds`, `sxt 0x2`, `sxt 0x6`, `cmpesb`, `fadds`, `stw` | no trap, correct result (`adds 0, r` gives `0000000012345678`) |
+| `movtd %r, %r` | no trap; the copy carries the tag (a later plain `std` of it traps) |
+| `movtd %r, %ctprN` | no trap |
+| speculative `addd,sm 0x0, %r, %r'` (lcc's form for 64-bit copies) | no trap, but the **whole result is a diagnostic value**: even the low half is lost (`std,sm` of it stores `4afafafa52345678`, not `…12345678`) |
+| speculative `std,sm` of the register itself | no trap; the low half is stored intact (variant d) |
+
+So a value written by 32-bit operations under `dbl = 0` must be read,
+copied and spilled at 32 bits (`adds`, `sxt`, `stw`), as lcc does
+(`adds 0x0, %r1, %b[1]` for 32-bit copies, `addd,sm` only for 64-bit
+values): no 64-bit operation, speculative or not, gives a usable result.
+For a GCC port this rules out paradoxical subregs of such values; the
+proof-of-concept backend promotes narrow integers to 64 bits with `sxt`
+and spills 32-bit values with `stw`.
+
 ### Integer promotion (guide 9.5.1, 9.5.2; lcc)
 
 Integer arguments narrower than 64 bits are extended to 64 bits by the

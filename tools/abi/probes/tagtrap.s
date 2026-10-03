@@ -94,3 +94,59 @@ probe_d:
 	  std,2,sm	%r0, 0x0, %r3
 	}
 	.size	probe_d, .- probe_d
+! E: as B, then copy %r3 with a speculative addd,sm (as lcc writes register
+! copies) and store the copy speculatively: does the copy trap, and does
+! it carry the tag?
+	.global	probe_e
+	.type	probe_e, #function
+	.align	8
+probe_e:
+	{
+	  setwd	wsz = 0x4, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3; ipd 2
+	  ldd,0,sm	%r1, 0x0, %r3
+	}
+	{
+	  nop 5
+	}
+	{
+	  adds,0	0x0, %r2, %r3
+	}
+	{
+	  nop 1
+	}
+	{
+	  addd,0,sm	0x0, %r3, %r4
+	}
+	{
+	  ct	%ctpr3
+	  std,2,sm	%r0, 0x0, %r4
+	}
+	.size	probe_e, .- probe_e
+! F: as E with a non-speculative addd.
+	.global	probe_f
+	.type	probe_f, #function
+	.align	8
+probe_f:
+	{
+	  setwd	wsz = 0x4, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3; ipd 2
+	  ldd,0,sm	%r1, 0x0, %r3
+	}
+	{
+	  nop 5
+	}
+	{
+	  adds,0	0x0, %r2, %r3
+	}
+	{
+	  nop 1
+	}
+	{
+	  addd,0	0x0, %r3, %r4
+	}
+	{
+	  ct	%ctpr3
+	  std,2,sm	%r0, 0x0, %r4
+	}
+	.size	probe_f, .- probe_f

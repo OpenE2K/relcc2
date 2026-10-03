@@ -103,7 +103,8 @@ differ from v6.
 ## Repository layout
 
 ```
-spec/isa/      ISA spec: bundle.md (wide instruction format), binutils-ops.yaml
+spec/isa/      ISA spec: bundle.md (wide instruction format), control-transfer.md
+               (branches, calls, CTPRs), binutils-ops.yaml
                (every operation), registers.yaml (state and AAU registers)
 spec/abi/      ABI spec for e2k64: data layout, registers + DWARF, calling
                convention, stacks and unwinding, ELF/relocations/PIC/TLS,
@@ -118,8 +119,8 @@ tools/isa-timing/   latency/hazard microbenchmarks run on hardware over SSH
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     compiled to assembly and read, as are atomics.c,
                     asmops.c and stackprot.c; tagtrap.c, dbl.c,
-                    ldouble.c, dso/run.sh and elfops/run.sh run on
-                    hardware)
+                    ldouble.c, ctpr.c, dso/run.sh and elfops/run.sh run
+                    on hardware)
 tools/abi/compat/   ABI compatibility suite: gen.py writes caller/callee
                     pairs, run.py builds every compiler pair and runs them
                     under qemu-e2k or, with --remote, on hardware over SSH;
@@ -223,7 +224,13 @@ python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
   `rwd %lsr` → `rrd %lsr` (4 cycles). Also measured: packed integer ops
   (1 cycle, 4 to integer consumers; the guide says FP class), conversions
   (5), FP compares (+2 over integer ones), predicate logic (as the guide;
-  `andp` chains within one instruction). Loads are scheduled for L1;
+  `andp` chains within one instruction). Control transfer
+  (`spec/isa/control-transfer.md`, hw): a taken `ibranch` costs 6 cycles,
+  a prepared `ct`/`call`/return issued in time costs nothing; every call
+  and return empties `%ctpr1–3` (a taken `ct` through an empty or
+  diagnostic CTPR traps, a false one doesn't); gas forbids preparing and
+  transferring through the same CTPR in one instruction before v6. Loads
+  are scheduled for L1;
   `--memory` measures beyond-L1 latency for reference only. Other
   generations, 128-bit ops and throughput are not measured yet.
 

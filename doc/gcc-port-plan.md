@@ -593,6 +593,20 @@ for E2K a plain dependence with latency 5 between the `disp` insn and the
 
 Indirect calls: `movtd %reg, %ctprN` (latency 9) then `call`.
 
+Two hardware facts shape this (`spec/isa/control-transfer.md`, measured
+on the 4C):
+
+- **Every `call` and every return empties all three CTPRs**, and a taken
+  `ct` through an empty CTPR traps (SIGILL). Model `call` as clobbering
+  `%ctpr1–3` (they are call-used anyway, registers.md) and never keep a
+  prepared value live across a call; the return must be prepared again
+  after the last call. A `ct` with a false condition never traps, so
+  prepares may be speculative and hoisted above the condition.
+- **A taken `ibranch` costs 6 cycles; a taken `ct` prepared in time costs
+  nothing**, calls and returns included. The M1 `ibranch` form is
+  correct but slow for loops and likely-taken branches, which is why M5
+  matters; lcc uses `ibranch` almost never.
+
 ### D5. Literals and constants
 
 Operands can be 5-bit literals in the syllable or 16/32/64-bit literals

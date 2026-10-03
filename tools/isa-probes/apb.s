@@ -8,7 +8,11 @@
 	.align	8
 apb_nop:
 	{
+	  setwd	wsz = 0x4, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
+	}
+	{
+	  nop 5
 	}
 	{
 	  ct	%ctpr3
@@ -3236,7 +3240,10 @@ apb_call:
 	  nop 7
 	}
 	{
-	  call	%ctpr1, wbs = 0x10
+	  call	%ctpr1, wbs = 0x1c
+	}
+	{
+	  return	%ctpr3
 	}
 	{
 	  nop 7
@@ -3313,6 +3320,99 @@ apb_call:
 	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=0, ind=0, asz=5, abs=0, disp=0
 	}
 	.size	apb_call, .-apb_call
+
+	.global	apb_call_last
+	.type	apb_call_last, #function
+	.align	8
+apb_call_last:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  ldisp	%ctpr2, .Lcall_last_prog
+	  aaurwd,2	%dr1, %aad0
+	}
+	{
+	  bap
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 4
+	}
+	{
+	  rrd,0	%clkr, %dr4
+	}
+	{
+	  movad,0	area=0, ind=0, am=1, be=0, %dr8
+	}
+	{
+	  movad,0	area=0, ind=0, am=1, be=0, %dr9
+	}
+	{
+	  disp	%ctpr1, apb_nop
+	}
+	{
+	  nop 7
+	}
+	{
+	  call	%ctpr1, wbs = 0x1c
+	}
+	{
+	  return	%ctpr3
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  nop 7
+	}
+	{
+	  gettagd,2	%dr8, %r6
+	  puttagd,5	%dr8, 0x0, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x0, %dr7
+	  std,5	%dr0, 0x8, %dr6
+	}
+	{
+	  gettagd,2	%dr9, %r6
+	  puttagd,5	%dr9, 0x0, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x10, %dr7
+	  std,5	%dr0, 0x18, %dr6
+	}
+	{
+	  disp	%ctpr2, disp=0x0
+	  subd,0	%dr5, %dr4, %dr0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.align	8
+.Lcall_last_prog:
+	{
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=0, ind=0, asz=5, abs=0, disp=0
+	}
+	.size	apb_call_last, .-apb_call_last
 
 	.global	apb_ctpr1
 	.type	apb_ctpr1, #function

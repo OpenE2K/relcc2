@@ -27,7 +27,11 @@ HEADER = """! SPDX-License-Identifier: GPL-3.0-or-later
 	.align	8
 apb_nop:
 	{
+	  setwd	wsz = 0x4, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
+	}
+	{
+	  nop 5
 	}
 	{
 	  ct	%ctpr3
@@ -205,9 +209,16 @@ def main():
     # What stops the program: a call, a disp to %ctpr1, a write to
     # %ctpr2, eap (+ bap), %aabf0 = 0.
     nop7 = ["nop 7"]
+    # A call empties every CTPR (control-transfer.md), so the return is
+    # prepared again after it; wbs leaves the callee's 4-pair window
+    # enough (wsz - wbs <= 4, registers.md).
     add("call", [({}, None)], seq(4), base, between={
-        1: [["disp\t%ctpr1, apb_nop"], nop7, ["call\t%ctpr1, wbs = 0x10"],
-            nop7, nop7]})
+        1: [["disp\t%ctpr1, apb_nop"], nop7, ["call\t%ctpr1, wbs = 0x1c"],
+            ["return\t%ctpr3"], nop7, nop7]})
+    # Control: the same call after the last mova.
+    add("call_last", [({}, None)], seq(2), base, between={
+        1: [["disp\t%ctpr1, apb_nop"], nop7, ["call\t%ctpr1, wbs = 0x1c"],
+            ["return\t%ctpr3"], nop7, nop7]})
     add("ctpr1", [({}, None)], seq(4), base, between={
         1: [["disp\t%ctpr1, apb_nop"], nop7, nop7]})
     add("ctpr2", [({}, None)], seq(4), base, between={

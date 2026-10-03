@@ -22,7 +22,8 @@ def kernel(name, body, extra=""):
     """BODY: wide instructions (lists of operations) of one iteration.
     '%%REC' in an operation names a recovery block that branches back
     to the instruction after the one holding it; '%%LOOP' names the
-    loop head; '%%NEXT' the instruction after the next ct %ctpr2.
+    loop head; '%%NEXT' the instruction after the next ct %ctpr2;
+    '%%FWD' the instruction after the one holding it.
     EXTRA: code placed after the function's return (called routines)."""
     lab = f".L{name}"
     out = [f"\n\t.global\tpmu_{name}\n\t.type\tpmu_{name}, #function\n"
@@ -40,7 +41,11 @@ def kernel(name, body, extra=""):
     nxt = 0
     for g in body:
         wi(*[o.replace("%%REC", f"{lab}_rec").replace("%%LOOP", f"{lab}_loop")
-             .replace("%%NEXT", f"{lab}_next{nxt}") for o in g])
+             .replace("%%NEXT", f"{lab}_next{nxt}")
+             .replace("%%FWD", f"{lab}_fwd{nxt}") for o in g])
+        if any("%%FWD" in o for o in g):
+            out.append(f"{lab}_fwd{nxt}:\n")
+            nxt += 1
         if any("%%REC" in o for o in g):
             rec = True
             out.append(f"{lab}_back:\n")
@@ -162,6 +167,29 @@ def main():
                                       ["cmpedb,0\t%dr3, 0x0, %pred2",
                                        "cmpedb,1\t%dr3, 0x1, %pred3"]] + gap
                 + [[f"ct\t%ctpr2 ? {cond}"]])
+    # Latencies by a sweep: producer, D cycles of nop, consumer.  The
+    # stall is TICKS minus the instructions' own cycles.
+    lat = {
+        "getsp": ("getsp,0\t0x0, %dr8", "addd,0\t%dr8, 0x1, %dr9"),
+        "movif": ("movif,0\t%dr3, %r3, %dr8", "addd,0\t%dr8, 0x1, %dr9"),
+        "movif_movfi": ("movif,0\t%dr3, %r3, %dr8", "movfi,0\t%dr8, %r9"),
+        "movfi": ("movfi,0\t%dr8, %r8", "addd,0\t%dr8, 0x1, %dr9"),
+    }
+    for name, (prod, cons) in lat.items():
+        for d in range(7):
+            gap = [[f"nop {d - 1}" if d > 1 else "nop"]] if d else []
+            add(f"lat_{name}_d{d}", [[prod]] + gap + [[cons]])
+    # A taken forward ibranch to the next instruction.
+    add("ibranch_fwd", [["ibranch\t%%FWD"]])
+    # A stall (a load used 1 instruction later) just before a taken
+    # ibranch, a prepared ct, or nothing.
+    ld = [["ldd,0\t%dr1, 0x0, %dr8"]]
+    add("stall_none", ld + [["addd,0\t%dr8, 0x1, %dr9"]])
+    add("stall_ibranch", ld + [["addd,0\t%dr8, 0x1, %dr9", "ibranch\t%%FWD"]])
+    add("stall_ct", [["disp\t%ctpr2, %%NEXT"], ["nop 5"]] + ld
+        + [["addd,0\t%dr8, 0x1, %dr9", "ct\t%ctpr2"]])
+    add("nostall_ibranch", ld + [["nop 2"],
+                                 ["addd,0\t%dr8, 0x1, %dr9", "ibranch\t%%FWD"]])
     # Two taken ibranches (to a block that branches back).
     add("ibranch2", [["ibranch\t%%REC"]])
     # A call to a function that returns at once.  The call empties the

@@ -5,7 +5,7 @@
 
      LCC=/opt/mcst/lcc-1.29.16.e2k-v3.linux-6.1/bin/lcc
      $LCC -O1 tools/isa-probes/pmu.c tools/isa-probes/pmu.s -o pmu
-     taskset -c 2 ./pmu [KERNEL]
+     taskset -c 2 ./pmu [PREFIX [EVENT]]   # kernels starting with PREFIX
 
    Each line: kernel, event, then the count per execution of the
    kernel's loop body, after subtracting the empty kernel's.  Zero
@@ -137,10 +137,13 @@ int
 main (int argc, char **argv)
 {
   const char *only = argc > 1 ? argv[1] : NULL;
+  const char *event = argc > 2 ? argv[2] : NULL;
   int nk = sizeof kernels / sizeof *kernels;
   setvbuf (stdout, NULL, _IOLBF, 0);
   for (unsigned e = 0; e < sizeof events / sizeof *events; e++)
     {
+      if (event && strcmp (event, events[e].name) != 0)
+        continue;
       int fd = pmu_open (events[e].config);
       if (fd < 0)
         {
@@ -151,7 +154,7 @@ main (int argc, char **argv)
       double base = per_iter (fd, kernels[0].f);
       for (int k = 0; k < nk; k++)
         {
-          if (only && strcmp (only, kernels[k].name) != 0)
+          if (only && strncmp (only, kernels[k].name, strlen (only)) != 0)
             continue;
           double v = per_iter (fd, kernels[k].f);
           /* The C kernels have their own loops: report them raw.  */

@@ -3615,6 +3615,1444 @@ pmu_cmpct_true_d4:
 	}
 	.size	pmu_cmpct_true_d4, .-pmu_cmpct_true_d4
 
+	.global	pmu_lat_getsp_d0
+	.type	pmu_lat_getsp_d0, #function
+	.align	8
+pmu_lat_getsp_d0:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_getsp_d0_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_getsp_d0_loop:
+	{
+	  getsp,0	0x0, %dr8
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_getsp_d0, .-pmu_lat_getsp_d0
+
+	.global	pmu_lat_getsp_d1
+	.type	pmu_lat_getsp_d1, #function
+	.align	8
+pmu_lat_getsp_d1:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_getsp_d1_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_getsp_d1_loop:
+	{
+	  getsp,0	0x0, %dr8
+	}
+	{
+	  nop
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_getsp_d1, .-pmu_lat_getsp_d1
+
+	.global	pmu_lat_getsp_d2
+	.type	pmu_lat_getsp_d2, #function
+	.align	8
+pmu_lat_getsp_d2:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_getsp_d2_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_getsp_d2_loop:
+	{
+	  getsp,0	0x0, %dr8
+	}
+	{
+	  nop 1
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_getsp_d2, .-pmu_lat_getsp_d2
+
+	.global	pmu_lat_getsp_d3
+	.type	pmu_lat_getsp_d3, #function
+	.align	8
+pmu_lat_getsp_d3:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_getsp_d3_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_getsp_d3_loop:
+	{
+	  getsp,0	0x0, %dr8
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_getsp_d3, .-pmu_lat_getsp_d3
+
+	.global	pmu_lat_getsp_d4
+	.type	pmu_lat_getsp_d4, #function
+	.align	8
+pmu_lat_getsp_d4:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_getsp_d4_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_getsp_d4_loop:
+	{
+	  getsp,0	0x0, %dr8
+	}
+	{
+	  nop 3
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_getsp_d4, .-pmu_lat_getsp_d4
+
+	.global	pmu_lat_getsp_d5
+	.type	pmu_lat_getsp_d5, #function
+	.align	8
+pmu_lat_getsp_d5:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_getsp_d5_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_getsp_d5_loop:
+	{
+	  getsp,0	0x0, %dr8
+	}
+	{
+	  nop 4
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_getsp_d5, .-pmu_lat_getsp_d5
+
+	.global	pmu_lat_getsp_d6
+	.type	pmu_lat_getsp_d6, #function
+	.align	8
+pmu_lat_getsp_d6:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_getsp_d6_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_getsp_d6_loop:
+	{
+	  getsp,0	0x0, %dr8
+	}
+	{
+	  nop 5
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_getsp_d6, .-pmu_lat_getsp_d6
+
+	.global	pmu_lat_movif_d0
+	.type	pmu_lat_movif_d0, #function
+	.align	8
+pmu_lat_movif_d0:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movif_d0_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movif_d0_loop:
+	{
+	  movif,0	%dr3, %r3, %dr8
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movif_d0, .-pmu_lat_movif_d0
+
+	.global	pmu_lat_movif_d1
+	.type	pmu_lat_movif_d1, #function
+	.align	8
+pmu_lat_movif_d1:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movif_d1_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movif_d1_loop:
+	{
+	  movif,0	%dr3, %r3, %dr8
+	}
+	{
+	  nop
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movif_d1, .-pmu_lat_movif_d1
+
+	.global	pmu_lat_movif_d2
+	.type	pmu_lat_movif_d2, #function
+	.align	8
+pmu_lat_movif_d2:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movif_d2_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movif_d2_loop:
+	{
+	  movif,0	%dr3, %r3, %dr8
+	}
+	{
+	  nop 1
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movif_d2, .-pmu_lat_movif_d2
+
+	.global	pmu_lat_movif_d3
+	.type	pmu_lat_movif_d3, #function
+	.align	8
+pmu_lat_movif_d3:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movif_d3_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movif_d3_loop:
+	{
+	  movif,0	%dr3, %r3, %dr8
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movif_d3, .-pmu_lat_movif_d3
+
+	.global	pmu_lat_movif_d4
+	.type	pmu_lat_movif_d4, #function
+	.align	8
+pmu_lat_movif_d4:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movif_d4_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movif_d4_loop:
+	{
+	  movif,0	%dr3, %r3, %dr8
+	}
+	{
+	  nop 3
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movif_d4, .-pmu_lat_movif_d4
+
+	.global	pmu_lat_movif_d5
+	.type	pmu_lat_movif_d5, #function
+	.align	8
+pmu_lat_movif_d5:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movif_d5_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movif_d5_loop:
+	{
+	  movif,0	%dr3, %r3, %dr8
+	}
+	{
+	  nop 4
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movif_d5, .-pmu_lat_movif_d5
+
+	.global	pmu_lat_movif_d6
+	.type	pmu_lat_movif_d6, #function
+	.align	8
+pmu_lat_movif_d6:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movif_d6_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movif_d6_loop:
+	{
+	  movif,0	%dr3, %r3, %dr8
+	}
+	{
+	  nop 5
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movif_d6, .-pmu_lat_movif_d6
+
+	.global	pmu_lat_movif_movfi_d0
+	.type	pmu_lat_movif_movfi_d0, #function
+	.align	8
+pmu_lat_movif_movfi_d0:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movif_movfi_d0_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movif_movfi_d0_loop:
+	{
+	  movif,0	%dr3, %r3, %dr8
+	}
+	{
+	  movfi,0	%dr8, %r9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movif_movfi_d0, .-pmu_lat_movif_movfi_d0
+
+	.global	pmu_lat_movif_movfi_d1
+	.type	pmu_lat_movif_movfi_d1, #function
+	.align	8
+pmu_lat_movif_movfi_d1:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movif_movfi_d1_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movif_movfi_d1_loop:
+	{
+	  movif,0	%dr3, %r3, %dr8
+	}
+	{
+	  nop
+	}
+	{
+	  movfi,0	%dr8, %r9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movif_movfi_d1, .-pmu_lat_movif_movfi_d1
+
+	.global	pmu_lat_movif_movfi_d2
+	.type	pmu_lat_movif_movfi_d2, #function
+	.align	8
+pmu_lat_movif_movfi_d2:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movif_movfi_d2_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movif_movfi_d2_loop:
+	{
+	  movif,0	%dr3, %r3, %dr8
+	}
+	{
+	  nop 1
+	}
+	{
+	  movfi,0	%dr8, %r9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movif_movfi_d2, .-pmu_lat_movif_movfi_d2
+
+	.global	pmu_lat_movif_movfi_d3
+	.type	pmu_lat_movif_movfi_d3, #function
+	.align	8
+pmu_lat_movif_movfi_d3:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movif_movfi_d3_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movif_movfi_d3_loop:
+	{
+	  movif,0	%dr3, %r3, %dr8
+	}
+	{
+	  nop 2
+	}
+	{
+	  movfi,0	%dr8, %r9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movif_movfi_d3, .-pmu_lat_movif_movfi_d3
+
+	.global	pmu_lat_movif_movfi_d4
+	.type	pmu_lat_movif_movfi_d4, #function
+	.align	8
+pmu_lat_movif_movfi_d4:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movif_movfi_d4_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movif_movfi_d4_loop:
+	{
+	  movif,0	%dr3, %r3, %dr8
+	}
+	{
+	  nop 3
+	}
+	{
+	  movfi,0	%dr8, %r9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movif_movfi_d4, .-pmu_lat_movif_movfi_d4
+
+	.global	pmu_lat_movif_movfi_d5
+	.type	pmu_lat_movif_movfi_d5, #function
+	.align	8
+pmu_lat_movif_movfi_d5:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movif_movfi_d5_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movif_movfi_d5_loop:
+	{
+	  movif,0	%dr3, %r3, %dr8
+	}
+	{
+	  nop 4
+	}
+	{
+	  movfi,0	%dr8, %r9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movif_movfi_d5, .-pmu_lat_movif_movfi_d5
+
+	.global	pmu_lat_movif_movfi_d6
+	.type	pmu_lat_movif_movfi_d6, #function
+	.align	8
+pmu_lat_movif_movfi_d6:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movif_movfi_d6_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movif_movfi_d6_loop:
+	{
+	  movif,0	%dr3, %r3, %dr8
+	}
+	{
+	  nop 5
+	}
+	{
+	  movfi,0	%dr8, %r9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movif_movfi_d6, .-pmu_lat_movif_movfi_d6
+
+	.global	pmu_lat_movfi_d0
+	.type	pmu_lat_movfi_d0, #function
+	.align	8
+pmu_lat_movfi_d0:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movfi_d0_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movfi_d0_loop:
+	{
+	  movfi,0	%dr8, %r8
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movfi_d0, .-pmu_lat_movfi_d0
+
+	.global	pmu_lat_movfi_d1
+	.type	pmu_lat_movfi_d1, #function
+	.align	8
+pmu_lat_movfi_d1:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movfi_d1_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movfi_d1_loop:
+	{
+	  movfi,0	%dr8, %r8
+	}
+	{
+	  nop
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movfi_d1, .-pmu_lat_movfi_d1
+
+	.global	pmu_lat_movfi_d2
+	.type	pmu_lat_movfi_d2, #function
+	.align	8
+pmu_lat_movfi_d2:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movfi_d2_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movfi_d2_loop:
+	{
+	  movfi,0	%dr8, %r8
+	}
+	{
+	  nop 1
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movfi_d2, .-pmu_lat_movfi_d2
+
+	.global	pmu_lat_movfi_d3
+	.type	pmu_lat_movfi_d3, #function
+	.align	8
+pmu_lat_movfi_d3:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movfi_d3_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movfi_d3_loop:
+	{
+	  movfi,0	%dr8, %r8
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movfi_d3, .-pmu_lat_movfi_d3
+
+	.global	pmu_lat_movfi_d4
+	.type	pmu_lat_movfi_d4, #function
+	.align	8
+pmu_lat_movfi_d4:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movfi_d4_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movfi_d4_loop:
+	{
+	  movfi,0	%dr8, %r8
+	}
+	{
+	  nop 3
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movfi_d4, .-pmu_lat_movfi_d4
+
+	.global	pmu_lat_movfi_d5
+	.type	pmu_lat_movfi_d5, #function
+	.align	8
+pmu_lat_movfi_d5:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movfi_d5_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movfi_d5_loop:
+	{
+	  movfi,0	%dr8, %r8
+	}
+	{
+	  nop 4
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movfi_d5, .-pmu_lat_movfi_d5
+
+	.global	pmu_lat_movfi_d6
+	.type	pmu_lat_movfi_d6, #function
+	.align	8
+pmu_lat_movfi_d6:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Llat_movfi_d6_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Llat_movfi_d6_loop:
+	{
+	  movfi,0	%dr8, %r8
+	}
+	{
+	  nop 5
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_lat_movfi_d6, .-pmu_lat_movfi_d6
+
+	.global	pmu_ibranch_fwd
+	.type	pmu_ibranch_fwd, #function
+	.align	8
+pmu_ibranch_fwd:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Libranch_fwd_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Libranch_fwd_loop:
+	{
+	  ibranch	.Libranch_fwd_fwd0
+	}
+.Libranch_fwd_fwd0:
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_ibranch_fwd, .-pmu_ibranch_fwd
+
+	.global	pmu_stall_none
+	.type	pmu_stall_none, #function
+	.align	8
+pmu_stall_none:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lstall_none_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Lstall_none_loop:
+	{
+	  ldd,0	%dr1, 0x0, %dr8
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	}
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_stall_none, .-pmu_stall_none
+
+	.global	pmu_stall_ibranch
+	.type	pmu_stall_ibranch, #function
+	.align	8
+pmu_stall_ibranch:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lstall_ibranch_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Lstall_ibranch_loop:
+	{
+	  ldd,0	%dr1, 0x0, %dr8
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	  ibranch	.Lstall_ibranch_fwd0
+	}
+.Lstall_ibranch_fwd0:
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_stall_ibranch, .-pmu_stall_ibranch
+
+	.global	pmu_stall_ct
+	.type	pmu_stall_ct, #function
+	.align	8
+pmu_stall_ct:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lstall_ct_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Lstall_ct_loop:
+	{
+	  disp	%ctpr2, .Lstall_ct_next0
+	}
+	{
+	  nop 5
+	}
+	{
+	  ldd,0	%dr1, 0x0, %dr8
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	  ct	%ctpr2
+	}
+.Lstall_ct_next0:
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_stall_ct, .-pmu_stall_ct
+
+	.global	pmu_nostall_ibranch
+	.type	pmu_nostall_ibranch, #function
+	.align	8
+pmu_nostall_ibranch:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x1, %dr3
+	  addd,1	0x0, 0x0, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lnostall_ibranch_loop
+	  cmpedb,0	%dr3, 0x0, %pred1
+	}
+	{
+	  nop 5
+	}
+.Lnostall_ibranch_loop:
+	{
+	  ldd,0	%dr1, 0x0, %dr8
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr9
+	  ibranch	.Lnostall_ibranch_fwd0
+	}
+.Lnostall_ibranch_fwd0:
+	{
+	  subd,3	%dr0, 0x1, %dr0
+	}
+	{
+	  cmpedb,3	%dr0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pmu_nostall_ibranch, .-pmu_nostall_ibranch
+
 	.global	pmu_ibranch2
 	.type	pmu_ibranch2, #function
 	.align	8

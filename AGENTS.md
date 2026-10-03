@@ -105,7 +105,9 @@ differ from v6.
 ```
 spec/isa/      ISA spec: bundle.md (wide instruction format), control-transfer.md
                (branches, calls, CTPRs), semantics.md (what operations
-               compute), apb.md (array prefetch), binutils-ops.yaml
+               compute), apb.md (array prefetch), speculation.md
+               (speculative operations, diagnostic values, DAM),
+               binutils-ops.yaml
                (every operation), registers.yaml (state and AAU registers)
 spec/abi/      ABI spec for e2k64: data layout, registers + DWARF, calling
                convention, stacks and unwinding, ELF/relocations/PIC/TLS,
@@ -125,7 +127,9 @@ tools/isa-score/    scores a compiled program's use of E2K parallelism:
 tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     writes semantics.s) and array prefetch probes (apb.c;
                     gen_apb.py writes apb.s and apb-cases.h; apb-loop.c,
-                    apb-lcc.c), run on hardware
+                    apb-lcc.c) and speculation probe (spec.c;
+                    gen_spec.py writes spec.s and spec-cases.h), run on
+                    hardware
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     compiled to assembly and read, as are atomics.c,
                     asmops.c and stackprot.c; tagtrap.c, dbl.c,
@@ -251,7 +255,18 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   (the guide is wrong), `merge` picks the first operand when the
   predicate is false, shift counts are modulo the width, division by
   zero is SIGFPE, FP `lt`/`le` signal on quiet NaNs, `fmax`/`fmin` are
-  x86-style, `fmul_add` rounds twice. Array prefetch
+  x86-style, `fmul_add` rounds twice. Speculation
+  (`spec/isa/speculation.md`, hw): `,sm` faults give diagnostic values
+  that trap (SIGILL `ILL_ILLOPN`) only at a non-speculative use,
+  including a diagnostic predicate; `ld,sm` is semi-speculative (pages
+  in valid pages, diagnostic for invalid ones, one kernel entry per
+  invalid region), `mas=0x3` loads fully speculative; a speculative FP
+  op that would set a flag not already set gives a diagnostic instead
+  (the kernel starts processes with all flags set); data speculation:
+  lock load `mas=0x4` (ALC0/3), check load `mas=0x3` (ALC2/5, same
+  register) that reloads and sets `%MLOCK` for `rbranch` only if the
+  entry was lost (overlapping store, trap, no lock load), kept across
+  calls and register overwrites, at least 32 entries. Array prefetch
   (`spec/isa/apb.md`, hw): the program format, what a `mova` reads
   (`base + AAIND + disp + step × n + ind`, zero-extended, diagnostic
   instead of a fault), latency 5, and the correctness rules: a call, a
@@ -391,8 +406,8 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
    available, which may clean registers like qemu.
 2. The relcc2 work listed in `doc/gcc-port-plan.md` section 11: DejaGnu
    boards for qemu-e2k and the 4C; timing on v5 (8CB) and other
-   generations with `tools/isa-timing/bench.py`; data-speculation and
-   loop-mode specs.
+   generations with `tools/isa-timing/bench.py`; loop-mode spec;
+   speculation leftovers (`spec/isa/speculation.md`, "Not checked yet").
 3. APB leftovers (`spec/isa/apb.md`, "Not checked yet"): AAU stores
    (`staa`/`incr`) and v5+ on hardware. Protected (`e2k128`) and 32-bit
    modes.

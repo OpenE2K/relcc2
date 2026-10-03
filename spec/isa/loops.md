@@ -120,6 +120,13 @@ the loop that the counter ended it.
 | 5, 2, 3, 2 (two stores) | both in 4–7 |
 | 5, 2, 3, `semc` = 1 | 1–7 |
 
+AAU stores (`staad … %aad0[ %aasti1 ]` with `incr`, as lcc pipelines
+them) follow the same rules, and a suppressed one doesn't advance its
+index either: with `pcnt` 3 the values of iterations 4, 5, 6 land in
+elements 0, 1, 2 (and 7 in element 3 with `strmd` 1) [hw]. So a
+pipelined loop's AAU stores need no address correction for the
+prologue.
+
 **Loads are never suppressed**: an ordinary `ldd` in a `loop_mode`
 instruction that reads past an array in epilogue iterations faults,
 whatever `ldmc` (0, 1) and `ldovl` (0, 1, 2, 255) say. Loads that may
@@ -130,12 +137,39 @@ array-prefetch `mova`s: `mova` is enabled when `!loop_mode || ldmc ||
 
 **Rotation.** `setbn rsz = R, rbs = B, rcur = C` makes `%b[]` a ring of
 2(R + 1) 64-bit registers starting at window register 2B (`%b[n]` is
-one 64-bit register, like `%dr`). Each `abn` moves the base down one
+one 64-bit register, like `%dr`); `rcur` = C starts `%b[0]` C pairs up
+the ring, at `%dr(2B + 2C)` (`rcur` 1, 2, 3 put `%b[0]` at `%dr18`,
+`%dr20`, `%dr22` with B = 8). Each `abn` moves the base down one
 register pair, so **the old `%b[0]` is the new `%b[2]`** (as
 the guide's example says, 6.3.2): with `rsz` 3 (4 pairs from `%dr16`),
 iterations writing `%b[0]` filled `%dr16`, `%dr22`, `%dr20`, `%dr18`,
 `%dr16`, … `setbp psz = P` and `abp` do the same for `%pred0..P`: the
 old `%pred0` is the new `%pred1`, the old `%predP` the new `%pred0`.
+
+**Early exits and while loops.** `ct %ctpr1 ? ~%pred0 &&
+%NOT_LOOP_END` leaves when `%pred0` becomes true or the count runs out:
+with `lcnt` 10 and the predicate true in iteration 4 the loop ran 4
+times, with it never true 10 times. With `vlc` = 0 `%NOT_LOOP_END` is
+always true, so the same loop is a plain while loop that only the
+predicate ends (7 iterations), still with `alc`, rotation and the store
+rules' prologue part (the last-iteration part needs `%LOOP_END`, which
+never comes).
+
+**Calls.** A call doesn't touch `%lsr`: a loop calling a function that
+leaves it alone counts right. A callee that runs its own loop leaves
+`%lsr` finished (`lcnt` 0, `over` 1), and the caller's loop then ends
+after the current iteration; saving `%lsr` with `rrd` before the call
+and writing it back with `rwd` after (4 cycles before the next `alc`)
+gives the right count. Restoring `%lsr` also resets `%ilcr`, which
+matters only for array prefetch (apb.md).
+
+**Interrupts.** 100,000,000 iterations of a loop whose rotating `%b[]`
+chain counts them (each iteration writes `%b[2] + 1` to `%b[0]`) gave
+the exact count and chain value with 10,965 `SIGALRM`s delivered during
+the loop: the kernel saves and restores `%lsr`, `%ilcr` and the
+rotation bases. A `loop_mode` store to a new page in each of 64
+iterations page-faults every time and still stores every value, with
+the right count.
 
 **Timing.** A one-instruction `loop_mode` loop (`alc`, `ct ?
 %NOT_LOOP_END`) runs 1,000 iterations in 1,001 cycles; with a second
@@ -143,6 +177,8 @@ instruction, 2,001: the transfer through a prepared `%ctpr1` is free
 ([control-transfer.md](control-transfer.md)).
 
 ## How lcc builds loops [lcc]
+
+Counted loops (`for` with a known trip count):
 
 lcc writes `%lsr` = `vlc` | `ldovl` 255 | `strmd` (1 if the loop
 stores, else 0) | `lcnt` = n (`addd 0x20ff2000000000`, `insfd` of n),
@@ -166,6 +202,16 @@ prefetch unit (`staad … %aad0[ %aasti1 ]` with `incr`). Example,
        staad,5 %b[12], %aad0[ %aasti1 ]; incr,5 %aaincr0 }
 ```
 
+Loops without a trip count (`while`, early exits): `%lsr` without `vlc`
+(`0x20ff0000000000`: `ldovl` 255, `strmd` 1), the same `loop_mode`,
+`alc`, `abn` and `abp`, and an exit through a rotated predicate
+(`ct %ctpr1 ? %pred1`) or `ct %ctpr1 ? ~%pred0 && %NOT_LOOP_END`. In
+these, lcc also conditions prologue work on `%pcntN`: in CoreMark's
+`matrix_test` a DAM lock load runs under `? %pcnt14` and its check
+under `? %pcnt0`. Over CoreMark and Linpack at `-O3`/`-O4` lcc uses
+`%pcnt0` … `%pcnt14` and `rcur` up to 0x24, never `abg`, `%lcntex` or a
+read of `%lsr`, and never a call inside a loop-mode loop.
+
 ## For a compiler
 
 - A counted loop needs no compare: `rwd` the count into `%lsr` (with
@@ -180,8 +226,11 @@ prefetch unit (`staad … %aad0[ %aasti1 ]` with `incr`). Example,
   speculative.
 - Values that live across stages go in `%b[]`; a value produced in
   stage s and used k iterations later is named `%b[n + 2k]` at the use.
-- `%lsr` and `%ilcr` are not preserved by calls; a loop with a call
-  (lcc never pipelines one, guide 6.3.3) must save `%lsr` around it.
+- A loop with a call (lcc never pipelines one, guide 6.3.3) must save
+  `%lsr` around it unless the callee is known not to run a loop:
+  calls don't preserve it, they just don't change it.
+- A loop without a known trip count can still use loop mode: `%lsr`
+  without `vlc`, and an exit predicate in the back edge's condition.
 
 ## Emulators
 
@@ -197,9 +246,7 @@ The rest of `loops.c` matches the 4C under the community qemu.
 
 ## Not checked yet
 
-- `abg` (global register rotation), `rcur`, nested loops and loops that
-  save `%lsr` around a call; traps and signals inside a loop beyond the
-  array-prefetch case (apb.md).
-- `ldovl` and `ldmc` with array prefetch; quad stores and AAU stores
-  (`staa`) under the store rules.
+- `abg` (global register rotation; lcc doesn't use it).
+- `ldovl` and `ldmc` with array prefetch (`mova` in epilogue
+  iterations); quad stores under the store rules.
 - v5+ (`%lsr1`, `%ilcr1`, 64-bit counts).

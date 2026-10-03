@@ -242,14 +242,20 @@ it, it runs at the memory latency, since lcc's code without APB does not
 prefetch. (`dot` is bound by its chain of FP additions while the data is
 in L1.)
 
-## AAU stores [lcc, source]
+## AAU stores [lcc, source, hw]
 
 `staa{b,h,w,d,q}` (channels 2 and 5) store to `AAD[d].base +
 AASTI[ind] + literal`; an `incr,CH %aaincrN` on the next line (encoded
 in the CDS AM2/AM5 bit) adds `AAINCR[N] × size` to `AASTI[ind]` after
 the store. lcc uses them for stores in APB loops (`d[i] = a[i] + 1`:
 `staad %b[15], %aad1[ %aasti1 ]`, `incr,5 %aaincr2`). They do not need
-`bap`. Not run on hardware yet.
+`bap`. On the 4C (`tools/isa-probes/loops.c`, `aastores*`): with
+`aaurwd` of the base to `%aad0` and 0 to `%aasti1`, `staad,5 v, %aad0[
+%aasti1 ]` with `incr,5 %aaincr0` stores consecutive doublewords, and
+in a `loop_mode` instruction it obeys the loop-mode store rules like
+any store, **including its `incr`**: a suppressed `staa` doesn't advance
+the index, so the first iteration after the prologue stores at element 0
+([loops.md](loops.md)).
 
 ## How lcc uses APB [lcc, guide]
 
@@ -320,7 +326,8 @@ program receives signals.
 
 ## Not checked yet
 
-- AAU stores (`staa`, `incr`) on hardware.
+- AAU stores in other formats (`staab`…`staaq`), with a literal, or
+  into areas also read by `mova`.
 - v5+ (64-bit indices, unaligned areas, `movaqp`); timing on other
   generations.
 - `dcd`, `dpl = 1`, the meaning of `%aabf`, epilogue (`ecnt`) behaviour

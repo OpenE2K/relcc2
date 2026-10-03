@@ -418,11 +418,10 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 
 ## Next steps (proposed, owner to choose)
 
-0. `docs/spec-poc-findings.md` (the PoC agent's file): every entry up to
-   A14 is now in `spec/` or `doc/` (checked again with our own probes);
-   the agent working there may drop them. Still worth adding: compat
-   tests with non-trivially-copyable C++ classes as results and
-   arguments (A9).
+0. `docs/spec-poc-findings.md` (the PoC agent's file, untracked): all
+   entries so far are folded into `spec/` and `doc/` and removed from it;
+   new ones continue as I8, A15, P6. Left from A9: compat tests with
+   non-trivially-copyable C++ classes as results and arguments.
 1. Extend the compat suite (see Current state). It runs on the 4C with
    `run.py --target v3 --remote ...`; all pairs match qemu except the
    tag-trap tests, which pass on the 4C. Run it on v5 (8CB) when

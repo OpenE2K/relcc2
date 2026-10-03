@@ -11,20 +11,25 @@ basic block, compares
   on the chosen ISA version.
 
 The ratio says how far a compiler is from what the machine allows,
-without judging the algorithm. It needs no hardware; an optional run
-under qemu-e2k weights the blocks by how often they execute.
+without judging the algorithm. The score is static (every block counts
+once) and needs no hardware and no emulator; how fast a program really
+runs is measured by running it on the hardware.
 
 ```
-tools/isa-score/score.py PROGRAM                  # every block counts once
-tools/isa-score/count.sh -o P.counts PROGRAM ARGS # run under MCST's qemu-e2k
-tools/isa-score/score.py PROGRAM --counts P.counts
+tools/isa-score/score.py PROGRAM
 tools/isa-score/score.py PROGRAM --function f --explain 0x10450
                                                   # one block, cycle by cycle
 ```
 
 Options: `--iset N` (default: the ISA version in the ELF header),
 `--function NAME` (repeatable), `--top N`, `--json FILE` (every block's
-numbers), `--bias ADDR` (load address of a PIE, for counts).
+numbers).
+
+To compare compilers' schedulers, compare **operations per cycle** of
+the achieved schedule on the same program: on CoreMark and Linpack it
+ranks lcc, Unipro's clang and gcc-claude as the 4C does. The score
+(possible / achieved) only says how much each compiler leaves on the
+table with its own operations.
 
 ## What is measured
 
@@ -78,9 +83,13 @@ Preparations (`disp`) are assumed hoistable in the possible schedule.
 `validate/validate.py --remote claude@ringo.lan --remote-dir
 relcc2/<dir>` builds nine kernels (sum, dot product, saxpy, byte hash,
 branches, polynomial, list walk, copy, an empty function) with lcc at
-`-O0`, `-O2` and `-O3`, counts their executions under qemu-e2k, predicts
-their cycles and times them on the machine with `%clkr`. On the Elbrus
-4C every kernel is within 2% (a call and return adds 6 cycles the model
+`-O0`, `-O2` and `-O3`; on the machine it single-steps each kernel once
+under gdb (`validate/count.py`) to learn how often each wide instruction
+runs, and times each kernel with `%clkr`; the prediction is the static
+per-block cycles weighted by those counts. The table below was produced
+with execution counts from an earlier qemu-based counter (since
+removed); the gdb counter has not completed a run yet. On the Elbrus 4C
+every kernel was within 2% (a call and return adds 6 cycles the model
 doesn't count):
 
 | Kernel | -O0 | -O2 | -O3 |
@@ -111,6 +120,3 @@ scheduler could do with the same operations.
   cycles), taken `ibranch` costs other than on a loop's back edge, the
   store/load channel pairs gas forbids, and branch targets in the bad
   page offsets of `CPU_HWBUG_CODE_PLACEMENT`.
-- qemu-e2k reports a wrong address for every instruction after the first
-  of a translation block, so `bbcount.c` writes per-block count lists and
-  `score.py` assigns them by walking the instruction sizes.

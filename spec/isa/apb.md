@@ -257,8 +257,12 @@ any store, **including its `incr`**: a suppressed `staa` doesn't advance
 the index, so the first iteration after the prologue stores at element 0
 ([loops.md](loops.md)).
 
-Other formats on the 4C (`aastores{w,q}*`): `staaw` stores the low 32
-bits of its register and steps 4 bytes; `staaq %qrN` stores `%drN` at
+Other formats on the 4C (`aastores{b,h,w,q}*`, `aastores_lit`):
+`staab`, `staah` and `staaw` store the low 8, 16 and 32 bits of their
+register and step 1, 2 and 4 bytes, under the same loop-mode rules (with
+`pcnt` 3 and `strmd` 1, iterations 4–7 land in elements 0–3); a literal
+(`%aad0[ %aasti1 + 0x8 ]`) is a byte offset added to the address (one
+doubleword further), the index stepping as without it; `staaq %qrN` stores `%drN` at
 the lower and `%drN+1` at the higher address and steps 16 bytes (the
 area 16-byte aligned). In loop mode a `staaq` counts as two stores for
 `strmd`, and splitting it raises SIGILL ([loops.md](loops.md)). With
@@ -335,8 +339,7 @@ program receives signals.
 
 ## Not checked yet
 
-- AAU stores in byte and half format (`staab`, `staah`), with a literal, or
-  into areas also read by `mova`. (`mova` in epilogue iterations:
+- AAU stores into areas also read by `mova`. (`mova` in epilogue iterations:
   disabled unless `%lsr.ldmc`, [loops.md](loops.md).)
 - v5+ (64-bit indices, unaligned areas, `movaqp`); timing on other
   generations.

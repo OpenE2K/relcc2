@@ -67,6 +67,9 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | 80-bit `fxaddxx` / `fxmulxx` / `fxdivxx` | — | 5 / 4 / 16 | — |
 | `fxaddxx` → integer op | — | 7 | — |
 | `movfi` → `movif` (unpack and repack an 80-bit value) | — | 4 | — |
+| `movif` → `movfi` (pmu.c) | — | 4 | — |
+| `movif` → integer op, `movfi` → integer op (pmu.c) | — | 6 (a consumer 2 cycles after stalls 8, not 4) | — |
+| `getsp` → integer op (pmu.c) | — | 2 | — |
 | `fdtofx` → `fxtofd` | — | 5 | — |
 | compare → `andp` (reading the `%pred`) | 1 | 1 | — |
 | `andp` → `andp` | 0.5 | 0 inside one wide instruction (`@p4` → next CLP), 1 through a `%pred` | — |
@@ -74,6 +77,11 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | `andp` → `ct ? pred` | 3 | 3 | — |
 | FP compare (`fcmpltdb`) → predicated ALU op | — | 4 | — |
 | FP compare → `ct ? pred` | — | 5 | — |
+
+Rows marked (pmu.c) come from `tools/isa-probes/pmu.c` (producer, D
+cycles of `nop`, consumer, counted with the TICKS monitor;
+[monitors.md](monitors.md)), not from `bench.py`, so they are not in
+`timing-e2s.yaml`.
 
 The scheduled latencies of scalar integer, FP, control and predicate
 operations match the guide. Differences:

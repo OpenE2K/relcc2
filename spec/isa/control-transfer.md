@@ -120,6 +120,8 @@ So:
   **same** CTPR (gas: "not supported on elbrus-vN", MCST bug 154538);
   v6+ allows it. Different CTPRs are fine: lcc puts `call %ctpr2` and
   `disp %ctpr1, loop_head` next to each other.
+- `movtd` and `getpl` into a CTPR go only in ALC0
+  ([bundle.md](bundle.md), "Bundling restrictions").
 
 ## Costs [hw]
 
@@ -170,7 +172,16 @@ about 0.4 per block):
 
 So a prepared transfer issued at least its delay after the prepare costs
 nothing, calls and returns included, while a taken `ibranch` always
-costs 6 cycles. A compiler should prepare every likely-taken transfer
+costs 6 cycles, forward or backward (monitors: `ibranch_fwd` 1
+instruction in 7 cycles, a forward and a backward one 2 in 14).
+
+A taken `ibranch` **hides an interlock stall in its own instruction**:
+a load used one instruction later stalls 4 cycles (2 instructions, 6
+cycles); with a taken `ibranch` in the consumer's instruction the pair
+takes 8 cycles, not 12, while a prepared `ct` there adds nothing and the
+stall is paid (monitors, `stall_*`). So padding with `nop` before an
+`ibranch` back edge doesn't pay, as the proof-of-concept backend found
+(`docs/spec-poc-findings.md` I4); with a `ct` back edge it does. A compiler should prepare every likely-taken transfer
 early (5 cycles before for `disp`, 9 for `movtd`) and keep `ibranch` for
 rarely taken branches or when no CTPR is free.
 

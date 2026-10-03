@@ -343,6 +343,12 @@ gas rejects these combinations within one wide instruction:
 - `disp` and `ldisp` together (both need CS0);
 - two operations in the same channel.
 
+Channel lists in `binutils-ops.yaml` don't depend on the operands, but
+one rule does: `movtd` and `getpl` **into `%ctpr1–3` go only in ALC0**
+(gas: "may be encoded in the 0-th channel only", citing every
+`iset-vX.single`; checked for v3 and v6), while into an ordinary
+register they take ALC0, 1, 3 or 4.
+
 ## Assembler syntax notes [decoded]
 
 - **Store operand order.** By default gas reads stores as *data, address,

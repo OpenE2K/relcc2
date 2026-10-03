@@ -342,6 +342,14 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 
 ## Next steps (proposed, owner to choose)
 
+0. Open items in `docs/spec-poc-findings.md` (the PoC agent's file;
+   untracked until it commits it): I5 quiet FP compares `fcmpud*f` into
+   `semantics.md`; A7 runtime facts for libgcc (`rrd %cr0.hi` as the
+   return address, `__builtin_eh_return` expanding to nothing, `%idr`
+   fields and CPU models, MCST's `unwind.inc` hunks, DWARF numbers for
+   `%g0-31`, the sysroot `usr/lib` problem in port plan 4.2); I2/I2b/I4
+   measurements (`getsp`, `movif`/`movfi` separately, backward `ibranch`,
+   `ibranch` and pending stalls).
 1. Extend the compat suite (see Current state). It runs on the 4C with
    `run.py --target v3 --remote ...`; all pairs match qemu except the
    tag-trap tests, which pass on the 4C. Run it on v5 (8CB) when

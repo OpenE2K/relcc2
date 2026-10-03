@@ -36,7 +36,8 @@ tools/isa-score/profile.py PROGRAM --samples FILE [--stat FILE]
 
 `profile.py` runs the program under `perf record` sampling two monitors
 every `--period` events (default 100,003): EXEC (wide instructions) and
-TICKS (cycles). The monitors record the exact instruction (EXEC samples
+TICKS (cycles); a second run samples EXEC and `NO_CT_TAKEN`, whose
+difference at a transfer counts the times it was taken. The monitors record the exact instruction (EXEC samples
 spread evenly over a block's instructions), so a block's EXEC samples ÷
 its length × the period estimate how often it ran, and its TICKS
 samples × the period the cycles spent in it. It reports, for the
@@ -72,7 +73,11 @@ issues in the same channel 2 cycles after its producer
 (`spec/isa/timing.md`). A conditional transfer is assumed not taken
 unless it is a back edge: not taken, it needs its `disp` only 2 cycles
 before it, not 5 (measured with the monitors; on lcc's CoreMark this
-assumption took the model from 10% too slow to within 1%). A loop's
+assumption took the model from 10% too slow to within 1%). A taken
+`ibranch` costs 6 cycles: unconditional ones and back edges are charged
+it. For a block ending in a conditional transfer `score.py` also
+computes both outcomes (`achieved_taken`, `achieved_fall` in `--json`),
+which `profile.py` weights by measured taken fractions. A loop's
 achieved cost is its initiation
 interval, from simulating three iterations, plus a one-time entry cost.
 
@@ -131,26 +136,32 @@ Elbrus 4C (about a minute):
 
 (predicted / sampled / `%clkr` cycles per call, lcc 1.29.16, data in
 L1; `%clkr` includes the call and return, about 6 cycles.) Every kernel
-is within 1%, `copy -O3` within 3%.
+is within 1%, `copy -O3` within 3% (a later run: `copy` within 6%, with a
+few hundred samples per kernel).
 
 On whole benchmarks (`profile.py`, the 4C, CoreMark with 2,000
 iterations, Linpack at size 200 with `--period 10007`; lcc 1.29.16,
 Unipro's clang 20, gcc-claude snapshot db34161a6cd):
 
-| Build | Measured cycles | Measured / achieved | Operations per cycle, run | Score regs / flow, run | Cycles without an instruction to issue |
-|---|---|---|---|---|---|
-| lcc `-O3` CoreMark | 13.32 G | 1.00 | 2.77 | 0.89 / 0.89 | 1.3% |
-| Unipro `-O2` CoreMark | 15.63 G | 1.02 | 1.01 | 0.89 / 0.71 | 6.3% |
-| gcc-claude `-O2` CoreMark | 18.20 G | 1.11 | 0.60 | 0.78 / 0.62 | 11.4% |
-| lcc `-O3` Linpack | 8.35 M | 1.01 | 3.67 | 0.70 / 0.70 | |
-| Unipro `-O2` Linpack | 37.8 M | 0.94 | 0.56 | 0.84 / 0.12 | 0.4% |
-| gcc-claude `-O2` Linpack | 47.7 M | 1.04 | 0.48 | 0.58 / 0.15 | 1.9% |
+| Build | Measured cycles | Measured / achieved | Operations per cycle, run | Score regs / flow, run | Fetch bubbles (`IB_NO_COMMAND`) | Taken `ibranch` |
+|---|---|---|---|---|---|---|
+| lcc `-O3` CoreMark | 13.32 G | 0.98 | 2.77 | 0.88 / 0.87 | 1.3% | 4 M |
+| Unipro `-O2` CoreMark | 15.63 G | 1.00 | 1.01 | 0.87 / 0.70 | 6.3% | 0 |
+| gcc-claude `-O2` CoreMark | 18.20 G | 1.06 | 0.60 | 0.74 / 0.59 | 11.4% | 377 M |
+| lcc `-O3` Linpack | 8.34 M | 1.02 | 3.76 | 0.71 / 0.70 | 0.8% | 0 |
+| Unipro `-O2` Linpack | 37.8 M | 0.94 | 0.56 | 0.84 / 0.11 | 0.4% | 0 |
+| gcc-claude `-O2` Linpack | 47.7 M | 1.03 | 0.47 | 0.57 / 0.15 | 1.8% | 0.2 M |
 
-The model's remaining error follows instruction-fetch bubbles
-(`IB_NO_COMMAND`: cycles after taken transfers and returns with no
-instruction ready), which it does not model; gcc-claude's code has the
-most. Weighted by the run, operations per cycle rank the compilers as
-their measured speed does.
+Fetch bubbles are taken `ibranch`es (6 cycles each; gcc-claude's) and
+taken `ct`s waiting for a late prepare (Unipro's `switch` dispatch and
+early conditional exits); the model charges both once it knows which
+transfers were taken. What is left: in gcc-claude's CoreMark an
+interlock step in `matrix_mul_matrix` that the model doesn't predict
+(about 2% of the run; not explained by load timing, register kind or
+`nop` placement, checked with `pmu.c`'s `mm_*` replicas) and call blocks
+that take about 14 cycles more per call than modelled; in Unipro's
+Linpack, loops that run faster than modelled. Weighted by the run,
+operations per cycle rank the compilers as their measured speed does.
 
 The possible schedule cannot be measured; it is a bound on what a
 scheduler could do with the same operations.
@@ -163,9 +174,9 @@ scheduler could do with the same operations.
 - Loop analysis covers loops whose body is one basic block (lcc's
   `loop_mode` loops and other loops compiled into one block). Other
   loops are scored block by block.
-- Not modelled: cache misses, instruction-fetch bubbles after taken
-  transfers (`IB_NO_COMMAND`, up to 11% of a run, see above), the call
-  and return themselves (about 6 cycles), taken `ibranch` costs other
-  than on a loop's back edge, the
+- Not modelled: cache misses, the call and return themselves (about 6
+  cycles; more in some of gcc-claude's call blocks, see above), which
+  way a conditional transfer goes (static: exits not taken, back edges
+  taken; `profile.py` measures it), the
   store/load channel pairs gas forbids, and branch targets in the bad
   page offsets of `CPU_HWBUG_CODE_PLACEMENT`.

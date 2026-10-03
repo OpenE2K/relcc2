@@ -59,7 +59,7 @@ def main():
     pa = SimpleNamespace(remote=a.remote, remote_dir=a.remote_dir, key=a.key,
                          cpu=a.cpu, period=PERIOD, args=[str(REPEAT)],
                          o=str(out), stdin="")
-    spath, _ = prof.run_remote(pa, str(prog))
+    spath, tpath, _ = prof.run_remote(pa, str(prog))
     ssh = ["ssh", "-i", a.key, "-o", "IdentitiesOnly=yes", a.remote]
     res = subprocess.run(ssh + [f"cd {a.remote_dir} && taskset -c {a.cpu}"
                                 " ./validate"],
@@ -68,12 +68,12 @@ def main():
            re.finditer(r"^(k_\w+) \w+ (\d+)$", res, re.M)}
 
     samples, _ = prof.read_samples(spath, str(prog))
-    rows, _ = prof.weigh(str(prog), 3, samples, PERIOD)
+    taken, _ = prof.read_samples(tpath, str(prog))
+    rows, _ = prof.weigh(str(prog), 3, samples, PERIOD, taken)
     pred, meas = defaultdict(float), defaultdict(float)
     for r in rows:
         if r["func"].startswith("k_"):
-            pred[r["func"]] += score.total_cost(r, "achieved", r["count"],
-                                                r["entries"]) / REPEAT
+            pred[r["func"]] += prof.achieved_run(r) / REPEAT
             meas[r["func"]] += r["measured"] / REPEAT
     print("Cycles per call (sampled: from TICKS samples in the kernel;"
           " %clkr: includes the call and return)")

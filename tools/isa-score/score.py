@@ -50,6 +50,9 @@ def analyse(path, iset, only=None):
 
             row = dict(func=fname, addr=b.addr, instrs=len(b.instrs),
                        ops=len(ops), loop=b.succ_self,
+                       ibranch=("taken" if b.ibranch_taken else "not taken")
+                       if b.ibranch else None,
+                       last=b.instrs[-1].addr,
                        unknown=sorted({op.name for op in ops if not op.known
                                        and op.unit == "alc"}))
             if b.succ_self:
@@ -70,6 +73,12 @@ def analyse(path, iset, only=None):
             else:
                 row["achieved"], _, out["achieved"] = analysis.achieved(
                     b, seed("achieved"))
+                if b.cond:
+                    # Both outcomes, for weighting by a measured run.
+                    for k, tk in (("achieved_taken", True),
+                                  ("achieved_fall", False)):
+                        row[k] = analysis.achieved(b, seed("achieved"),
+                                                   taken=tk)[0]
                 for m in ("regs", "flow"):
                     row[m], out[m] = analysis.possible(b, dec, m, seed(m))
                     # The compiler's schedule is one valid schedule of the

@@ -33,7 +33,10 @@ class Block:
     succ_self: bool = False      # last transfer goes back to its start
     rotates: bool = False        # abn in the loop: %b[] rotates by 2
     back_edge: bool = False      # transfer to an earlier block
-    back_ibranch: bool = False   # the back edge is an ibranch (taken: +6)
+    cond: bool = False           # the last transfer is conditional
+    ibranch: bool = False        # the last transfer is an ibranch
+    ibranch_taken: bool = False  # ... assumed taken (+6): unconditional or
+                                 # a back edge (control-transfer.md)
     target: int = None           # address the last transfer goes to
     falls: bool = True           # can continue to the next block
 
@@ -114,7 +117,9 @@ def blocks(name, instrs):
             if tgt is not None:
                 b.succ_self = tgt == cur[0].addr
                 b.back_edge = tgt <= cur[0].addr
-                b.back_ibranch = b.back_edge and ct.name == "ibranch"
+            b.cond = bool(ct.preds) and ct.name in ("ct", "ibranch")
+            b.ibranch = ct.name == "ibranch"
+            b.ibranch_taken = b.ibranch and (b.back_edge or not ct.preds)
             b.rotates = any(op.name == "abn" for i in cur for op in i.ops)
             out.append(b)
             cur = []
@@ -367,10 +372,14 @@ def _seed_ready(seed, key, op, ch):
 
 # --- Achieved schedule -----------------------------------------------------
 
-def achieved(block, seed=None, iterations=1, trace=None):
+def achieved(block, seed=None, iterations=1, trace=None, taken=None):
     """Simulate BLOCK as scheduled, with interlock stalls.  Returns
     (cycles of the last iteration, cycles of the first, out).  TRACE, a
-    list, receives (iteration, instr, issue, stall, reason)."""
+    list, receives (iteration, instr, issue, stall, reason).  TAKEN says
+    whether a conditional last transfer is taken; by default a back edge
+    is and other exits are not."""
+    if taken is None:
+        taken = block.back_edge if block.cond else True
     seed = seed or {}
     t = 0
     avail = {}                     # key -> (op, chan, issue)
@@ -397,7 +406,7 @@ def achieved(block, seed=None, iterations=1, trace=None):
                     # compiler's likely path falls through); a back edge
                     # is assumed taken.
                     if key[0] == "c" and op.unit == "ct" and op.preds \
-                            and not block.back_edge \
+                            and not taken \
                             and p.name in ("disp", "sdisp"):
                         lat = min(lat, model.CTP_LAT_NOT_TAKEN)
                     r = pis + lat
@@ -430,7 +439,7 @@ def achieved(block, seed=None, iterations=1, trace=None):
                 if (ch, pis + model.PORT_DISTANCE) in intside:
                     late.add((id(p), pis))
             t = issue + ins.cycles()
-        if block.back_ibranch:
+        if block.ibranch and taken:
             t += 6
     starts.append(t)
     out = {k: (p, ch, i - t) for k, (p, ch, i) in avail.items()}

@@ -36,6 +36,10 @@ import elf as elfmod  # noqa: E402
 import score  # noqa: E402
 
 EXEC, TICKS = "cpu/event=0x213/u", "cpu/event=0x372/u"
+# Instructions without a taken transfer: at a branch, EXEC - NO_CT_TAKEN
+# samples count the times it was taken.
+NO_CT_TAKEN = "cpu/event=0x320/u"
+IBRANCH_TAKEN = 6     # cycles of a taken ibranch (control-transfer.md)
 # perf stat: instruction-side events, multiplexed over the two monitors.
 STAT = [("TICKS", 0x572), ("EXEC", 0x513), ("BUB_E2", 0x511),
         ("BUB_B_NOP", 0x51a), ("IB_NO_COMMAND", 0x518),
@@ -62,27 +66,31 @@ def run_remote(a, prog):
            f" -e {EXEC},{TICKS} -c {a.period} -o perf.data"
            f" -- ./{name} {args} < stdin.txt {cap} > run.out"
            f" && perf script -i perf.data -F event,ip,dso > samples.txt"
+           f" && taskset -c {a.cpu} perf record -q -m 32"
+           f" -e {EXEC},{NO_CT_TAKEN} -c {a.period} -o taken.data"
+           f" -- ./{name} {args} < stdin.txt {cap} > /dev/null"
+           f" && perf script -i taken.data -F event,ip,dso > taken.txt"
            f" && taskset -c {a.cpu} perf stat -x, -e {events}"
            f" -o stat.txt -- ./{name} {args} < stdin.txt {cap} > /dev/null")
     subprocess.run(ssh + [cmd], check=True)
     out = Path(a.o)
     out.mkdir(parents=True, exist_ok=True)
-    for f in ("samples.txt", "stat.txt", "run.out"):
+    for f in ("samples.txt", "taken.txt", "stat.txt", "run.out"):
         subprocess.run(scp + [f"{a.remote}:{d}/{f}", str(out / f)],
                        check=True)
-    return out / "samples.txt", out / "stat.txt"
+    return out / "samples.txt", out / "taken.txt", out / "stat.txt"
 
 
 def read_samples(path, prog):
     """{event: Counter(address)} for samples in PROGRAM, and the number
     of samples elsewhere (shared libraries, the kernel's trampolines)."""
     name = Path(prog).name
-    got = {EXEC: Counter(), TICKS: Counter()}
+    got = defaultdict(Counter)
     other = Counter()
     for line in Path(path).read_text().splitlines():
         m = re.match(r"\s*(cpu/event=0x\w+/u):\s+([0-9a-f]+)\s+\((.*)\)",
                      line)
-        if not m or m.group(1) not in got:
+        if not m:
             continue
         if Path(m.group(3)).name == name:
             got[m.group(1)][int(m.group(2), 16)] += 1
@@ -103,9 +111,11 @@ def read_stat(path):
     return res
 
 
-def weigh(prog, iset, samples, period):
+def weigh(prog, iset, samples, period, taken=None):
     """isa-score rows with measured fields: count (executions), measured
-    (cycles), exec_samples, tick_samples."""
+    (cycles), exec_samples, tick_samples, and for blocks ending in an
+    ibranch, taken (times taken: from TAKEN, samples of EXEC and
+    NO_CT_TAKEN from a second run, else as score.py assumes)."""
     rows = score.analyse(prog, iset)
     elf = elfmod.Elf(prog)
     block_of = {}                 # instruction address -> block address
@@ -132,7 +142,38 @@ def weigh(prog, iset, samples, period):
     for r in rows:
         r["entries"] = sum(by_addr[a]["count"] for a in r.get("entry_from", [])
                            if a in by_addr)
+        if taken and (r["ibranch"] or "achieved_taken" in r):
+            ex, nt = taken[EXEC][r["last"]], taken[NO_CT_TAKEN][r["last"]]
+            if ex:
+                r["taken_frac"] = max(0, ex - nt) / ex
     return rows, lost
+
+
+def taken_count(r):
+    """How often block R's last transfer, an ibranch, was taken in the
+    run (measured if sampled, else as score.py assumes)."""
+    if not r["ibranch"]:
+        return 0
+    f = r.get("taken_frac", 1.0 if r["ibranch"] == "taken" else 0.0)
+    return f * r["count"]
+
+
+def achieved_run(r):
+    """The model's cycles for block R in the run: score.py's per-block
+    cycles weighted by its count.  A block ending in a conditional
+    transfer is charged its taken and fall-through cycles in the measured
+    proportion (a taken ibranch costs 6 cycles, a taken ct waits for its
+    CTPR); a loop's ibranch back edge is charged 6 cycles per measured
+    taken one."""
+    if "achieved_taken" in r and "taken_frac" in r:
+        f = r["taken_frac"]
+        return r["count"] * (f * r["achieved_taken"]
+                             + (1 - f) * r["achieved_fall"])
+    c = score.total_cost(r, "achieved", r["count"], r["entries"])
+    if r["loop"] and r["ibranch"] and "taken_frac" in r:
+        assumed = r["count"] if r["ibranch"] == "taken" else 0
+        c += IBRANCH_TAKEN * (taken_count(r) - assumed)
+    return c
 
 
 def report(rows, stat, other, lost, period, top, out=sys.stdout):
@@ -140,8 +181,10 @@ def report(rows, stat, other, lost, period, top, out=sys.stdout):
     t = defaultdict(float)
     for r in rows:
         n, e = r["count"], r["entries"]
-        for k in ("achieved", "regs", "flow"):
+        for k in ("regs", "flow"):
             t[k] += score.total_cost(r, k, n, e)
+        t["achieved"] += achieved_run(r)
+        t["ibranch"] += taken_count(r)
         t["ops"] += r["ops"] * n
         t["exec"] += r["instrs"] * n
         t["measured"] += r["measured"]
@@ -172,6 +215,8 @@ def report(rows, stat, other, lost, period, top, out=sys.stdout):
     p(f"  achieved {t['achieved']:14.0f}   ILP {score.fmt_ratio(t['ops'], t['achieved'])}"
       f"   the model of the compiler's schedule (L1 hits);"
       f" measured / achieved {score.fmt_ratio(t['measured'], t['achieved'])}")
+    p(f"           {t['ibranch']:14.0f} taken ibranches in it, {IBRANCH_TAKEN} cycles"
+      " each")
     p(f"  possible {t['regs']:14.0f}   ILP {score.fmt_ratio(t['ops'], t['regs'])}"
       "   keeping the compiler's registers")
     p(f"  possible {t['flow']:14.0f}   ILP {score.fmt_ratio(t['ops'], t['flow'])}"
@@ -183,8 +228,7 @@ def report(rows, stat, other, lost, period, top, out=sys.stdout):
     for r in rows:
         f = funcs[r["func"]]
         f["measured"] += r["measured"]
-        f["achieved"] += score.total_cost(r, "achieved", r["count"],
-                                          r["entries"])
+        f["achieved"] += achieved_run(r)
         f["flow"] += score.total_cost(r, "flow", r["count"], r["entries"])
         f["ops"] += r["ops"] * r["count"]
     p("")
@@ -207,7 +251,8 @@ def report(rows, stat, other, lost, period, top, out=sys.stdout):
             break
         tag = " loop" if r["loop"] else ""
         p(f"  {r['addr']:#10x} {r['func'][:22]:22s} {r['count']:11.0f}"
-          f" {r['measured'] / r['count']:8.1f} {r['achieved']:8d}"
+          f" {r['measured'] / r['count']:8.1f}"
+          f" {achieved_run(r) / r['count']:8.1f}"
           f" {r['flow']:5d}{tag}")
 
 
@@ -226,6 +271,8 @@ def main():
                     " loops; keep samples under 100,000 per second)")
     ap.add_argument("--samples", help="perf script output of an earlier run")
     ap.add_argument("--stat", help="perf stat -x, output of an earlier run")
+    ap.add_argument("--taken", help="perf script output of an earlier run's"
+                    " EXEC and NO_CT_TAKEN samples")
     ap.add_argument("--iset", type=int)
     ap.add_argument("-o", default=str(ROOT / "toolchains" / "isa-score"
                                       / "profile"))
@@ -236,13 +283,14 @@ def main():
     if not iset:
         ap.error("the ELF header names no ISA version; give --iset")
     if a.samples:
-        spath, stpath = a.samples, a.stat
+        spath, tpath, stpath = a.samples, a.taken, a.stat
     elif a.remote:
-        spath, stpath = run_remote(a, a.program)
+        spath, tpath, stpath = run_remote(a, a.program)
     else:
         ap.error("give --remote or --samples")
     samples, other = read_samples(spath, a.program)
-    rows, lost = weigh(a.program, iset, samples, a.period)
+    taken = read_samples(tpath, a.program)[0] if tpath else None
+    rows, lost = weigh(a.program, iset, samples, a.period, taken)
     report(rows, read_stat(stpath), other, lost, a.period, a.top)
     if a.json:
         Path(a.json).write_text(json.dumps(rows, indent=1))

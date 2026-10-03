@@ -934,19 +934,24 @@ load needs no `BEGIN_CONTROL` check. The exceptions, all measured:
   default). It returns real data from valid pages the process hasn't
   touched (the kernel pages them in), so its result is always usable
   when the guard holds. The fully speculative form (mod 3) can return a
-  diagnostic for such a page and then needs recovery code; leave it out.
+  diagnostic for such a page and then needs recovery code (item 5);
+  leave it out at first.
   Cost to keep in mind: the first speculative load into each invalid
   region traps into the kernel once (about 5,000 cycles), and a load
   from a valid page not touched yet is paged in even if never used.
 - `volatile` and atomic accesses, and loads with a MAS (lock loads):
   never speculated.
 - FP operations: a speculative FP operation that would raise a flag
-  not already set gives a diagnostic instead. That is harmless while the
-  flags are sticky-set (the kernel's start state) but turns into SIGILL
-  after `feclearexcept`. Speculate FP only under `-fno-trapping-math`,
-  and then only if we accept that hazard (to be decided; lcc's
-  `-fspec-fp` is on by default, but lcc kept FP divisions under their
-  branch in our probes).
+  not already set, or an exception that is unmasked, gives a diagnostic
+  instead. That is harmless while the flags are sticky-set and all
+  exceptions masked (the kernel's start state) but turns into SIGILL
+  after `feclearexcept` or `feenableexcept` (instead of SIGFPE in the
+  second case). Speculate FP only under `-fno-trapping-math`, and then
+  only if we accept that hazard (to be decided; lcc's `-fspec-fp` is on
+  by default and lcc speculates FP multiplications in Linpack, but kept
+  FP divisions under their branch in our probes). A checked form is
+  possible (item 5): a speculative operation reading the result, with
+  `rbranch ? %dt_alN`, catches the diagnostic.
 - Integer division: `sdivd,sm` by zero gives a diagnostic; safe to
   speculate as such, but lcc doesn't, and it is rarely worth it (11+
   cycles).
@@ -991,7 +996,10 @@ ia64's advanced load + check (`ld.a` + `ld.c`/`chk.a`):
 | `ld.a r` (advanced load, enters the ALAT) | `ldd,0,sm ..., %rN, mas=0x4` in ALC0/ALC3 (enters the DAM) |
 | `ld.c r` (check: reload if the entry is gone) | `ldd,5 ..., %rN, mas=0x3` in ALC2/ALC5, same register and address |
 | `chk.a r, recovery` (branch to recovery code) | the check plus `rbranch recovery` in the same wide instruction |
-| ALAT invalidation by stores | DAM entry removed by any overlapping store |
+| `ld.sa r` (speculative advanced load) | `ldd,0,sm ..., mas=0x7` (fully speculative lock: a failed one just makes the check reload) |
+| `ld.c.nc r` (check, entry kept) | `ldd,5 ..., mas=0x2` |
+| `invala.e r` (drop one entry) | `std,2 ..., %rN, mas=0x5` (drops the entry of its data register, writes nothing) |
+| ALAT invalidation by stores | DAM entry removed by any overlapping store (exact bytes, no false conflicts); a `mas=0x4` store skips the DAM |
 
 GCC's Haifa scheduler already does `BEGIN_DATA` speculation for ia64
 with these hooks: `TARGET_SCHED_NEEDS_BLOCK_P` (does a check need a
@@ -1014,7 +1022,29 @@ patterns must express:
 
 lcc pipelines loops with it (`-fswp-dam-cc`, default at `-O3`, about +5%
 speed for 1–2% more code per its changelog). For GCC it comes after
-control speculation and modulo scheduling (M6/M7).
+control speculation and modulo scheduling (M6/M7). lcc 1.29.16 uses only
+the `mas=0x4` lock and the `mas=0x3` check.
+
+**5. Checked control speculation (`%dt_al`).** The fully speculative
+load (`ld,sm ..., mas=0x3`) never enters the kernel, so it is what code
+that must not page in memory speculatively uses (lcc's
+`-fno-semi-spec-ld`, which the kernel is built with). It needs recovery,
+and E2K has ia64's `ld.s` + `chk.s` in this form:
+
+| ia64 | E2K |
+|---|---|
+| `ld.s r` (speculative load, NaT on failure) | `ldd,2,sm ..., %rN, mas=0x3` |
+| `chk.s r, recovery` | a `,sm` operation reading `%rN` in ALC N (0, 1, 3 or 4), predicated on the guard, writing `%empty`, plus `rbranch recovery ? %dt_alN` in the same wide instruction |
+| recovery block | a non-speculative reload and the recomputed users, then a branch back |
+
+This is GCC's `BEGIN_CONTROL` speculation with checks, which the Haifa
+scheduler already supports for ia64 (`create_check_block_twin`,
+haifa-sched.cc:8347; `TARGET_SCHED_GEN_SPEC_CHECK`;
+`TARGET_SCHED_NEEDS_BLOCK_P`). The check must be in a channel the
+`%dt_al` condition can name, and it tests operands only: a value that
+turned diagnostic in the check's own operation is not caught. A port
+can offer it as an option (lcc's `-fno-semi-spec-ld`) after the
+check-free semi-speculative form works.
 
 ### 7.7 Loops
 
@@ -1184,8 +1214,7 @@ Useful next pieces of relcc2 work for the port, in rough order:
    turn into reservations (data only; the generator that writes `.md`
    belongs in the port).
 4. **Speculation leftovers** (`spec/isa/speculation.md`, done for v3):
-   the other MAS lock/check forms, fully speculative loads' recovery,
-   unmasked FP exceptions under `,sm`, v5+.
+   quad lock and check loads, window spills and the DAM, v5+.
 5. **Loop mode and rotation** spec details for 7.7.
 6. Review of the port's output against `spec/` and lcc, and test
    triage.

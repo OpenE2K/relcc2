@@ -336,11 +336,16 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 
 ## Open questions for the owner
 
-- The community qemu zero-extends 32-bit FP results under `dbl = 1`
-  (`is_alop_affected_by_dbl`); the 4C and MCST's qemu don't. A bug in the
-  owner's emulator, found by reading its source.
+None at the moment.
 
 ## Gotchas
+
+- The community qemu (the owner's; to be fixed later) differs from the
+  4C and MCST's qemu in two ways: under `dbl = 1` it zero-extends 32-bit
+  FP results such as `fadds` (`is_alop_affected_by_dbl`), and it starts
+  processes with the FP exception flags clear, while the kernel sets all
+  six in `%pfpfr` and `%fpsr` (`%pfpfr` 0x1fbf, `%fpsr` 0x3f). Use MCST's
+  qemu (`toolchains/qemu-mcst`) as the reference for both.
 
 - MCST's qemu applies `%pfpfr` (rounding, flags) to 80-bit operations
   and ignores x87 precision control; the hardware uses `%fpcr`/`%fpsr`.

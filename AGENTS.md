@@ -105,7 +105,7 @@ differ from v6.
 ```
 spec/isa/      ISA spec: bundle.md (wide instruction format), control-transfer.md
                (branches, calls, CTPRs), semantics.md (what operations
-               compute), binutils-ops.yaml
+               compute), apb.md (array prefetch), binutils-ops.yaml
                (every operation), registers.yaml (state and AAU registers)
 spec/abi/      ABI spec for e2k64: data layout, registers + DWARF, calling
                convention, stacks and unwinding, ELF/relocations/PIC/TLS,
@@ -119,7 +119,9 @@ tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas
 tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
 tools/isa-timing/   latency/hazard microbenchmarks run on hardware over SSH
 tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
-                    writes semantics.s), run on hardware
+                    writes semantics.s) and array prefetch probes (apb.c;
+                    gen_apb.py writes apb.s and apb-cases.h; apb-loop.c,
+                    apb-lcc.c), run on hardware
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     compiled to assembly and read, as are atomics.c,
                     asmops.c and stackprot.c; tagtrap.c, dbl.c,
@@ -214,7 +216,7 @@ python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
   assembler syntax notes, known objdump bugs. Each section is marked
   [checked] (byte-exact against gas), [decoded] (our decoder agrees with
   objdump on the corpus) or [source] (read only).
-- Still [source] only: APB array-prefetch programs, SS type 1 (`abgc`/
+- Still [source] only: SS type 1 (`abgc`/
   `rbgc`), `vfbg`, `puttsd`, `%bgrpred` (gas doesn't accept them), v7 `dtbp`
   and ctcond type 11, `staa`/`ldaa`/`incr` decoding (hidden by an objdump
   bug; encoding is checked).
@@ -238,7 +240,15 @@ python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
   (the guide is wrong), `merge` picks the first operand when the
   predicate is false, shift counts are modulo the width, division by
   zero is SIGFPE, FP `lt`/`le` signal on quiet NaNs, `fmax`/`fmin` are
-  x86-style, `fmul_add` rounds twice. Loads
+  x86-style, `fmul_add` rounds twice. Array prefetch
+  (`spec/isa/apb.md`, hw): the program format, what a `mova` reads
+  (`base + AAIND + disp + step × n + ind`, zero-extended, diagnostic
+  instead of a fault), latency 5, and the correctness rules: a call, a
+  return or a `%ctpr2` write stops the program (the next `mova` is
+  SIGILL), and after any interrupt the kernel recomputes positions from
+  `%ilcr − %lsr`, so APB is correct only in a `loop_mode` loop counted
+  by `%lsr` (written before `bap`) with every area advanced once per
+  iteration. lcc's loops are 2–22× faster with it. Loads
   are scheduled for L1;
   `--memory` measures beyond-L1 latency for reference only. Other
   generations, 128-bit ops and throughput are not measured yet.
@@ -358,7 +368,9 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
    boards for qemu-e2k and the 4C; timing on v5 (8CB) and other
    generations with `tools/isa-timing/bench.py`; data-speculation and
    loop-mode specs.
-3. APB; protected (`e2k128`) and 32-bit modes.
+3. APB leftovers (`spec/isa/apb.md`, "Not checked yet"): AAU stores
+   (`staa`/`incr`) and v5+ on hardware. Protected (`e2k128`) and 32-bit
+   modes.
 4. ELF leftovers: `@PREF`, `@GOTPLT` (source only so far).
 
 ## Open questions for the owner
@@ -378,6 +390,12 @@ None at the moment.
   processes with the FP exception flags clear, while the kernel sets all
   six in `%pfpfr` and `%fpsr` (`%pfpfr` 0x1fbf, `%fpsr` 0x3f). Use MCST's
   qemu (`toolchains/qemu-mcst`) as the reference for both.
+
+- MCST's qemu restarts every array prefetch area from its start when a
+  signal handler returns, so code built by lcc at `-O2` and above can
+  compute wrong results there if the program receives signals (lcc's
+  loops in `apb-lcc.c`: 600 wrong of 900). It models none of APB's
+  limits either. Test APB on the 4C.
 
 - MCST's qemu applies `%pfpfr` (rounding, flags) to 80-bit operations
   and ignores x87 precision control; the hardware uses `%fpcr`/`%fpsr`.

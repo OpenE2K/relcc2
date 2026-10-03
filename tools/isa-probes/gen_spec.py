@@ -38,9 +38,10 @@ spec_nop:
 """
 
 
-def case(name, groups, keep_flags=False):
+def case(name, groups, keep_flags=False, fpfr=None):
     """GROUPS: wide instructions (lists of operations) run after %dr8 = 0
-    and, unless KEEP_FLAGS, the %pfpfr flag reset; '%%LOCKED' in an
+    and, unless KEEP_FLAGS, the %pfpfr flag reset; FPFR = (AND, OR)
+    instead sets %pfpfr to (%pfpfr & AND) | OR; '%%LOCKED' in an
     operation names the label an rbranch goes to."""
     out = []
 
@@ -51,8 +52,12 @@ def case(name, groups, keep_flags=False):
     wi("addd,1\t0x0, 0x0, %dr8", "addd,2\t0x0, 0x0, %dr9",
        "rrs,0\t%pfpfr, %r10")
     wi("nop 5")
-    wi("ands,0\t%r10, 0xffffffc0, %r11" if not keep_flags
-       else "ors,0\t%r10, 0x3f, %r11")
+    if fpfr:
+        wi(f"ands,0\t%r10, {fpfr[0]:#x}, %r11")
+        wi(f"ors,0\t%r11, {fpfr[1]:#x}, %r11")
+    else:
+        wi("ands,0\t%r10, 0xffffffc0, %r11" if not keep_flags
+           else "ors,0\t%r10, 0x3f, %r11")
     wi("rws,0\t%r11, %pfpfr")
     wi("nop 7")
     wi("rrd,0\t%clkr, %dr4")
@@ -183,12 +188,13 @@ def main():
     # Clean data-speculation tests: the table is cleared first.
     inv = [["addd,0\t0x0, 0x0, %dr11"], ["mmurw,2\t%dr11, %dam_inv"], nop]
 
-    def check(reg, off=0):
-        return [[f"ldd,5\t%dr2, {off:#x}, %dr{reg}, mas=0x3",
+    def check(reg, off=0, mas=3):
+        return [[f"ldd,5\t%dr2, {off:#x}, %dr{reg}, mas={mas:#x}",
                  "rbranch\t%%LOCKED"], nop]
 
-    def spld(reg, off=0, ch=0):
-        return [[f"ldd,{ch},sm\t%dr2, {off:#x}, %dr{reg}, mas=0x4"], nop]
+    def spld(reg, off=0, ch=0, mas=4):
+        return [[f"ldd,{ch},sm\t%dr2, {off:#x}, %dr{reg}, mas={mas:#x}"],
+                nop]
 
     st0 = [["std,2\t%dr2, 0x0, %dr3"], nop]
     st8 = [["std,2\t%dr2, 0x8, %dr3"], nop]
@@ -233,6 +239,71 @@ def main():
         groups += [nop] + [["ldd,5\t%dr2, 0x0, %dr16, mas=0x3",
                             "rbranch\t%%LOCKED"], nop]
         add(f"k_cap{n}", groups)
+    # MAS mod 7 (spec-lock-check) against mod 4: the lock load alone
+    # from a, then with a check of a after it.
+    for m in (4, 7):
+        lk = [[f"ldd,0,sm\t%dr1, 0x0, %dr8, mas={m:#x}"], nop, nop]
+        add(f"lk{m}", inv + lk)
+        add(f"lk{m}_chk", inv + lk + [["ldd,5\t%dr1, 0x0, %dr8, mas=0x3",
+                                       "rbranch\t%%LOCKED"], nop])
+        add(f"k{m}_match", inv + spld(8, mas=m) + check(8))
+        add(f"k{m}_store", inv + spld(8, mas=m) + st0 + check(8))
+    # MAS mod 2: a check that does not unlock.
+    add("k_chk2_twice", inv + spld(8) + check(8, mas=2) + check(8))
+    add("k_chk2_store", inv + spld(8) + st0 + check(8, mas=2))
+    add("k_chk2_noentry", inv + check(8, mas=2))
+    # Stores with MAS mod 5 ("unlock", by data register), mod 3 ("store
+    # and unlock") and mod 4 ("no check").
+    add("k_st5", inv + spld(8) + [["std,2\t%dr2, 0x10, %dr8, mas=0x5"], nop]
+        + check(8))
+    add("k_st5_otherreg", inv + spld(8)
+        + [["std,2\t%dr2, 0x10, %dr12, mas=0x5"], nop] + check(8))
+    add("k_st3", inv + spld(8) + [["std,2\t%dr2, 0x10, %dr8, mas=0x3"], nop]
+        + check(8))
+    add("k_st4_same", inv + spld(8) + [["std,2\t%dr2, 0x0, %dr3, mas=0x4"],
+                                       nop] + check(8))
+    # The same register locked twice: from +8 then +0, store to +8.
+    add("k_relock", inv + spld(8, 8) + spld(8) + st8 + check(8))
+    add("k_relock0", inv + spld(8, 8) + spld(8) + st0 + check(8))
+    # Store to a (b + distance): does the DAM compare whole addresses?
+    add("k_alias", inv + spld(8) + [["std,2\t%dr1, 0x0, %dr3"], nop]
+        + check(8))
+    # %dt_alN: a branch taken when the speculative operation in ALC N of
+    # the same wide instruction gets a diagnostic operand.  The load is
+    # from a; the use runs only if c != 0, as lcc writes it.
+    for kind, mas in (("spec", ", mas=0x3"), ("semi", "")):
+        ld = [["cmpedb,0\t%dr3, 0x0, %pred0",
+               f"ldd,2,sm\t%dr1, 0x0, %dr12{mas}"], nop, nop]
+        add(f"dt_{kind}", ld + [["rbranch\t%%LOCKED ? %dt_al1",
+                                 "addd,1,sm\t%dr12, 0x1, %dr8 ? ~%pred0"],
+                                nop])
+    ld = [["ldd,2,sm\t%dr1, 0x0, %dr12, mas=0x3"], nop, nop]
+    add("dt_al4", ld + [["rbranch\t%%LOCKED ? %dt_al4",
+                         "addd,4,sm\t%dr12, 0x1, %dr8"], nop])
+    add("dt_other", ld + [["rbranch\t%%LOCKED ? %dt_al0",
+                           "addd,0,sm\t0x0, 0x1, %dr10",
+                           "addd,1,sm\t%dr12, 0x1, %dr8"], nop])
+    add("dt_none", ld + [["addd,1,sm\t%dr12, 0x1, %dr8"], nop])
+    # Does an FP result that becomes diagnostic (inexact, flags clear)
+    # set %dt_al?  And a diagnostic FP operand?
+    add("dt_fpres", [["rbranch\t%%LOCKED ? %dt_al0",
+                      "faddd,0,sm\t%dr1, %dr2, %dr8"], nop])
+    add("dt_fpop", [["faddd,0,sm\t%dr1, %dr2, %dr12"], nop, nop,
+                    ["rbranch\t%%LOCKED ? %dt_al0",
+                     "faddd,0,sm\t%dr12, 0x0, %dr8"], nop])
+    # Unmasked FP exceptions (%pfpfr mask bits 7..12: invalid, denormal,
+    # divide by zero, overflow, underflow, inexact), flags clear or set.
+    zm, pm = 0x200, 0x1000
+    div = [["fdivd,5\t%dr1, %dr2, %dr8"], nop, nop, nop]
+    divsm = [["fdivd,5,sm\t%dr1, %dr2, %dr8"], nop, nop, nop]
+    add("fdiv_zm", div, fpfr=(~(0x3f | zm) & 0xffffffff, 0))
+    add("fdivsm_zm", divsm, fpfr=(~(0x3f | zm) & 0xffffffff, 0))
+    add("fdivsm_zm_kf", divsm, fpfr=(~zm & 0xffffffff, 0x3f))
+    add("fdiv_pm_kf", div, fpfr=(~pm & 0xffffffff, 0x3f))
+    add("fdivsm_pm_kf", divsm, fpfr=(~pm & 0xffffffff, 0x3f))
+    add("fdivsm_zm_use", [["fdivd,5,sm\t%dr1, %dr2, %dr3"], nop, nop, nop,
+                          ["faddd,0\t%dr3, 0x0, %dr8"], nop],
+        fpfr=(~(0x3f | zm) & 0xffffffff, 0))
     # The check load alone (no mas=0x4 load before it).
     add("dam_checkonly", [["ldd,0\t%dr2, 0x0, %dr8, mas=0x3",
                            "rbranch\t%%LOCKED"], nop])

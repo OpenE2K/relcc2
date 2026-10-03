@@ -8,6 +8,8 @@
      loopC  as loopA, but %lsr is written after bap, a page fault comes
             in between, and a 777-iteration loop before it left the
             loop counters stale
+     loopE  as loopA with a given %lsr: what movad returns in epilogue
+            iterations (ecnt) for each ldmc and ldovl (spec/isa/loops.md)
 
    After a trap the kernel rebuilds each area's position from the loop
    counters (%ilcr - %lsr), so only loopA stays correct on hardware.
@@ -28,6 +30,7 @@
 long loopA (const long *, long, long *);
 long loopB (const long *, long, long *);
 long loopC (const long *, long, long *, char *);
+long loopE (const long *, unsigned long, long *);
 
 static volatile long ticks;
 
@@ -83,6 +86,23 @@ main (int argc, char **argv)
               (r < 2 ? shift == 777 : shift == 0) ? "PASS"
               : r < 2 && shift == 0 ? "no shift (qemu?)" : "FAIL");
       munmap (p, pg);
+    }
+
+  /* movad in epilogue iterations: lcnt 5, ecnt 2.  */
+  static const struct { int ldmc, ldovl; } ep[] = {
+    { 0, 0 }, { 1, 0 }, { 0, 255 }, { 1, 255 }, { 0, 1 }, { 0, 2 } };
+  for (unsigned k = 0; k < sizeof ep / sizeof *ep; k++)
+    {
+      long out[32] = { 0 };
+      unsigned long lsr = 5 | 2UL << 32 | 1UL << 37
+                          | (unsigned long) ep[k].ldmc << 39
+                          | (unsigned long) ep[k].ldovl << 40;
+      long it = loopE (a, lsr, out);
+      printf ("loopE ldmc %d ldovl %3d: %ld iterations, movad gave",
+              ep[k].ldmc, ep[k].ldovl, it);
+      for (long i = 0; i < it && i < 16; i++)
+        printf (" %ld%s", out[2 * i], out[2 * i + 1] ? "(tag)" : "");
+      printf ("\n");
     }
   return 0;
 }

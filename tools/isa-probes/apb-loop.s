@@ -213,3 +213,79 @@ loopC:
 	}
 	.size	loopC, .-loopC
 
+
+! long loopE(const long *a, unsigned long lsr, long *out): a loop_mode
+! loop with one movad per iteration, %lsr as given (to set ecnt, ldmc,
+! ldovl); iteration i stores the value movad returned (tag cleared) at
+! out[2i] and its tag at out[2i+1], from instructions without loop_mode.
+! Returns the iteration count.
+	.global	loopE
+	.type	loopE, #function
+	.align	8
+loopE:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  ldisp	%ctpr2, .LEprog
+	  aaurwd,2	%dr0, %aad0
+	  addd,1	0x0, 0x0, %dr10
+	  addd,3	%dr2, 0x0, %dr14
+	}
+	{
+	  disp	%ctpr1, .LEloop
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 7
+	  bap
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+.LEloop:
+	{
+	  loop_mode
+	  movad,0	area=0, ind=0, am=1, be=0, %dr8
+	  addd,1	%dr10, 0x1, %dr10
+	}
+	{
+	  nop 4
+	}
+	{
+	  gettagd,2	%dr8, %r12
+	  puttagd,5	%dr8, 0x0, %dr13
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr14, 0x0, %dr13
+	  stw,5	%dr14, 0x8, %r12
+	}
+	{
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  addd,0	%dr14, 0x10, %dr14
+	}
+	{
+	  nop 7
+	  disp	%ctpr2, disp=0x0
+	}
+	{
+	  addd,0	%dr10, 0x0, %dr0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.align	8
+.LEprog:
+	{
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=0, ind=0, asz=5, abs=0, disp=0
+	}
+	.size	loopE, .-loopE

@@ -259,7 +259,7 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   (the guide is wrong), `merge` picks the first operand when the
   predicate is false, shift counts are modulo the width, division by
   zero is SIGFPE, FP `lt`/`le` signal on quiet NaNs, `fmax`/`fmin` are
-  x86-style, `fmul_add` rounds twice. Speculation
+  x86-style, `fmul_add` rounds twice, `fcmpud*f` is the quiet FP compare into a register (x86 ZF/PF/CF layout; MCST's qemu wrongly raises invalid), `cmpand*` tests `a & b`, `movtd`/`getpl` to a CTPR only in ALC0, a taken `ibranch` hides a stall in its own instruction. Speculation
   (`spec/isa/speculation.md`, hw): `,sm` faults give diagnostic values
   that trap (SIGILL `ILL_ILLOPN`) only at a non-speculative use,
   including a diagnostic predicate; `ld,sm` is semi-speculative (pages
@@ -418,14 +418,11 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 
 ## Next steps (proposed, owner to choose)
 
-0. Open items in `docs/spec-poc-findings.md` (the PoC agent's file;
-   untracked until it commits it): I5 quiet FP compares `fcmpud*f` into
-   `semantics.md`; A7 runtime facts for libgcc (`rrd %cr0.hi` as the
-   return address, `__builtin_eh_return` expanding to nothing, `%idr`
-   fields and CPU models, MCST's `unwind.inc` hunks, DWARF numbers for
-   `%g0-31`, the sysroot `usr/lib` problem in port plan 4.2); I2/I2b/I4
-   measurements (`getsp`, `movif`/`movfi` separately, backward `ibranch`,
-   `ibranch` and pending stalls).
+0. `docs/spec-poc-findings.md` (the PoC agent's file): every entry up to
+   A14 is now in `spec/` or `doc/` (checked again with our own probes);
+   the agent working there may drop them. Still worth adding: compat
+   tests with non-trivially-copyable C++ classes as results and
+   arguments (A9).
 1. Extend the compat suite (see Current state). It runs on the 4C with
    `run.py --target v3 --remote ...`; all pairs match qemu except the
    tag-trap tests, which pass on the 4C. Run it on v5 (8CB) when

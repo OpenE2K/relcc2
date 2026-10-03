@@ -149,6 +149,27 @@ def main():
     add("aastores_nolm", [count, ["nop 1"],
                           ["staad,5\t%dr10, %aad0[ %aasti1 ]",
                            "incr,5\t%aaincr0"], BACK], pre=aau)
+    # The same in other formats.  staaw stores %r10 (4-byte elements);
+    # staaq stores %qr26 = (%dr26, %dr27) = (i, i + 0x100) per iteration
+    # (16-byte elements), to see whether a quad store counts as one store
+    # or two for strmd.
+    add("aastoresw", [count, ["nop 1"],
+                      BACK + ["staaw,5\t%r10, %aad0[ %aasti1 ]",
+                              "incr,5\t%aaincr0"]], pre=aau)
+    add("aastoresq", [count, ["addd,0\t0x0, %dr10, %dr26",
+                              "addd,1\t%dr10, 0x100, %dr27"], ["nop 1"],
+                      BACK + ["staaq,5\t%qr26, %aad0[ %aasti1 ]",
+                              "incr,5\t%aaincr0"]], pre=aau)
+    # The same quad store of data set before the loop, for its cost.
+    add("aastoresq_c", [count, ["nop 1"],
+                        BACK + ["staaq,5\t%qr28, %aad0[ %aasti1 ]",
+                                "incr,5\t%aaincr0"]],
+        pre=aau + [["addd,0\t0x0, 0x55, %dr28", "addd,1\t0x0, 0x66, %dr29"]])
+    add("aastoresq_nolm", [count, ["addd,0\t0x0, %dr10, %dr26",
+                                   "addd,1\t%dr10, 0x100, %dr27"],
+                           ["nop 1"],
+                           ["staaq,5\t%qr26, %aad0[ %aasti1 ]",
+                            "incr,5\t%aaincr0"], BACK], pre=aau)
     # A call inside the loop to a function that leaves %lsr alone, and to
     # one that leaves it as its own finished loop would (vlc, over, lcnt
     # 0), without and with the caller saving %lsr around the call.  The call empties the CTPRs: prepare again.

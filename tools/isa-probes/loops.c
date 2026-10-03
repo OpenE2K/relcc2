@@ -25,9 +25,15 @@
 
 static sigjmp_buf env;
 
+static int sig_code;
+static void *sig_addr;
+
 static void
-handler (int sig)
+handler (int sig, siginfo_t *si, void *uc)
 {
+  (void) uc;
+  sig_code = si->si_code;
+  sig_addr = si->si_addr;
   siglongjmp (env, sig);
 }
 
@@ -64,12 +70,17 @@ static void
 run (const char *name, loopfn f, unsigned long l, int show_regs)
 {
   unsigned long out[16];
-  long buf[64];
+  long buf[64] __attribute__ ((aligned (16)));
   memset (out, 0, sizeof out);
   memset (buf, 0, sizeof buf);
-  long cycles = f (out, l, buf, arg3);
+  int sig;
+  long cycles = 0;
+  if ((sig = sigsetjmp (env, 1)) == 0)
+    cycles = f (out, l, buf, arg3);
   printf ("%-12s", name);
   fields ("set", l);
+  if (sig)
+    printf (" signal %d code %d at %p", sig, sig_code, sig_addr);
   printf ("\n             iterations %lu  pcnt0 %lu pcnt1 %lu lcntex %lu",
           out[0], out[1], out[2], out[3]);
   fields ("lsr", out[4]);
@@ -179,8 +190,13 @@ int
 main (void)
 {
   setvbuf (stdout, NULL, _IOLBF, 0);
-  signal (SIGSEGV, handler);
-  signal (SIGBUS, handler);
+  struct sigaction sa;
+  memset (&sa, 0, sizeof sa);
+  sa.sa_sigaction = handler;
+  sa.sa_flags = SA_SIGINFO | SA_NODEFER;
+  sigaction (SIGSEGV, &sa, NULL);
+  sigaction (SIGBUS, &sa, NULL);
+  sigaction (SIGILL, &sa, NULL);
   /* Iteration counts.  */
   run ("count", loop_count, lsr (5, 0, 1, 0, 0, 0), 0);
   run ("count", loop_count, lsr (1, 0, 1, 0, 0, 0), 0);
@@ -206,6 +222,16 @@ main (void)
   run ("aastores", loop_aastores, lsr (5, 2, 1, 3, 0, 0), 0);
   run ("aastores", loop_aastores, lsr (5, 2, 1, 3, 1, 0), 0);
   run ("aastores_nolm", loop_aastores_nolm, lsr (5, 2, 1, 3, 0, 0), 0);
+  run ("aastoresw", loop_aastoresw, lsr (5, 2, 1, 3, 0, 0), 0);
+  run ("aastoresw", loop_aastoresw, lsr (5, 2, 1, 3, 1, 0), 0);
+  run ("aastoresq", loop_aastoresq, lsr (5, 0, 1, 0, 0, 0), 0);
+  run ("aastoresq", loop_aastoresq, lsr (5, 2, 1, 3, 0, 0), 0);
+  run ("aastoresq", loop_aastoresq, lsr (5, 2, 1, 3, 1, 0), 0);
+  run ("aastoresq", loop_aastoresq, lsr (5, 2, 1, 3, 2, 0), 0);
+  run ("aastoresq_c", loop_aastoresq_c, lsr (5, 0, 1, 0, 0, 0), 0);
+  run ("aastoresq_c", loop_aastoresq_c, lsr (20, 0, 1, 0, 0, 0), 0);
+  run ("aastores", loop_aastores, lsr (20, 0, 1, 0, 0, 0), 0);
+  run ("aastoresq_nolm", loop_aastoresq_nolm, lsr (5, 2, 1, 3, 0, 0), 0);
   /* Rotation.  */
   run ("rotate", loop_rotate, lsr (5, 0, 1, 0, 0, 0), 1);
   run ("rotate", loop_rotate, lsr (3, 0, 1, 0, 0, 0), 1);

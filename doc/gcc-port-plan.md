@@ -1094,7 +1094,20 @@ check-free semi-speculative form works.
 - **Counted loops**: a `doloop_end` pattern lets GCC turn a loop into
   "decrement counter and branch". E2K's loop counter (`%lsr`,
   `ct ? %LOOP_END`, `alc`) fits; ia64 does the same with `ar.lc`
-  (ia64.md:3957).
+  (ia64.md:3957). What the pattern must emit (`spec/isa/loops.md`,
+  measured on the 4C):
+  - `rwd` the trip count with `vlc` (bit 37) into `%lsr` **at least 4
+    cycles before the loop** (sooner, the loop runs one iteration too
+    many), and `disp %ctpr1, head` 5 cycles before the back edge;
+  - `alc alcf=1, alct=1` and `ct %ctpr1 ? %NOT_LOOP_END` in the last
+    instruction; the loop runs `lcnt` times (once for 0 or 1, so guard
+    a zero trip count before it);
+  - either no `loop_mode` bit, or `strmd` at least the number of stores
+    in the instruction: with `loop_mode` the last iteration's stores
+    from number `strmd` on are dropped (`semc` = 1 turns that off);
+  - `%lsr` and `%ilcr` are call-clobbered, so `doloop` must not be used
+    around calls without saving `%lsr` (GCC's `doloop` already refuses
+    loops with calls on most targets).
 - **Software pipelining**: GCC's SMS (`modulo-sched.cc`, `-fmodulo-sched`)
   overlaps iterations and uses register copies instead of rotating
   registers; it runs before register allocation and needs `doloop_end`.
@@ -1107,14 +1120,20 @@ check-free semi-speculative form works.
   `save`/`restore` and E2K's `call wbs=` do — is handled by hardware and
   GCC models it with `INCOMING_REGNO`/`OUTGOING_REGNO` (D1). *Loop
   rotation* — inside a loop, an instruction advances a base so that the
-  register written as `%b[0]` in one iteration is read as `%b[1]` in the
-  next (E2K `abn`, ia64 `br.ctop`), which lets overlapped iterations keep
+  register written as `%b[0]` in one iteration is read as `%b[2]` in the
+  next (E2K `abn`, one register pair; predicates `%pred0` → `%pred1` with
+  `abp`; ia64 `br.ctop`), which lets overlapped iterations keep
   their own copies without moves — is what software pipelining needs.
   SPARC has no loop rotation. GCC has **no support for loop rotation
   anywhere**; ia64 never used its rotating registers (`n_rotate_regs = 0`, "No rotating register
   support yet", ia64.cc:2769). Supporting E2K loop mode with rotation
   (`abn`/`abp`, `%b[]` rotation, prologue/epilogue predicates) is new
-  compiler work — a research project for after the port works.
+  compiler work — a research project for after the port works. lcc
+  shows a simpler shape that needs no prologue counters: it peels the
+  prologue stages before the loop, makes every load in the kernel
+  speculative (loads are never suppressed in the epilogue), and lets
+  `strmd` drop the stores of the last iteration (`spec/isa/loops.md`,
+  "How lcc builds loops").
 - **APB** (array prefetch, `spec/isa/apb.md`): measured on the 4C,
   lcc's streaming loops are 2× faster from L1, about 6× from L2 and 22×
   from memory with it than without, because lcc's code without APB
@@ -1258,7 +1277,8 @@ Useful next pieces of relcc2 work for the port, in rough order:
    belongs in the port).
 4. **Speculation leftovers** (`spec/isa/speculation.md`, done for v3):
    quad lock and check loads, window spills and the DAM, v5+.
-5. **Loop mode and rotation** spec details for 7.7.
+5. **Loop mode leftovers** (`spec/isa/loops.md`, "Not checked yet"):
+   `abg`, nested loops, traps inside loops, v5+ counters.
 6. Review of the port's output against `spec/` and lcc, and test
    triage.
 

@@ -302,8 +302,9 @@ part survives a window spill only with `nfx = 0`; 80-bit ops use
 stores write only 10 bytes.
 
 Other measured facts: `setwd dbl` affects only 32-bit integer ALU ops
-(loads always write the whole register, FP ops never extend; lcc uses
-`dbl = 0`, Unipro `dbl = 1`); `std,sm` of a register with a tagged upper
+(loads always write the whole register, FP ops never extend; Unipro
+uses `dbl = 1`, lcc `dbl = 0` except at `-O2`+ in functions that need
+unsigned 32-bit results zero-extended, about 18% of them); `std,sm` of a register with a tagged upper
 half doesn't trap. MCST's libffi (`src/e2k/`) agrees with
 calling-convention.md on every rule and filled its gaps (no slot
 backfill, callee owns the argument area, large results overlap memory

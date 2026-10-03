@@ -628,15 +628,21 @@ longer exists in GCC (removed 2021).
 what a 32-bit integer operation does to the upper half of its 64-bit
 destination register (measured on the 4C, `spec/abi/registers.md`):
 
-| | `dbl = 0` (lcc) | `dbl = 1` (Unipro) |
+| | `dbl = 0` (lcc's default) | `dbl = 1` (Unipro; lcc in some functions) |
 |---|---|---|
 | `adds`, `shls`, `muls`, other 32-bit integer ALU ops | write the low 32 bits only; the upper half (and its tag) stays as it was | zero-extend into all 64 bits |
 | loads (`ldw` etc.), `sxt`, 64-bit ops | whole register | whole register |
 | 32-bit float ops (`fadds`), `movts` | low half only | low half only |
 
-lcc always emits `dbl = 0` (every lcc function above starts with
-`setwd ..., dbl = 0x0`), which is also how pre-v3 CPUs behave; that is
-why the emulator must support both.
+lcc emits `dbl = 0` at `-O0` and in most functions, which is also how
+pre-v3 CPUs behave. But at `-O2` and above it sets `dbl = 1` in
+functions whose unsigned 32-bit results must be zero-extended (about
+18% of functions in GCC's `gcc.c-torture/execute` tests, lcc 1.29.16
+and 1.31.05; `registers.md`): `unsigned addu (unsigned a, unsigned b)`
+becomes a bare `adds` under `dbl = 1`, while the signed version is
+`adds` + `sxt` under `dbl = 0`. The decision below was taken when we
+believed lcc always used `dbl = 0`; following lcc exactly would mean
+choosing per function.
 
 **Decision (owner): `dbl = 0`, like lcc** (the port follows lcc's
 conventions throughout). Consequences:

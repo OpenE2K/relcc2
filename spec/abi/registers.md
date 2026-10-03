@@ -62,7 +62,14 @@ proof-of-concept backend's probe, `docs/spec-poc-findings.md` A2):
   zero-extend their result into the whole 64-bit register; with
   `dbl = 0`, they write only the low half and leave the upper half
   (including its tag) unchanged. The flag is saved and restored per frame
-  (`cr1_hi.wdbl`). lcc uses `dbl = 0`, Unipro `dbl = 1`. Code must not rely
+  (`cr1_hi.wdbl`). Unipro always uses `dbl = 1`. lcc chooses per
+  function (lcc 1.29.16 and 1.31.05): `dbl = 0` without optimisation,
+  and at `-O2` and above `dbl = 1` in functions whose unsigned 32-bit
+  results must be zero-extended (an `unsigned` sum returned or used as an
+  index, `unsigned` → `unsigned long`), which saves the extension;
+  signed code keeps `dbl = 0` and uses `sxt`. In 400 of GCC's
+  `gcc.c-torture/execute` tests at `-O2`, 387 of 2,102 functions had
+  `dbl = 1` (386 with 1.31.05); at `-O0` none. Code must not rely
   on the upper half of a 32-bit result either way. Measured on the 4C
   (`tools/abi/probes/dbl.c`, hw; MCST's qemu agrees):
 

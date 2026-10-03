@@ -14,6 +14,11 @@ measurement:
   ctl    Control-transfer preparation: per-block cycles with the prepare
          (disp, movtd, return) placed D cycles before its ct, D = 1..10.
          The time is flat while D is below the latency.
+  tp     Throughput: K wide instructions, each a group of independent
+         operations (constant inputs, rotating destinations), back to
+         back. cycles per instruction = (T(K2) - T(K1)) / (iterations *
+         (K2 - K1)); 1.0 means every channel used takes a new
+         operation each cycle.
   hz     Hazards: does an operation D cycles (0 = same wide instruction)
          after a producer see the new value or the old one? Old values
          mean the dependency is not interlocked.
@@ -21,7 +26,7 @@ measurement:
 Usage:
   bench.py [--target T] [--remote [USER@]HOST] [--ssh-key FILE]
            [--remote-dir DIR] [--out DIR] [--yaml FILE] [--memory]
-           [--numa CPU:MEM]
+           [--numa CPU:MEM] [--only KIND,...]
 
 --target picks lcc as in tools/abi/compat/run.py (default v3). Results
 are printed as tables; --yaml writes them as data (see
@@ -275,6 +280,193 @@ SCHED_STEPS = 32
 CHASE_SIZES = [16 << 10, 256 << 10, 2 << 20, 16 << 20, 128 << 20]
 
 CTL_DISTANCES = range(1, 11)
+
+
+# Throughput: name: (operations of one wide instruction, description).
+# "{d}" is replaced by a destination register, a different one for
+# every operation of 9 or more consecutive instructions, so no result is
+# overwritten while in flight. Inputs are constants (INIT, %dr1 = cell),
+# so there are no dependences.
+def _ch(fmt, chans):
+    return [fmt.format(c=c, o=8 * c, d="{d}") for c in chans]
+
+
+TP = {
+    "addd_1": (_ch("addd,{c} %dr3, %dr5, {d}", [0]), "1 addd"),
+    "addd_6": (_ch("addd,{c} %dr3, %dr5, {d}", range(6)), "6 addd"),
+    "muld_4": (_ch("muld,{c} %dr3, %dr3, {d}", [0, 1, 3, 4]), "4 muld"),
+    "faddd_1": (_ch("faddd,{c} %dr4, %dr5, {d}", [0]), "1 faddd"),
+    "faddd_4": (_ch("faddd,{c} %dr4, %dr5, {d}", [0, 1, 3, 4]), "4 faddd"),
+    "fmuld_4": (_ch("fmuld,{c} %dr4, %dr4, {d}", [0, 1, 3, 4]), "4 fmuld"),
+    "fmul_addd_4": (_ch("fmul_addd,{c} %dr4, %dr4, %dr5, {d}", [0, 1, 3, 4]),
+                    "4 fmul_addd"),
+    "fadds_4": (_ch("fadds,{c} %r6, %r5, {d}", [0, 1, 3, 4]), "4 fadds"),
+    "faddd4_addd2": (_ch("faddd,{c} %dr4, %dr5, {d}", [0, 1, 3, 4])
+                     + _ch("addd,{c} %dr3, %dr5, {d}", [2, 5]),
+                     "4 faddd + 2 addd"),
+    "fdtoid_4": (_ch("fdtoid,{c} %dr4, {d}", [0, 1, 3, 4]), "4 fdtoid"),
+    "paddw_2": (_ch("paddw,{c} %dr3, %dr5, {d}", [0, 3]), "2 paddw"),
+    "popcntd_2": (_ch("popcntd,{c} %dr3, {d}", [1, 4]), "2 popcntd"),
+    "ldd_1": (_ch("ldd,{c} %dr1, {o:#x}, {d}", [0]), "1 ldd"),
+    "ldd_2": (_ch("ldd,{c} %dr1, {o:#x}, {d}", [0, 3]), "2 ldd (ALC0, 3)"),
+    "ldd_4": (_ch("ldd,{c} %dr1, {o:#x}, {d}", [0, 2, 3, 5]), "4 ldd"),
+    "ldd4_addd2": (_ch("ldd,{c} %dr1, {o:#x}, {d}", [0, 2, 3, 5])
+                   + _ch("addd,{c} %dr3, %dr5, {d}", [1, 4]),
+                   "4 ldd + 2 addd"),
+    "ldw_4": (_ch("ldw,{c} %dr1, {o:#x}, {d}", [0, 2, 3, 5]), "4 ldw"),
+    "std_1": (_ch("std,{c} %dr1, {o:#x}, %dr3", [2]), "1 std"),
+    "std_2": (_ch("std,{c} %dr1, {o:#x}, %dr3", [2, 5]), "2 std"),
+    "std2_addd4": (_ch("std,{c} %dr1, {o:#x}, %dr3", [2, 5])
+                   + _ch("addd,{c} %dr3, %dr5, {d}", [0, 1, 3, 4]),
+                   "2 std + 4 addd"),
+    # Two stores: same line (above), other lines, the same address.
+    "std_2_8": (["std,2 %dr1, 0x100, %dr3", "std,5 %dr1, 0x108, %dr3"],
+                "2 std, 8 bytes apart"),
+    "std_2_40": (["std,2 %dr1, 0x100, %dr3", "std,5 %dr1, 0x140, %dr3"],
+                 "2 std, 64 bytes apart"),
+    "std_2_100": (["std,2 %dr1, 0x100, %dr3", "std,5 %dr1, 0x200, %dr3"],
+                  "2 std, 256 bytes apart"),
+    "std_2_0": (["std,2 %dr1, 0x100, %dr3", "std,5 %dr1, 0x100, %dr3"],
+                "2 std, same address"),
+    "stw_2": (["stw,2 %dr1, 0x100, %r3", "stw,5 %dr1, 0x140, %r3"],
+              "2 stw, 64 bytes apart"),
+    "std_1_5": (["std,5 %dr1, 0x100, %dr3"], "1 std in ALC5"),
+    "std1_ldd2": (_ch("std,{c} %dr1, {o:#x}, %dr3", [2])
+                  + _ch("ldd,{c} %dr1, {o:#x}, {d}", [0, 5]),
+                  "1 std + 2 ldd"),
+    "fdivd": (["fdivd,5 %dr4, %dr4, {d}"], "fdivd"),
+    "fdivs": (["fdivs,5 %r6, %r6, {d}"], "fdivs"),
+    "fsqrts": (["fsqrts,5 %r6, {d}"], "fsqrts"),
+    "sdivd": (["sdivd,5 %dr3, %dr3, {d}"], "sdivd"),
+    "sdivs": (["sdivs,5 %r3, %r3, {d}"], "sdivs"),
+}
+# Pairs of instructions alternating, to see whether two kinds of
+# operation share a unit: name: ([ops of instruction A], [ops of B]).
+TP2 = {
+    "fdivd_sdivd": (["fdivd,5 %dr4, %dr4, {d}"], ["sdivd,5 %dr3, %dr3, {d}"],
+                    "fdivd, sdivd alternating"),
+    "fdivd_fsqrts": (["fdivd,5 %dr4, %dr4, {d}"], ["fsqrts,5 %r6, {d}"],
+                     "fdivd, fsqrts alternating"),
+    "alt_st_ld": (["std,2 %dr1, 0x100, %dr3"], ["ldd,0 %dr1, 0x108, {d}"],
+                  "std, then ldd in the same 32 bytes"),
+    "alt_st_ldfar": (["std,2 %dr1, 0x100, %dr3"], ["ldd,0 %dr1, 0x200, {d}"],
+                     "std, then ldd elsewhere"),
+    "alt_stld_nop": (["std,2 %dr1, 0x110, %dr3", "ldd,0 %dr1, 0x100, {d}"], [],
+                     "std + ldd in the same 32 bytes every other cycle"),
+    "alt_st_st": (["std,2 %dr1, 0x100, %dr3"], ["std,5 %dr1, 0x108, %dr3"],
+                  "std, then std in the same bank"),
+    "fdivd_nop": (["fdivd,5 %dr4, %dr4, {d}"], [],
+                  "fdivd every other cycle"),
+    "sdivd_nop": (["sdivd,5 %dr3, %dr3, {d}"], [],
+                  "sdivd every other cycle"),
+}
+# Dividers and stores at a distance: one operation every G cycles.
+for _n, _op in (("fdivd", "fdivd,5 %dr4, %dr4, {d}"),
+                ("fdivs", "fdivs,5 %r6, %r6, {d}"),
+                ("fsqrts", "fsqrts,5 %r6, {d}"),
+                ("sdivd", "sdivd,5 %dr3, %dr3, {d}"),
+                ("sdivs", "sdivs,5 %r3, %r3, {d}")):
+    for _g in range(2, 9):
+        TP[f"{_n}_g{_g}"] = ([_op, f"nop {_g - 1}"], f"{_n} every {_g} cycles")
+# Two memory accesses in one instruction, D bytes apart: two stores, a
+# store and a load, two loads.
+for _d in (0x8, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x80, 0xc0, 0x100,
+           0x140, 0x180, 0x1c0, 0x200):
+    TP[f"stst_{_d:x}"] = ([f"std,2 %dr1, 0x100, %dr3",
+                           f"std,5 %dr1, {0x100 + _d:#x}, %dr3"],
+                          f"std + std {_d} bytes apart")
+    TP[f"stld_{_d:x}"] = ([f"std,2 %dr1, 0x100, %dr3",
+                           f"ldd,0 %dr1, {0x100 + _d:#x}, {{d}}"],
+                          f"std + ldd {_d} bytes apart")
+    TP[f"ldld_{_d:x}"] = ([f"ldd,0 %dr1, 0x100, {{d}}",
+                           f"ldd,3 %dr1, {0x100 + _d:#x}, {{d}}"],
+                          f"ldd + ldd {_d} bytes apart")
+# Which channels a store and loads in one instruction may use (far
+# apart, so no bank conflict).
+for _st, _lds in ((2, [0]), (2, [5]), (2, [0, 5]), (5, [2]), (5, [3]),
+                  (5, [2, 3])):
+    _ops = [f"std,{_st} %dr1, 0x100, %dr3"] + [
+        f"ldd,{c} %dr1, {0x180 + 0x40 * i:#x}, {{d}}" for i, c in enumerate(_lds)]
+    TP[f"st{_st}_ld{''.join(map(str, _lds))}"] = (
+        _ops, f"std in ALC{_st} + ldd in ALC{', '.join(map(str, _lds))}")
+# A store and a load in one instruction, each at one of the doublewords
+# of a 32-byte block and the next (two blocks of the page).
+for _b in (0x0, 0x100):
+    for _s in range(0, 0x28, 8):
+        for _l in range(0, 0x28, 8):
+            TP[f"g_{_b + _s:x}_{_b + _l:x}"] = (
+                [f"std,2 %dr1, {_b + _s:#x}, %dr3",
+                 f"ldd,0 %dr1, {_b + _l:#x}, {{d}}"], "grid")
+TP["stld_0"] = (["std,2 %dr1, 0x100, %dr3", "ldd,0 %dr1, 0x100, {d}"],
+                "std + ldd same address")
+TP_DEST = range(8, 64)
+
+
+def tp_kernel(name, k):
+    if name in TP:
+        groups, what = [TP[name][0]], TP[name][1]
+    else:
+        a, b, what = TP2[name]
+        groups = [a, b]
+    fn = f"tp_{name}_{k}"
+    body, r = [], 0
+    for i in range(k):
+        ops = []
+        for op in groups[i % len(groups)]:
+            reg = TP_DEST[r % len(TP_DEST)]
+            if op.startswith("nop"):
+                ops.append(op)
+                continue
+            if op.startswith(("fadds", "fdivs", "fsqrts", "sdivs")):
+                ops.append(op.replace("{d}", f"%r{reg}"))
+            else:
+                ops.append(op.replace("{d}", f"%dr{reg}"))
+            r += 1
+        body.append("\t{\n" + "".join(f"\t  {o}\n" for o in ops) + "\t}")
+    return f"""
+	.global	{fn}
+	.type	{fn}, #function
+	.align	8
+{fn}:
+	{{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x1
+	  return	%ctpr3
+	  {INIT[0]}
+	  {INIT[1]}
+	}}
+	{{
+	  disp	%ctpr1, .L{fn}
+	}}
+	{{
+	  {INIT[2]}
+	  {INIT[3]}
+	}}
+	{{
+	  nop 7
+	}}
+	{{
+	  nop 7
+	}}
+.L{fn}:
+{chr(10).join(body)}
+	{{
+	  subd,0 %dr0, 0x1, %dr0
+	}}
+	{{
+	  nop 3
+	  cmpedb,0 %dr0, 0x0, %pred0
+	}}
+	{{
+	  ct	%ctpr1 ? ~%pred0
+	}}
+	{{
+	  nop 7
+	}}
+	{{
+	  ct	%ctpr3
+	}}
+	.size	{fn}, .-{fn}
+"""
 
 
 def lat_kernel(name, k):
@@ -855,7 +1047,12 @@ rdclk:
 	}
 	.size	rdclk, .-rdclk
 """]
-    decl, lat_rows, ctl_rows, hz_rows = [], [], [], []
+    decl, lat_rows, ctl_rows, hz_rows, tp_rows = [], [], [], [], []
+    for name in list(TP) + list(TP2):
+        for k in (K1, K2):
+            asm.append(tp_kernel(name, k))
+            decl.append(f"long tp_{name}_{k}(long, void *);")
+        tp_rows.append(f'\t{{"{name}", tp_{name}_{K1}, tp_{name}_{K2}}},')
     for name in LAT:
         for k in (K1, K2):
             asm.append(lat_kernel(name, k))
@@ -913,10 +1110,14 @@ rdclk:
     (out / "main.c").write_text(f"""/* Generated by tools/isa-timing/bench.py. */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 unsigned long rdclk(void);
 {chr(10).join(decl)}
 typedef long (*kern)(long, void *);
+static struct {{ const char *name; kern f1, f2; }} tp[] = {{
+{chr(10).join(tp_rows)}
+}};
 static struct {{ const char *name; int ops; kern f1, f2; }} lat[] = {{
 {chr(10).join(lat_rows)}
 }};
@@ -935,7 +1136,14 @@ static struct {{ const char *kind; int d, blocks; kern f; }} ctl[] = {{
 static struct {{ const char *name; int d; kern f; }} hz[] = {{
 {chr(10).join(hz_rows)}
 }};
-static void *cell[16] __attribute__((aligned(64)));
+static void *cell[512] __attribute__((aligned(4096)));
+static const char *only;
+
+/* With an argument, run only the kinds named in it ("tp,lat"). */
+static int want(const char *kind)
+{{
+	return !only || strstr(only, kind);
+}}
 
 static unsigned long best(kern f, long n, void *p)
 {{
@@ -985,19 +1193,29 @@ static void **chain(size_t size, int huge)
 	return (void **)buf;
 }}
 
-int main(void)
+int main(int argc, char **argv)
 {{
 	long n = {ITER};
+	only = argc > 1 ? argv[1] : NULL;
 	setvbuf(stdout, NULL, _IOLBF, 0);
 	cell[0] = &cell[0];
-	for (unsigned i = 0; i < sizeof lat / sizeof lat[0]; i++) {{
+	for (unsigned i = 0; want("tp") && i < sizeof tp / sizeof tp[0]; i++) {{
+		void *p = cell;
+		unsigned long t1 = best(tp[i].f1, n, p), t2 = best(tp[i].f2, n, p);
+		printf("tp %s %.3f %.2f %.2f\\n", tp[i].name,
+		       (double)(t2 - t1) / ((double)n * ({K2} - {K1})),
+		       (double)t1 / n, (double)t2 / n);
+	}}
+	memset(cell, 0, sizeof cell);	/* the throughput stores wrote it */
+	cell[0] = &cell[0];
+	for (unsigned i = 0; want("lat") && i < sizeof lat / sizeof lat[0]; i++) {{
 		void *p = cell;
 		unsigned long t1 = best(lat[i].f1, n, p), t2 = best(lat[i].f2, n, p);
 		printf("lat %s %.3f\\n", lat[i].name,
 		       (double)(t2 - t1) * lat[i].ops / ((double)n * ({K2} - {K1})));
 	}}
 	size_t sizes[] = {{ {sizes} }};
-	for (unsigned i = 0; i < sizeof sizes / sizeof sizes[0]; i++) {{
+	for (unsigned i = 0; want("chase") && i < sizeof sizes / sizeof sizes[0]; i++) {{
 		void **p = chain(sizes[i], 1), *q = p;
 		long m = n / 8;
 		bestc(lat_ldd_l1_ch0_{K2}, m, &q);
@@ -1007,7 +1225,7 @@ int main(void)
 		       (double)(t2 - t1) / ((double)m * ({K2} - {K1})));
 		free(p);
 	}}
-	for (unsigned i = 0; i < sizeof sched / sizeof sched[0]; i++) {{
+	for (unsigned i = 0; want("sched") && i < sizeof sched / sizeof sched[0]; i++) {{
 		long m = n / 4;
 		unsigned long t = best(sched[i].f, m, cell),
 			      t0 = best(sched[i].f, m / 2, cell);
@@ -1016,7 +1234,7 @@ int main(void)
 	}}
 	size_t csizes[] = {{ {", ".join(str(x) for x, _ in chase_sched)} }};
 	int chuge[] = {{ {", ".join(str(h) for _, h in chase_sched)} }};
-	for (unsigned i = 0; i < {nchs}; i++) {{
+	for (unsigned i = 0; want("chsched") && i < {nchs}; i++) {{
 		void **p = chain(csizes[i], chuge[i]), *q = p;
 		long m = csizes[i] > (4 << 20) ? 40 : 400;
 		for (unsigned j = 0; j < sizeof chase_sched / sizeof chase_sched[0]; j++) {{
@@ -1028,16 +1246,16 @@ int main(void)
 		}}
 		free(p);
 	}}
-	for (unsigned i = 0; i < sizeof br / sizeof br[0]; i++) {{
+	for (unsigned i = 0; want("br") && i < sizeof br / sizeof br[0]; i++) {{
 		unsigned long t = best(br[i].f, n / 4, cell);
 		printf("br %s %.3f\\n", br[i].name, (double)t / ((double)(n / 4) * 16));
 	}}
-	for (unsigned i = 0; i < sizeof ctl / sizeof ctl[0]; i++) {{
+	for (unsigned i = 0; want("ctl") && i < sizeof ctl / sizeof ctl[0]; i++) {{
 		unsigned long t = best(ctl[i].f, n / 4, cell);
 		printf("ctl %s %d %.3f\\n", ctl[i].kind, ctl[i].d,
 		       (double)t / ((double)(n / 4) * ctl[i].blocks));
 	}}
-	for (unsigned i = 0; i < sizeof hz / sizeof hz[0]; i++)
+	for (unsigned i = 0; want("hz") && i < sizeof hz / sizeof hz[0]; i++)
 		printf("hz %s %d %ld\\n", hz[i].name, hz[i].d, hz[i].f(0, cell));
 	return 0;
 }}
@@ -1053,7 +1271,7 @@ def find_lcc(target):
 
 def run(args, prog, sysroot):
     if args.remote:
-        ssh = ["ssh", "-o", "BatchMode=yes"]
+        ssh = ["ssh", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=30"]
         if args.ssh_key:
             ssh += ["-i", str(args.ssh_key), "-o", "IdentitiesOnly=yes"]
         rdir = args.remote_dir
@@ -1064,10 +1282,12 @@ def run(args, prog, sysroot):
         if args.numa:
             cpu, mem = args.numa.split(":")
             wrap = f"numactl --cpunodebind={cpu} --preferred={mem} "
-        cmd = ssh + [args.remote, f"{wrap}{rdir}/{prog.name}"]
+        cmd = ssh + [args.remote, f"{wrap}{rdir}/{prog.name}"
+                     + (f" {args.only}" if args.only else "")]
     else:
         isa = re.match(r"v(\d+)", args.target).group(1)
         cmd = ["qemu-e2k", "-cpu", f"elbrus-v{isa}", "-L", str(sysroot), str(prog)]
+        cmd += [args.only] if args.only else []
     return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
 
 
@@ -1084,11 +1304,13 @@ def knee(points):
 
 
 def parse(text):
-    res = {"lat": {}, "sched": {}, "chase": {}, "chsched": {}, "br": {}, "ctl": {},
+    res = {"tp": {}, "lat": {}, "sched": {}, "chase": {}, "chsched": {}, "br": {}, "ctl": {},
            "hz": {}}
     for line in text.splitlines():
         f = line.split()
-        if f[0] == "lat":
+        if f[0] == "tp":
+            res["tp"][f[1]] = float(f[2])
+        elif f[0] == "lat":
             res["lat"][f[1]] = float(f[2])
         elif f[0] == "sched":
             res["sched"].setdefault(f[1], []).append((int(f[2]), int(f[3]), float(f[4])))
@@ -1123,7 +1345,15 @@ def chase_latency(pts):
     return None
 
 
+def tp_what(name):
+    return TP[name][1] if name in TP else TP2[name][2]
+
+
 def report(res):
+    if res["tp"]:
+        print("Throughput (cycles per wide instruction of independent ops):")
+        for name, v in res["tp"].items():
+            print(f"  {name:14} {v:6.2f}  {tp_what(name)}")
     print("Back-to-back cost (cycles per chain step, stalling):")
     for name, v in res["lat"].items():
         print(f"  {name:14} {v:6.2f}  {LAT[name][2]}")
@@ -1160,7 +1390,11 @@ def write_yaml(path, res, args):
              f"lcc_target: {args.target}",
              f"numa: '{args.numa or 'not pinned'}'",
              f"date: {datetime.date.today().isoformat()}",
-             "back_to_back:"]
+             "throughput:"]
+    for name, v in res["tp"].items():
+        lines.append(f"  {name}: {{cycles_per_instruction: {v:.2f}, "
+                     f"what: {tp_what(name)!r}}}")
+    lines.append("back_to_back:")
     for name, v in res["lat"].items():
         lines.append(f"  {name}: {{cycles_per_step: {v:.2f}, ops_per_step: "
                      f"{len(LAT[name][1])}, what: {LAT[name][2]!r}}}")
@@ -1215,10 +1449,24 @@ def main():
     ap.add_argument("--numa", metavar="CPU:MEM",
                     help="with --remote: run on NUMA node CPU, allocating "
                     "on node MEM (numactl --preferred)")
+    ap.add_argument("--only", metavar="KIND,...",
+                    help="run only these kinds (tp, lat, chase, sched, "
+                    "chsched, br, ctl, hz); not with --yaml")
+    ap.add_argument("--results", type=Path, metavar="FILE",
+                    help="don't run: read the output of an earlier run "
+                    "(e.g. one started with nohup on the host)")
     ap.add_argument("--machine", default="unspecified",
                     help="description recorded in --yaml output")
     args = ap.parse_args()
+    if args.only and args.yaml:
+        ap.error("--yaml needs a full run")
 
+    if args.results:
+        res = parse(args.results.read_text())
+        report(res)
+        if args.yaml:
+            write_yaml(args.yaml, res, args)
+        return
     lcc, sysroot = find_lcc(args.target)
     generate(args.out, args.memory)
     prog = args.out / "bench"

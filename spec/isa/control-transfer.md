@@ -137,7 +137,22 @@ Delays between a prepare (or the condition) and the transfer, from
 A transfer placed earlier waits until the CTPR is ready, then proceeds:
 with the prepare D cycles before the `ct`, the pair costs `max(D,
 delay) + 1` cycles. Unlike an early data consumer (timing.md, "Stalls
-cost more than the latency"), there is no extra penalty.
+cost more than the latency"), there is no extra penalty. The same holds
+for the condition: a `ct ? pred` 1 or 2 cycles after its integer compare
+waits 2 or 1 cycles, taken or not.
+
+A conditional `ct` that is **not taken** waits for its CTPR only until
+2 cycles after the `disp` (1 cycle early: 1 cycle lost; later: none),
+not 5. Measured with the performance monitors (`tools/isa-probes/pmu.c`,
+`ct_*_dK` and `cmpct_*_dK`; [monitors.md](monitors.md)):
+
+| `disp` → `ct ? pred` distance | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| extra cycles, condition false | 1 | 0 | 0 | 0 | 0 |
+| extra cycles, condition true | 4 | 3 | 2 | 1 | 0 |
+
+So a compiler may put the `disp` of a rarely taken exit late, without
+cost on the fall-through path.
 
 Cost of the transfer itself (cycles per block in a loop of 16 identical
 blocks, compared with a block of `nop`s of the same shape; the loop adds

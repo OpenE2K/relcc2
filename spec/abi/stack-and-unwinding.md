@@ -64,7 +64,11 @@ C++ exceptions use MCST's E2K `libgcc_s`:
   v1–v4 and v5+ (32 bytes per register pair vs. 16 bytes per register), so
   libgcc checks the CPU at run time.
 - glibc's unwinder interface also looks up `_Unwind_GetPCSP`, an E2K
-  extension returning the chain stack position of a frame.
+  extension returning the chain stack position of a frame, exported by
+  libgcc_s as `_Unwind_GetPCSP@GCC_3.0` (MCST's `libgcc-std.ver.in`).
+  glibc dlopens libgcc_s for thread exit and cancellation and asserts
+  that the symbol exists (`sysdeps/e2k/unwind-arch.h`): a libgcc_s
+  without it aborts every thread that exits through the unwinder.
 - The landing pad is reached by an ordinary return: `uw_install_context`
   is a `noreturn` function that rewrites the chain with `set_backtrace`
   and returns, where other targets end it with `__builtin_eh_return`

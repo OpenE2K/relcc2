@@ -325,10 +325,18 @@ mainline libgcc this way, `docs/spec-poc-findings.md` A7, A10, A11):
   `libc.a` references it too, so without it every static link that pulls
   in `dlopen`, NSS or iconv fails.
 - `__builtin_return_address (0)` is `rrd %cr0.hi` masked to bits 0–47.
-- Runtime libraries: libatomic and libgomp build unchanged (lcc ships
-  LLVM's `libomp`, not libgomp); libquadmath needs the `__builtin_*q`
-  builtins (`fabsq`, `copysignq`, `nanq`, `nansq`, `infq`, `huge_valq`)
-  and `-std=gnu17` (glibc's e2k `fenv.h` breaks under C23).
+- MCST also adds `_Unwind_GetPCSP` to the `GCC_3.0` node of the generic
+  `libgcc-std.ver.in`. libgcc_s must export it: MCST's glibc dlopens
+  libgcc_s for thread exit and cancellation and asserts the symbol
+  exists (`sysdeps/e2k/unwind-arch.h`), so without it every thread that
+  exits through glibc's unwinder aborts.
+- Runtime libraries: libatomic builds unchanged; libgomp needs an
+  `e2k*-*-linux*` entry (`config_path="linux posix"`) in
+  `libgomp/configure.tgt`, else it falls back to the POSIX
+  configuration without futexes or pinned memory (lcc ships LLVM's
+  `libomp`, not libgomp); libquadmath needs the `__builtin_*q` builtins
+  (`fabsq`, `copysignq`, `nanq`, `nansq`, `infq`, `huge_valq`) and
+  `-std=gnu17` (glibc's e2k `fenv.h` breaks under C23).
 - DWARF: MCST's gdb ignores CFI and misreads `DW_OP_call_frame_cfa`, so
   `DW_AT_frame_base` must be a register expression
   (stack-and-unwinding.md, "Debug information").

@@ -50,6 +50,7 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | `disp` → `ct` | 5 | 5 | — |
 | `return` → `ct` | 6 | 6 | — |
 | `movtd` → `ct` | 9 | 9 | — |
+| taken `ibranch` (instant branch), taken prepared `ct` | — | +6, 0 (see [control-transfer.md](control-transfer.md)) | — |
 | packed integer (`paddw`, `pandd`, `pcmpeqw`, `pmaxsh`, `psllw`, `pshufb`) | 4 (FP class) | 1 | — |
 | packed multiply, `psadbw` (`pmullh`; ALC1/4) | 4 | 2 | — |
 | packed integer → integer op | 4 + 2 | 4 | — |

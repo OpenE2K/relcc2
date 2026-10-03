@@ -489,6 +489,98 @@ def ret_kernels(d):
 """
 
 
+# Branch costs: cycles per block of a loop of 16 identical blocks, each
+# ending at the label of the next. Compare with the plain blocks of the
+# same shape (same number of wide instructions and nops) to get the cost
+# of the transfer itself. %pred0 is false and %pred1 true throughout.
+BR_BLOCKS = {
+    "plain1": "\t{\n\t  nop\n\t}\n",
+    "ibr_taken": "\t{\n\t  ibranch\t{nxt}\n\t}\n",
+    "ibr_nottaken": "\t{\n\t  ibranch\t{nxt} ? %pred0\n\t}\n",
+    "ibr_taken_pred": "\t{\n\t  ibranch\t{nxt} ? %pred1\n\t}\n",
+    "plain3": "\t{\n\t  nop\n\t}\n\t{\n\t  nop 5\n\t}\n\t{\n\t  nop\n\t}\n",
+    "ct_taken": ("\t{\n\t  disp\t%ctpr2, {nxt}\n\t}\n\t{\n\t  nop 5\n\t}\n"
+                 "\t{\n\t  ct\t%ctpr2\n\t}\n"),
+    "ct_taken_ipd0": ("\t{\n\t  disp\t%ctpr2, {nxt}; ipd 0\n\t}\n\t{\n\t  nop 5\n\t}\n"
+                      "\t{\n\t  ct\t%ctpr2\n\t}\n"),
+    "ct_taken_pred": ("\t{\n\t  disp\t%ctpr2, {nxt}\n\t}\n\t{\n\t  nop 5\n\t}\n"
+                      "\t{\n\t  ct\t%ctpr2 ? %pred1\n\t}\n"),
+    "ct_nottaken": ("\t{\n\t  disp\t%ctpr2, {nxt}\n\t}\n\t{\n\t  nop 5\n\t}\n"
+                    "\t{\n\t  ct\t%ctpr2 ? %pred0\n\t}\n"),
+    # A call to a leaf that prepares its return at entry and returns 6
+    # cycles later: compare with plain3 plus the leaf's own 8 cycles.
+    "call_return": ("\t{\n\t  disp\t%ctpr2, br_leaf\n\t}\n\t{\n\t  nop 5\n\t}\n"
+                    "\t{\n\t  call\t%ctpr2, wbs = 0xc\n\t}\n"),
+}
+
+
+def br_kernel(name):
+    fn = f"br_{name}"
+    blocks = []
+    for i in range(16):
+        nxt = f".L{fn}_b{i}"
+        blocks.append(BR_BLOCKS[name].replace("{nxt}", nxt) + f"{nxt}:")
+    return f"""
+	.global	{fn}
+	.type	{fn}, #function
+	.align	8
+{fn}:
+	{{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x1
+	  disp	%ctpr1, .L{fn}
+	  addd,0 0x0, 0x0, %dr5
+	}}
+	{{
+	  cmpedb,0 %dr5, 0x1, %pred0
+	  cmpedb,1 %dr5, 0x0, %pred1
+	}}
+	{{
+	  nop 7
+	}}
+.L{fn}:
+{chr(10).join(blocks)}
+	{{
+	  subd,0 %dr0, 0x1, %dr0
+	  disp	%ctpr1, .L{fn}
+	}}
+	{{
+	  nop 3
+	  cmpedb,0 %dr0, 0x0, %pred2
+	}}
+	{{
+	  ct	%ctpr1 ? ~%pred2
+	}}
+	{{
+	  return	%ctpr3
+	}}
+	{{
+	  nop 6
+	}}
+	{{
+	  ct	%ctpr3
+	}}
+	.size	{fn}, .-{fn}
+"""
+
+
+BR_LEAF = """
+	.type	br_leaf, #function
+	.align	8
+br_leaf:
+	{
+	  setwd	wsz = 0x4, nfx = 0x1, dbl = 0x1
+	  return	%ctpr3
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	br_leaf, .-br_leaf
+"""
+
+
 # Hazard tests. Each function returns 1 if the consumer saw the new value
 # (or the transfer went the new way), 0 if it saw the old one.
 # (name, description, setup bundles, producer op, consumer bundle text,
@@ -719,6 +811,12 @@ rdclk:
         asm.append(sched_kernel("chase", gap, CHASE_SCHED))
         decl.append(f"long sched_chase_{gap}(long, void *);")
         chase_rows.append(f'\t{{{gap}, sched_chase_{gap}}},')
+    br_rows = []
+    asm.append(BR_LEAF)
+    for name in BR_BLOCKS:
+        asm.append(br_kernel(name))
+        decl.append(f"long br_{name}(long, void *);")
+        br_rows.append(f'\t{{"{name}", br_{name}}},')
     for d in CTL_DISTANCES:
         for kind in ("disp", "movtd", "cmp_ct", "cmp_alu", "cmp_andp",
                      "andp_alu", "andp_ct", "andp_andp", "fcmp_alu", "fcmp_ct"):
@@ -735,7 +833,7 @@ rdclk:
             if name in ("muld_use", "ldd_use", "fdivd_use", "sdivd_use",
                         "andp_pred_alu",
                         "int_fp_use", "fp_int_use", "int_fp_use_x",
-                        "fp_int_use_x", "disp_ct", "movtd_ct", "fpcr_rrs", "lsr_rrd",
+                        "fp_int_use_x", "disp_ct", "fpcr_rrs", "lsr_rrd",
                         "pfpfr_round", "fadd_pfpfr") and d == 0:
                 continue
             asm.append(hz_kernel(name, d))
@@ -764,6 +862,9 @@ static struct {{ const char *name; int gap, fixed; kern f; }} sched[] = {{
 }};
 static struct {{ int gap; kern f; }} chase_sched[] = {{
 {chr(10).join(chase_rows)}
+}};
+static struct {{ const char *name; kern f; }} br[] = {{
+{chr(10).join(br_rows)}
 }};
 static struct {{ const char *kind; int d, blocks; kern f; }} ctl[] = {{
 {chr(10).join(ctl_rows)}
@@ -864,6 +965,10 @@ int main(void)
 		}}
 		free(p);
 	}}
+	for (unsigned i = 0; i < sizeof br / sizeof br[0]; i++) {{
+		unsigned long t = best(br[i].f, n / 4, cell);
+		printf("br %s %.3f\\n", br[i].name, (double)t / ((double)(n / 4) * 16));
+	}}
 	for (unsigned i = 0; i < sizeof ctl / sizeof ctl[0]; i++) {{
 		unsigned long t = best(ctl[i].f, n / 4, cell);
 		printf("ctl %s %d %.3f\\n", ctl[i].kind, ctl[i].d,
@@ -916,7 +1021,8 @@ def knee(points):
 
 
 def parse(text):
-    res = {"lat": {}, "sched": {}, "chase": {}, "chsched": {}, "ctl": {}, "hz": {}}
+    res = {"lat": {}, "sched": {}, "chase": {}, "chsched": {}, "br": {}, "ctl": {},
+           "hz": {}}
     for line in text.splitlines():
         f = line.split()
         if f[0] == "lat":
@@ -927,6 +1033,8 @@ def parse(text):
             res["chsched"].setdefault(f[1], []).append((int(f[2]), float(f[3])))
         elif f[0] == "chase":
             res["chase"][int(f[1])] = float(f[2])
+        elif f[0] == "br":
+            res["br"][f[1]] = float(f[2])
         elif f[0] == "ctl":
             res["ctl"].setdefault(f[1], []).append((int(f[2]), float(f[3])))
         elif f[0] == "hz":
@@ -969,6 +1077,9 @@ def report(res):
     print("Pointer chase (cycles per load):")
     for size, v in res["chase"].items():
         print(f"  {size >> 10:8} KiB {v:7.2f}")
+    print("Branch costs: cycles per block (compare with plain1 / plain3)")
+    for name, v in res["br"].items():
+        print(f"  {name:15} {v:.2f}")
     print("Control transfer: cycles per block at prepare distance D")
     for kind, pts in res["ctl"].items():
         print(f"  {kind:7} " + " ".join(f"{d}:{t:.1f}" for d, t in pts)
@@ -1005,6 +1116,9 @@ def write_yaml(path, res, args):
         lines.append(f"    latency: {chase_latency(pts)}")
         lines.append("    cycles_per_load_by_gap: {" +
                      ", ".join(f"{g}: {t:.2f}" for g, t in pts) + "}")
+    lines.append("branch_cycles_per_block:")
+    for name, v in res["br"].items():
+        lines.append(f"  {name}: {v:.2f}")
     lines.append("control_prepare:")
     for kind, pts in res["ctl"].items():
         lines.append(f"  {kind}:")

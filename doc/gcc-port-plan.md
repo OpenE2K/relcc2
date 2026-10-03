@@ -308,7 +308,30 @@ adds them should say where they come from (the DCO's clause (b) covers
 submitting work under a compatible free licence). Adapt rather than
 rewrite: drop the `-llcc` link in `t-linux` (GCC's own
 `__builtin_cpu_is` support replaces it) and check the `__LCC__`-only
-paths (e.g. the DWARF register ranges in `_Unwind_SetGR`).
+paths (e.g. the DWARF register ranges in `_Unwind_SetGR`). What else
+building it takes (`spec/abi/stack-and-unwinding.md`,
+`spec/abi/source-compat.md`; the proof-of-concept backend built
+mainline libgcc this way, `docs/spec-poc-findings.md` A7, A10, A11):
+
+- MCST also changed the generic `libgcc/unwind.inc` (`#if defined
+  __e2k__`: a chain-stack cache in the unwind context, reset before phase
+  2). Carry those hunks, not only the `config/e2k/` files.
+- The unwinder returns to landing pads normally after `set_backtrace`;
+  `__builtin_eh_return` is never used, so no `eh_return` pattern.
+- CPU detection: the unwinder picks the procedure-stack layout (v1–v4
+  or v5+) with `__builtin_cpu_is`, which lcc backs with `__cpu_info` from
+  proprietary `liblcc`. Define and fill `__cpu_info` in libgcc instead
+  (from `%idr`; layout and codes in source-compat.md). MCST's static
+  `libc.a` references it too, so without it every static link that pulls
+  in `dlopen`, NSS or iconv fails.
+- `__builtin_return_address (0)` is `rrd %cr0.hi` masked to bits 0–47.
+- Runtime libraries: libatomic and libgomp build unchanged (lcc ships
+  LLVM's `libomp`, not libgomp); libquadmath needs the `__builtin_*q`
+  builtins (`fabsq`, `copysignq`, `nanq`, `nansq`, `infq`, `huge_valq`)
+  and `-std=gnu17` (glibc's e2k `fenv.h` breaks under C23).
+- DWARF: MCST's gdb ignores CFI and misreads `DW_OP_call_frame_cfa`, so
+  `DW_AT_frame_base` must be a register expression
+  (stack-and-unwinding.md, "Debug information").
 
 Until libgcc builds (M3), link against the system's `libgcc_s.so.1`
 from lcc's sysroot.
@@ -367,6 +390,14 @@ LCC=/opt/mcst/lcc-1.29.16.e2k-v3.linux-6.1
 make -j16 all-gcc          # builds the driver and cc1 only
 make install-gcc
 ```
+
+Linking with GCC's driver needs two workarounds: lcc's sysroot has
+`lib64`, `lib32` and `lib128` (also under `usr/`) but no `lib` or
+`usr/lib`, so the `usr/lib/../lib64` search paths GCC derives from
+`MULTILIB_OSDIRNAMES = .=../lib64` don't resolve (use a sysroot of
+symlinks with empty `lib` and `usr/lib`); and MCST's libgcc build looks
+for target tools named `e2k-linux-gnu-*`, while lcc ships `e2k-linux-*`
+(symlink them).
 
 `--enable-checking=yes,rtl` makes the compiler verify its RTL constantly:
 slow, but it turns silent bugs in your patterns into immediate errors.
@@ -539,7 +570,9 @@ renaming approach), or the loop's rotating area placed elsewhere.
 
 **Static chain** (for nested functions and trampolines): use `%g12`,
 which MCST's libffi already uses for its closures
-(`spec/abi/registers.md`).
+(`spec/abi/registers.md`). lcc supports neither nested functions nor
+`__builtin_setjmp`/`__builtin_longjmp`/`__builtin_apply`, so nothing
+depends on them and they can wait (`spec/abi/source-compat.md`).
 
 **Call-clobbered**: globals (except `%g13`, fixed; `%g12` as the static chain), the outgoing
 registers, `%ctpr1–3`, `%lsr`. Window registers `%r*` are preserved by

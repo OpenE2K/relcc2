@@ -266,7 +266,14 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   lock load `mas=0x4` (ALC0/3), check load `mas=0x3` (ALC2/5, same
   register) that reloads and sets `%MLOCK` for `rbranch` only if the
   entry was lost (overlapping store, trap, no lock load), kept across
-  calls and register overwrites, at least 32 entries. Array prefetch
+  calls and register overwrites, at least 32 entries; mod 7 is a fully
+  speculative lock, mod 2 a check that keeps the entry, stores with mod
+  3/5 drop their data register's entry (5 writes nothing), mod 4 stores
+  skip the DAM; a fully speculative load recovers through `rbranch ?
+  %dt_alN`, taken when the `,sm` operation in ALC N of that instruction
+  has a diagnostic operand (lcc's `-fno-semi-spec-ld`); with an
+  exception unmasked a speculative FP op always gives a diagnostic
+  (SIGILL at the use instead of SIGFPE). Array prefetch
   (`spec/isa/apb.md`, hw): the program format, what a `mova` reads
   (`base + AAIND + disp + step × n + ind`, zero-extended, diagnostic
   instead of a fault), latency 5, and the correctness rules: a call, a
@@ -438,6 +445,11 @@ None at the moment.
   compute wrong results there if the program receives signals (lcc's
   loops in `apb-lcc.c`: 600 wrong of 900). It models none of APB's
   limits either. Test APB on the 4C.
+
+- Checked speculation can't be tested under emulation: MCST's qemu never
+  takes `rbranch ? %dt_alN` and has no untouched pages (so fully
+  speculative loads never fail there), and the community qemu aborts on
+  `%dt_al`. Use the 4C (`tools/isa-probes/spec.c`).
 
 - MCST's qemu applies `%pfpfr` (rounding, flags) to 80-bit operations
   and ignores x87 precision control; the hardware uses `%fpcr`/`%fpsr`.

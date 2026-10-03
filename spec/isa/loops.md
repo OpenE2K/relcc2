@@ -38,7 +38,7 @@ Status markers:
 | 37 | `vlc` | the counter is valid; without it the loop never ends [hw] |
 | 38 | `over` | set by the `alc` that ended the loop; read as `%lcntex` |
 | 39 | `ldmc` | loads manual control: 1 keeps `mova` working in epilogue iterations [hw] |
-| 40–47 | `ldovl` | load overlap (no effect seen on ordinary loads or `mova` [hw]) |
+| 40–47 | `ldovl` | load overlap: undocumented (only named in the kernel; neither qemu implements it); no effect seen on ordinary loads or `mova` results at 0, 1, 2, 255 [hw]; lcc always writes 255 |
 | 48–52 | `pcnt` | prologue counter |
 | 53–59 | `strmd` | how many stores of the last iteration still write |
 | 60 | `semc` | side effects manual control: no store suppression at all |
@@ -66,7 +66,7 @@ reads the old value ([timing.md](timing.md)), and a loop whose first
 | `alc alcf=F, alct=T` | SS bits 16–17 | advance the counters if the instruction's transfer is not taken (F) / taken (T) |
 | `abn abnf=F, abnt=T` | SS bits 21–22 | rotate `%b[]` likewise |
 | `abp abpf=F, abpt=T` | SS bits 18–19 | rotate the predicates likewise |
-| `abg abgi, abgd` | SS bits 23–24 | rotate the global registers' based area (`%bgr`; not run) |
+| `abg N` (gas: a number, 2 = `abgi`, 1 = `abgd`) | SS bits 23–24 | rotate the global registers' based area (`%bgr`, below) |
 | `ct ... ? %NOT_LOOP_END` (`%LOOP_END`, and combinations with a predicate) | ctcond types 4–7, 14, 15 | transfer on the loop-end condition |
 | `op ? %pcntN` | RLP/MRGC condition (gas accepts it as `? %pcntN`) | true while `pcnt ≤ N` |
 | `pass %lcntex, @pN` | ELP special predicate 0 | true when `over` is set |
@@ -252,8 +252,29 @@ read of `%lsr`, and never a call inside a loop-mode loop.
 
 The rest of `loops.c` matches the 4C under the community qemu.
 
+## Global register rotation (`abg`, `%bgr`) [source]
+
+`%bgr` (11 bits): `val` (bits 0–7) marks which of the eight rotating
+registers are valid, `cur` (bits 8–10) is the rotation offset; the
+kernel starts processes with `val` = 0xff. `%g24`–`%g31` map to physical
+global `24 + ((cur + n) & 7)`; `%g0`–`%g23` don't rotate. Reading a
+rotating global whose `val` bit is clear, non-speculatively in ALC4 or
+ALC5, raises `exc_fp_stack_u`, which the kernel turns into SIGFPE
+(`FPE_FLTINV`); there is also an `exc_fp_stack_o`. This is an x87-style
+register stack, presumably for MCST's x86 binary translator (`abgi` /
+`abgd` push and pop; v6 replaces `abg` with `abgc`/`rbgc`, bundle.md).
+MCST's qemu decodes `abg` but doesn't execute it (TODO); the community
+qemu doesn't either. lcc never emits it, so a compiler can ignore it.
+
+**Don't probe it on shared hardware**: on the 4C an `abg 2` followed by
+reads of `%dg24`, `%dg25`, `%dg31` killed the process with SIGFPE, and
+a second run (single `abg 2` and `abg 1`, signal handlers that
+`siglongjmp` out, then `rws` to `%bgr`) took the machine down; the
+serial console caught nothing and the cause is unknown. The cases are
+kept out of `loops.c`.
+
 ## Not checked yet
 
-- `abg` (global register rotation; lcc doesn't use it).
+- `abg` semantics on hardware (see above: not to be run casually).
 - What `ldovl` does; quad stores under the store rules.
 - v5+ (`%lsr1`, `%ilcr1`, 64-bit counts).

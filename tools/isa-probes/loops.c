@@ -16,9 +16,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/time.h>
 #include <unistd.h>
 
-#define CASE(n) long loop_##n (unsigned long *, unsigned long, long *);
+#define CASE(n) long loop_##n (unsigned long *, unsigned long, long *, long);
 #include "loops-cases.h"
 #undef CASE
 
@@ -56,15 +57,17 @@ fields (const char *what, unsigned long v)
           v >> 48 & 0x1f, v >> 53 & 0x7f);
 }
 
+typedef long (*loopfn) (unsigned long *, unsigned long, long *, long);
+static long arg3;
+
 static void
-run (const char *name, long (*f) (unsigned long *, unsigned long, long *),
-     unsigned long l, int show_regs)
+run (const char *name, loopfn f, unsigned long l, int show_regs)
 {
   unsigned long out[16];
   long buf[64];
   memset (out, 0, sizeof out);
   memset (buf, 0, sizeof buf);
-  long cycles = f (out, l, buf);
+  long cycles = f (out, l, buf, arg3);
   printf ("%-12s", name);
   fields ("set", l);
   printf ("\n             iterations %lu  pcnt0 %lu pcnt1 %lu lcntex %lu",
@@ -102,12 +105,74 @@ run_loads (unsigned long l)
   printf (" ldmc %lu ldovl %lu: ", l >> 39 & 1, l >> 40 & 0xff);
   if ((sig = sigsetjmp (env, 1)) == 0)
     {
-      loop_loads (out, l, buf);
+      loop_loads (out, l, buf, 0);
       printf ("no fault, %lu iterations\n", out[0]);
     }
   else
     printf ("signal %d\n", sig);
   munmap (m, pg);
+}
+
+static volatile long signals;
+
+static void
+tick (int sig)
+{
+  (void) sig;
+  signals++;
+}
+
+/* The %b[] chain over N iterations, with a SIGALRM every US
+   microseconds (0: none).  */
+static void
+run_chain (unsigned long n, int us)
+{
+  unsigned long out[16], max = 0;
+  long buf[64];
+  struct itimerval it = { { 0, us }, { 0, us } }, off = { { 0, 0 }, { 0, 0 } };
+  signals = 0;
+  signal (SIGALRM, tick);
+  if (us)
+    setitimer (ITIMER_REAL, &it, NULL);
+  long cycles = loop_chain (out, lsr (n, 0, 1, 0, 0, 0), buf, 0);
+  setitimer (ITIMER_REAL, &off, NULL);
+  for (int i = 8; i < 16; i++)
+    if (out[i] > max && out[i] < 0x100)
+      max = out[i];
+    else if (out[i] > max && out[i] >= 0x200)
+      max = out[i];
+  printf ("chain        %lu iterations, %ld signals: counted %lu, chain %lu, "
+          "%.2f cycles/iteration\n", n, signals, out[0], max,
+          (double) cycles / n);
+}
+
+/* Stores to a new page in each of N iterations.  */
+static void
+run_pagestores (loopfn f, const char *name, unsigned n, int touch)
+{
+  long pg = sysconf (_SC_PAGESIZE);
+  unsigned long out[16];
+  char *m = mmap (NULL, (n + 2) * pg, PROT_READ | PROT_WRITE,
+                  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (touch)
+    for (unsigned i = 0; i < n + 2; i++)
+      m[i * pg] = 0;
+  long cycles = f (out, lsr (n, 0, 1, 0, 1, 0), (long *) m, 0);
+  unsigned ok = 0, bad = 0;
+  for (unsigned i = 1; i <= n; i++)
+    {
+      /* Iteration i stores i at page i - 1 (the offset is computed
+         from the count before the increment).  */
+      long v = *(long *) (m + (i - 1) * pg);
+      if (v == (long) i)
+        ok++;
+      else
+        bad++;
+    }
+  printf ("%-16s %s, %u iterations, counted %lu: %u pages stored, %u not; "
+          "%ld cycles\n", name, touch ? "touched" : "fresh pages", n, out[0],
+          ok, bad, cycles);
+  munmap (m, (n + 2) * pg);
 }
 
 int
@@ -136,6 +201,11 @@ main (void)
   run ("stores2", loop_stores2, lsr (5, 2, 1, 3, 1, 0), 0);
   run ("stores2", loop_stores2, lsr (5, 2, 1, 3, 2, 0), 0);
   run ("stores_nolm", loop_stores_nolm, lsr (5, 2, 1, 3, 0, 0), 0);
+  /* AAU stores under the store rules.  */
+  run ("aastores", loop_aastores, lsr (5, 0, 1, 0, 0, 0), 0);
+  run ("aastores", loop_aastores, lsr (5, 2, 1, 3, 0, 0), 0);
+  run ("aastores", loop_aastores, lsr (5, 2, 1, 3, 1, 0), 0);
+  run ("aastores_nolm", loop_aastores_nolm, lsr (5, 2, 1, 3, 0, 0), 0);
   /* Rotation.  */
   run ("rotate", loop_rotate, lsr (5, 0, 1, 0, 0, 0), 1);
   run ("rotate", loop_rotate, lsr (3, 0, 1, 0, 0, 0), 1);
@@ -147,6 +217,28 @@ main (void)
   run ("early4", loop_early4, lsr (5, 0, 1, 0, 0, 0), 0);
   run ("early5", loop_early5, lsr (5, 0, 1, 0, 0, 0), 0);
   run ("early6", loop_early6, lsr (5, 0, 1, 0, 0, 0), 0);
+  /* Rotation offset, calls, early exits, traps and signals.  */
+  run ("rcur1", loop_rcur1, lsr (1, 0, 1, 0, 0, 0), 1);
+  run ("rcur2", loop_rcur2, lsr (1, 0, 1, 0, 0, 0), 1);
+  run ("rcur3", loop_rcur3, lsr (1, 0, 1, 0, 0, 0), 1);
+  run ("call_leaf", loop_call_loop_leaf0, lsr (5, 0, 1, 0, 0, 0), 0);
+  run ("call_clob", loop_call_loop_clobber0, lsr (5, 0, 1, 0, 0, 0), 0);
+  run ("call_clob_sv", loop_call_loop_clobber1, lsr (5, 0, 1, 0, 0, 0), 0);
+  arg3 = 4;
+  run ("early_exit", loop_early_exit, lsr (10, 0, 1, 0, 0, 0), 0);
+  arg3 = 20;
+  run ("early_exit", loop_early_exit, lsr (10, 0, 1, 0, 0, 0), 0);
+  arg3 = 7;
+  run ("early_exit", loop_early_exit, lsr (0, 0, 0, 0, 0, 0), 0);
+  arg3 = 0;
+  run ("chain", loop_chain, lsr (7, 0, 1, 0, 0, 0), 1);
+  run_chain (7, 0);
+  run_chain (100000000, 0);
+  run_chain (100000000, 50);
+  run_pagestores (loop_pagestores, "pagestores", 64, 0);
+  run_pagestores (loop_pagestores, "pagestores", 64, 1);
+  run_pagestores (loop_pagestores_nolm, "pagestores_nolm", 64, 0);
+  run_pagestores (loop_pagestores_nolm, "pagestores_nolm", 64, 1);
   run ("lcntex_after", loop_lcntex_after, lsr (5, 2, 1, 0, 0, 0), 0);
   /* Loads beyond the array in epilogue iterations.  */
   run_loads (lsrl (5, 0, 0, 0));

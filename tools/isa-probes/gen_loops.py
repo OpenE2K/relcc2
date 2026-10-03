@@ -29,7 +29,7 @@ BACK = ["loop_mode", "alc\talcf=1, alct=1", "ct\t%ctpr1 ? %NOT_LOOP_END"]
 
 
 def case(name, body, setbn="rsz = 0x3, rbs = 0x8, rcur = 0x0", setbp=None,
-         early=None):
+         early=None, pre=(), extra=""):
     """BODY: the loop's wide instructions; the last one should end with
     BACK.  %dr10 counts iterations in a separate instruction."""
     out = [f"\n\t.global\tloop_{name}\n\t.type\tloop_{name}, #function\n"
@@ -51,6 +51,8 @@ def case(name, body, setbn="rsz = 0x3, rbs = 0x8, rcur = 0x0", setbp=None,
         wi("rrd,0\t%lsr, %dr4")
         wi("rrd,0\t%ilcr, %dr5")
         wi("nop 5")
+        for g in pre:
+            wi(*g)
         wi("rrd,0\t%clkr, %dr8")
     else:
         # The loop's first instruction EARLY cycles after the write.
@@ -69,6 +71,7 @@ def case(name, body, setbn="rsz = 0x3, rbs = 0x8, rcur = 0x0", setbp=None,
            f"std,5\t%dr0, {8 * (k + 1):#x}, %dr{regs[k + 1]}")
     wi("subd,0\t%dr9, %dr8, %dr0", "nop 5")
     wi("ct\t%ctpr3")
+    out.append(extra)
     return (name, "".join(out) + f"\t.size\tloop_{name}, .-loop_{name}\n")
 
 
@@ -124,6 +127,85 @@ def main():
     # case left lcnt 0, so a stale read ends the loop at once).
     for d in range(1, 7):
         add(f"early{d}", [count + BACK], early=d)
+    # Traps and signals: a long loop whose rotating %b[] chain counts the
+    # iterations (each %b[0] = previous %b[0] + 1, read as %b[2]).
+    add("chain", [count, ["addd,0\t%b[2], 0x1, %b[0]"] + BACK
+                  + ["abn\tabnf=1, abnt=1"]],
+        pre=[["addd,0\t0x0, 0x0, %b[0]"], ["abn\tabnf=1, abnt=1"]])
+    # Stores to a new page each iteration (buf + 4096 * i), so every
+    # store faults once.
+    add("pagestores", [count + ["shld,1\t%dr10, 0xc, %dr14"], ["nop 1"],
+                       BACK + ["std,2\t%dr2, %dr14, %dr10"]])
+    add("pagestores_nolm", [count + ["shld,1\t%dr10, 0xc, %dr14"], ["nop 1"],
+                            ["std,2\t%dr2, %dr14, %dr10"], BACK])
+    # AAU stores as lcc writes them: staad to %aad0 (base buf) at index
+    # %aasti1, which incr advances by one element; with and without
+    # loop_mode.  Iteration i stores i.
+    aau = [["aaurwd,2\t%dr2, %aad0", "addd,0\t0x0, 0x0, %dr24"],
+           ["aaurwd,5\t%dr24, %aasti1"], ["nop 7"], ["nop 7"]]
+    add("aastores", [count, ["nop 1"],
+                     BACK + ["staad,5\t%dr10, %aad0[ %aasti1 ]",
+                             "incr,5\t%aaincr0"]], pre=aau)
+    add("aastores_nolm", [count, ["nop 1"],
+                          ["staad,5\t%dr10, %aad0[ %aasti1 ]",
+                           "incr,5\t%aaincr0"], BACK], pre=aau)
+    # A call inside the loop to a function that leaves %lsr alone, and to
+    # one that leaves it as its own finished loop would (vlc, over, lcnt
+    # 0), without and with the caller saving %lsr around the call.  The call empties the CTPRs: prepare again.
+    leaf = """\t.type\tloop_leaf, #function
+loop_leaf:
+\t{
+\t  setwd\twsz = 0x4, nfx = 0x1, dbl = 0x0
+\t  return\t%ctpr3
+\t}
+\t{
+\t  nop 5
+\t}
+\t{
+\t  ct\t%ctpr3
+\t}
+\t.type\tloop_clobber, #function
+loop_clobber:
+\t{
+\t  setwd\twsz = 0x4, nfx = 0x1, dbl = 0x0
+\t  return\t%ctpr3
+\t  addd,0\t0x0, 0x6000000000, %dr0
+\t}
+\t{
+\t  rwd,0\t%dr0, %lsr
+\t}
+\t{
+\t  nop 5
+\t}
+\t{
+\t  ct\t%ctpr3
+\t}
+"""
+    def call(target, save):
+        g = [count + ["disp\t%ctpr2, " + target]]
+        if save:
+            g.append(["rrd,0\t%lsr, %dr24"])
+        g += [["nop 5"], ["call\t%ctpr2, wbs = 0x1c"],
+              ["disp\t%ctpr1, .L" + f"call_{target}{int(save)}" + "_loop"],
+              ["return\t%ctpr3"]]
+        if save:
+            g.append(["rwd,0\t%dr24, %lsr"])
+        g += [["nop 5"], BACK]
+        return g
+    for target, save in (("loop_leaf", False), ("loop_clobber", False),
+                         ("loop_clobber", True)):
+        add(f"call_{target}{int(save)}", call(target, save),
+            extra=leaf if target == "loop_leaf" and not save else "")
+    # Early exit: leave when %dr10 reaches %dr3 (third argument), via
+    # ~%pred0 && %NOT_LOOP_END, with or without a valid count.
+    add("early_exit", [count, ["cmpedb,0\t%dr10, %dr3, %pred0"], ["nop 2"],
+                       ["loop_mode", "alc\talcf=1, alct=1",
+                        "ct\t%ctpr1 ? ~%pred0 && %NOT_LOOP_END"]])
+    # rcur: which register %b[0] is before any abn.
+    for rc in (1, 2, 3):
+        add(f"rcur{rc}", [count, BACK],
+            setbn=f"rsz = 0x3, rbs = 0x8, rcur = {rc:#x}",
+            pre=[["addd,0\t0x0, 0x55, %b[0]", "addd,1\t0x0, 0x66, %b[1]"]])
     # %lcntex after the loop.
     add("lcntex_after", [count, BACK, ["pass\t%lcntex, @p0",
                                        "andp\t@p0, @p0, @p4",

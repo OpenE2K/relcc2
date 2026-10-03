@@ -176,6 +176,61 @@ instead of 13). A scheduler should keep the producer's channel free of
 integer operations 2 cycles after an FP-side result it routes to the
 integer side, or place the consumer a cycle later.
 
+## Throughput
+
+Measured by `bench.py`'s `tp` kernels: 32 or 64 wide instructions, each
+a group of independent operations with constant inputs and fresh
+destinations, back to back; the cost per instruction is the difference
+divided by 32 (`throughput` in the YAML). Every channel takes a new
+operation every cycle, at full width:
+
+| Group per instruction | Cycles |
+|---|---|
+| 6 `addd`; 4 `muld`; 4 `faddd`, `fadds`, `fmuld`, `fmul_addd` or `fdtoid`; 4 `faddd` + 2 `addd` | 1 |
+| 2 `paddw` (ALC0, 3 only on v3); 2 `popcntd` (ALC1, 4) | 1 |
+| 4 `ldd` or `ldw`; 4 `ldd` + 2 `addd` | 1 |
+| 1 `std` (ALC2 or 5); a store with loads in any allowed channels, far apart | 1 |
+
+The exceptions are the divider and the memory banks.
+
+**Divider.** `fdivs`, `fdivd`, `sdivs`, `sdivd` and `fsqrts` share one
+unit in ALC5 (a `fdivd`/`sdivd` pair alternating behaves like either
+alone). It is pipelined, but some issue distances conflict and stall
+the later instruction. Cycles per divide when one issues every `g`
+cycles:
+
+| `g` | 1 | 2 | 3 | 4 | 5 | 6+ |
+|---|---|---|---|---|---|---|
+| `fdivs`, `fdivd`, `sdivs` | 5 | 2 | 3 | 4 | 5 | `g` |
+| `sdivd` | 5 | 3.4 | 3 | 4 | 5 | `g` |
+| `fsqrts` | 7 | 2.8 | 3 | 4 | **7** | `g` |
+
+So a scheduler should keep divides 2 cycles apart (3 for `sdivd`) and
+not issue `fsqrts` exactly 5 cycles after another. Fractions are
+averages of a pattern of stalled and unstalled issues; the structure
+behind them (and behind `fsqrts` at 5) is not known.
+
+**Two stores in one instruction** take 2 cycles when their addresses
+agree in bits 6–7 (the same 64-byte bank of four: 0, 8, 16, 32, 48, 256
+or 512 bytes apart), and 1 cycle otherwise (64, 80, 96, 128, 192, 320,
+384, 448 apart). `stw` pairs behave the same way. Alternating stores to
+one bank in successive instructions cost nothing.
+
+**A store and a load in one instruction** to the same 8 bytes take
+about 1.9 cycles. To other bytes of the same 32-byte block they take
+either 2 cycles or 1, and which one is not a property of the code or
+the address: identical kernels (same instructions, same data
+addresses) differ within one run and between runs, also pinned to one
+CPU, in contiguous stretches of the run, so some state left by earlier
+code decides it. Different 32-byte blocks never conflict, nor do two
+loads (0 to 512 bytes apart), nor a store followed by a load of the
+same bytes in the next instruction.
+
+A compiler cannot see most addresses, but it can for one base register
+(stack slots, structure fields): don't put two stores whose offsets
+agree modulo 256 within 64 bytes, or a store and a load in the same 32
+bytes, in one instruction.
+
 ## Memory
 
 Compilers schedule every load for an L1 hit (3 cycles); lcc does too.
@@ -248,4 +303,6 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
 - v4, v5, v6 (the 8CB is v5).
 - Loop mode registers other than `%lsr` (`%ilcr`); APB throughput.
 - 128-bit operations (v5+), `%spred`.
-- Throughput (operations per cycle per channel) as opposed to latency.
+- Throughput of 128-bit and packed FP operations, `mova`, AAU stores,
+  and loads and stores of other sizes; whether the store bank rule
+  involves physical address bits.

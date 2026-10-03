@@ -311,8 +311,14 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   by `%lsr` (written before `bap`) with every area advanced once per
   iteration. lcc's loops are 2–22× faster with it. Loads
   are scheduled for L1;
-  `--memory` measures beyond-L1 latency for reference only. Other
-  generations, 128-bit ops and throughput are not measured yet.
+  `--memory` measures beyond-L1 latency for reference only.
+  Throughput (`bench.py` `tp`): every channel takes an operation every
+  cycle at full width (6 integer, 4 FP, 4 loads, 2 stores), except the
+  divider in ALC5 shared by all divides (1 cycle apart stalls 4,
+  `sdivd` wants 3, `fsqrts` also conflicts at 5) and L1 banks (two
+  stores agreeing in address bits 6–7, or a store and a load in one
+  32-byte block, can take 2 cycles). Other generations and 128-bit ops
+  are not measured yet.
 
 ### Schedule scoring (tools/isa-score)
 

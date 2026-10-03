@@ -38,7 +38,11 @@ number, 1 marks the half as diagnostic (the guide simplifies this to one
 bit per half; the other values are protected-mode pointers). Memory has
 the same tags. A diagnostic double has tag 5 (both halves). The 4C fills
 a failed load's result with `4afafafa4afafafa`; a failed division or FP
-operation keeps the result bits it computed. Predicates have one tag
+operation returns the result it computed with bit 30 of each half set
+(`1.0 / 0.0` → `7ff0000040000000`, `1.0 / 3.0` → `7fd5555555555555`,
+`7 / 0` → `400000004000000d`), and a speculative operation on a
+diagnostic operand computes on its bits as usual (`addd,sm` of
+`4afafafa4afafafa` and 1 gives `…4afafafb`). Predicates have one tag
 bit: a **diagnostic predicate** comes from a speculative compare of a
 diagnostic value.
 
@@ -78,9 +82,16 @@ SIGFPE at the faulting operation (source-compat.md).
 | same | the flag is already set | the normal result (`1/3`, `inf`, NaN), no change to the flags |
 | same | no exception (`1.0 / 2.0`) | the normal result |
 | `fdivd` (not speculative) | divide by zero | `inf`, the flag set (FP exceptions are masked) |
+| `fdivd,sm` | an **unmasked** exception (`%pfpfr` mask bit clear: divide by zero, inexact), flag set or not | diagnostic; the flag is not changed |
+| `fdivd` (not speculative) | an unmasked exception, flag set or not | SIGFPE (`FPE_FLTDIV` 3, `FPE_FLTRES` 6) |
+| `faddd` (not speculative) of that diagnostic result | | SIGILL `ILL_ILLOPN` |
 
-So a speculative FP operation never changes the sticky flags: if it
-would, it yields a diagnostic value instead. The kernel starts every
+So a speculative FP operation never has a side effect: if it would set
+a sticky flag or trap, it yields a diagnostic value instead. A program
+that unmasks an exception (`feenableexcept`) therefore gets SIGILL, not
+SIGFPE, when a speculated operation raises it, unless the compiler
+checks the result with `%dt_al` (below) and redoes the operation
+non-speculatively. The kernel starts every
 process with all six flags set (`%pfpfr` `0x1fbf`, `%fpsr` `0x3f`;
 AGENTS.md), so in practice speculative FP operations give normal
 results. But after `feclearexcept`, almost every speculative FP result
@@ -120,10 +131,56 @@ Measured costs on the 4C:
 lcc's `-fsemi-spec-ld` (default) makes loads moved from under a predicate
 semi-speculative; `-fspec-ld` uses fully speculative loads with
 compensation code where semi-speculative ones are not allowed; the
-kernel itself is built `-fno-semi-spec-ld` [lcc-doc, source]. How lcc
-branches to the compensation code of a fully speculative load is not
-known (the `%dt_al` branch conditions of [bundle.md](bundle.md) are a
-candidate; lcc 1.29.16 used none in our probes).
+kernel itself is built `-fno-semi-spec-ld` [lcc-doc, source]. In lcc
+1.29.16's output (CoreMark, Linpack, probes at `-O3`) [lcc]:
+
+| Options | Speculative loads | Prefetch | Data speculation |
+|---|---|---|---|
+| default, or `-fspec-ld` alone | `ld,sm` (mod 0) | `ldb,sm …, mas=0x20` | lock `mas=0x4`, check `mas=0x3` |
+| `-fno-semi-spec-ld` | `ld,sm …, mas=0x3` with `%dt_al` recovery | `ldb,sm …, mas=0x23` | none |
+| `-fno-semi-spec-ld -fno-spec-ld` | none | none | none |
+
+### Recovery: `%dt_al` [hw, lcc, source]
+
+`rbranch label ? %dt_alN` (ctcond type 8, = `ibranch ? %MLOCK ||
+%dt_alN`; gas: `tc-e2k.c`) jumps when the **speculative operation in
+ALC N of the same wide instruction** has a diagnostic operand. N is 0,
+1, 3 or 4 (several may be given, `%dt_al01`); gas requires a `,sm`
+operation with an explicit channel there. This is how a fully
+speculative load reaches its compensation code. lcc's `if (c) r = *p +
+1;` [lcc]:
+
+```
+{ cmpesb,0 %r1, 0x0, %pred0 ; ldd,2,sm %r0, 0x0, %r4, mas=0x3 }
+...
+{ rbranch .L49 ? %dt_al1
+  add_addd,1,sm %r4, %r4, %r4, %empty ? ~%pred0   ! the check
+  addd,2,sm %r4, 0x1, %r3 ? ~%pred0 }             ! the real use
+.L53: ...
+.L49: { ldd,0 %r0, 0x0, %r4 }                     ! compensation:
+      ... { ibranch .L53 ; addd,0,sm %r4, 0x1, %r3 ? ~%pred0 }
+```
+
+The check is any speculative operation that reads the loaded register,
+under the guard's predicate, writing `%empty`; the compensation block
+repeats the load without `,sm` (so a genuinely bad address faults
+there, and an untouched page is paged in) and recomputes what used it,
+then branches back. Measured [hw]:
+
+| Check in ALC N, `rbranch ? %dt_alN` | Branch |
+|---|---|
+| operand diagnostic (`mas=0x3` from NULL or an untouched page, `ld,sm` from NULL) | taken |
+| operand valid | not taken, no cost |
+| the check predicated off (guard false), operand diagnostic | not taken |
+| diagnostic operand in another ALC than N | not taken |
+| no `rbranch`: the speculative operation alone | no trap, diagnostic result |
+| the operation's own result diagnostic (`faddd,sm` inexact with flags clear), operands valid | **not** taken |
+| a diagnostic FP operand (`faddd,sm` of the above) | taken |
+
+So `%dt_al` tests operands, not results: an FP result that turned
+diagnostic is caught only by a later speculative operation that reads
+it. A taken branch costs about as much as any taken `ibranch`, plus the
+compensation code.
 
 Unaligned loads (`ldd` from a 4-aligned address) work and need no
 speculation [hw]. A load to `%empty` with `,sm` is a prefetch: lcc emits
@@ -156,18 +213,39 @@ The protocol, as lcc uses it and as measured:
    value, then branches back. If nothing used the early value before the
    check, no `rbranch` is needed: the check's reload is the recovery.
 
+Other MAS kinds [hw; qemu `mas-format.h`]. lcc 1.29.16 emits only the
+lock `mas=0x4` (with or without `,sm`) and the check `mas=0x3` [lcc].
+
+| Operation | MAS mod | Channels | Effect |
+|---|---|---|---|
+| `ld,sm` | 4, lock | ALC0, ALC3 | semi-speculative load and lock: pages in an untouched page (a trap, so the entry is lost at once; the check then reloads) |
+| `ld,sm` | 7, speculative lock | ALC0, ALC3 | fully speculative load and lock: diagnostic for an untouched page, no entry; the check then reloads (non-speculatively, paging it in) and sets `%MLOCK` |
+| `ld` | 3, check and unlock | ALC2, ALC5 | as above |
+| `ld` | 2, check | ALC2, ALC5 | as mod 3 but keeps the entry: a later check still passes |
+| `st` | 3, store and unlock | ALC2 (ALC5 for quad) | stores and removes the entry of its **data** register |
+| `st` | 5, unlock | ALC2 (ALC5 for quad) | removes the entry of its data register; **does not write memory** |
+| `st` | 4, no check | any store channel | stores without removing entries: a later check of the overwritten bytes passes with the stale value |
+
+With mod 7 a load can move above both a branch and a store: the check,
+placed under the guard, turns into a normal load whenever the
+speculative lock failed. Both lock kinds have the same costs and keep
+or lose entries in the same way. A check of an address the program
+cannot read faults like a normal load (SIGSEGV), so it must stay under
+the guard.
+
 What keeps or loses an entry:
 
 | Between lock load and check | Entry | Measured |
 |---|---|---|
 | nothing | kept | check: early value, no `%MLOCK` |
 | store to the same bytes, full or partial | lost | reload, `%MLOCK` |
-| store to other bytes | kept | |
+| store to other bytes | kept | at distances 8 B to 16 MiB + 8: no false conflicts |
 | a store before the lock load | — | no conflict |
 | a `call` (to a function that just returns) | kept | |
 | a trap (page fault) | lost: the kernel clears the DAM on every page fault and context switch [source] | reload, `%MLOCK` |
 | **the destination register overwritten** | **kept** | the check returns the overwritten value, no `%MLOCK` |
 | check of another register, or no lock load | — | reload, `%MLOCK` |
+| the register locked again (other address) | the newer entry replaces it | a store to the first address keeps the check passing; a store to the second fails it |
 | 32 lock loads to other registers | kept | |
 | 48 lock loads | sometimes lost (1 run in 3) | |
 
@@ -196,6 +274,7 @@ compensation block [lcc]. Options: `-fno-dam`, `-fno-swp-dam`,
 | A semi-speculative load from a valid page not yet touched | a page fault, even if the value is never used |
 | A check load whose entry survived | none (no memory access) |
 | A failed check | the reload, plus `rbranch` into and out of compensation code |
+| `rbranch ? %dt_alN` not taken | none |
 
 The guide's example (6.4.3, `if (a) *a++`): 10 cycles with a branch,
 6 with the load and add hoisted as `,sm`, 5 with a predicated store as
@@ -211,15 +290,20 @@ well.
 | Non-speculative use of a diagnostic value | SIGILL | aborts ("exception handling is unimplemented") | no trap |
 | DAM | as above | as above, but a trap does not clear it | not modelled: every check reloads and sets `%MLOCK` |
 | Check load in ALC0/ALC3 | SIGILL | accepted | accepted |
+| `%dt_al` | taken on a diagnostic operand | never taken | aborts ("%MLOCK \|\| %dt_alM" not implemented) |
+| Store `mas=0x3` (store and unlock) | removes the entry | keeps it | DAM not modelled |
+| Speculative lock (mod 7) from an untouched page | diagnostic | data (untouched pages are not modelled) | data, tag 0 |
 
-MCST's qemu matches the 4C on everything except FP and traps; never use
-either emulator to judge FP speculation or the signals a program gets.
+MCST's qemu matches the 4C on everything except FP, traps, `%dt_al` and
+the store-unlock store; never use either emulator to judge FP
+speculation or the signals a program gets. Code recovering through
+`%dt_al` still runs correctly under it, because its loads fail only
+where the guard is false.
 
 ## Not checked yet
 
-- MAS mod 7 (spec-lock-check) and mod 2 (check without unlock); the
-  "unlock" store (mod 5).
-- How lcc reaches the compensation code of fully speculative loads.
-- Unmasked FP exceptions under `,sm`.
+- Quad (`ldq`/`ldqp`) lock and check loads; whether a window spill to
+  the procedure stack drops entries (MCST's qemu unlocks spilled
+  registers, `e2k_cpu_spill_rf`).
 - v5+ (`masf4` encodings on v6, partial speculative loads across pages on
   v7, kernel `cpu_features.h`).

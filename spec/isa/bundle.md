@@ -228,8 +228,9 @@ Bits 0–4 are `psrc`; bits 5–8 are the condition type:
 
 gas accepts conditions involving `%MLOCK` only on `ibranch`. In types 8, 9
 and 11, `%dt_alN`, `%cmpN` and `%clpN` refer to operations in the same
-bundle: a speculative operation in ALC N, a compare in ALC N, and the CLP
-that produces `@p(4 + N)`.
+bundle: a speculative operation in ALC N (true when it has a diagnostic
+operand; [speculation.md](speculation.md)), a compare in ALC N, and the
+CLP that produces `@p(4 + N)`.
 
 ## CS0: control syllable 0 [decoded, except `puttsd`, which gas does not accept]
 

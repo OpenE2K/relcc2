@@ -104,7 +104,8 @@ differ from v6.
 
 ```
 spec/isa/      ISA spec: bundle.md (wide instruction format), control-transfer.md
-               (branches, calls, CTPRs), binutils-ops.yaml
+               (branches, calls, CTPRs), semantics.md (what operations
+               compute), binutils-ops.yaml
                (every operation), registers.yaml (state and AAU registers)
 spec/abi/      ABI spec for e2k64: data layout, registers + DWARF, calling
                convention, stacks and unwinding, ELF/relocations/PIC/TLS,
@@ -117,6 +118,8 @@ tools/setup/   install reference toolchains into toolchains/
 tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas
 tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
 tools/isa-timing/   latency/hazard microbenchmarks run on hardware over SSH
+tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
+                    writes semantics.s), run on hardware
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     compiled to assembly and read, as are atomics.c,
                     asmops.c and stackprot.c; tagtrap.c, dbl.c,
@@ -230,7 +233,12 @@ python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
   a prepared `ct`/`call`/return issued in time costs nothing; every call
   and return empties `%ctpr1–3` (a taken `ct` through an empty or
   diagnostic CTPR traps, a false one doesn't); gas forbids preparing and
-  transferring through the same CTPR in one instruction before v6. Loads
+  transferring through the same CTPR in one instruction before v6.
+  Operation semantics (`spec/isa/semantics.md`, hw): `sxt` 4–6 zero-extend
+  (the guide is wrong), `merge` picks the first operand when the
+  predicate is false, shift counts are modulo the width, division by
+  zero is SIGFPE, FP `lt`/`le` signal on quiet NaNs, `fmax`/`fmin` are
+  x86-style, `fmul_add` rounds twice. Loads
   are scheduled for L1;
   `--memory` measures beyond-L1 latency for reference only. Other
   generations, 128-bit ops and throughput are not measured yet.
@@ -350,6 +358,11 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 None at the moment.
 
 ## Gotchas
+
+- MCST's qemu cannot deliver hardware exceptions as signals: division by
+  zero, a taken `ct` through an empty CTPR, a too-small `setwd`, a
+  diagnostic-operand trap all stop it with "exception handling is
+  unimplemented - aborting". Test those on the 4C.
 
 - The community qemu (the owner's; to be fixed later) differs from the
   4C and MCST's qemu in two ways: under `dbl = 1` it zero-extends 32-bit

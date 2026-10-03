@@ -13,8 +13,9 @@ another compiler, on shared objects: `fetch_add` on `long`, `int`,
 exchange spinlock guarding a plain counter. All counts were exact in
 three runs of 1.6 million increments each, while a plain-increment
 control lost about half. So the lock protocol below is atomic in
-hardware and code from different compilers interoperates. Fences and
-the 16-byte rule are not checked on hardware.
+hardware and code from different compilers interoperates. Ordering
+and 16-byte atomics on v3 are checked by `tools/abi/probes/litmus.c`
+(below).
 
 Code from different compilers interoperates as long as each one's
 read-modify-write is really atomic in hardware; the lock protocol below
@@ -76,6 +77,45 @@ loop around a **locked load** and an **unlocking store**. lcc's
 `_write_barrier`, `_mem_barrier` and `_barrier`, each a compiler barrier
 plus a `wait` whose mask is the argument (the mask bits of `wait` for
 the target ISA) (**lcc-doc**).
+
+## Memory ordering on hardware (v3) [hw]
+
+`tools/abi/probes/litmus.c` with hand-written sides (`litmus.s`) runs
+the classic two-thread tests on the 4C, two threads on one chip (CPUs
+0, 1) and on different chips (1, 9), 2 million iterations per variant,
+each access in its own wide instruction unless noted:
+
+| Test | Forbidden under SC | Seen |
+|---|---|---|
+| SB: `x = 1; r1 = y` ‖ `y = 1; r2 = x` | `r1 = r2 = 0` | 23 and 41 times |
+| SB, store and load in one wide instruction | same | 5,540 and 15 |
+| SB with `wait ld_c = 1, st_c = 1` or `wait st_c = 1` between | same | never |
+| MP: `x = 1; y = 1` ‖ `r1 = y; r2 = x` | `r1 = 1, r2 = 0` | never (also with the loads in one instruction, `wait`, or lcc's release/acquire) |
+| MP, both stores in one wide instruction | same | 2 in 20 million (one per channel order) |
+| LB: `r1 = x; y = 1` ‖ `r2 = y; x = 1` | `r1 = r2 = 1` | never (also in one instruction) |
+
+So across wide instructions v3 behaves like TSO (x86): the only
+reordering is a later load passing an earlier store (a store buffer),
+and `wait st_c = 1` before the load prevents it. Loads are not
+reordered with loads, stores not with stores, and a load not with a
+later store. Within one wide instruction a load may see memory before
+the instruction's store, and two stores may become visible in either
+order (rare, since they need another core reading between them). The
+counts are low because the two threads rarely overlap closely, so
+"never" means not seen in 4 million tries per variant; v4 and later
+are not tested.
+
+For a compiler on v3 that means: seq_cst stores and fences need the
+`wait` (or a locked read-modify-write); acquire loads and release
+stores need only that the compiler keeps their order and does not put
+the release store in one instruction with an earlier store (lcc still
+emits `wait` before a release store and a dummy use after an acquire
+load, which is safe).
+
+16-byte atomics on v3 (same probe): two threads doing
+`__atomic_fetch_add` and CAS loops on an `__int128` through libatomic
+gave exact counts (4 million each), a third thread's `__atomic_load_n`
+never saw the two halves differ, and `__atomic_is_lock_free(16)` is 0.
 
 ## 16-byte atomics (lcc, lcc-doc)
 

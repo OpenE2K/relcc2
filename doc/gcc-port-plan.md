@@ -358,7 +358,11 @@ written up in `spec/abi/source-compat.md` and `spec/abi/atomics.md`:
   ALC0) and a wait-unlock store (MAS `0x2`) with `rbranch` back, which
   gas assembles as `ibranch ? %MLOCK`; fences = `wait ld_c = 1,
   st_c = 1`. Under `-march=elbrus-v3` 16-byte atomics must call
-  libatomic, like lcc.
+  libatomic, like lcc. The 4C orders memory like x86 TSO across wide
+  instructions (atomics.md, "Memory ordering on hardware"), so lcc's
+  `wait`s around acquire/release accesses are stronger than needed;
+  following lcc keeps them. Never bundle a release store with an
+  earlier store: stores in one instruction are unordered.
 - lcc treats `swapcontext` as returns-twice and zero-initialises
   possibly uninitialised locals at `-O1`+ to avoid tag traps; the port
   should consider both.

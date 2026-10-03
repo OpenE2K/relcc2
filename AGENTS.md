@@ -140,7 +140,7 @@ tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     compiled to assembly and read, as are atomics.c,
                     asmops.c and stackprot.c; tagtrap.c, dbl.c,
                     ldouble.c, ctpr.c, dso/run.sh and elfops/run.sh run
-                    on hardware)
+                    on hardware, as does litmus.c with litmus.s)
 tools/abi/compat/   ABI compatibility suite: gen.py writes caller/callee
                     pairs, run.py builds every compiler pair and runs them
                     under qemu-e2k or, with --remote, on hardware over SSH;
@@ -377,7 +377,10 @@ read-modify-write is a lock-wait load (MAS 0x7, ALC0) plus wait-unlock
 store (MAS 0x2) with `rbranch` (= `ibranch ? %MLOCK`), whatever the
 order; fences and seq_cst/release accesses use `wait ld_c, st_c`.
 16-byte atomics are libatomic calls with a lock on v3/v4 and inline
-`ldqp`/`stqp` on v5+; mixing them on one object breaks. Source-level
+`ldqp`/`stqp` on v5+; mixing them on one object breaks. On the 4C
+(`litmus.c`) v3 is TSO-like across wide instructions: only a load
+passing an earlier store, which `wait st_c` stops; two stores in one
+instruction may become visible in either order. Source-level
 conventions (`source-compat.md`): define `__e2k__`, `__iset__`,
 `__ptr64__`, never `__LCC__` (glibc's headers key lcc-only code on it);
 asm `r` = register or even pair, `x` = extended register; lcc treats

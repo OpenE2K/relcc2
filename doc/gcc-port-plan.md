@@ -1014,8 +1014,10 @@ patterns must express:
   one register that is live from the lock load to the check.
 - The check goes in ALC2 or ALC5 (it also occupies a store channel), the
   lock load in ALC0 or ALC3, and `rbranch` in the check's instruction.
-- The table holds at least 32 entries; keep fewer pairs outstanding.
-- Traps clear it (a failed check, so correct but slow); calls don't, and
+- The table holds exactly 32 entries and evicts the oldest; keep fewer
+  pairs outstanding.
+- Traps clear it (a failed check, so correct but slow), and so does a
+  call deep enough to spill the register file; shallow calls don't, and
   entries are keyed by physical register, so clear it (`mmurw 0,
   %dam_inv`) on exit from a function that used it, as lcc does, and
   never let a check run without its own lock load on every path.

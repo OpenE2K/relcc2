@@ -242,12 +242,13 @@ What keeps or loses an entry:
 | store to other bytes | kept | at distances 8 B to 16 MiB + 8: no false conflicts |
 | a store before the lock load | — | no conflict |
 | a `call` (to a function that just returns) | kept | |
+| a call deep enough to spill the register file (64 levels) | lost | `DAM_BELL` 1 ([monitors.md](monitors.md)); 2 levels: kept |
 | a trap (page fault) | lost: the kernel clears the DAM on every page fault and context switch [source] | reload, `%MLOCK` |
 | **the destination register overwritten** | **kept** | the check returns the overwritten value, no `%MLOCK` |
 | check of another register, or no lock load | — | reload, `%MLOCK` |
 | the register locked again (other address) | the newer entry replaces it | a store to the first address keeps the check passing; a store to the second fails it |
 | 32 lock loads to other registers | kept | |
-| 48 lock loads | sometimes lost (1 run in 3) | |
+| 33 or more lock loads | the oldest entries evicted | the table holds exactly **32** (`DAM_OVFL` = locks − 32 after a clear, monitors.md) |
 
 `mmurw %rX, %dam_inv` clears the whole table; lcc writes it at the exits
 of functions that use data speculation [lcc]. An entry is keyed by the
@@ -302,8 +303,6 @@ where the guard is false.
 
 ## Not checked yet
 
-- Quad (`ldq`/`ldqp`) lock and check loads; whether a window spill to
-  the procedure stack drops entries (MCST's qemu unlocks spilled
-  registers, `e2k_cpu_spill_rf`).
+- Quad (`ldq`/`ldqp`) lock and check loads.
 - v5+ (`masf4` encodings on v6, partial speculative loads across pages on
   v7, kernel `cpu_features.h`).

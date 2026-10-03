@@ -107,6 +107,7 @@ spec/isa/      ISA spec: bundle.md (wide instruction format), control-transfer.m
                (branches, calls, CTPRs), semantics.md (what operations
                compute), apb.md (array prefetch), speculation.md
                (speculative operations, diagnostic values, DAM),
+               monitors.md (performance counters through perf),
                binutils-ops.yaml
                (every operation), registers.yaml (state and AAU registers)
 spec/abi/      ABI spec for e2k64: data layout, registers + DWARF, calling
@@ -128,7 +129,9 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     writes semantics.s) and array prefetch probes (apb.c;
                     gen_apb.py writes apb.s and apb-cases.h; apb-loop.c,
                     apb-lcc.c) and speculation probe (spec.c;
-                    gen_spec.py writes spec.s and spec-cases.h), run on
+                    gen_spec.py writes spec.s and spec-cases.h) and
+                    monitor events (pmu.c, gen_pmu.py; pmu.h is a
+                    helper for counting in any probe), run on
                     hardware
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     compiled to assembly and read, as are atomics.c,
@@ -266,14 +269,22 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   lock load `mas=0x4` (ALC0/3), check load `mas=0x3` (ALC2/5, same
   register) that reloads and sets `%MLOCK` for `rbranch` only if the
   entry was lost (overlapping store, trap, no lock load), kept across
-  calls and register overwrites, at least 32 entries; mod 7 is a fully
+  shallow calls and register overwrites, exactly 32 entries; mod 7 is a fully
   speculative lock, mod 2 a check that keeps the entry, stores with mod
   3/5 drop their data register's entry (5 writes nothing), mod 4 stores
   skip the DAM; a fully speculative load recovers through `rbranch ?
   %dt_alN`, taken when the `,sm` operation in ALC N of that instruction
   has a diagnostic operand (lcc's `-fno-semi-spec-ld`); with an
   exception unmasked a speculative FP op always gives a diagnostic
-  (SIGILL at the use instead of SIGFPE). Array prefetch
+  (SIGILL at the use instead of SIGFPE). Performance monitors
+  (`spec/isa/monitors.md`, hw): perf's raw `cpu` events (`0xMMEE`,
+  event lists in the kernel's `tools/perf/pmu-events/arch/e2k`), two
+  instruction and two data monitors on v3, user-mode counting allowed
+  on the 4C, `%dimar0/1` readable with `rrd` in user mode; `EXEC`
+  counts wide instructions, `TICKS` cycles, `BUB_E2` 4-cycle stall
+  steps, `CONF_ALUn_OUT` write-back conflicts, plus DAM, L1 and spill
+  events; sampling is throttled and breakpoints miss hits, so neither
+  gives exact per-address counts. Array prefetch
   (`spec/isa/apb.md`, hw): the program format, what a `mova` reads
   (`base + AAIND + disp + step × n + ind`, zero-extended, diagnostic
   instead of a fault), latency 5, and the correctness rules: a call, a

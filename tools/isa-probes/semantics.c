@@ -4,7 +4,9 @@
 
      LCC=/opt/mcst/lcc-1.29.16.e2k-v3.linux-6.1/bin/lcc
      $LCC -O1 tools/isa-probes/semantics.c tools/isa-probes/semantics.s -o sem
-     ./sem                         # on hardware, or under qemu-e2k
+     ./sem                         # on hardware
+     qemu-e2k ... ./sem emu        # under qemu-e2k: skips the cases that
+                                   # trap (MCST's qemu can't deliver them)
 
    Prints one line per case; traps are caught and printed as signals.  */
 
@@ -31,6 +33,9 @@ OP2 (cmppdb) OP2 (cmpldb) OP2 (cmpledb)
 OP2 (fcmpeqdb) OP2 (fcmpltdb) OP2 (fcmpledb) OP2 (fcmpuoddb)
 OP2 (fcmpneqdb) OP2 (fcmpnltdb) OP2 (fcmpnledb) OP2 (fcmpoddb)
 u64 s_fmul_addd (u64, u64, u64);
+OP2 (fcmpuddf) OP2 (fcmpoddf) OP2 (fcmpudsf) OP2 (fcmpodsf)
+OP2 (cmpandedb) OP2 (cmpandsdb) OP2 (cmpandpdb) OP2 (cmpandledb)
+u64 s_idr (void);
 
 static sigjmp_buf env;
 static volatile int sig, code;
@@ -78,8 +83,9 @@ u2d (u64 u)
 }
 
 int
-main (void)
+main (int argc, char **argv)
 {
+  int emu = argc > 1 && strcmp (argv[1], "emu") == 0;
   struct sigaction sa;
   memset (&sa, 0, sizeof sa);
   sa.sa_sigaction = handler;
@@ -135,12 +141,15 @@ main (void)
   printf ("# division\n");
   run2 ("sdivd", s_sdivd, 0x8000000000000000UL, -1UL);
   run2 ("sdivd", s_sdivd, -7UL, 2);
-  run2 ("sdivd", s_sdivd, 7, 0);
+  if (!emu)
+    run2 ("sdivd", s_sdivd, 7, 0);
   run2 ("udivd", s_udivd, -1UL, 2);
-  run2 ("udivd", s_udivd, 7, 0);
+  if (!emu)
+    run2 ("udivd", s_udivd, 7, 0);
   run2 ("sdivs", s_sdivs, 0x80000000UL, 0xffffffffUL);
   run2 ("sdivs", s_sdivs, 0xfffffff9UL, 2);
-  run2 ("sdivs", s_sdivs, 7, 0);
+  if (!emu)
+    run2 ("sdivs", s_sdivs, 7, 0);
   run2 ("udivs", s_udivs, 0xffffffffUL, 2);
   run2 ("smulhd", s_smulhd, -1UL, 2);
   run2 ("umulhd", s_umulhd, -1UL, 2);
@@ -179,6 +188,41 @@ main (void)
   for (unsigned i = 0; i < sizeof fc / sizeof fc[0]; i++)
     for (unsigned j = 0; j < sizeof fv / sizeof fv[0]; j++)
       run2 (fc[i].n, fc[i].f, fv[j][0], fv[j][1]);
+
+  printf ("# FP compares into a register: (result << 8) | flags\n");
+  struct { const char *n; u64 (*f) (u64, u64); int single; } fr[] = {
+    { "fcmpuddf", s_fcmpuddf, 0 }, { "fcmpoddf", s_fcmpoddf, 0 },
+    { "fcmpudsf", s_fcmpudsf, 1 }, { "fcmpodsf", s_fcmpodsf, 1 } };
+  double rv[][2] = { { 1, 2 }, { 2, 2 }, { -0.0, 0.0 }, { INFINITY, INFINITY },
+                     { 3, 2 }, { NAN, 1 }, { 1, NAN } };
+  for (unsigned i = 0; i < sizeof fr / sizeof fr[0]; i++)
+    for (unsigned j = 0; j < sizeof rv / sizeof rv[0]; j++)
+      {
+        u64 a = d2u (rv[j][0]), b = d2u (rv[j][1]);
+        if (fr[i].single)
+          {
+            float x = rv[j][0], y = rv[j][1];
+            unsigned xa, yb;
+            memcpy (&xa, &x, 4);
+            memcpy (&yb, &y, 4);
+            a = xa, b = yb;
+          }
+        run2 (fr[i].n, fr[i].f, a, b);
+      }
+  run2 ("fcmpuddf", s_fcmpuddf, 0x7ff4000000000000UL, d2u (1.0));
+
+  printf ("# cmpand: 1 = predicate true for a & b\n");
+  struct { const char *n; u64 (*f) (u64, u64); } ca[] = {
+    { "cmpandedb", s_cmpandedb }, { "cmpandsdb", s_cmpandsdb },
+    { "cmpandpdb", s_cmpandpdb }, { "cmpandledb", s_cmpandledb } };
+  u64 av[][2] = { { 0x40, 0x40 }, { 0x45, 0x40 }, { 0x05, 0x40 },
+                  { -1UL, 0x8000000000000000UL }, { 3, 3 }, { 1, 3 },
+                  { 7, 7 }, { 0, 0 } };
+  for (unsigned i = 0; i < sizeof ca / sizeof ca[0]; i++)
+    for (unsigned j = 0; j < sizeof av / sizeof av[0]; j++)
+      run2 (ca[i].n, ca[i].f, av[j][0], av[j][1]);
+
+  printf ("idr -> %016lx\n", s_idr ());
 
   printf ("# fmaxd / fmind with NaN and signed zeros\n");
   u64 mv[][2] = { { qnan, d2u (1.0) }, { d2u (1.0), qnan },

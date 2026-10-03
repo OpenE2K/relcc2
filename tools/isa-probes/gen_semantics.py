@@ -81,6 +81,26 @@ def main():
             ["rrs,0 %pfpfr, %r10"], ["nop 5"],
             ["ands,0 %r10, 0x3f, %r10"], ["rws,0 %r8, %pfpfr"],
             ["ord,0 %dr2, %dr10, %dr0"]], wsz=8))
+    # FP compares into a register (x86 ucomisd/comisd flag layout?):
+    # (result << 8) | %pfpfr flags raised; ud is the quiet one.
+    for c, r in (("uddf", "%dr"), ("oddf", "%dr"), ("udsf", "%r"),
+                 ("odsf", "%r")):
+        out.append(fn(f"s_fcmp{c}", [
+            ["rrs,0 %pfpfr, %r8"], ["nop 5"],
+            ["ands,0 %r8, 0xffffffc0, %r9"], ["rws,0 %r9, %pfpfr"], ["nop 5"],
+            [f"fcmp{c},0 {r}0, {r}1, %r2"], ["nop 5"],
+            ["rrs,0 %pfpfr, %r10"], ["nop 5"],
+            ["ands,0 %r10, 0x3f, %r10", "andd,1 %dr2, 0xffffffff, %dr2"],
+            ["rws,0 %r8, %pfpfr", "shld,1 %dr2, 0x8, %dr2"],
+            ["ord,0 %dr2, %dr10, %dr0"]], wsz=8))
+    # cmpand: a predicate from a & b (1 = true).
+    for c in ["e", "s", "p", "le"]:
+        out.append(fn(f"s_cmpand{c}db", [
+            [f"cmpand{c}db,0 %dr0, %dr1, %pred0", "addd,1 0x0, 0x0, %dr2"],
+            ["nop 2"], ["addd,0 0x0, 0x1, %dr2 ? %pred0"],
+            ["addd,0 0x0, %dr2, %dr0"]]))
+    # %idr: the CPU model and revision.
+    out.append(fn("s_idr", [["rrd,0 %idr, %dr0"]]))
     # double fmul_addd(a, b, c): fused or two roundings?
     out.append(fn("s_fmul_addd", [["fmul_addd %dr0, %dr1, %dr2, %dr0"]]))
     (HERE / "semantics.s").write_text("".join(out))

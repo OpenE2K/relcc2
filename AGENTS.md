@@ -201,8 +201,12 @@ python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
   costs +1 for integer/load results and +2 for FP ones (the guide's
   int→FP +1 is this crossing); a stall costs about a
   whole latency extra; everything user code touches is interlocked except
-  `rwd %lsr` → `rrd %lsr` (4 cycles). Other generations, packed ops and
-  throughput are not measured yet.
+  `rwd %lsr` → `rrd %lsr` (4 cycles). Also measured: packed integer ops
+  (1 cycle, 4 to integer consumers; the guide says FP class), conversions
+  (5), FP compares (+2 over integer ones), predicate logic (as the guide;
+  `andp` chains within one instruction), L2 9, memory ~105–110 local and
+  ~190–235 on another node (`--numa`). Other generations, 128-bit ops
+  and throughput are not measured yet.
 
 ### ABI (spec/abi) — written, checked by the compat suite under qemu-e2k and on the 4C (v3)
 

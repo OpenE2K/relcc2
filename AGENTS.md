@@ -88,9 +88,12 @@ differ from v6.
   claude@ringo.lan` (key in untracked `secrets/`, never commit or copy it).
   4× E2S, 16 cores, 61 GiB RAM, ALT Linux, native lcc 1.29.16, gdb, perf.
   It is a shared machine, not a container: keep parallelism low (about
-  `-j4`), work in `~/relcc2`, and don't fill `/tmp` (tmpfs). When a task
-  is done, remove what you created (`~/relcc2`, `~/dso-probe`,
-  `~/elfops-probe`); the account's own dotfiles stay.
+  `-j4`) and don't fill `/tmp` (tmpfs). **Several agents use the account
+  at once**: work only in your own subdirectory `~/relcc2/<task>` (check
+  that it isn't taken), and when done remove only that subdirectory.
+  Never remove `~/relcc2` itself or other agents' subdirectories; the
+  account's dotfiles stay. `bench.py --remote-dir` and `run.py
+  --remote-dir` choose the subdirectory.
 - Nearly every Elbrus system ships MCST's lcc as the default compiler (OS
   Elbrus and ALT Linux), so tests may assume lcc on the target.
 - ALT Linux ships no 32-bit or protected-mode (`e2k128`) runtime. Keep those

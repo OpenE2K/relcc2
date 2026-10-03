@@ -20,7 +20,8 @@ measurement:
 
 Usage:
   bench.py [--target T] [--remote [USER@]HOST] [--ssh-key FILE]
-           [--out DIR] [--yaml FILE] [--memory] [--numa CPU:MEM]
+           [--remote-dir DIR] [--out DIR] [--yaml FILE] [--memory]
+           [--numa CPU:MEM]
 
 --target picks lcc as in tools/abi/compat/run.py (default v3). Results
 are printed as tables; --yaml writes them as data (see
@@ -887,7 +888,7 @@ def run(args, prog, sysroot):
         ssh = ["ssh", "-o", "BatchMode=yes"]
         if args.ssh_key:
             ssh += ["-i", str(args.ssh_key), "-o", "IdentitiesOnly=yes"]
-        rdir = "relcc2/isa-timing"
+        rdir = args.remote_dir
         subprocess.run(ssh + [args.remote, f"mkdir -p {rdir}"], check=True)
         subprocess.run(["scp", "-q"] + ssh[1:] + [str(prog), f"{args.remote}:{rdir}/"],
                        check=True)
@@ -1028,6 +1029,9 @@ def main():
                     default=SSH_KEY if SSH_KEY.exists() else None)
     ap.add_argument("--out", type=Path, default=ROOT / "toolchains" / "isa-timing")
     ap.add_argument("--yaml", type=Path)
+    ap.add_argument("--remote-dir", default="relcc2/isa-timing",
+                    help="with --remote: working directory on the host, "
+                    "relative to $HOME (one per task; shared hosts)")
     ap.add_argument("--memory", action="store_true",
                     help="also measure load latency beyond L1 (pointer chases "
                     "over 256 KiB..128 MiB; informational, slow)")

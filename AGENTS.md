@@ -118,6 +118,10 @@ tools/setup/   install reference toolchains into toolchains/
 tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas
 tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
 tools/isa-timing/   latency/hazard microbenchmarks run on hardware over SSH
+tools/isa-score/    scores a compiled program's use of E2K parallelism:
+                    the compiler's schedule vs the best schedule of the
+                    same operations, per block and loop, optionally
+                    weighted by counts from a qemu-e2k run (README.md)
 tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     writes semantics.s) and array prefetch probes (apb.c;
                     gen_apb.py writes apb.s and apb-cases.h; apb-loop.c,
@@ -200,6 +204,10 @@ python3 tools/abi/compat/run.py toolchains/compat/gen --target v3 \
     --remote claude@ringo.lan -o toolchains/compat/ringo-v3
                                                   # on the 4C, ~30 s: 0 unexpected
 python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
+python3 tools/isa-score/selftest.py               # stall rule vs timing-e2s.yaml: ok
+python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
+    --remote-dir relcc2/<task>                    # isa-score vs the 4C: all
+                                                  # kernels within 2%
 ```
 
 ## Current state
@@ -226,7 +234,10 @@ python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
   `disp`→`ct` 5, ...); crossing between the clusters ALC0–2 and ALC3–5
   costs +1 for integer/load results and +2 for FP ones (the guide's
   int→FP +1 is this crossing); a stall costs about a
-  whole latency extra; everything user code touches is interlocked except
+  whole latency extra (exactly: an operand e cycles early stalls
+  4 × ceil(e/4)); an FP-side result routed to an integer op is a cycle
+  late when an integer op or load issues in its channel 2 cycles after
+  it (write-back conflict); everything user code touches is interlocked except
   `rwd %lsr` → `rrd %lsr` (4 cycles). Also measured: packed integer ops
   (1 cycle, 4 to integer consumers; the guide says FP class), conversions
   (5), FP compares (+2 over integer ones), predicate logic (as the guide;
@@ -252,6 +263,19 @@ python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
   are scheduled for L1;
   `--memory` measures beyond-L1 latency for reference only. Other
   generations, 128-bit ops and throughput are not measured yet.
+
+### Schedule scoring (tools/isa-score)
+
+`score.py PROGRAM [--counts FILE]` compares, for every basic block and
+single-block loop, the compiler's schedule ("achieved", interlock stalls
+and write-back conflicts included, loads in L1) with the best list
+schedule of the same operations on the chosen ISA version ("possible",
+keeping the compiler's registers or true dependences only; loops by
+initiation interval). `count.sh` runs the program under MCST's qemu-e2k
+with a TCG plugin to weight blocks by executions (qemu-e2k reports wrong
+addresses after a block's first instruction; the plugin works around
+it). Validated on the 4C: nine kernels at lcc -O0/-O2/-O3 within 2% of
+the cycles measured with `%clkr`. v6/v7 use v3 latencies.
 
 ### ABI (spec/abi) — written, checked by the compat suite under qemu-e2k and on the 4C (v3)
 

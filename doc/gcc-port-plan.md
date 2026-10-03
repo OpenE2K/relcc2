@@ -987,7 +987,11 @@ print `,N` with a punctuation code in the output templates.
 ### 7.8 Measuring
 
 Correctness with the compat suite and GCC's testsuite; speed with `perf
-stat` on the 4C against lcc on the same sources. The guide's chapter 5
+stat` on the 4C against lcc on the same sources. `tools/isa-score`
+shows where the cycles go without hardware: for each block and loop it
+gives the schedule's cycles and the best possible for the same
+operations, so the port's output and lcc's can be compared block by
+block (validated on the 4C to within 2%). The guide's chapter 5
 lists the E2K performance counters (`BUB_E2` etc. for stalls).
 
 ---

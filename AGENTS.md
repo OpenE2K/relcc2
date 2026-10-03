@@ -123,7 +123,8 @@ tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
 tools/isa-timing/   latency/hazard microbenchmarks run on hardware over SSH
 tools/isa-score/    scores a compiled program's use of E2K parallelism:
                     the compiler's schedule vs the best schedule of the
-                    same operations, per block and loop, static
+                    same operations, per block and loop, static;
+                    profile.py weights it by a sampled run on the 4C
                     (README.md)
 tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     writes semantics.s) and array prefetch probes (apb.c;
@@ -213,8 +214,8 @@ python3 tools/abi/compat/run.py toolchains/compat/gen --target v3 \
 python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
 python3 tools/isa-score/selftest.py               # stall rule vs timing-e2s.yaml: ok
 python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
-    --remote-dir relcc2/<task>                    # isa-score vs the 4C (gdb
-                                                  # counts; not yet run, slow)
+    --remote-dir relcc2/<task>                    # isa-score vs the 4C,
+                                                  # ~1 min: within 1% (one 3%)
 ```
 
 ## Current state
@@ -304,13 +305,18 @@ loop, the compiler's schedule ("achieved", interlock stalls and
 write-back conflicts included, loads in L1) with the best list schedule
 of the same operations on the chosen ISA version ("possible", keeping
 the compiler's registers or true dependences only; loops by initiation
-interval). Static only (owner: no emulator runs; real performance is
-measured on hardware). To compare schedulers use operations per cycle
-of the achieved schedule: on CoreMark and Linpack it ranks lcc > Unipro
-clang > gcc-claude, as the 4C does; the possible/achieved score does
-not. The model was validated within 2% on the 4C with qemu execution
-counts (removed since); `validate/` now counts by single-stepping under
-gdb on the machine, not yet run to completion. v6/v7 use v3 latencies.
+interval). It is static (owner: no emulator runs). `profile.py PROGRAM
+--remote ...` weights the same blocks by a run on the 4C: perf samples
+the EXEC and TICKS monitors (spec/isa/monitors.md), whose exact
+instruction addresses give per-block execution counts and measured
+cycles, and it reports measured against modelled cycles per block plus
+a stall breakdown. To compare schedulers use operations per cycle of
+the achieved schedule, static or weighted by the run: on CoreMark and
+Linpack it ranks lcc > Unipro clang > gcc-claude, as the 4C does; the
+possible/achieved score does not. `validate/` (about a minute on the
+4C) puts every kernel within 1% (one within 3%); on the benchmarks the
+model is within 6%, except gcc-claude's CoreMark (11%, instruction-fetch
+bubbles after taken transfers, not modelled). v6/v7 use v3 latencies.
 
 ### ABI (spec/abi) — written, checked by the compat suite under qemu-e2k and on the 4C (v3)
 

@@ -489,7 +489,8 @@ produce slow code: correctness first, then the VLIW work.
 
 - Counted loops (`doloop_end`), modulo scheduling with register copies
   (GCC's SMS), then E2K loop mode and rotating registers, then APB.
-  Section 7.7.
+  Section 7.7, which notes that APB needs only a counted loop-mode loop
+  and could come right after `doloop_end`.
 
 ### M8. C++ and the other runtimes
 
@@ -950,7 +951,25 @@ print `,N` with a punctuation code in the output templates.
   support yet", ia64.cc:2769). Supporting E2K loop mode with rotation
   (`abn`/`abp`, `%b[]` rotation, prologue/epilogue predicates) is new
   compiler work — a research project for after the port works.
-- **APB** (array prefetch): later still.
+- **APB** (array prefetch, `spec/isa/apb.md`): measured on the 4C,
+  lcc's streaming loops are 2× faster from L1, about 6× from L2 and 22×
+  from memory with it than without, because lcc's code without APB
+  doesn't prefetch at all. APB doesn't need rotating registers or
+  software pipelining: a plain `loop_mode` loop counted by `%lsr`
+  (`doloop_end`) with one `mova` per array is enough (`apb-loop.s`,
+  loop A). It does need, for correctness:
+  - every area advanced exactly once per loop-mode iteration and `%lsr`
+    written before `bap`, because after any interrupt the kernel
+    recomputes the stream position from `%ilcr − %lsr`;
+  - no calls in the loop, and no use of `%ctpr2` (a call, a return or a
+    write to `%ctpr2` stops the program, and a later `mova` is SIGILL);
+  - on v3/v4, elements aligned to their size (otherwise the `mova`
+    returns a diagnostic value), proven or checked at run time as lcc
+    does.
+
+  So APB could come right after counted loops, before modulo scheduling.
+  It can be tested only on hardware: MCST's qemu gives wrong results for
+  APB loops that receive signals.
 
 ### 7.8 Measuring
 

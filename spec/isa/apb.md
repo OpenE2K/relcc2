@@ -209,9 +209,10 @@ signals, and with three processes sharing one CPU.
 
 Rules that follow:
 
-- Use APB only in a `loop_mode` loop counted by `%lsr` (`ct %ctpr1 ?
-  %NOT_LOOP_END`, `alc alcf=1, alct=1`), with every area advanced
-  (`am = 1`) exactly once per iteration.
+- Use APB only in a `loop_mode` loop counted by `%lsr`
+  ([loops.md](loops.md); `ct %ctpr1 ? %NOT_LOOP_END`, `alc alcf=1,
+  alct=1`), with every area advanced (`am = 1`) exactly once per
+  iteration.
 - Write `%lsr` (which also sets `%ilcr`) before `bap`, and issue no
   `mova` outside the loop.
 - In the prologue between `bap` and the loop, no area may advance.

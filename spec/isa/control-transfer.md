@@ -236,8 +236,8 @@ call, a `switch`, an early exit and an indirect call:
 - After every call it prepares again whatever the rest needs (the loop's
   back edge, the next call, the return), as the hardware requires.
 - Counted loops use loop mode: `disp %ctpr1, head` before the loop and
-  `ct %ctpr1 ? %NOT_LOOP_END` with `loop_mode`, `alc`, `abn` (loop mode is
-  not specified here yet).
+  `ct %ctpr1 ? %NOT_LOOP_END` with `loop_mode`, `alc`, `abn`
+  ([loops.md](loops.md)).
 - `switch`: the target is loaded from a jump table and moved with
   `movtd,0,sm` into `%ctpr1`; indirect calls the same way, 9 cycles before
   the `call`.

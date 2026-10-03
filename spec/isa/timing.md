@@ -40,9 +40,10 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | `sdivs`, `sdivd` | — | 11 | 13 |
 | `ldd`, L1 hit, any of ALC0/2/3/5 → next load's address | 3 | 3 | 5 |
 | `ldd` → integer op | 3 | 3 | — |
+| `ldb`, `ldh`, `ldw` → integer op | 3 | 3 | — |
 | integer op → load address | — | 1 | — |
 | FP add → integer op | 4 + 2 | 6 | — |
-| integer multiply → integer op | 4 + 2 | 6 | — |
+| integer multiply (`muld`, `muls`) → integer op | 4 + 2 | 6 (7 with a write-back conflict, below) | — |
 | integer op → FP add | 1 + 1 | 1 in the same cluster, 2 across (see Clusters) | — |
 | FP add → FP multiply | 4 | 4 | — |
 | compare → predicated ALU op | 2 | 2 | — |
@@ -119,14 +120,44 @@ The pipeline interlocks, but an early consumer is expensive. For a
 |---|---|---|---|---|---|
 | cycles | 5 | 6 | 7 | 4 | 5 |
 
-So for `g` below the latency the cost is about `g + latency`, not
-`latency`: issuing one cycle early loses almost a whole latency. The
-dividers and square root behave periodically (period 4: `fdivs` costs 11,
-12, 13, 14, 11, ... for `g` = 3, 4, 5, 6, 7). The combined integer
-operations cost 5 back-to-back despite a latency of 2. Consequences for a
-compiler: model latencies exactly, and fill a known gap with `nop N` (or
-independent work) rather than relying on the interlock. This is why lcc
-pads with `nop`s.
+The rule behind every measured gap: an operand that is `e = L − g`
+cycles early stalls the consumer's whole wide instruction for
+`4 × ceil(e / 4)` cycles, so a step costs `g + 4 × ceil((L − g) / 4)`.
+The pipeline retries in 4-cycle steps: one cycle early costs 4, five
+cycles early 8. This fits all the chains in `timing-e2s.yaml` (`addd`,
+`add_addd`, `muld`, `faddd`, `fmuld`, `fmul_addd`, `fdivs`, `fdivd`,
+`fsqrts`, `sdivd`, `ldd`; checked by `tools/isa-score/selftest.py`),
+including the dividers' apparent period of 4 and the combined integer
+operations' 5 back-to-back (latency 2, one cycle early: 1 + 4). A
+`mova` result used early stalls the same way (apb.md). Consequences for
+a compiler: model latencies exactly, and fill a known gap with `nop N`
+(or independent work) rather than relying on the interlock. This is why
+lcc pads with `nop`s.
+
+## Write-back conflicts
+
+An FP-side result (FP add or multiply, integer multiply) on its way to
+an integer operation arrives one cycle late when an integer-side
+operation (an ALU operation or a load, not a store) issues in the
+**same channel exactly 2 cycles after** the producer. With the consumer
+placed at the producer's latency, that is a stall step (4 cycles).
+Measured (`bench.py`, `*_p*` kernels; the reported latency counts from
+the second operation, so the producer → consumer distance is 2 more):
+
+| Producer (ALC0) → `addd,1` | Operation 2 cycles later | Producer → consumer latency |
+|---|---|---|
+| `muld` | `addd,0` | 7 |
+| `muld` | `ldd,0` | 7 |
+| `muld` | `addd,1` (other channel) | 6 |
+| `muld` | `faddd,0` (FP side) | 6 |
+| `faddd` | `addd,0` | 7 |
+
+Not affected: the same pairs feeding FP consumers, stores, and
+operations in any other channel. lcc's `-O0` code hits it (`muls,0`
+then `ldb,0` two cycles later in a hash loop: 17 cycles per iteration
+instead of 13). A scheduler should keep the producer's channel free of
+integer operations 2 cycles after an FP-side result it routes to the
+integer side, or place the consumer a cycle later.
 
 ## Memory
 

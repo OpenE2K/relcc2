@@ -75,7 +75,7 @@ APS fields (APLS is the 32-bit `disp`):
 | 31 | `ct` (left) / `dpl` (right) | `ct = 1`: last instruction of the program; it must be set in the last instruction's left half. `dpl = 1`: the right half duplicates the left; lcc always writes 0 |
 | 30 | `si` | Secondary index, v1 only; gas rejects it on v2+ |
 | 28–29 | `dcd` | Cache control: 0 all caches; 2 bypass DCACHE2; 3 bypass DCACHE2 and ECACHE [guide]. lcc writes 0 |
-| 25–27 | `fmt` | Element format: 1 byte, 2 half, 3 word, 4 double, 5 quad, 7 quad packed (v5+). Used to scale the increment and to check alignment |
+| 25–27 | `fmt` | Element format: 1 byte, 2 half, 3 word, 4 double, 5 quad, 7 quad packed (v5+; on the Elbrus-8C2 a program with `fmt` 7 makes its `movaqp` SIGILL). Used to scale the increment and to check alignment |
 | 20–24 | `mrng` | Bytes a `mova` may read per step, from 1 to 31; 0 means 32 |
 | 15–19 | `d` | Descriptor `%aadN` (0–31) |
 | 12–14 | `incr` | Increment register `%aaincrN` (0–7); `%aaincr0` is always 1 |
@@ -270,6 +270,17 @@ its data ready it costs what a `staad` does; with the data written by
 integer ops two cycles before, the loop took 4 more cycles per
 iteration (one stall step; not analysed further) [hw].
 
+## 128-bit movas (v5+) [hw: Elbrus-8C2]
+
+`movaqp,N area=…, ind=…, am=…, be=…, %qprM` (`apb.c` built with
+`-DAPB_V5`, cases `q5*`) with an area of `fmt` 5 returns 16 bytes per
+element into all of `%qprM` and steps 16 bytes. A base misaligned by 8
+or by 4 bytes still returns the right (unaligned) 16 bytes, as v5's
+doubleword movas do with a misaligned base (the 4C gives a diagnostic
+value there). `be = 1` reverses all 16 bytes (the low half of the
+result is the swapped high doubleword). An area with `fmt` 7 makes the
+`movaqp` SIGILL on the 8C2.
+
 ## How lcc uses APB [lcc, guide]
 
 - At `-O2` and above (not `-O1`), also when software pipelining is
@@ -341,7 +352,7 @@ program receives signals.
 
 - AAU stores into areas also read by `mova`. (`mova` in epilogue iterations:
   disabled unless `%lsr.ldmc`, [loops.md](loops.md).)
-- v5+ (64-bit indices, unaligned areas, `movaqp`); timing on other
-  generations.
+- v5+: 64-bit indices, `fmt` 7; timing (the 8C2's `movaqp` and APB
+  timing); v6+.
 - `dcd`, `dpl = 1`, the meaning of `%aabf`, epilogue (`ecnt`) behaviour
   with movas.

@@ -226,6 +226,19 @@ The protocol, as lcc uses it and as measured:
    could reproduce that in isolation. lcc always puts `rbranch` in the
    check's instruction, and so should a compiler.
 
+**Quad lock and check loads (v5+)** [hw: Elbrus-8C2, `spec.c` built
+with `-DSPEC_V5`, `./spec-v5 v5`]: `ldqp,0,sm … %qprN, mas=0x4` with
+`ldqp,5 … %qprN, mas=0x3` (and `rbranch`) work as the doubleword pair,
+for all 128 bits: an intact entry keeps the early value, a store into
+**either half** removes it and the check reloads the whole 16 bytes, a
+store to the next 16 bytes doesn't. The lock goes in ALC0 or ALC3
+(gas also accepts ALC2, where it records no entry), the check in ALC2
+or ALC5; without `,sm` no entry; mod 7 works; a second check reloads.
+Entries are per register, not per size: a doubleword check (`ldd …
+%drN, mas=0x3`) of a quad-locked register finds the entry, and a
+`stqp` over a doubleword entry removes it. A quad entry counts as one
+of the 32 (32 quad locks fit, 40 don't).
+
 Other MAS kinds [hw; qemu `mas-format.h`]. lcc 1.29.16 emits only the
 lock `mas=0x4` (always with `,sm`) and the check `mas=0x3` [lcc].
 
@@ -316,6 +329,7 @@ where the guard is false.
 
 ## Not checked yet
 
-- Quad (`ldq`/`ldqp`) lock and check loads.
+- Quad lock and check loads on v3 (`ldq` exists only in protected
+  mode there).
 - v5+ (`masf4` encodings on v6, partial speculative loads across pages on
   v7, kernel `cpu_features.h`).

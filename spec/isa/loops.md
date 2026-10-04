@@ -141,7 +141,11 @@ protected-mode descriptors [source]): with `strmd` 0 the last iteration
 drops it, with 2 it stores, and with 1, which would keep only its first
 half, the `loop_mode` instruction raises SIGILL (`ILL_ILLOPC`) in that
 iteration [hw]. A `strmd` count must therefore never split a quad
-store. Word stores (`staaw`) count
+store. **On v5 a quad store is one store**: `stqp` (ALC2) and
+`staaqp` (ALC5), one channel each, follow the rules with `strmd` 1
+keeping the whole 16 bytes; with `stqp` in ALC2 and `std` in ALC5,
+`strmd` 1 keeps the quad store and drops the doubleword (hw: Elbrus-8C2,
+`v5qstores*`, `v5aaqstores`). Word stores (`staaw`) count
 as one and advance by 4 bytes [hw].
 
 **Loads are never suppressed**: an ordinary `ldd` in a `loop_mode`
@@ -293,6 +297,5 @@ kept out of `loops.c`.
 ## Not checked yet
 
 - `abg` semantics on hardware (see above: not to be run casually).
-- What `ldovl` does; v5+ quad stores (`stqp`, `staaqp`) under the
-  store rules.
-- v5+ (`%lsr1`, `%ilcr1`, 64-bit counts).
+- What `ldovl` does.
+- v6+.

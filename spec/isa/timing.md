@@ -366,6 +366,12 @@ v5, as lcc's documentation says for v1–v5. What v5 adds or changes:
 
   So 128-bit operations take the latency of their 64-bit counterparts,
   and FP min/max is 2, not 4, on v3 too (table above).
+- **128-bit operations are fully pipelined** in every channel they are
+  allowed (`v5tp_*` kernels: one per channel per cycle): packed integer
+  add `qpaddd` in ALC0/3; `qpmullh`, `qpsadbw`, `addcd` in ALC1/4;
+  logic, shifts, shuffles (`qpshufb`, `qppermb`, `qpmerge`), FP compares,
+  `qpfmaxd`, conversions, `plog`/`qplog` in ALC0/1/3/4; combined FP
+  (`qpfmul_addd`) in all six.
 - **Crossings with 128-bit values**: a `qpfaddd` result costs 6 in the
   other cluster (as scalar FP) and 6 to `addd` (reading the low half), 4
   to `faddd`; `qpaddd` costs 4 in the other cluster and 4 to `addd`;

@@ -246,11 +246,11 @@ prefetching and APB, so `bench.py` measures them only with `--memory`
 L2 hit 9 cycles (the guide says 11), memory on the local node about
 105–110 (+15 with 4 KiB pages, from TLB misses), on another node about
 190–235.
-This 4C runs its memory in two channels per processor instead of the
-three the E2S has (owner): latency should hardly change, but any
+This 4C runs its DDR3 memory in two channels per processor instead of
+the three the E2S has (owner): latency should hardly change, but any
 bandwidth-bound result on it (memory-bound benchmarks, streaming loops)
-understates a fully populated machine. The 8C2 has all four of its
-memory channels populated, so 4C/8C2 bandwidth comparisons favour the
+understates a fully populated machine. The 8C2 has DDR4 in all four
+of its memory channels, so 4C/8C2 bandwidth comparisons favour the
 8C2 by more than the hardware does.
 
 On the Elbrus-8C2 (64 KiB L1D and 512 KiB L2 per core, 16 MiB L3

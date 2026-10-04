@@ -86,7 +86,7 @@ differ from v6.
 
 - **4C (v3)**: `ssh -i secrets/id_ed25519 -o IdentitiesOnly=yes
   claude@ringo.lan` (key in untracked `secrets/`, never commit or copy it).
-  4× E2S, 16 cores, 61 GiB RAM (two memory channels per processor
+  4× E2S, 16 cores, 61 GiB DDR3 (two memory channels per processor
   instead of three), ALT Linux, native lcc 1.29.16, gdb, perf.
   It is a shared machine, not a container: keep parallelism low (about
   `-j4`) and don't fill `/tmp` (tmpfs). **Several agents use the account
@@ -99,7 +99,7 @@ differ from v6.
   claude@geofront.lan` (the same key). Elbrus-8C2 (E8C2, cpu family 5),
   8 cores, one socket, 1500 MHz (`performance` governor since
   2026-10-04; `%clkr` counts 1500 MHz), 125 GiB
-  RAM (all four memory channels populated), Elbrus Linux 9.5.5 (OS Elbrus, kernel 6.1), native lcc 1.29.16
+  DDR4 (all four memory channels populated), Elbrus Linux 9.5.5 (OS Elbrus, kernel 6.1), native lcc 1.29.16
   (`e2k-8c2-linux`), gdb, perf (`perf_event_paranoid` 2), numactl.
   Same rules as the 4C: work only in `~/relcc2/<task>`, remove only
   that, keep runs short. Build code for it with the 8C2-tuned

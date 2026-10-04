@@ -584,7 +584,13 @@ renaming approach), or the loop's rotating area placed elsewhere.
 which MCST's libffi already uses for its closures
 (`spec/abi/registers.md`). lcc supports neither nested functions nor
 `__builtin_setjmp`/`__builtin_longjmp`/`__builtin_apply`, so nothing
-depends on them and they can wait (`spec/abi/source-compat.md`).
+depends on them and they can wait (`spec/abi/source-compat.md`). When
+they come, nonlocal `goto` and `__builtin_longjmp` can re-enter the
+target frame through glibc: the receiver calls `_setjmp` on a `jmp_buf`
+in its frame, the jump writes the label's address over the saved IP
+(byte 8) and calls `longjmp`; the frame resumes at the label with the
+registers of its latest call (`spec/abi/stack-and-unwinding.md`,
+checked on the 4C; the proof of concept implements both this way).
 
 **Call-clobbered**: globals (except `%g13`, fixed; `%g12` as the static chain), the outgoing
 registers, `%ctpr1–3`, `%lsr`. Window registers `%r*` are preserved by
@@ -728,7 +734,11 @@ the extended part is lost when the window spills (measured on the 4C);
 lcc sets `nfx=0` in every function that uses `long double`. 80-bit
 operations follow `%fpcr`/`%fpsr` (x87 control and status words), not
 `%pfpfr`, so rounding-mode patterns and `fenv` support must handle both
-(`spec/abi/registers.md`). Cross-domain and cross-cluster latency
+(`spec/abi/registers.md`, "Floating-point control and status", which
+also gives the bit layouts). `TARGET_ATOMIC_ASSIGN_EXPAND_FENV` (C11
+`_Atomic float x; x += y` must drop the exceptions of failed CAS
+iterations) has to hold, clear and update both pairs, as glibc's
+`feholdexcept`/`feupdateenv` do. Cross-domain and cross-cluster latency
 penalties (FP→integer +2, crossing between ALC0–2 and ALC3–5 +1 or +2,
 `spec/isa/timing.md`) go into the DFA's bypasses, not into register
 classes.
@@ -800,6 +810,39 @@ each one cost it a debugging session:
   have no `ne`/`gt`/`ge` forms.
 - GCC 17 defaults to C23, where `int f();` takes no arguments: run the
   compat suite's `unproto` unit with `-std=gnu17` in the `--cc` command.
+- **FP compare codes:** LTGT must raise invalid on a quiet NaN (PR91323:
+  `a < b || a > b` folds to it), UNEQ and the other UN* codes must not,
+  so LTGT takes the signaling `fcmpod*f` and UNEQ the quiet `fcmpud*f`
+  (`spec/isa/semantics.md`). But without a CC mode,
+  `reversed_comparison_code_parts` (`jump.cc`) reverses UNEQ to LTGT
+  and back, so an FP compare stored to a register can come out of
+  combine with the other code. Either keep the distinction in a CC
+  mode, as CC-mode ports do, or lower UNLT/UNLE/UNGT/UNGE/UNEQ/LTGT at
+  expand time to `fcmpud*f`/`fcmpod*f` into a register plus an integer
+  test of its flags, as the proof of concept does (then
+  gcc.dg/torture/pr91323 passes).
+- **`getsp` amounts** (alloca, VLAs) must be in a window register or
+  `%g16`–`%g31`, never `%g0`–`%g15`: the kernel cannot read those when
+  the stack must grow, and the program gets SIGSEGV, but only for
+  allocations past the mapped stack (`spec/abi/stack-and-unwinding.md`;
+  the proof of concept's 800 KB VLA). lcc uses `%g24`. Give the
+  `allocate_stack` pattern a window-register constraint.
+- **Short label-difference tables** crash MCST gas when a `.text`
+  label follows them (`spec/isa/bundle.md`, "Known gas bugs"): keep
+  `CASE_VECTOR_SHORTEN_MODE` at `SImode` or wider.
+- **Memory accesses in one wide instruction** are ordered (ALC2 before
+  ALC5, a load before a store in its cluster; `spec/isa/bundle.md`): a
+  load in ALC5 sees a store in ALC2 of its own instruction, and of two
+  stores to one address the ALC5 one wins. So two accesses that may
+  alias must not share an instruction, except a load and a later store
+  in a pairing where the load reads the old value. Anti dependences
+  can't be trusted for this: once 32 memory references are pending
+  (`param_max_pending_list_length`), sched-deps flushes its lists and
+  links a later load to the earlier stores with `REG_DEP_ANTI`
+  (`flush_pending_lists`, `sched-deps.cc`), although the load must see
+  them. A bundler that lets anti-dependent insns share an instruction
+  put such a load beside its store in the proof of concept (a
+  miscompiled vector shuffle).
 
 ---
 
@@ -1058,7 +1101,16 @@ patterns must express:
   returns the overwritten value: silent wrong data). Model the pair as
   one register that is live from the lock load to the check.
 - The check goes in ALC2 or ALC5 (it also occupies a store channel), the
-  lock load in ALC0 or ALC3, and `rbranch` in the check's instruction.
+  lock load in ALC0 or ALC3 **with `,sm`** (without it no entry is
+  recorded and every check reloads), and `rbranch` in the check's
+  instruction, always, as lcc does (a consumer right after a check
+  without `rbranch` once saw the early value in the proof of concept).
+  An intact check costs nothing, also for a use in the next
+  instruction (measured); a failed one about 4 cycles plus the
+  compensation code (the proof of concept's measurement).
+- Keep stores out of a check's instruction: a check in ALC5 that
+  reloads sees a store in ALC2 of the same instruction
+  (`spec/isa/bundle.md`).
 - The table holds exactly 32 entries and evicts the oldest; keep fewer
   pairs outstanding.
 - Traps clear it (a failed check, so correct but slow), and so does a

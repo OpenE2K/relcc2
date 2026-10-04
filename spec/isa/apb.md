@@ -94,7 +94,7 @@ exactly 32 units (`asz` 3 + 3 + 4 above = 8 + 8 + 16).
 | Register | Count | Width | Meaning |
 |---|---|---|---|
 | `%aadN` | 32 | 128 | Array descriptor: base address in bits 0–47 of the low half (plus tag, rw bits); size in the high half up to v6 |
-| `%aaindN` | 16 | 32 (v3, v4), 64 (v5+) | Start index in bytes; `%aaind0` = 0 |
+| `%aaindN` | 16 | 32 (v3, v4), 64 (v5+) | Start index in bytes; `%aaind0` = 0. Checked (`ind64`: base = array − 2³², index 2³²): the 8C2 reads the array, the 4C uses the low 32 bits and gets diagnostic values [hw] |
 | `%aaincrN` | 8 | 32, sign-extended (v3, v4), 64 (v5+) | Step in elements; `%aaincr0` = 1 |
 | `%aastiN` | 16 | as `%aaind` | Store index for `staa` |
 | `%aaldiN`, `%aaldaN`, `%aaldv`, `%aaldm`, `%aafstr`, `%aasr` | | | Current positions and state; the kernel saves them on traps |
@@ -357,7 +357,6 @@ program receives signals.
 
 - AAU stores into areas also read by `mova`. (`mova` in epilogue iterations:
   disabled unless `%lsr.ldmc`, [loops.md](loops.md).)
-- v5+: 64-bit indices, `fmt` 7; timing (the 8C2's `movaqp` and APB
-  timing); v6+.
+- v5+: `fmt` 7, 64-bit increments; v6+.
 - `dcd`, `dpl = 1`, the meaning of `%aabf`, epilogue (`ecnt`) behaviour
   with movas.

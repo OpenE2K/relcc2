@@ -279,6 +279,12 @@ def main():
     # Cold start: apb.c evicts the array from the caches first.
     for g in (0, 24, 40, 80):
         add(f"cold{g}", [({}, None)], seq(4), base, gap=g)
+    # A start index past 32 bits: base = array - 2^32 in the descriptor,
+    # %aaind1 = 2^32.  A 64-bit index (v5+) reads the array; a 32-bit one
+    # reads 4 GiB below it.
+    add("ind64", [({"ind": 1}, None)], seq(3),
+        [("%aad0", ("%dr1", -(1 << 32) & ((1 << 64) - 1))),
+         ("%aaind1", 1 << 32)])
     v3 = list(CASES)
     CASES.clear()
     # v5+: 128-bit movas (movaqp), fmt 5 (quad) and 7 (quad packed),

@@ -11064,3 +11064,101 @@ apb_cold80:
 	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=0, ind=0, asz=5, abs=0, disp=0
 	}
 	.size	apb_cold80, .-apb_cold80
+
+	.global	apb_ind64
+	.type	apb_ind64, #function
+	.align	8
+apb_ind64:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	%dr1, _f64,_lts0 0xffffffff00000000, %dr3
+	}
+	{
+	  ldisp	%ctpr2, .Lind64_prog
+	  aaurwd,2	%dr3, %aad0
+	}
+	{
+	  addd,0	0x0, _f64,_lts0 0x100000000, %dr3
+	}
+	{
+	  aaurwd,2	%dr3, %aaind1
+	}
+	{
+	  bap
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 4
+	}
+	{
+	  rrd,0	%clkr, %dr4
+	}
+	{
+	  movad,0	area=0, ind=0, am=1, be=0, %dr8
+	}
+	{
+	  movad,0	area=0, ind=0, am=1, be=0, %dr9
+	}
+	{
+	  movad,0	area=0, ind=0, am=1, be=0, %dr10
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  nop 7
+	}
+	{
+	  gettagd,2	%dr8, %r6
+	  puttagd,5	%dr8, 0x0, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x0, %dr7
+	  std,5	%dr0, 0x8, %dr6
+	}
+	{
+	  gettagd,2	%dr9, %r6
+	  puttagd,5	%dr9, 0x0, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x10, %dr7
+	  std,5	%dr0, 0x18, %dr6
+	}
+	{
+	  gettagd,2	%dr10, %r6
+	  puttagd,5	%dr10, 0x0, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x20, %dr7
+	  std,5	%dr0, 0x28, %dr6
+	}
+	{
+	  disp	%ctpr2, disp=0x0
+	  subd,0	%dr5, %dr4, %dr0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.align	8
+.Lind64_prog:
+	{
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=0, ind=1, asz=5, abs=0, disp=0
+	}
+	.size	apb_ind64, .-apb_ind64

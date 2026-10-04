@@ -311,10 +311,21 @@ v5, as lcc's documentation says for v1–v5. What v5 adds or changes:
   (`%qprN` is register N at its full 128 bits): `qpfaddd`, `qpfmuld` 4
   cycles, `qpfmul_addd` 8, `qpaddd` and `qpand` 1; 6 `qpfaddd` or
   `qpfmuld` per instruction.
-- **Quad loads are slow:** `ldqp` has a latency of **11** to any
-  consumer (integer or `qp`; `ldd` stays 3), and only one `ldqp` issues
-  per cycle (2, 3 or 4 in one instruction take 2, 3, 3–4 cycles). Two
-  `stqp` in one instruction, 64 bytes apart, take 1 cycle.
+- **`ldqp` bypasses L1:** the single-register 128-bit load is served
+  by L2. Its latency is **11** to any consumer (integer or `qp`; `ldd`
+  stays 3), only one issues per cycle (2, 3 or 4 in one instruction
+  take 2, 3, 3–4 cycles), and the monitors show why: 10 million `ldqp`
+  of one cached address make almost no L1 requests and 10 million L2
+  queries, all hits, where `ldd` hits L1 (the v5 event list says
+  `L1_REQUEST` counts "synchronous requests except qpword";
+  monitors.md). **`ldq`** (a register pair `%qrN`, two load channels:
+  `ldq,0` takes ALC0 and ALC2, `ldq,3` ALC3 and ALC5) goes through L1:
+  latency 3, two per instruction (32 bytes a cycle). lcc's v5 code
+  never uses `ldqp` for data: a 128-bit vector is two `ldd` and a
+  `qppackdl` (`ldqp`/`stqp` appear only in 16-byte atomics). Stores
+  go through L1 and on to L2 alike (L1 is write-through: `std` and
+  `stqp` make as many L2 store queries as L1 ones); two `stqp` in one
+  instruction, 64 bytes apart, take 1 cycle.
 - **Divider:** `sdivd` every 2 cycles no longer conflicts (2 cycles; v3
   3.4); the other divider distances are as on v3 (`fsqrts` still
   conflicts at 5). An ALC5 FP operation never conflicts with a divide

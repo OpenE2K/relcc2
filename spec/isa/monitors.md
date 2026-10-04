@@ -105,10 +105,24 @@ Facts these gave about the core (also in the other spec files):
   shallow call keeps them (speculation.md).
 - Register-file and chain-stack spills happen without traps.
 
+## v5 (Elbrus-8C2) [hw]
+
+The events checked on the 4C keep their numbers on v5 (`TICKS` 0x572,
+`EXEC` 0x513, `BUB_E2` 0x511, `NO_CT_TAKEN` 0x520, `CONF_ALU0_OUT`
+0x540, `DAM_*`, `RBRANCH` 0x517; only `L1_HIT` 0x100 is gone), and the
+monitor probe gives the same counts there, so `profile.py` works on v5
+unchanged. v5's list (643 events) splits the caches further: `L1_REQUEST`
+(0x404, either data monitor; "synchronous requests except qpword"),
+`L1_LD_HIT` 0x100, `L1_ST_QUERY` 0x101, `L1_ST_HIT` 0x001, `L2_QUERY`
+0x040, `L2_HIT` 0x140, `L2_ST_QUERY` 0x141, and MAU (memory access
+unit) and L3 events. They showed that `ldqp` bypasses L1 (timing.md,
+"Elbrus-8C2"). With more events than counters `perf stat` multiplexes
+and scales the counts; ask for at most four at a time for exact ones.
+
 ## Not checked yet
 
 - The other events (instruction buffer, MAU, L2, `BUB_E0_*`), the
   uncore PMUs (`uncore_sic_*`, `uncore_ipcc_*`, `uncore_iocc_*`), and
-  v5+ (whose Events.json differ).
+  the rest of v5's list.
 - Whether `%dimcr`'s `u_m_en` bit is what makes `%dimar` readable in
   user mode.

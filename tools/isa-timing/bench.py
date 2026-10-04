@@ -430,6 +430,8 @@ SCHED_V5 = {
     "ldqp": ("%dr1", [("ldqp,0 %dr2, 0x0, %qpr2", None)], 16),
     "ldqp_to_addd": ("%dr1", [("ldqp,0 %dr2, 0x0, %qpr2", None),
                               ("addd,0 %dr2, %dr5, %dr2", 16)], 16),
+    # ldq loads a register pair (%qrN = %drN, %drN+1) through L1.
+    "ldq": ("%dr1", [("ldq,0 %dr2, 0x0, %qr2", None)], 16),
     "ldqp_to_qpand": ("%dr1", [("ldqp,0 %dr2, 0x0, %qpr2", None),
                                ("qpand,0 %qpr2, %qpr2, %qpr2", 16)], 16),
     "ldd_to_addd_v5": ("%dr1", [("ldd,0 %dr2, 0x0, %dr2", None),
@@ -452,6 +454,9 @@ TP_V5 = {
     "v5_ldqp_4far": (["ldqp,0 %dr1, 0x0, {d}", "ldqp,2 %dr1, 0x100, {d}",
                       "ldqp,3 %dr1, 0x200, {d}", "ldqp,5 %dr1, 0x300, {d}"],
                      "4 ldqp, 256 bytes apart"),
+    "v5_ldq_1": (["ldq,0 %dr1, 0x0, {d}"], "1 ldq"),
+    "v5_ldq_2": (["ldq,0 %dr1, 0x0, {d}", "ldq,3 %dr1, 0x40, {d}"],
+                 "2 ldq (ALC0, 3)"),
     "v5_ldd_4": (_ch("ldd,{c} %dr1, {o:#x}, {d}", [0, 2, 3, 5]), "4 ldd"),
     "v5_stqp_2": (["stqp,2 %dr1, 0x100, %qpr7", "stqp,5 %dr1, 0x140, %qpr7"],
                   "2 stqp, 64 bytes apart"),
@@ -523,6 +528,9 @@ def tp_kernel(name, k):
                 continue
             if op.startswith(("fadds", "fdivs", "fsqrts", "sdivs")):
                 ops.append(op.replace("{d}", f"%r{reg}"))
+            elif op.startswith("ldq,"):
+                # A register pair: an even register, a fresh pair each time.
+                ops.append(op.replace("{d}", f"%qr{8 + (2 * r) % 56}"))
             elif op.startswith(("qp", "ldqp")):
                 ops.append(op.replace("{d}", f"%qpr{reg}"))
             else:

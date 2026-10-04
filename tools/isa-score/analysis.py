@@ -167,12 +167,18 @@ def latency(p, c, key, pch=None, cch=None):
         return cl["lat"]
     fp_cons = model.is_fp_consumer(c.name) or c.unit == "aas"
     lat = cl["lat"] if fp_cons else cl["to_int"]
+    # A 64-bit FP-side result read by a 128-bit (qp) operation pays as
+    # if crossing (8C2: faddd -> qpfaddd 6, paddw -> qpaddd 4).
+    if cl["fpside"] and c.name.startswith("qp") and not p.name.startswith("qp"):
+        lat = max(lat, cl["lat"] + 2, cl["to_int"])
     if c.unit == "ct":               # e.g. a register read by a call
         return lat
     pc, cc = cluster(pch), cluster(cch)
     if pc is not None and cc is not None and pc != cc and p.unit == "alc":
         if cl["fpside"]:
-            lat = max(lat, cl["lat"] + 2)
+            # The other cluster: FP 6, packed 4 (paddw, qpaddd: both
+            # machines), i.e. at least the cost to an integer consumer.
+            lat = max(lat, cl["lat"] + 2, cl["to_int"])
         elif cl["fpside"] is False:
             lat += 1
     return lat

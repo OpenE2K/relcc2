@@ -57,6 +57,8 @@ CLASSES = {
     "conv":   dict(lat=5, to_int=6, fpside=True),
     "conv6":  dict(lat=6, to_int=7, fpside=True),    # fdtofs
     "fcmpr":  dict(lat=2, to_int=4, fpside=True),    # FP compare to a register
+    "fminmax": dict(lat=2, to_int=4, fpside=True),   # fmax/fmin, also packed
+    "pslow":  dict(lat=4, to_int=6, fpside=True),    # qphminposuh, qpsgn2mskb
     "packed": dict(lat=1, to_int=4, fpside=True),
     "pmul":   dict(lat=2, to_int=4, fpside=True),
     "fx":     dict(lat=5, to_int=7, fpside=True),    # 80-bit add
@@ -109,6 +111,10 @@ def classify(name):
     n = name
     if n == "getsp":
         return "getsp"
+    if re.match(r"(q?plog_|addcd|subcd)", n):
+        return "int"      # one cycle (v5, measured on the 8C2)
+    if n == "qpmpsadbh":
+        return "pmul"
     if n.startswith("mova"):
         return "mova"
     if n.startswith(("aaurr", "apurr")):
@@ -131,15 +137,21 @@ def classify(name):
         return "fdivd"
     if re.match(r"(p?f|qpf)sqrt", n):
         return "fsqrt"
-    if "_" in n and n[0] in "fp" and not n.startswith("pass"):
+    if "_" in n and n.startswith(("f", "p", "qp")) and not n.startswith("pass"):
         return "cfp" if (n.startswith(("f", "pf", "qpf"))) else "cint"
     if "_" in n:
         return "cint"
     if re.match(r"(u|s)?mul|umulx|smulx|[us]mulhd", n):
         return "imul"
-    if n == "fdtofs":
+    if re.match(r"(p|qp)?f(max|min)", n):
+        return "fminmax"
+    if n in ("qphminposuh", "qpsgn2mskb"):
+        return "pslow"
+    if n in ("qpfdtoifd", "qpfstoifs"):
+        return "fp"
+    if n in ("fdtofs", "qpfdtofs", "qpfdtois", "qpfdtoistr", "qpidtofs"):
         return "conv6"
-    if re.match(r"(f[sdx]|i[sd]|pf|qpf)to", n) or n in ("movif", "movfi"):
+    if re.match(r"(f[sdx]|i[sd]|pf|qpf|qpf[sd]|qpi[sd])to", n) or n in ("movif", "movfi"):
         return "conv"
     if re.match(r"(p?fcmp|qpfcmp)", n):
         return "fcmpr"

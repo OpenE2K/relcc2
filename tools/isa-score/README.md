@@ -162,6 +162,16 @@ Unipro's clang 20, gcc-claude snapshot db34161a6cd):
 | Unipro `-O2` Linpack | 37.8 M | 0.94 | 0.56 | 0.84 / 0.11 | 0.4% | 0 |
 | gcc-claude `-O2` Linpack | 47.7 M | 1.03 | 0.47 | 0.57 / 0.15 | 1.8% | 0.2 M |
 
+On the Elbrus-8C2 with the 8C2-tuned lcc and Unipro's clang
+(`-march=elbrus-v5`), measured / achieved is 1.00 for CoreMark (lcc
+`-O3` and Unipro `-O2`), 0.98 for lcc's Linpack and 1.12 for Unipro's
+(Linpack's 320 KB matrix leaves L1, which the model assumes). The
+4C-tuned lcc (`e2k-v3.4c`) gives the same cycles on the 4C as the
+generic one (CoreMark 13.30 G against 13.32 G). The same v3 CoreMark
+binary takes 2% more cycles on the 8C2 than on the 4C for the same
+iterations (fix the iteration count: CoreMark's fourth argument 0 makes
+it calibrate, so runs differ).
+
 Fetch bubbles are taken `ibranch`es (6 cycles each; gcc-claude's) and
 taken `ct`s waiting for a late prepare (Unipro's `switch` dispatch and
 early conditional exits); the model charges both once it knows which

@@ -341,7 +341,12 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   128-bit `qp*` ops with scalar latencies; `ldqp` bypasses L1 (served
   by L2: latency 11, one per cycle; `ldq` into a pair goes through L1,
   latency 3; lcc loads 128-bit data as two `ldd`); an APB area delivers
-  16 bytes a cycle (also v3); `%aaind` is 64-bit. isa-score models these
+  16 bytes a cycle (also v3); `%aaind` and `%aaincr` are 64-bit, `fmt`
+  7 is SIGILL; all 195 v5 ALU operations have measured latencies (1, 2,
+  4, 5, 6 or 8 by class, as their 64-bit counterparts) and are fully
+  pipelined; FP min/max is 2 cycles (also v3); a 64-bit FP-side result
+  feeding a `qp` operation pays the crossing cost; L2 11, L3 about 32,
+  memory about 180 cycles. isa-score models these
   and is within 3% on the 8C2's kernels and 1.00 on CoreMark
   (`validate.py --target v5.8c2 --period 30011`). Other v5 hardware results: `%lsr1` is the 64-bit loop
   count (write it after `%lsr`); misaligned APB areas give data; the

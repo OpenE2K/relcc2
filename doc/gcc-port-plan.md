@@ -1325,16 +1325,16 @@ Useful next pieces of relcc2 work for the port, in rough order:
 
 1. **DejaGnu board files** for qemu-e2k and for ssh to the 4C, and a
    script to run GCC's testsuite with them.
-2. **Timing tables** for more generations (v5 on the 8CB, v4/v6 via the
-   community) with `tools/isa-timing/bench.py`; the 4C (v3) table is in
-   `spec/isa/timing.md`.
+2. **Timing tables** for more generations (v4/v6 via the community)
+   with `tools/isa-timing/bench.py`; the 4C (v3) and 8C2 (v5) tables
+   are in `spec/isa/timing.md`.
 3. **Channel/resource data** from `binutils-ops.yaml` in a form easy to
    turn into reservations (data only; the generator that writes `.md`
    belongs in the port).
-4. **Speculation leftovers** (`spec/isa/speculation.md`, done for v3):
-   quad lock and check loads, window spills and the DAM, v5+.
+4. **Speculation leftovers** (`spec/isa/speculation.md`, done for v3
+   and v5): v6+.
 5. **Loop mode leftovers** (`spec/isa/loops.md`, "Not checked yet"):
-   `abg`, nested loops, traps inside loops, v5+ counters.
+   `abg`, `ldovl`, v6+.
 6. Review of the port's output against `spec/` and lcc, and test
    triage.
 
@@ -1350,9 +1350,29 @@ Decided by the owner:
   `EF_E2K_INCOMPAT`; `spec/abi/elf.md`). How MCST keeps v3 code working on
   later CPUs is not public, so forward compatibility is established by
   testing: lcc's v3 code passes the whole compat suite (lcc → lcc,
-  1,853 tests) under MCST's qemu as v5, v6 and v7; the owner can test on v5 (8CB), and the community on
-  v4 and v6. Known differences to keep in mind: v5 and later may fill
-  fresh window registers with tagged values (the tag trap,
-  `calling-convention.md`), and v6 has longer load latencies
-  (performance only).
+  1,853 tests) under MCST's qemu as v5, v6 and v7, and the suite
+  passes on the Elbrus-8C2 (v5) for every pair; the community can test
+  v4 and v6. The 8C2 does not fill fresh registers with tagged values
+  (only qemu does), and v6 has longer load latencies (performance
+  only).
+
+### What a v5 mode adds (lcc 1.29.16 for the 8C2, measured)
+
+lcc's v5 code for CoreMark and Linpack differs from its v3 code in only
+a few ways, a guide to what an `-march=elbrus-v5` mode needs first:
+
+- **Array prefetch without alignment**: v5 allows unaligned areas, so
+  lcc uses APB where its v3 code needed `-faligned` or a run-time check
+  (Linpack: 52 APB programs in the v5 build, none in the v3 one).
+- **More FP channels**: `faddd`/`fmuld`/`fmul_add*` also in ALC2/5 (6 a
+  cycle); lcc uses them sparingly (19 of 399 FP operations in Linpack).
+  Watch the one conflicting pattern with the divider (timing.md).
+- **`%lsr1`** for loop counts (written after `%lsr`, loops.md).
+- **128-bit data**: two `ldd` + `qppackdl` for loads (`ldqp` goes to L2,
+  latency 11), `stqp` for 16-byte stores, `qp*` operations with their
+  64-bit latencies; `ldqp`/`stqp` loops for 16-byte atomics.
+- **`getfzd`/`getfzs`** (v5 field extract) in place of v3 sequences.
+
+Everything else (latencies, hazards, control transfer, the ABI) is the
+same as v3 on the 8C2.
 

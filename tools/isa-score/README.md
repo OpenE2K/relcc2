@@ -139,6 +139,16 @@ L1; `%clkr` includes the call and return, about 6 cycles.) Every kernel
 is within 1%, `copy -O3` within 3% (a later run: `copy` within 6%, with a
 few hundred samples per kernel).
 
+On the Elbrus-8C2 (`--target v5.8c2 --period 30011`; the default
+period makes TICKS sampling exceed perf's limit of about 100,000
+samples a second at 1.5 GHz, which throttles it) every kernel is within
+3% (`sum -O2` 7%) once the model knows three v5 facts: `movaqp` writes
+one 128-bit register (the disassembly names it like a pair), `ldqp`
+takes 11 cycles (served by L2), and an array-prefetch area delivers 16
+bytes a cycle (lcc's v5 `sum -O3` reads 32 an iteration). Built with
+the 4C-tuned lcc (`--target v3.4c`) the 4C results are the same as
+with the generic one.
+
 On whole benchmarks (`profile.py`, the 4C, CoreMark with 2,000
 iterations, Linpack at size 200 with `--period 10007`; lcc 1.29.16,
 Unipro's clang 20, gcc-claude snapshot db34161a6cd):
@@ -168,9 +178,10 @@ scheduler could do with the same operations.
 
 ## Limits
 
-- Timing is measured on v3 (E2S) only; the guide says v1-v5 share it.
-  For v6 and v7 the v3 latencies are used and the report says so; the
-  channel tables are those of the chosen version.
+- Timing is measured on v3 (E2S) and v5 (8C2), which share it apart
+  from v5's additions (spec/isa/timing.md). For v6 and v7 the v3
+  latencies are used and the report says so; the channel tables are
+  those of the chosen version.
 - Loop analysis covers loops whose body is one basic block (lcc's
   `loop_mode` loops and other loops compiled into one block). Other
   loops are scored block by block.

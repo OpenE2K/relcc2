@@ -254,6 +254,17 @@ issued earlier stalls a fixed 4 cycles, as above. The first `mova` after
 `bap` issues without a stall 22 cycles after it when the data is in the
 caches.
 
+**One area delivers 16 bytes a cycle.** lcc's `loop_mode` loops over
+arrays in L1 (`-O3 -faligned`, timed with `%clkr`), on the 4C and the
+8C2 alike: a sum of `long`s reading one area runs at 0.53–0.54 cycles
+per element, also when lcc's v5 code reads 32 bytes an iteration from
+that area with two `movaqp` (each iteration then takes 2 cycles, where
+the v3 code's two `movad`, 16 bytes, take 1); two arrays (two areas)
+keep 0.54 cycles per element, 16 bytes a cycle from each; three arrays
+reach 23 (v3 code) to 30 bytes a cycle (v5 code). So reading more than
+16 bytes from one area in one instruction costs a cycle per extra 16
+bytes (isa-score models this).
+
 ## Hazards (interlocking)
 
 | Producer → consumer | Interlocked? | Detail |

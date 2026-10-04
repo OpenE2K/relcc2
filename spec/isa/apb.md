@@ -242,6 +242,11 @@ it, it runs at the memory latency, since lcc's code without APB does not
 prefetch. (`dot` is bound by its chain of FP additions while the data is
 in L1.)
 
+
+One area delivers at most **16 bytes a cycle** (4C and 8C2; lcc's
+loops in timing.md, "Array prefetch"): lcc's v5 code, which reads 32
+bytes an iteration from one area with two `movaqp`, runs no faster per
+element than its v3 code with two `movad`.
 ## AAU stores [lcc, source, hw]
 
 `staa{b,h,w,d,q}` (channels 2 and 5) store to `AAD[d].base +

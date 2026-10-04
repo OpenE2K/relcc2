@@ -189,9 +189,13 @@ scheduler could do with the same operations.
 ## Limits
 
 - Timing is measured on v3 (E2S) and v5 (8C2), which share it apart
-  from v5's additions (spec/isa/timing.md). For v6 and v7 the v3
-  latencies are used and the report says so; the channel tables are
-  those of the chosen version.
+  from v5's additions (spec/isa/timing.md). For v6 and v7 they are
+  used with one change, loads at 5 cycles instead of 3 (binutils'
+  `build_plt_entry`; the owner recalls this as v6's only timing
+  change), not measured, and the report says so; the channel tables
+  are those of the chosen version. So `--iset 6` scores a program as
+  if for a CPU with slower loads, e.g. to see how much a schedule
+  tuned for v3 loses there.
 - Loop analysis covers loops whose body is one basic block (lcc's
   `loop_mode` loops and other loops compiled into one block). Other
   loops are scored block by block.

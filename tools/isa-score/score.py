@@ -124,7 +124,8 @@ def report(rows, iset, top, out):
     p = lambda *a: print(*a, file=out)  # noqa: E731
     p(f"ISA version: elbrus-v{iset}"
       + ("" if iset in model.MEASURED_ISETS else
-         " (timing measured on v3 only; v3 latencies used)"))
+         " (not measured: v3/v5 latencies with loads at"
+         f" {model.V6_LOAD_LAT} cycles)"))
     p("Static: every block counts once")
     unknown = sorted({u for r in rows for u in r["unknown"]})
     if unknown:

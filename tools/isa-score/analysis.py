@@ -157,7 +157,7 @@ def latency(p, c, key, pch=None, cch=None):
         return 1
     if kind not in REGKINDS:
         return 1
-    cl = model.CLASSES.get(p.cls)
+    cl = model.class_of(p)
     if cl is None:
         return 1
     # A store takes its data without the FP-side -> integer or the
@@ -473,7 +473,7 @@ def _own_latency(op):
         return model.BAP_TO_MOVA
     if op.unit == "cs0":
         return model.CTP_LAT.get(op.name, 1)
-    cl = model.CLASSES.get(op.cls)
+    cl = model.class_of(op)
     return cl["lat"] if cl else 1
 
 

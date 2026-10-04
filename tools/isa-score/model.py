@@ -35,6 +35,10 @@ def load_yaml(text):
 e2kdis.yaml = type("yaml", (), {"safe_load": staticmethod(load_yaml)})
 
 MEASURED_ISETS = {1, 2, 3, 4, 5}
+# v6 and later: loads take 5 cycles to a consumer instead of 3 (binutils
+# bfd/elfxx-e2k.c build_plt_entry; the owner's recollection is that this
+# is the only timing change).  Not measured.
+V6_LOAD_LAT = 5
 
 # --- Latency classes (spec/isa/timing.md) ---------------------------------
 #
@@ -104,6 +108,14 @@ FP_PREFIXES = ("fadd", "fsub", "fmul", "fmin", "fmax", "fscale", "frcp",
                "fsqrt", "fdiv", "fabs", "fneg", "fcmp", "fx", "pf", "qpf",
                "fdto", "fsto", "fxto", "movif", "movfi", "fstoi", "fdtoi",
                "frsqrt", "fma", "fms", "fnma", "fnms")
+
+
+def class_of(op):
+    """Latency class of OP, with the v6+ load latency."""
+    cl = CLASSES.get(op.cls)
+    if cl is not None and op.cls == "load" and getattr(op, "iset", 3) >= 6:
+        cl = dict(cl, lat=V6_LOAD_LAT, to_int=V6_LOAD_LAT)
+    return cl
 
 
 def classify(name):
@@ -434,6 +446,7 @@ class Decoder:
                     ins.loop_mode = True
                 op = parse_line(s, self)
                 if op is not None:
+                    op.iset = self.iset
                     ins.ops.append(op)
             yield ins
             off += length

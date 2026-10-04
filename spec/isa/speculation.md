@@ -193,7 +193,11 @@ The protocol, as lcc uses it and as measured:
 
 1. **Lock load**: `ldd,0,sm %addr, %off, %rN, mas=0x4` (MAS mod 4,
    "lock-check"), in **ALC0 or ALC3**. It loads and records an entry for
-   its destination register (`,sm` is optional; lcc writes it).
+   its destination register. **`,sm` is required**: without it the load
+   records no entry, so its check always reloads and sets `%MLOCK`
+   (`k_nosm*` in `spec.c`: ALC0 and ALC3, two registers, nothing in
+   between; found by the proof-of-concept backend,
+   `docs/spec-poc-findings.md` I10).
 2. **Stores**: any store that overlaps the entry's bytes, even partly
    (a 4-byte store into an 8-byte entry), removes it. Stores elsewhere
    do not.
@@ -210,11 +214,16 @@ The protocol, as lcc uses it and as measured:
 4. **Recovery**: `rbranch label` (= `ibranch label ? %MLOCK`) in the
    **same wide instruction as the check** jumps when the check reloaded,
    to compensation code that recomputes whatever already used the early
-   value, then branches back. If nothing used the early value before the
-   check, no `rbranch` is needed: the check's reload is the recovery.
+   value, then branches back. In principle, if nothing used the early
+   value before the check, the check's reload is the recovery and no
+   `rbranch` is needed; but the proof-of-concept backend saw a consumer
+   one instruction after such a check get the early value (once in 1,000
+   calls, inside a larger function, I11), and neither it nor our probes
+   could reproduce that in isolation. lcc always puts `rbranch` in the
+   check's instruction, and so should a compiler.
 
 Other MAS kinds [hw; qemu `mas-format.h`]. lcc 1.29.16 emits only the
-lock `mas=0x4` (with or without `,sm`) and the check `mas=0x3` [lcc].
+lock `mas=0x4` (always with `,sm`) and the check `mas=0x3` [lcc].
 
 | Operation | MAS mod | Channels | Effect |
 |---|---|---|---|
@@ -273,7 +282,7 @@ compensation block [lcc]. Options: `-fno-dam`, `-fno-swp-dam`,
 | A speculative operation that succeeds | none |
 | A speculative load from an invalid region, first time | one kernel entry (about 5,000 cycles); none afterwards |
 | A semi-speculative load from a valid page not yet touched | a page fault, even if the value is never used |
-| A check load whose entry survived | none (no memory access) |
+| A check load whose entry survived | none (no memory access); a use of its register in the next instruction issues as if the check were not there (`kt_check_use` against `kt_nocheck_use`, 22 cycles both) |
 | A failed check | the reload, plus `rbranch` into and out of compensation code |
 | `rbranch ? %dt_alN` not taken | none |
 

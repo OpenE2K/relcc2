@@ -343,6 +343,33 @@ gas rejects these combinations within one wide instruction:
 - `disp` and `ldisp` together (both need CS0);
 - two operations in the same channel.
 
+### Memory accesses in one wide instruction [hw]
+
+Memory accesses to one address in one wide instruction are **not**
+simultaneous: on the 4C (`tools/isa-probes/samewi.c`, 1,000 runs each,
+also found by the proof-of-concept backend, `docs/spec-poc-findings.md`
+I9 and I12) they take effect in the order ALC2 before ALC5, and a load
+before a store in the same cluster:
+
+| Load + store of one doubleword | The load returns |
+|---|---|
+| load ALC0, store ALC2 | the old value |
+| load ALC3, store ALC5 | the old value |
+| load ALC2, store ALC5 | the old value |
+| load ALC5, store ALC2 | **the new value** (also when the store writes only part of it, `stw` into the upper half) |
+| load ALC3, store ALC2; load ALC0, store ALC5 | gas rejects these |
+
+Two stores to one address: the **ALC5 store wins**, whichever value
+it writes. So a compiler may put a load and a store that may alias in
+one instruction only when the load is meant to see the old value and
+is not in ALC5 with the store in ALC2 (gas chooses channels for
+operations written without `,N`, so in practice: keep them apart), may
+never put a load that must see a store in the same instruction as the
+store, and should not put two stores that may alias in one instruction
+unless it places them in channels. Other cores may see two stores of
+one instruction in either order (atomics.md). A failed check load in
+ALC5 also sees an ALC2 store of its own instruction (I12).
+
 Channel lists in `binutils-ops.yaml` don't depend on the operands, but
 one rule does: `movtd` and `getpl` **into `%ctpr1–3` go only in ALC0**
 (gas: "may be encoded in the 0-th channel only", citing every
@@ -388,6 +415,20 @@ disassembling; the first four also by the proof-of-concept backend,
   Every object gets a weak absolute marker symbol naming the compiler
   (`elbrus_optimizing_compiler_v1.29.16_Jan_22_2026 = 0x0`); nothing
   depends on it.
+
+## Known gas bugs [checked: gas 2.41-29.018, ours and lcc's]
+
+- **Internal error on a label after a short label difference.** A label
+  defined in `.text` after a `.rodata` `.short` or `.byte` holding the
+  difference of two `.text` labels makes gas abort ("Internal error in
+  check_current_insn_or_label_alignment at tc-e2k.c:9164"), even after
+  an `.align 8` and a following function's label; a 4-byte `.long`
+  difference, or no later label, is fine. GCC emits such tables for
+  narrowed computed-goto offset tables and with `-g` its end-of-text
+  label follows them (gcc.c-torture/compile/labels-3.c; found by the
+  proof-of-concept backend, I8); a port should keep case-vector and
+  label-difference tables at 4 bytes (`CASE_VECTOR_SHORTEN_MODE`).
+  lcc never emits such tables.
 
 ## Known objdump bugs
 

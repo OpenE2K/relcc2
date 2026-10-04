@@ -222,6 +222,8 @@ SCHED = {
     "pmullh": ("%dr3", [("pmullh,1 %dr2, %dr3, %dr2", None)], 8),
     "psadbw": ("%dr3", [("psadbw,1 %dr2, %dr5, %dr2", None)], 8),
     "pshufb": ("%dr3", [("pshufb,0 %dr2, %dr2, %dr5, %dr2", None)], 8),
+    "paddw_to_paddw_x": ("%dr3", [("paddw,0 %dr2, %dr5, %dr2", None),
+                                  ("paddw,3 %dr2, %dr5, %dr2", 12)], 6),
     "paddw_to_addd": ("%dr3", [("paddw,0 %dr2, %dr5, %dr2", None),
                                ("addd,0 %dr2, %dr5, %dr2", 12)], 10),
     "addd_to_paddw": ("%dr3", [("addd,0 %dr2, %dr5, %dr2", None),
@@ -234,6 +236,10 @@ SCHED = {
     "lzcnts": ("%dr3", [("lzcnts,1 %r2, %r2", None)], 6),
     "scls": ("%dr3", [("scls,0 %r2, 0x1, %r2", None)], 6),
     "getfs": ("%dr3", [("getfs,0 %r2, %r5, %r2", None)], 6),
+    # FP min/max (x86-style; semantics.md).
+    "fmaxd": ("%dr4", [("fmaxd,0 %dr2, %dr5, %dr2", None)], 8),
+    "fmind": ("%dr4", [("fmind,0 %dr2, %dr4, %dr2", None)], 8),
+    "pfmaxd": ("%dr4", [("pfmaxd,0 %dr2, %dr5, %dr2", None)], 8),
     # Conversions and FP compares into a register.
     "fdtoid": ("%dr4", [("fdtoid,0 %dr2, %dr2", None)], 8),
     "idtofd": ("%dr3", [("idtofd,0 %dr2, %dr2", None)], 8),
@@ -426,6 +432,30 @@ SCHED_V5 = {
     "qpfmul_addd": (QP_INIT, [("qpfmul_addd,0 %qpr2, %qpr8, %qpr7, %qpr2",
                                None)], 12),
     "qpaddd": (QP_INIT, [("qpaddd,0 %qpr2, %qpr7, %qpr2", None)], 8),
+    # Crossings: 128-bit results to the other cluster and to 64-bit
+    # integer and FP consumers (which read the low half).
+    "qpfaddd_to_qpfaddd_x": (QP_INIT, [("qpfaddd,0 %qpr2, %qpr7, %qpr2", None),
+                                       ("qpfaddd,3 %qpr2, %qpr7, %qpr2", 12)], 8),
+    "qpaddd_to_qpaddd_x": (QP_INIT, [("qpaddd,0 %qpr2, %qpr7, %qpr2", None),
+                                     ("qpaddd,3 %qpr2, %qpr7, %qpr2", 12)], 6),
+    "qpfaddd_to_addd": (QP_INIT, [("qpfaddd,0 %qpr2, %qpr7, %qpr2", None),
+                                  ("addd,0 %dr2, %dr5, %dr2", 12)], 10),
+    "qpaddd_to_addd": (QP_INIT, [("qpaddd,0 %qpr2, %qpr7, %qpr2", None),
+                                 ("addd,0 %dr2, %dr5, %dr2", 12)], 8),
+    "qpfaddd_to_faddd": (QP_INIT, [("qpfaddd,0 %qpr2, %qpr7, %qpr2", None),
+                                   ("faddd,0 %dr2, %dr5, %dr2", 12)], 8),
+    "addd_to_qpaddd": (QP_INIT, [("addd,0 %dr2, %dr5, %dr2", None),
+                                 ("qpaddd,0 %qpr2, %qpr7, %qpr2", 12)], 6),
+    "fmuld_to_qpfmuld": (QP_INIT, [("fmuld,0 %dr2, %dr4, %dr2", None),
+                                   ("qpfmuld,0 %qpr2, %qpr8, %qpr2", 12)], 8),
+    "faddd_to_qpaddd": (QP_INIT, [("faddd,0 %dr2, %dr5, %dr2", None),
+                                  ("qpaddd,0 %qpr2, %qpr7, %qpr2", 12)], 8),
+    "paddw_to_qpaddd": (QP_INIT, [("paddw,0 %dr2, %dr5, %dr2", None),
+                                  ("qpaddd,0 %qpr2, %qpr7, %qpr2", 12)], 6),
+    "qpfaddd_to_qpfaddd_c1": (QP_INIT, [("qpfaddd,0 %qpr2, %qpr7, %qpr2", None),
+                                        ("qpfaddd,1 %qpr2, %qpr7, %qpr2", 12)], 8),
+    "faddd_to_qpfaddd": (QP_INIT, [("faddd,0 %dr2, %dr5, %dr2", None),
+                                   ("qpfaddd,0 %qpr2, %qpr7, %qpr2", 12)], 8),
     "qpand": (QP_INIT, [("qpand,0 %qpr2, %qpr2, %qpr2", None)], 8),
     "ldqp": ("%dr1", [("ldqp,0 %dr2, 0x0, %qpr2", None)], 16),
     "ldqp_to_addd": ("%dr1", [("ldqp,0 %dr2, 0x0, %qpr2", None),
@@ -501,9 +531,43 @@ TPN_V5 = {
     for op in ("faddd", "fmuld") for g in range(9, 17)}
 
 
+def v5_op_chains():
+    """A dependent chain for every ALU operation new in v5 (from
+    binutils-ops.yaml): the result is the next copy's first source, the
+    other sources are constants (%qpr7 = 0.0 pairs, %dr5 / %r5 = 0)."""
+    import yaml
+    data = yaml.safe_load((ROOT / "spec/isa/binutils-ops.yaml").read_text())
+    first = {}
+    for e in data["alu_ops"]:
+        if e.get("isets"):
+            first.setdefault(e["name"], []).append(e)
+    reg = {"p": ("%qpr2", "%qpr7"), "d": ("%dr2", "%dr5"), "s": ("%r2", "%r5")}
+    out = {}
+    for name, es in sorted(first.items()):
+        if min(min(e["isets"]) for e in es) != 5:
+            continue
+        if name.startswith(("ld", "st", "apto", "getva", "puttag")):
+            continue
+        if name.startswith(("plog_", "qplog_")) and not name.endswith(
+                ("_0x96", "_0xe8")):
+            continue
+        e = next(e for e in es if 5 in e["isets"])
+        args = "pppp" if name.startswith("qplog") else e["args"]
+        srcs, dst = args[:-1], args[-1]
+        # The chain runs through the first source of the destination's
+        # kind (else the first source): it gets %qpr2 / %dr2 / %r2.
+        k = srcs.index(dst) if dst in srcs else 0
+        ops = [reg[a][0] if i == k else reg[a][1] for i, a in enumerate(srcs)]
+        ops.append(reg[dst][0])
+        out[f"v5op_{name}"] = (QP_INIT, [(f"{name},{e['channels'][0]} "
+                                          + ", ".join(ops), None)], 8)
+    return out
+
+
 def add_v5():
     """Add the v5+ kernels to the tables (for --target v5 and later)."""
     SCHED.update(SCHED_V5)
+    SCHED.update(v5_op_chains())
     TP.update(TP_V5)
     TP2.update(TP2_V5)
     TPN.update(TPN_V5)

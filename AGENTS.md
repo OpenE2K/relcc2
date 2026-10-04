@@ -331,8 +331,15 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   divider in ALC5 shared by all divides (1 cycle apart stalls 4,
   `sdivd` wants 3, `fsqrts` also conflicts at 5) and L1 banks (two
   stores agreeing in address bits 6–7, or a store and a load in one
-  32-byte block, can take 2 cycles). Other generations and 128-bit ops
-  are not measured yet.
+  32-byte block, can take 2 cycles). The Elbrus-8C2 (v5,
+  `timing-e8c2.yaml`, timing.md "Elbrus-8C2") has every v3 latency,
+  hazard and control delay; v5 adds 6 FP ops per cycle (ALC2/5),
+  128-bit `qp*` ops with scalar latencies, slow `ldqp` (latency 11, one
+  per cycle). Other v5 hardware results: `%lsr1` is the 64-bit loop
+  count (write it after `%lsr`); misaligned APB areas give data; the
+  compat suite passes for every pair (no register cleaning); Elbrus
+  Linux's libatomic is built for v5, so v3 and v5 code can share
+  16-byte atomics there. v4, v6, v7 are not measured.
 
 ### Schedule scoring (tools/isa-score)
 
@@ -469,10 +476,10 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
    new ones continue as I13, A17, P8.
 1. Extend the compat suite (see Current state). It runs on the 4C with
    `run.py --target v3 --remote ...`; all pairs match qemu except the
-   tag-trap tests, which pass on the 4C. Run it on v5 (8CB) when
-   available, which may clean registers like qemu.
+   tag-trap tests, which pass on the 4C and on the 8C2 (v5, `--target
+   v5.8c2 --remote claude@geofront.lan`).
 2. The relcc2 work listed in `doc/gcc-port-plan.md` section 11: DejaGnu
-   boards for qemu-e2k and the 4C; timing on v5 (8CB) and other
+   boards for qemu-e2k and the 4C; timing on other
    generations with `tools/isa-timing/bench.py`; loop-mode and
    speculation leftovers (`spec/isa/loops.md`, `speculation.md`, "Not
    checked yet").

@@ -94,6 +94,18 @@ differ from v6.
   Never remove `~/relcc2` itself or other agents' subdirectories; the
   account's dotfiles stay. `bench.py --remote-dir` and `run.py
   --remote-dir` choose the subdirectory.
+- **8C2 (v5)**: `ssh -i secrets/id_ed25519 -o IdentitiesOnly=yes
+  claude@geofront.lan` (the same key). Elbrus-8C2 (E8C2, cpu family 5),
+  8 cores, one socket, 1263–1500 MHz with frequency scaling, 125 GiB
+  RAM, Elbrus Linux 9.5.5 (OS Elbrus, kernel 6.1), native lcc 1.29.16
+  (`e2k-8c2-linux`), gdb, perf (`perf_event_paranoid` 2), numactl.
+  Same rules as the 4C: work only in `~/relcc2/<task>`, remove only
+  that, keep runs short. Build code for it with the 8C2-tuned
+  cross-compiler `/opt/mcst/lcc-1.29.16.e2k-v5.8c2.linux-6.1` (not v3
+  code run forward-compatibly), and for the 4C with `e2k-v3.4c` when
+  timing matters (`e2k-v3` is generic, only forward compatible); the
+  directory names say which lcc builds are tuned for a CPU. Its system
+  libatomic is built for the 8C2 (16-byte atomics in hardware).
 - Nearly every Elbrus system ships MCST's lcc as the default compiler (OS
   Elbrus and ALT Linux), so tests may assume lcc on the target.
 - ALT Linux ships no 32-bit or protected-mode (`e2k128`) runtime. Keep those

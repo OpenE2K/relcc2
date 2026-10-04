@@ -11162,3 +11162,84 @@ apb_ind64:
 	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=0, ind=1, asz=5, abs=0, disp=0
 	}
 	.size	apb_ind64, .-apb_ind64
+
+	.global	apb_incr64
+	.type	apb_incr64, #function
+	.align	8
+apb_incr64:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  ldisp	%ctpr2, .Lincr64_prog
+	  aaurwd,2	%dr1, %aad0
+	}
+	{
+	  addd,0	0x0, _f64,_lts0 0x100000001, %dr3
+	}
+	{
+	  aaurwd,2	%dr3, %aaincr1
+	}
+	{
+	  bap
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 4
+	}
+	{
+	  rrd,0	%clkr, %dr4
+	}
+	{
+	  movab,0	area=0, ind=0, am=1, be=0, %dr8
+	}
+	{
+	  movab,0	area=0, ind=0, am=1, be=0, %dr9
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  nop 7
+	}
+	{
+	  gettagd,2	%dr8, %r6
+	  puttagd,5	%dr8, 0x0, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x0, %dr7
+	  std,5	%dr0, 0x8, %dr6
+	}
+	{
+	  gettagd,2	%dr9, %r6
+	  puttagd,5	%dr9, 0x0, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x10, %dr7
+	  std,5	%dr0, 0x18, %dr6
+	}
+	{
+	  disp	%ctpr2, disp=0x0
+	  subd,0	%dr5, %dr4, %dr0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.align	8
+.Lincr64_prog:
+	{
+	  fapb	ct=1, dcd=0, fmt=1, mrng=1, d=0, incr=1, ind=0, asz=5, abs=0, disp=0
+	}
+	.size	apb_incr64, .-apb_incr64

@@ -75,7 +75,7 @@ APS fields (APLS is the 32-bit `disp`):
 | 31 | `ct` (left) / `dpl` (right) | `ct = 1`: last instruction of the program; it must be set in the last instruction's left half. `dpl = 1`: the right half duplicates the left; lcc always writes 0 |
 | 30 | `si` | Secondary index, v1 only; gas rejects it on v2+ |
 | 28–29 | `dcd` | Cache control: 0 all caches; 2 bypass DCACHE2; 3 bypass DCACHE2 and ECACHE [guide]. lcc writes 0 |
-| 25–27 | `fmt` | Element format: 1 byte, 2 half, 3 word, 4 double, 5 quad, 7 quad packed (v5+; on the Elbrus-8C2 a program with `fmt` 7 makes its `movaqp` SIGILL). Used to scale the increment and to check alignment |
+| 25–27 | `fmt` | Element format: 1 byte, 2 half, 3 word, 4 double, 5 quad, 7 quad packed (both qemus accept 7 as a 16-byte format; on the Elbrus-8C2 any `mova` from an area with `fmt` 7 is SIGILL, `movaqp` or `movad`, `mrng` 16 or 32, so it is not a v5 format there). Used to scale the increment and to check alignment |
 | 20–24 | `mrng` | Bytes a `mova` may read per step, from 1 to 31; 0 means 32 |
 | 15–19 | `d` | Descriptor `%aadN` (0–31) |
 | 12–14 | `incr` | Increment register `%aaincrN` (0–7); `%aaincr0` is always 1 |
@@ -95,7 +95,7 @@ exactly 32 units (`asz` 3 + 3 + 4 above = 8 + 8 + 16).
 |---|---|---|---|
 | `%aadN` | 32 | 128 | Array descriptor: base address in bits 0–47 of the low half (plus tag, rw bits); size in the high half up to v6 |
 | `%aaindN` | 16 | 32 (v3, v4), 64 (v5+) | Start index in bytes; `%aaind0` = 0. Checked (`ind64`: base = array − 2³², index 2³²): the 8C2 reads the array, the 4C uses the low 32 bits and gets diagnostic values [hw] |
-| `%aaincrN` | 8 | 32, sign-extended (v3, v4), 64 (v5+) | Step in elements; `%aaincr0` = 1 |
+| `%aaincrN` | 8 | 32, sign-extended (v3, v4), 64 (v5+) | Step in elements; `%aaincr0` = 1. Checked (`incr64`: bytes, increment 2³² + 1): the 8C2 reads from `a + 2³² + 1`, the 4C from `a + 1` [hw] |
 | `%aastiN` | 16 | as `%aaind` | Store index for `staa` |
 | `%aaldiN`, `%aaldaN`, `%aaldv`, `%aaldm`, `%aafstr`, `%aasr` | | | Current positions and state; the kernel saves them on traps |
 | `%aabfN` | | | Write-only; "value for modification of AAU load flags" (binutils), meaning not documented |
@@ -275,6 +275,13 @@ its data ready it costs what a `staad` does; with the data written by
 integer ops two cycles before, the loop took 4 more cycles per
 iteration (one stall step; not analysed further) [hw].
 
+A warning from the 8C2: an area whose increment carried a `mova` 32 GiB
+past its array (into unmapped memory) did not give a diagnostic value
+as nearer unmapped addresses do; the process spun in the kernel
+(nearly all system time, no page faults) until killed. The probe now
+maps the page its 64-bit step reaches; don't point APB areas that far
+on shared machines.
+
 ## 128-bit movas (v5+) [hw: Elbrus-8C2]
 
 `movaqp,N area=…, ind=…, am=…, be=…, %qprM` (`apb.c` built with
@@ -357,6 +364,6 @@ program receives signals.
 
 - AAU stores into areas also read by `mova`. (`mova` in epilogue iterations:
   disabled unless `%lsr.ldmc`, [loops.md](loops.md).)
-- v5+: `fmt` 7, 64-bit increments; v6+.
+- v6+.
 - `dcd`, `dpl = 1`, the meaning of `%aabf`, epilogue (`ecnt`) behaviour
   with movas.

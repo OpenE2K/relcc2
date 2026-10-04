@@ -31,6 +31,10 @@
 #endif
 #undef CASE
 
+#ifndef MAP_FIXED_NOREPLACE
+#define MAP_FIXED_NOREPLACE 0x100000
+#endif
+
 #define N 8192
 static unsigned long arr1[N] __attribute__ ((aligned (4096)));
 static unsigned long arr2[N] __attribute__ ((aligned (4096)));
@@ -97,6 +101,20 @@ run (const char *name, long (*f) (unsigned long *, void *, void *),
   void *b1 = arr1, *b2 = arr2;
   fixpage = NULL;
   fixups = 0;
+  if (strcmp (name, "incr64") == 0)
+    {
+      /* The page a 64-bit increment of 2^32 + 1 bytes reaches.  */
+      char *want = (char *) (((unsigned long) b1 + (1UL << 32) + 1)
+                             & ~(unsigned long) (pagesize - 1));
+      char *q = mmap (want, pagesize, PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+      if (q != want)
+        {
+          printf ("%s: cannot map a + 2^32\n", name);
+          return;
+        }
+      memset (q, 0x5a, pagesize);
+    }
   if (strcmp (name, "guard") == 0)
     {
       char *m = fresh_pages (2);

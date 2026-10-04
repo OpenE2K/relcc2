@@ -285,6 +285,12 @@ def main():
     add("ind64", [({"ind": 1}, None)], seq(3),
         [("%aad0", ("%dr1", -(1 << 32) & ((1 << 64) - 1))),
          ("%aaind1", 1 << 32)])
+    # An increment past 32 bits: 2^32 + 1 bytes (fmt 1).  A 32-bit
+    # %aaincr (v3) steps 1 byte; a 64-bit one (v5+) reaches a + 2^32 + 1,
+    # where apb.c maps a page of 0x5a.  (Steps into unmapped memory that
+    # far away made the 8C2's kernel loop on the trap: don't.)
+    add("incr64", [({"incr": 1, "fmt": 1, "mrng": 1}, None)],
+        seq(2, fmt=1), base + [("%aaincr1", (1 << 32) | 1)])
     v3 = list(CASES)
     CASES.clear()
     # v5+: 128-bit movas (movaqp), fmt 5 (quad) and 7 (quad packed),
@@ -297,6 +303,11 @@ def main():
         add(f"q{fmt}_mis4", [(q, None)], seq(3, fmt=fmt),
             [("%aad0", ("%dr1", 4))])
         add(f"q{fmt}_be", [(q, None)], seq(2, fmt=fmt, be=1), base)
+    # fmt 7 variants (fmt 7 with mrng 16 is SIGILL on the 8C2).
+    add("q7_m32", [({"fmt": 7, "mrng": 0}, None)], seq(2, fmt=7), base)
+    add("q7_movad", [({"fmt": 7, "mrng": 16}, None)], seq(2, fmt=4), base)
+    add("q7_pair", [({"fmt": 7, "mrng": 0}, None)],
+        [[mova(0, ind=0, am=0, fmt=7), mova(1, ind=16, am=1, fmt=7)]], base)
     v5 = list(CASES)
     v5_header = HEADER[:HEADER.index("\n\t.global\tapb_nop")] + "\n"
     for path, header, cs in (("apb", HEADER, v3), ("apb-v5", v5_header, v5)):

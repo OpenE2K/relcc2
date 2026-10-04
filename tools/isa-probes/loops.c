@@ -6,6 +6,11 @@
      $LCC -O1 tools/isa-probes/loops.c tools/isa-probes/loops.s -o loops
      ./loops
 
+   On v5 and later also (the v5 cases write %lsr1):
+     $LCC -O1 -DLOOPS_V5 tools/isa-probes/loops.c tools/isa-probes/loops.s \
+         tools/isa-probes/loops-v5.s -o loops-v5
+     ./loops-v5 v5
+
    Each line: case, the %lsr written (decoded), then what the loop did:
    iterations, counts of operations under %pcnt0 / %pcnt1 / %lcntex,
    %lsr and %ilcr after the write and after the loop, the stores that
@@ -21,6 +26,9 @@
 
 #define CASE(n) long loop_##n (unsigned long *, unsigned long, long *, long);
 #include "loops-cases.h"
+#ifdef LOOPS_V5
+#include "loops-v5-cases.h"
+#endif
 #undef CASE
 
 static sigjmp_buf env;
@@ -69,7 +77,7 @@ static long arg3;
 static void
 run (const char *name, loopfn f, unsigned long l, int show_regs)
 {
-  unsigned long out[16];
+  unsigned long out[20];
   long buf[64] __attribute__ ((aligned (16)));
   memset (out, 0, sizeof out);
   memset (buf, 0, sizeof buf);
@@ -92,7 +100,12 @@ run (const char *name, loopfn f, unsigned long l, int show_regs)
   for (int i = 0; i < 64; i++)
     if (buf[i])
       printf (" [%d]=%ld", i, buf[i]);
-  if (show_regs)
+#ifdef LOOPS_V5
+  if (show_regs == 2)
+    printf ("\n             lsr1 %#lx ilcr1 %#lx, after the loop lsr1 %#lx "
+            "ilcr1 %#lx", out[16], out[17], out[18], out[19]);
+#endif
+  if (show_regs == 1)
     {
       printf ("\n             %%dr16..23:");
       for (int i = 8; i < 16; i++)
@@ -187,9 +200,39 @@ run_pagestores (loopfn f, const char *name, unsigned n, int touch)
 }
 
 int
-main (void)
+main (int argc, char **argv)
 {
   setvbuf (stdout, NULL, _IOLBF, 0);
+#ifdef LOOPS_V5
+  if (argc > 1 && strcmp (argv[1], "v5") == 0)
+    {
+      /* %lsr1 (v5+): lsr gives lcnt 5, lsr1 (in arg3) other counts.  */
+      static const long n1[] = { 5, 7, 2, 1, 0, 100 };
+      for (unsigned i = 0; i < sizeof n1 / sizeof n1[0]; i++)
+        {
+          arg3 = n1[i];
+          printf ("lsr1 = %ld:\n", arg3);
+          run ("v5count_after", loop_v5count_after, lsr (5, 0, 1, 0, 0, 0), 2);
+          run ("v5count_before", loop_v5count_before, lsr (5, 0, 1, 0, 0, 0), 2);
+        }
+      /* lsr lcnt 0 with a count past 32 bits in lsr1 (lcc puts the whole
+         count there).  */
+      arg3 = (1L << 32) + 3;
+      run ("v5count_after", loop_v5count_after, lsr (0, 0, 1, 0, 0, 0), 2);
+      arg3 = (1L << 32) + 3;
+      run ("v5count_after", loop_v5count_after, lsr (3, 0, 1, 0, 0, 0), 2);
+      /* Prologue, epilogue and store rules with lsr1.  */
+      arg3 = 5;
+      run ("v5stores_after", loop_v5stores_after, lsr (5, 2, 1, 3, 1, 0), 2);
+      arg3 = 7;
+      run ("v5stores_after", loop_v5stores_after, lsr (5, 2, 1, 3, 1, 0), 2);
+      arg3 = 7;
+      run ("v5stores_before", loop_v5stores_before, lsr (5, 2, 1, 3, 1, 0), 2);
+      return 0;
+    }
+#endif
+  (void) argc;
+  (void) argv;
   struct sigaction sa;
   memset (&sa, 0, sizeof sa);
   sa.sa_sigaction = handler;

@@ -274,6 +274,23 @@ loop_clobber:
         v5.append(case(f"v5stores_{order}",
                        [count + ["shld,1\t%dr10, 0x3, %dr14"], ["nop 1"],
                         BACK + ["std,2\t%dr2, %dr14, %dr10"]], lsr1=order))
+    # v5+ quad stores in loop mode: stqp of %qpr26 = (i, i + 0x100) at
+    # buf + 16 (i - 1), and staaqp the same through the AAU, to see how
+    # one-channel quad stores count for strmd (v3's staaq counts two).
+    qdata = ["qppackdl,0\t%dr27, %dr10, %qpr26"]
+    v5.append(case("v5qstores", [
+        count + ["shld,1\t%dr10, 0x4, %dr14", "addd,0\t%dr10, 0x100, %dr27"],
+        ["nop 1"], qdata, ["nop 1"],
+        BACK + ["stqp,2\t%dr2, %dr14, %qpr26"]]))
+    v5.append(case("v5qstores2", [
+        count + ["shld,1\t%dr10, 0x4, %dr14", "addd,0\t%dr10, 0x100, %dr27"],
+        ["addd,0\t%dr14, 0x100, %dr15"], qdata, ["nop 1"],
+        BACK + ["stqp,2\t%dr2, %dr14, %qpr26",
+                "std,5\t%dr2, %dr15, %dr10"]]))
+    v5.append(case("v5aaqstores", [
+        count + ["addd,0\t%dr10, 0x100, %dr27"], ["nop 1"], qdata, ["nop 1"],
+        BACK + ["staaqp,5\t%qpr26, %aad0[ %aasti1 ]", "incr,5\t%aaincr0"]],
+        pre=aau))
     for path, header, cs in (("loops", HEADER, cases),
                              ("loops-v5", HEADER, v5)):
         (HERE / f"{path}.s").write_text(header + "".join(t for _, t in cs))

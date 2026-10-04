@@ -6,6 +6,11 @@
      $LCC -O1 tools/isa-probes/spec.c tools/isa-probes/spec.s -o spec -lm
      ./spec [CASE]                 # all cases, or only CASE
 
+   On v5 and later, the quad (ldqp) data-speculation cases:
+     $LCC -O1 -DSPEC_V5 tools/isa-probes/spec.c tools/isa-probes/spec.s \
+         tools/isa-probes/spec-v5.s -o spec-v5 -lm
+     ./spec-v5 v5
+
    Each line: case, arguments, then the result (value and tag), whether
    an rbranch was taken (%MLOCK), the %pfpfr exception flags raised, and
    the cycles; or the signal with its si_code.  */
@@ -21,6 +26,9 @@
 
 #define CASE(n) long spec_##n (unsigned long *, long, long, long);
 #include "spec-cases.h"
+#ifdef SPEC_V5
+#include "spec-v5-cases.h"
+#endif
 #undef CASE
 
 static sigjmp_buf env;
@@ -42,7 +50,7 @@ static void
 run (const char *name, long (*f) (unsigned long *, long, long, long),
      const char *what, long a, long b, long c)
 {
-  unsigned long out[4] = { 0 };
+  unsigned long out[6] __attribute__ ((aligned (16))) = { 0 };
   if (only && strcmp (name, only) != 0)
     return;
   printf ("%-16s %-22s", name, what);
@@ -53,8 +61,11 @@ run (const char *name, long (*f) (unsigned long *, long, long, long),
       return;
     }
   long cycles = f (out, a, b, c);
-  printf ("%016lx tag %lx%s flags %02lx  %ld cycles\n", out[0], out[1] & 0xff,
+  printf ("%016lx tag %lx%s flags %02lx  %ld cycles", out[0], out[1] & 0xff,
           out[2] ? " MLOCK" : "", out[3] & 0x3f, cycles);
+  if (out[4] || out[5])
+    printf ("  qpr8 %016lx %016lx", out[5], out[4]);
+  printf ("\n");
 }
 
 static char *
@@ -79,6 +90,22 @@ int
 main (int argc, char **argv)
 {
   only = argc > 1 ? argv[1] : NULL;
+#ifdef SPEC_V5
+  if (only && strcmp (only, "v5") == 0)
+    {
+      only = NULL;
+      setvbuf (stdout, NULL, _IOLBF, 0);
+      /* Quad lock and check loads: b[0] = 7, b[1] = 0x1111, stores 42. */
+      static long qb[128] __attribute__ ((aligned (64)));
+#define Q(n) qb[0] = 7; qb[1] = 0x1111; \
+      run (#n, spec_##n, "b 7 0x1111, store 42", 0, (long) qb, 42);
+      Q (q_match) Q (q_match_3_2) Q (q_match_2_5) Q (q_nosm) Q (q_lock7)
+      Q (q_store_lo) Q (q_store_hi) Q (q_store_next) Q (q_twice)
+      Q (q_stqp_over_ldd) Q (q_ldd_check)
+      Q (q_cap16) Q (q_cap24) Q (q_cap32) Q (q_cap40)
+      return 0;
+    }
+#endif
   struct sigaction sa;
   memset (&sa, 0, sizeof sa);
   sa.sa_sigaction = handler;

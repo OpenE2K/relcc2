@@ -5,6 +5,9 @@
 
      LCC=/opt/mcst/lcc-1.29.16.e2k-v3.linux-6.1/bin/lcc
      $LCC -O1 tools/isa-probes/apb.c tools/isa-probes/apb.s -o apb
+     On v5+, with the movaqp cases (q5*, q7*):
+     $LCC -O1 -DAPB_V5 tools/isa-probes/apb.c tools/isa-probes/apb.s \
+         tools/isa-probes/apb-v5.s -o apb-v5
      ./apb                         # on hardware, or under qemu-e2k
 
    Element I of the first array holds 0x8182838485000000 + 8 * I and of
@@ -23,12 +26,15 @@
 
 #define CASE(n, r, a) long apb_##n (unsigned long *, void *, void *);
 #include "apb-cases.h"
+#ifdef APB_V5
+#include "apb-v5-cases.h"
+#endif
 #undef CASE
 
 #define N 8192
 static unsigned long arr1[N] __attribute__ ((aligned (4096)));
 static unsigned long arr2[N] __attribute__ ((aligned (4096)));
-static unsigned long out[256];
+static unsigned long out[256] __attribute__ ((aligned (16)));
 static sigjmp_buf env;
 static volatile int sig, fixups;
 static char *fixpage;
@@ -123,6 +129,9 @@ run (const char *name, long (*f) (unsigned long *, void *, void *),
     {
       printf ("  %d: %016lx tag %lx", i, out[2 * i], out[2 * i + 1] & 0xff);
       describe (out[2 * i]);
+      if (out[192 + 2 * i] != 0xeeeeeeeeeeeeeeeeUL)   /* movaqp only */
+        printf ("  128 bits: high %016lx low %016lx", out[192 + 2 * i + 1],
+                out[192 + 2 * i]);
       printf ("\n");
     }
   for (int i = 0; i < reads; i++)
@@ -151,6 +160,9 @@ main (int argc, char **argv)
   if (argc < 2 || strcmp (argv[1], #n) == 0) \
     run (#n, apb_##n, r, a);
 #include "apb-cases.h"
+#ifdef APB_V5
+#include "apb-v5-cases.h"
+#endif
 #undef CASE
   return 0;
 }

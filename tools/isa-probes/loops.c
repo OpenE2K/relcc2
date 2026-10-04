@@ -228,6 +228,14 @@ main (int argc, char **argv)
       run ("v5stores_after", loop_v5stores_after, lsr (5, 2, 1, 3, 1, 0), 2);
       arg3 = 7;
       run ("v5stores_before", loop_v5stores_before, lsr (5, 2, 1, 3, 1, 0), 2);
+      /* Quad stores (stqp, staaqp) under strmd 0, 1, 2; buf[2k] holds
+         iteration k + 1, buf[2k + 1] iteration + 0x100.  */
+      for (int m = 0; m < 3; m++)
+        run ("v5qstores", loop_v5qstores, lsr (5, 2, 1, 3, m, 0), 0);
+      for (int m = 0; m < 3; m++)
+        run ("v5qstores2", loop_v5qstores2, lsr (5, 2, 1, 3, m, 0), 0);
+      for (int m = 0; m < 3; m++)
+        run ("v5aaqstores", loop_v5aaqstores, lsr (5, 2, 1, 3, m, 0), 0);
       return 0;
     }
 #endif

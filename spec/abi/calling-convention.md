@@ -100,8 +100,10 @@ there the registers still hold whatever an earlier frame left, which in
 these tests was never tagged. qemu models the cleaning as a hardware
 feature that the `CU_HW0.rf_clean_dsbl` bit turns off, and MCST Linux
 declares that bit between a field marked "since iset v5" and the v6
-fields, so v5 and later machines may clean registers as qemu does
-(inferred; not yet run on v5). Either way, a stale tag from an earlier
+fields, so v5 and later machines might clean registers as qemu does.
+The Elbrus-8C2 (v5) doesn't: the whole compat suite, these tests
+included, passes there for every pair (`run.py --target v5.8c2
+--remote`), and `tagtrap.c` behaves as on the 4C. Either way, a stale tag from an earlier
 speculative load can reach such a slot on any machine.
 
 Which operations trap on such a register (a speculative `ldd` from a bad

@@ -102,8 +102,11 @@ later store. Within one wide instruction a load may see memory before
 the instruction's store, and two stores may become visible in either
 order (rare, since they need another core reading between them). The
 counts are low because the two threads rarely overlap closely, so
-"never" means not seen in 4 million tries per variant; v4 and later
-are not tested.
+"never" means not seen in 4 million tries per variant. The Elbrus-8C2
+(v5, 300,000 tries per variant, built for v3 and for v5) gives the same
+picture with far more SB outcomes (870 to 5,052, against 5 on the 4C),
+none for MP or LB, and once more an MP outcome with both stores in one
+instruction.
 
 For a compiler on v3 that means: seq_cst stores and fences need the
 `wait` (or a locked read-modify-write); acquire loads and release
@@ -116,6 +119,9 @@ load, which is safe).
 `__atomic_fetch_add` and CAS loops on an `__int128` through libatomic
 gave exact counts (4 million each), a third thread's `__atomic_load_n`
 never saw the two halves differ, and `__atomic_is_lock_free(16)` is 0.
+The same v3 binary on the Elbrus-8C2 also counts exactly but reports
+lock-free 1, because that system's libatomic is built for the 8C2
+(below).
 
 ## 16-byte atomics (lcc, lcc-doc)
 
@@ -124,9 +130,15 @@ never saw the two halves differ, and `__atomic_is_lock_free(16)` is 0.
 | v3, v4 | no (only loads and stores of protected-mode descriptors) | calls `__atomic_load_16`, `__atomic_compare_exchange_16`, ... in libatomic, which uses a lock, not lock-free | 0 |
 | v5+ | yes | inline `ldqp`/`stqp` loops with the same MAS; seq_cst load = `wait`, `ldqp`, dummy use | 1 |
 
-- Code that mixes the two on **one object** is broken: libatomic's lock
-  does not exclude the hardware loop. lcc's `-mno-quad-memory-atomic`
-  makes v5+ code call libatomic too.
+- Whether code that mixes the two on **one object** works depends on
+  the system's libatomic. A libatomic built for v3/v4 (ALT Linux's on
+  the 4C) uses a lock, which does not exclude the hardware loop, so
+  mixing breaks. Elbrus Linux 9.5 on the 8C2 ships a libatomic built for
+  `elbrus-8c2` whose `__atomic_*_16` are the same `ldqp`/`stqp` loops
+  (147 quad operations in it), so there v3 code (calling libatomic) and
+  v5 code (inline) agree: two threads adding to one `__int128`, one
+  through each, counted exactly (4 million, three runs; hw). lcc's
+  `-mno-quad-memory-atomic` makes v5+ code call libatomic too.
 - v3 and v4 do not define `__GCC_HAVE_SYNC_COMPARE_AND_SWAP_16`; v5 does.
   Both define `__GCC_ATOMIC_*_LOCK_FREE` as 2 for every type up to
   `long long` and pointers.

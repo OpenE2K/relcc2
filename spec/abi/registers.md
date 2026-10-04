@@ -170,9 +170,10 @@ qemu as v3 and v5.
   of `movfi`'s result. lcc's v5 code is the same.
 - **A `long double` kept in a window register across a call needs
   `nfx = 0`** in the function that owns the window: with `nfx = 1` the
-  16-bit part reads back as 0 after the window has been spilled to the
-  procedure stack (a deep call), though it survives a call that does not
-  spill (hw, qemu). lcc sets `nfx = 0` in every function that touches
+  16-bit part is lost when the window is spilled to the procedure stack
+  (a deep call): it reads back as 0 on the Elbrus-8C2 and as 0 or stale
+  data (`0x1f98` in one run) on the 4C, though it survives a call that
+  does not spill (hw, qemu). lcc sets `nfx = 0` in every function that touches
   `long double` and keeps such values in window registers across calls.
   Global registers are not spilled.
 - The arithmetic is x87 extended precision exactly: 64-bit mantissa,

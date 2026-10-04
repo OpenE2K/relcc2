@@ -13,6 +13,24 @@ Each thread has three stacks (guide 9.1.1):
 - Grows downwards. `USD` points to the lowest used address.
 - `getsp N` moves the stack pointer by N bytes (negative N allocates) and
   returns the new pointer, aligned to 16 bytes. `getsp 0` reads it.
+- **The amount of a `getsp` must be a literal, a window or rotating
+  register, or a global from `%g16` up.** The data stack is mapped on
+  demand: a `getsp` that moves past the mapped part traps, and up to v6
+  (the `array_bounds` exception; also v7 CPUs with the
+  `CPU_HWBUG_RRD_USINCR` bug, while other v7 CPUs report the amount in
+  `%usincr`) the kernel decodes the instruction to learn the amount
+  (`arch/e2k/kernel/getsp.c`, `parse_getsp_operation`, called from
+  `traps.c`). It reads literals, window and rotating
+  registers (from the procedure stack) and its saved copies of
+  `%g16`–`%g31`, but for `%g0`–`%g15` (or a tagged value) it fails and
+  the process gets SIGSEGV (`SEGV_BNDERR`). On the 4C
+  (`tools/abi/probes/getsp.c`): 16 KiB, 256 KiB and 4 MiB with the
+  amount in a window register, `%g16` or `%g24` all work; with `%g8`
+  16 KiB works (no growth needed) and 256 KiB and 4 MiB die. So the
+  bug shows only for large allocations. lcc puts the amount in `%g24`,
+  saving and restoring the old value around it (`adds` + `getsp %g24`;
+  the 32-bit form, whose amount the kernel sign-extends). Found by the
+  proof-of-concept backend (`docs/spec-poc-findings.md` A16).
 - The previous `USD` is restored automatically on return, so functions
   don't deallocate their stack.
 - Areas in a frame, from higher to lower addresses: local variables,
@@ -138,3 +156,20 @@ caller's compiler: lcc and Unipro interoperate (compat, hw).
 (`longjmp.S`): unwinding the chain stack takes the kernel. So GCC's
 `__builtin_setjmp` (5 words, no system call) has no E2K counterpart;
 lcc doesn't offer it ([source-compat.md](source-compat.md)).
+
+The `jmp_buf` layout (`setjmp_tmpl.S`): byte 0 the signal mask, 8 the
+return IP (`%cr0.hi`, **not mangled**), 16 `%cr1.lo`, 24/32
+`%pcsp.lo`/`.hi`, 40 `%pcshtp` (32 bits), 44 `%br` (32 bits), 48
+`%usd.lo`, 56 `%wd.psz` (32 bits), 64 and 72 reserved. `e2k_longjmp2`
+copies the IP into the target frame as it is, so a compiler can
+**re-enter a frame at a label**, which GCC's nonlocal `goto` and
+`__builtin_longjmp` need: the receiving function calls `_setjmp` on a
+`jmp_buf` in its frame and writes the label's address at byte 8; a
+`longjmp` from any depth then resumes the frame at the label, with the
+window registers as they were at the frame's latest call and `%br`
+from the `_setjmp` call (so not inside a rotating loop). On the 4C
+(`tools/abi/probes/reenter.c` with `reenter.s`, non-PIC): a local set
+before the second call is intact at the label, from depths 0 to 256
+(spilled windows included). The proof-of-concept backend uses this for
+nested functions and `__builtin_setjmp`, PIC and non-PIC
+(`docs/spec-poc-findings.md` A15).

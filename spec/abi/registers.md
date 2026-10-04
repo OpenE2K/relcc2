@@ -106,6 +106,34 @@ globals are additionally saved around user signal handlers (guide 9.3.1.4).
 Keeping global variables in global registers is only safe in
 single-threaded programs without signal handlers.
 
+## Floating-point control and status (kernel, glibc)
+
+Three 32-bit registers, read with `rrs` and written with `rws`
+(kernel `cpu_regs_types.h`: `e2k_pfpfr_t`, `e2k_fpcr_t`, `e2k_fpsr_t`;
+glibc `sysdeps/e2k/fpu`). The exception bits are in the x87 order in
+all three: invalid, denormal, divide by zero, overflow, underflow,
+precision (inexact); glibc's `FE_*` values are those bits (`FE_INVALID`
+0x01, `FE_DIVBYZERO` 0x04, `FE_OVERFLOW` 0x08, `FE_UNDERFLOW` 0x10,
+`FE_INEXACT` 0x20; denormal 0x02 has no `FE_` name).
+
+| Register | Used by | Bits |
+|---|---|---|
+| `%pfpfr` | `float`, `double`, packed | 0–5 flags (`ie de ze oe ue pe`); 7–12 masks (`im dm zm om um pm`, 1 = masked, i.e. flag << 7); 13–14 rounding (0 nearest, 1 down, 2 up, 3 toward zero: `FE_DOWNWARD` 0x2000 ...); 15 `fz` (flush to zero); 26–31 `die dde dze doe due dpe` |
+| `%fpcr` | 80-bit (x87 control word) | 0–5 masks (`im` ... `pm`); 6 always 1; 8–9 precision control; 10–11 rounding (`FE_FPCR_DOWNWARD` 0x400 ...); 12 `ic` |
+| `%fpsr` | 80-bit (x87 status word) | 0–5 flags; 7 `es` (error summary); 9 `c1`; 15 `bf` |
+
+glibc keeps the two sets in step: `fenv_t` is `{ __fpcr, __fpsr,
+__pfpfr }`; `feholdexcept` saves all three, then sets every mask in
+`%pfpfr` and `%fpcr` and clears the flags in `%pfpfr` and `%fpsr`;
+`feenableexcept` clears mask bits in both `%pfpfr` (`excepts << 7`) and
+`%fpcr`. A compiler that saves and restores the FP environment (GCC's
+`TARGET_ATOMIC_ASSIGN_EXPAND_FENV`, for C11 atomic compound assignment
+of floating types) must do the same for both pairs, since `long double`
+uses `%fpcr`/`%fpsr`. Processes start with all six flags set
+(`%pfpfr` 0x1fbf, `%fpsr` 0x3f; speculation.md), so code (and tests)
+must not assume clear flags at startup. (Found by the proof-of-concept
+backend, `docs/spec-poc-findings.md` P7.)
+
 ## DWARF register numbers
 
 | DWARF number | Register | Source |

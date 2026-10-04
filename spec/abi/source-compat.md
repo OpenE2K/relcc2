@@ -174,8 +174,19 @@ No E2K code depends on them and there is no ABI to match, so a new
 compiler may leave them out at first. Implementing them needs
 trampolines (an executable stack, `%g12` loaded before a jump through a
 CTPR) and, for nonlocal `goto` and `__builtin_longjmp`, unwinding the
-chain stack, which glibc's `longjmp` does through the kernel
-([stack-and-unwinding.md](stack-and-unwinding.md)).
+chain stack, which glibc's `longjmp` does through the kernel; a
+`jmp_buf` whose saved IP is replaced by a label's address re-enters the
+frame there ([stack-and-unwinding.md](stack-and-unwinding.md)).
+
+**Labels as values** are different in lcc: `&&label` is the label's
+index among the address-taken labels of its function (0, 1, 2, ...),
+not a code address, and `goto *p` dispatches on that index (probed
+with lcc 1.29.16 at `-O0` and `-O2`: a table `{ &&a, &&b, &&c }` holds
+0, 1, 2 and computed goto through it works). Code that keeps label
+values only for `goto *` in the same function works with either
+compiler; code that prints them, compares them across functions or
+uses them as code addresses (GCC's documented uses for profiling or
+`__builtin_return_address` comparisons) gets 0, 1, 2 from lcc.
 
 ## Headers (source)
 

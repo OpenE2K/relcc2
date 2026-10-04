@@ -4,9 +4,12 @@ Latencies, control-transfer preparation delays and interlock behaviour,
 measured on hardware by `tools/isa-timing/bench.py`. The data is in
 [timing-e2s.yaml](timing-e2s.yaml) (generated; do not edit).
 
-Status: **[hw]** on an Elbrus 4C (E2S, elbrus-v3, 750 MHz). v1–v5 are
-said to share timings (AGENTS.md); v6 differs (e.g. load→use 5, binutils
-`bfd/elfxx-e2k.c` `build_plt_entry`) and is not measured yet.
+Status: **[hw]** on an Elbrus 4C (E2S, elbrus-v3, 750 MHz) and an
+Elbrus-8C2 (E8C2, elbrus-v5, 1.26–1.5 GHz; data in
+[timing-e8c2.yaml](timing-e8c2.yaml), section "Elbrus-8C2 (v5)" below).
+Every latency, hazard and control-transfer delay measured on both is
+the same; v6 differs (e.g. load→use 5, binutils `bfd/elfxx-e2k.c`
+`build_plt_entry`) and is not measured yet.
 
 ## Method
 
@@ -285,13 +288,46 @@ operations are in `%pfpfr` (rounding in bits 13–14:
 use instead (hw; MCST's qemu wrongly uses `%pfpfr` for them; see
 `spec/abi/registers.md`, "Extended parts and `long double`").
 
+## Elbrus-8C2 (v5) [hw]
+
+`bench.py --target v5.8c2` on the 8C2 (kernels as on the 4C plus v5
+ones, driver built by the 8C2-tuned lcc). All 80 scheduled latencies,
+28 back-to-back costs, 21 hazards, 11 control-transfer delays and 10
+branch costs equal the 4C's, and so do 164 of the 166 kernels of the
+monitor probe (`pmu.c`, cycles from `TICKS`). So v3 latencies hold for
+v5, as lcc's documentation says for v1–v5. What v5 adds or changes:
+
+- **Six FP operations per cycle.** v4 added `faddd`, `fmuld`,
+  `fmul_add*` (and the single forms) in ALC2 and ALC5, so 6 `faddd`,
+  `fmuld` or `fmul_addd` issue in one instruction (v3: 4). In ALC2/5
+  they have the usual latencies (4; `fmul_addd` 8) and crossing costs
+  (ALC5 → ALC0 FP 6, ALC5 FP → integer 6).
+- **128-bit packed operations** (`qp*`, v5) work on whole registers
+  (`%qprN` is register N at its full 128 bits): `qpfaddd`, `qpfmuld` 4
+  cycles, `qpfmul_addd` 8, `qpaddd` and `qpand` 1; 6 `qpfaddd` or
+  `qpfmuld` per instruction.
+- **Quad loads are slow:** `ldqp` has a latency of **11** to any
+  consumer (integer or `qp`; `ldd` stays 3), and only one `ldqp` issues
+  per cycle (2, 3 or 4 in one instruction take 2, 3, 3–4 cycles). Two
+  `stqp` in one instruction, 64 bytes apart, take 1 cycle.
+- **Divider:** `sdivd` every 2 cycles no longer conflicts (2 cycles; v3
+  3.4); the other divider distances are as on v3 (`fsqrts` still
+  conflicts at 5). An ALC5 FP operation never conflicts with a divide
+  in flight (distances 1–16 for `faddd` and `fmuld`), except in one
+  pattern: `fdivd` every 2 cycles with an ALC5 FP operation in every
+  gap costs 2.76 cycles per pair instead of 2 (probably what lcc 1.26's
+  "FP operations in channel 5 need special scheduling" is about).
+- **A store and a load in one 32-byte block** in one instruction take
+  1.8–2 cycles in every run (the 4C sometimes runs them at 1); two
+  stores agreeing in address bits 6–7 take 2, as on the 4C.
+
 ## Differences between generations (lcc-doc, not measured)
 
 lcc's changelogs name scheduling changes it made for later CPUs, which
 `bench.py` should check when it runs there:
 
 - v5: floating-point operations in channel 5 need special scheduling
-  (lcc 1.26).
+  (lcc 1.26); measured above: one conflicting pattern with the divider.
 - v6: the bypass from a store to a following load was removed (lcc 1.26),
   so a load that reads what a store just wrote waits longer.
 - Elbrus-48C (v7): prepare-to-transfer delays differ;
@@ -300,7 +336,7 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
 
 ## Not measured yet
 
-- v4, v5, v6 (the 8CB is v5).
+- v4, v6, v7.
 - Loop mode registers other than `%lsr` (`%ilcr`); APB throughput.
 - 128-bit operations (v5+), `%spred`.
 - Throughput of 128-bit and packed FP operations, `mova`, AAU stores,

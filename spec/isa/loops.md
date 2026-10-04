@@ -47,9 +47,17 @@ Status markers:
 the same places. **Writing `%lsr` also writes those fields of `%ilcr`**
 [hw]; the loop doesn't change `%ilcr`, so `%ilcr − %lsr` is the number
 of iterations done (the kernel uses this to restart array prefetch,
-apb.md). v5+ add `%lsr1` (0xc3) and `%ilcr1` (0xc7), which extend the
-counter (MCST's qemu: writing `%lsr1` also sets `%lsr.lcnt`) [source;
-not run]. The kernel saves `%lsr`, `%lsr1`, `%ilcr` and `%ilcr1` in a
+apb.md). v5+ add `%lsr1` (0xc3) and `%ilcr1` (0xc7): **`%lsr1` is the 64-bit
+loop counter** [hw: Elbrus-8C2, `loops.c` built with `-DLOOPS_V5`].
+Writing it sets the count: after `%lsr` with `lcnt` 5, writing `%lsr1`
+= 7 makes the loop run 7 iterations and `%lsr` read back `lcnt` 7
+(also 2, 1, 100; 0 behaves as `lcnt` 0 and runs once), and
+`%lsr1` = 2³² + 3 runs exactly 4,294,967,299 iterations. Writing `%lsr`
+**after** `%lsr1` resets `%lsr1` to the new `lcnt`, so write `%lsr`
+first (control fields) and `%lsr1` second (the count), as lcc does
+(`rwd %lsr` then `rwd n, %lsr1`). Each write also sets `%ilcr1`, which
+the loop leaves alone; `%lsr1` reads 0 after the loop. `ecnt`, `pcnt`
+and the store rules work as with `%lsr` alone. The kernel saves `%lsr`, `%lsr1`, `%ilcr` and `%ilcr1` in a
 signal context [source], and they are scratch across calls
 ([registers.md](../abi/registers.md)).
 

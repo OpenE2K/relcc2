@@ -40,7 +40,11 @@ the same tags. A diagnostic double has tag 5 (both halves). The 4C fills
 a failed load's result with `4afafafa4afafafa`; a failed division or FP
 operation returns the result it computed with bit 30 of each half set
 (`1.0 / 0.0` → `7ff0000040000000`, `1.0 / 3.0` → `7fd5555555555555`,
-`7 / 0` → `400000004000000d`), and a speculative operation on a
+`7 / 0` → `400000004000000d`; the Elbrus-8C2 (v5) gives the same
+except for a `faddd,sm` whose result becomes diagnostic, from a
+diagnostic operand or an inexact result: high half `7ff80000` (a quiet
+NaN with bit 30) where the 4C has `40000000`), and a
+speculative operation on a
 diagnostic operand computes on its bits as usual (`addd,sm` of
 `4afafafa4afafafa` and 1 gives `…4afafafb`). Predicates have one tag
 bit: a **diagnostic predicate** comes from a speculative compare of a

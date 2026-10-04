@@ -325,7 +325,7 @@ the halves and the areas agree. Differences:
 | Signal handler during a `loop_mode` APB loop | correct | **wrong data**: `sigreturn` restarts every area from its start (`linux-user/e2k/signal.c`); lcc's loops in `apb-lcc.c` give 600 wrong results of 900 | correct |
 | Trap between movas outside loop mode | position from the loop counters | continues | continues |
 | `ind + size > mrng`, `mova` wider than `fmt` | diagnostic | diagnostic (other bits) | data; SIGILL |
-| Misaligned base, overlapping areas | diagnostic | data | misaligned: invalid value without a tag; overlap: data |
+| Misaligned base, overlapping areas | diagnostic (the 8C2, v5: a misaligned base gives the unaligned data; of two overlapping areas the first gives data, the second diagnostic) | data | misaligned: invalid value without a tag; overlap: data |
 | `mova` after `eap`, after a write to `%ctpr2` | SIGILL | data | data |
 | `mova` after a call | SIGILL | aborts (no signals for hardware exceptions) | SIGILL |
 | `eap` then `bap` | continues | continues | restarts from the start |

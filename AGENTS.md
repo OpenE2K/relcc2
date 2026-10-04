@@ -86,7 +86,8 @@ differ from v6.
 
 - **4C (v3)**: `ssh -i secrets/id_ed25519 -o IdentitiesOnly=yes
   claude@ringo.lan` (key in untracked `secrets/`, never commit or copy it).
-  4× E2S, 16 cores, 61 GiB RAM, ALT Linux, native lcc 1.29.16, gdb, perf.
+  4× E2S, 16 cores, 61 GiB RAM (two memory channels per processor
+  instead of three), ALT Linux, native lcc 1.29.16, gdb, perf.
   It is a shared machine, not a container: keep parallelism low (about
   `-j4`) and don't fill `/tmp` (tmpfs). **Several agents use the account
   at once**: work only in your own subdirectory `~/relcc2/<task>` (check

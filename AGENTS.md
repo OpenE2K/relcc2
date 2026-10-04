@@ -338,8 +338,12 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   32-byte block, can take 2 cycles). The Elbrus-8C2 (v5,
   `timing-e8c2.yaml`, timing.md "Elbrus-8C2") has every v3 latency,
   hazard and control delay; v5 adds 6 FP ops per cycle (ALC2/5),
-  128-bit `qp*` ops with scalar latencies, slow `ldqp` (latency 11, one
-  per cycle). Other v5 hardware results: `%lsr1` is the 64-bit loop
+  128-bit `qp*` ops with scalar latencies; `ldqp` bypasses L1 (served
+  by L2: latency 11, one per cycle; `ldq` into a pair goes through L1,
+  latency 3; lcc loads 128-bit data as two `ldd`); an APB area delivers
+  16 bytes a cycle (also v3); `%aaind` is 64-bit. isa-score models these
+  and is within 3% on the 8C2's kernels and 1.00 on CoreMark
+  (`validate.py --target v5.8c2 --period 30011`). Other v5 hardware results: `%lsr1` is the 64-bit loop
   count (write it after `%lsr`); misaligned APB areas give data; the
   compat suite passes for every pair (no register cleaning); Elbrus
   Linux's libatomic is built for v5, so v3 and v5 code can share

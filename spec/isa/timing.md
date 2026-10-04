@@ -246,6 +246,18 @@ L2 hit 9 cycles (the guide says 11), memory on the local node about
 105–110 (+15 with 4 KiB pages, from TLB misses), on another node about
 190–235.
 
+On the Elbrus-8C2 (64 KiB L1D and 512 KiB L2 per core, 16 MiB L3
+shared, one node; `--memory` at 1,500 MHz): L2 hit 11 cycles (scheduled
+latency, a 256 KiB chase; the same as `ldqp`, which L2 serves), L3
+about 32 (1–8 MiB chases cost 32–33 cycles a load whatever the gap),
+memory about 180 (120 ns; a 128 MiB chase) and about 20 more with
+4 KiB pages. In nanoseconds the 8C2's L2 is faster than the 4C's (7 ns
+against 12) and so is its memory (120 against 145), but in cycles both
+are slower, which a schedule tuned for the 4C feels: Unipro's Linpack,
+whose 320 KB matrix leaves L1 and which uses no array prefetch, runs
+12% slower than isa-score's L1 model on the 8C2 and 6% faster on the
+4C.
+
 ## Array prefetch
 
 Measured by `tools/isa-probes/apb.c`, not `bench.py`; details in

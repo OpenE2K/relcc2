@@ -8,8 +8,9 @@ Status: **[hw]** on an Elbrus 4C (E2S, elbrus-v3, 750 MHz) and an
 Elbrus-8C2 (E8C2, elbrus-v5, 1.26–1.5 GHz; data in
 [timing-e8c2.yaml](timing-e8c2.yaml), section "Elbrus-8C2 (v5)" below).
 Every latency, hazard and control-transfer delay measured on both is
-the same; v6 differs (e.g. load→use 5, binutils `bfd/elfxx-e2k.c`
-`build_plt_entry`) and is not measured yet.
+the same; v6 differs (load→use 5 instead of 3, binutils
+`bfd/elfxx-e2k.c` `build_plt_entry`; the owner recalls this as v6's only
+timing change, and isa-score uses it for v6+) and is not measured.
 
 ## Method
 

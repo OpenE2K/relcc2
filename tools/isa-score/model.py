@@ -46,6 +46,7 @@ CLASSES = {
     "cint":   dict(lat=2, to_int=2, fpside=False),   # add_addd etc.
     "getsp":  dict(lat=2, to_int=2, fpside=False),   # timing.md (pmu.c)
     "load":   dict(lat=3, to_int=3, fpside=False),   # L1 hit
+    "ldqp":   dict(lat=11, to_int=11, fpside=False),  # v5: served by L2
     "idiv":   dict(lat=11, to_int=11, fpside=False),
     "imul":   dict(lat=4, to_int=6, fpside=True),
     "fp":     dict(lat=4, to_int=6, fpside=True),    # fadd, fmul, fmin
@@ -69,6 +70,13 @@ CLASSES = {
 PRED_LAT = {"icmpp": (2, 3, 1), "fcmpp": (4, 5, 3), "plog": (2, 3, 1)}
 
 # Prepare -> transfer through a CTPR.
+# One array-prefetch area delivers at most this many bytes a cycle (the
+# 8C2: two movaqp of one area in a loop_mode instruction take 2 cycles
+# an iteration; timing.md, "Array prefetch").
+APB_AREA_BYTES = 16
+MOVA_BYTES = {"movab": 1, "movah": 2, "movaw": 4, "movad": 8, "movaq": 16,
+              "movaqp": 16}
+
 CTP_LAT = {"disp": 5, "sdisp": 5, "return": 6, "movtd": 9, "ldisp": 3}
 # A conditional ct that is not taken waits for its CTPR only this long
 # after a disp (monitors.md, ct_false_dK in tools/isa-probes/gen_pmu.py).
@@ -81,7 +89,7 @@ BAP_TO_MOVA = 22    # apb.md, data in the caches
 # integer-side operation (ALU or load, not a store) issues in the same
 # channel PORT_DISTANCE cycles after it.
 PORT_DISTANCE = 2
-INT_SIDE = {"int", "cint", "getsp", "load", "idiv"}
+INT_SIDE = {"int", "cint", "getsp", "load", "ldqp", "idiv"}
 STALL_QUANTUM = 4   # timing.md: an early consumer waits in 4-cycle steps
 
 
@@ -105,6 +113,8 @@ def classify(name):
         return "mova"
     if n.startswith(("aaurr", "apurr")):
         return "aaur"
+    if n.startswith("ldqp"):
+        return "ldqp"
     if re.match(r"(ld|ldg|ldc)", n) and n != "ldisp":
         return "load"
     if re.match(r"[su]div", n):
@@ -273,7 +283,12 @@ def parse_line(line, unknown):
                   dsts=regs[-1], cls="plog")
     if name.startswith("mova"):
         m = re.search(r"area\s*=\s*(\d+).*am\s*=\s*(\d+)", rest)
-        regs = regs_of(rest.split(",")[-1])
+        dst = rest.split(",")[-1]
+        if name == "movaqp":
+            # v5's movaqp writes one 128-bit register, though the
+            # disassembly names it like a pre-v5 pair (%qb[N]).
+            dst = re.sub(r"%q(?!p)", "%qp", dst)
+        regs = regs_of(dst)
         half = (chan or 0) // 2
         area = ("aau", f"area{half}.{m.group(1)}") if m else ("aau", "area")
         op = Op(line, name, "aas", chan, srcs=[("aau", "apb"), area],

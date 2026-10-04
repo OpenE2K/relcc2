@@ -3,14 +3,19 @@
 """Compare isa-score's "achieved" cycles with cycles measured on hardware.
 
   validate.py --remote USER@HOST [--remote-dir DIR] [--key FILE] [-o DIR]
+              [--target T]
 
-Builds kernels.c with lcc at -O0, -O2 and -O3 (v3) and main.c, then on
+Builds kernels.c with lcc at -O0, -O2 and -O3 and main.c, then on
 the E2K machine: runs every kernel REPEAT times under perf, sampling the
 EXEC and TICKS monitors (profile.py), which gives how often each block
 ran and the cycles spent in each kernel, and times each kernel with
 %clkr.  The prediction is isa-score's static per-block cycles weighted
 by the sampled counts.  The data fits in L1, so prediction and
 measurement should agree as far as the model is right.
+
+--target picks the lcc build by its /opt/mcst directory suffix (default
+v3; use the CPU-tuned one for the machine: v3.4c for the 4C, v5.8c2
+for the 8C2); the model uses that ISA version.
 """
 
 import argparse
@@ -24,7 +29,7 @@ from types import SimpleNamespace
 HERE = Path(__file__).resolve().parent
 SCORE = HERE.parent
 ROOT = SCORE.parents[1]
-LCC = "/opt/mcst/lcc-1.29.16.e2k-v3.linux-6.1/bin/lcc"
+LCC = "/opt/mcst/lcc-1.29.16.e2k-{}.linux-6.1/bin/lcc"
 REPEAT = 20000
 PERIOD = 10007
 sys.path.insert(0, str(SCORE))
@@ -43,21 +48,27 @@ def main():
     ap.add_argument("--key", default=str(ROOT / "secrets" / "id_ed25519"))
     ap.add_argument("--cpu", type=int, default=2)
     ap.add_argument("-o", default=str(ROOT / "toolchains" / "isa-score" / "validate"))
+    ap.add_argument("--target", default="v3")
+    # perf throttles sampling above about 100,000 samples a second, and
+    # TICKS at PERIOD 10007 exceeds that above 1 GHz (the 8C2: use 30011).
+    ap.add_argument("--period", type=int, default=PERIOD)
     a = ap.parse_args()
+    lcc = LCC.format(a.target)
+    iset = int(re.match(r"v(\d+)", a.target).group(1))
     out = Path(a.o)
     out.mkdir(parents=True, exist_ok=True)
     objs = []
     for lvl in ("O0", "O2", "O3"):
         o = out / f"kernels-{lvl}.o"
-        sh(LCC, f"-{lvl}", f"-DSUF={lvl}", "-c", str(HERE / "kernels.c"),
+        sh(lcc, f"-{lvl}", f"-DSUF={lvl}", "-c", str(HERE / "kernels.c"),
            "-o", str(o))
         objs.append(str(o))
     prog = out / "validate"
-    sh(LCC, "-O1", str(HERE / "main.c"), str(HERE / "clk.s"), *objs,
+    sh(lcc, "-O1", str(HERE / "main.c"), str(HERE / "clk.s"), *objs,
        "-o", str(prog))
 
     pa = SimpleNamespace(remote=a.remote, remote_dir=a.remote_dir, key=a.key,
-                         cpu=a.cpu, period=PERIOD, args=[str(REPEAT)],
+                         cpu=a.cpu, period=a.period, args=[str(REPEAT)],
                          o=str(out), stdin="")
     spath, tpath, _ = prof.run_remote(pa, str(prog))
     ssh = ["ssh", "-i", a.key, "-o", "IdentitiesOnly=yes", a.remote]
@@ -69,7 +80,7 @@ def main():
 
     samples, _ = prof.read_samples(spath, str(prog))
     taken, _ = prof.read_samples(tpath, str(prog))
-    rows, _ = prof.weigh(str(prog), 3, samples, PERIOD, taken)
+    rows, _ = prof.weigh(str(prog), iset, samples, a.period, taken)
     pred, meas = defaultdict(float), defaultdict(float)
     for r in rows:
         if r["func"].startswith("k_"):

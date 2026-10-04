@@ -421,6 +421,19 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None):
                             else model.stall(r - issue)
                         if w > wait:
                             wait, why = w, f"{key} from {p.name} ({r - issue} early)"
+            # An area delivers APB_AREA_BYTES a cycle: more from one area
+            # in one instruction holds it for the extra cycles.
+            area_bytes = {}
+            for op in ins.ops:
+                if op.name in model.MOVA_BYTES:
+                    area = next((k for k in op.srcs if k[0] == "aau"
+                                 and k[1].startswith("area")), None)
+                    area_bytes[area] = (area_bytes.get(area, 0)
+                                        + model.MOVA_BYTES[op.name])
+            extra = max([math.ceil(b / model.APB_AREA_BYTES) - 1
+                         for b in area_bytes.values()] + [0])
+            if extra > wait:
+                wait, why = extra, f"APB area bandwidth ({max(area_bytes.values())} bytes)"
             if trace is not None:
                 trace.append((it, ins, issue, wait, why))
             issue += wait

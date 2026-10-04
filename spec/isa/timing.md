@@ -291,7 +291,12 @@ use instead (hw; MCST's qemu wrongly uses `%pfpfr` for them; see
 ## Elbrus-8C2 (v5) [hw]
 
 `bench.py --target v5.8c2` on the 8C2 (kernels as on the 4C plus v5
-ones, driver built by the 8C2-tuned lcc). All 80 scheduled latencies,
+ones, driver built by the 8C2-tuned lcc). The table was taken under the
+`schedutil` governor; rerun under `performance` (1500 MHz fixed,
+`%clkr` counting 1500 MHz against the wall clock, busy or idle) 368 of
+370 latency and throughput kernels gave the same numbers, the other two
+being store + load pairs in one 32-byte block (1.8–2 cycles either
+way), so the governor doesn't affect cycle counts. All 80 scheduled latencies,
 28 back-to-back costs, 21 hazards, 11 control-transfer delays and 10
 branch costs equal the 4C's, and so do 164 of the 166 kernels of the
 monitor probe (`pmu.c`, cycles from `TICKS`). So v3 latencies hold for

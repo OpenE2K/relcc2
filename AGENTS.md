@@ -96,7 +96,8 @@ differ from v6.
   --remote-dir` choose the subdirectory.
 - **8C2 (v5)**: `ssh -i secrets/id_ed25519 -o IdentitiesOnly=yes
   claude@geofront.lan` (the same key). Elbrus-8C2 (E8C2, cpu family 5),
-  8 cores, one socket, 1263–1500 MHz with frequency scaling, 125 GiB
+  8 cores, one socket, 1500 MHz (`performance` governor since
+  2026-10-04; `%clkr` counts 1500 MHz), 125 GiB
   RAM, Elbrus Linux 9.5.5 (OS Elbrus, kernel 6.1), native lcc 1.29.16
   (`e2k-8c2-linux`), gdb, perf (`perf_event_paranoid` 2), numactl.
   Same rules as the 4C: work only in `~/relcc2/<task>`, remove only

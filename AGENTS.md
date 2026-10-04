@@ -99,7 +99,7 @@ differ from v6.
   claude@geofront.lan` (the same key). Elbrus-8C2 (E8C2, cpu family 5),
   8 cores, one socket, 1500 MHz (`performance` governor since
   2026-10-04; `%clkr` counts 1500 MHz), 125 GiB
-  RAM, Elbrus Linux 9.5.5 (OS Elbrus, kernel 6.1), native lcc 1.29.16
+  RAM (all four memory channels populated), Elbrus Linux 9.5.5 (OS Elbrus, kernel 6.1), native lcc 1.29.16
   (`e2k-8c2-linux`), gdb, perf (`perf_event_paranoid` 2), numactl.
   Same rules as the 4C: work only in `~/relcc2/<task>`, remove only
   that, keep runs short. Build code for it with the 8C2-tuned

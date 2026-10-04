@@ -3442,6 +3442,465 @@ spec_k_match:
 	}
 	.size	spec_k_match, .-spec_k_match
 
+	.global	spec_kt_check_use
+	.type	spec_kt_check_use, #function
+	.align	8
+spec_kt_check_use:
+	{
+	  setwd	wsz = 0x40, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,1	0x0, 0x0, %dr8
+	  addd,2	0x0, 0x0, %dr9
+	  rrs,0	%pfpfr, %r10
+	}
+	{
+	  nop 5
+	}
+	{
+	  ands,0	%r10, 0xffffffc0, %r11
+	}
+	{
+	  rws,0	%r11, %pfpfr
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr4
+	}
+	{
+	  addd,0	0x0, 0x0, %dr11
+	}
+	{
+	  mmurw,2	%dr11, %dam_inv
+	}
+	{
+	  nop 7
+	}
+	{
+	  ldd,0,sm	%dr2, 0x0, %dr8, mas=0x4
+	}
+	{
+	  nop 7
+	}
+	{
+	  ldd,5	%dr2, 0x0, %dr8, mas=0x3
+	  rbranch	.Lkt_check_use_locked
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr8
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  ibranch	.Lkt_check_use_out
+	}
+.Lkt_check_use_locked:
+	{
+	  addd,1	0x0, 0x1, %dr9
+	  rrd,0	%clkr, %dr5
+	}
+.Lkt_check_use_out:
+	{
+	  nop 7
+	  rrs,0	%pfpfr, %r12
+	}
+	{
+	  nop 5
+	  gettagd,2	%dr8, %r6
+	  puttagd,5	%dr8, 0x0, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x0, %dr7
+	  std,5	%dr0, 0x8, %dr6
+	}
+	{
+	  std,2	%dr0, 0x10, %dr9
+	  stw,5	%dr0, 0x18, %r12
+	  rws,0	%r10, %pfpfr
+	}
+	{
+	  subd,0	%dr5, %dr4, %dr0
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	spec_kt_check_use, .-spec_kt_check_use
+
+	.global	spec_kt_nocheck_use
+	.type	spec_kt_nocheck_use, #function
+	.align	8
+spec_kt_nocheck_use:
+	{
+	  setwd	wsz = 0x40, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,1	0x0, 0x0, %dr8
+	  addd,2	0x0, 0x0, %dr9
+	  rrs,0	%pfpfr, %r10
+	}
+	{
+	  nop 5
+	}
+	{
+	  ands,0	%r10, 0xffffffc0, %r11
+	}
+	{
+	  rws,0	%r11, %pfpfr
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr4
+	}
+	{
+	  addd,0	0x0, 0x0, %dr11
+	}
+	{
+	  mmurw,2	%dr11, %dam_inv
+	}
+	{
+	  nop 7
+	}
+	{
+	  ldd,0,sm	%dr2, 0x0, %dr8, mas=0x4
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop
+	}
+	{
+	  addd,0	%dr8, 0x1, %dr8
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  ibranch	.Lkt_nocheck_use_out
+	}
+.Lkt_nocheck_use_locked:
+	{
+	  addd,1	0x0, 0x1, %dr9
+	  rrd,0	%clkr, %dr5
+	}
+.Lkt_nocheck_use_out:
+	{
+	  nop 7
+	  rrs,0	%pfpfr, %r12
+	}
+	{
+	  nop 5
+	  gettagd,2	%dr8, %r6
+	  puttagd,5	%dr8, 0x0, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x0, %dr7
+	  std,5	%dr0, 0x8, %dr6
+	}
+	{
+	  std,2	%dr0, 0x10, %dr9
+	  stw,5	%dr0, 0x18, %r12
+	  rws,0	%r10, %pfpfr
+	}
+	{
+	  subd,0	%dr5, %dr4, %dr0
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	spec_kt_nocheck_use, .-spec_kt_nocheck_use
+
+	.global	spec_k_nosm0_8
+	.type	spec_k_nosm0_8, #function
+	.align	8
+spec_k_nosm0_8:
+	{
+	  setwd	wsz = 0x40, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,1	0x0, 0x0, %dr8
+	  addd,2	0x0, 0x0, %dr9
+	  rrs,0	%pfpfr, %r10
+	}
+	{
+	  nop 5
+	}
+	{
+	  ands,0	%r10, 0xffffffc0, %r11
+	}
+	{
+	  rws,0	%r11, %pfpfr
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr4
+	}
+	{
+	  addd,0	0x0, 0x0, %dr11
+	}
+	{
+	  mmurw,2	%dr11, %dam_inv
+	}
+	{
+	  nop 7
+	}
+	{
+	  ldd,0	%dr2, 0x0, %dr8, mas=0x4
+	}
+	{
+	  nop 7
+	}
+	{
+	  ldd,5	%dr2, 0x0, %dr8, mas=0x3
+	  rbranch	.Lk_nosm0_8_locked
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  ibranch	.Lk_nosm0_8_out
+	}
+.Lk_nosm0_8_locked:
+	{
+	  addd,1	0x0, 0x1, %dr9
+	  rrd,0	%clkr, %dr5
+	}
+.Lk_nosm0_8_out:
+	{
+	  nop 7
+	  rrs,0	%pfpfr, %r12
+	}
+	{
+	  nop 5
+	  gettagd,2	%dr8, %r6
+	  puttagd,5	%dr8, 0x0, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x0, %dr7
+	  std,5	%dr0, 0x8, %dr6
+	}
+	{
+	  std,2	%dr0, 0x10, %dr9
+	  stw,5	%dr0, 0x18, %r12
+	  rws,0	%r10, %pfpfr
+	}
+	{
+	  subd,0	%dr5, %dr4, %dr0
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	spec_k_nosm0_8, .-spec_k_nosm0_8
+
+	.global	spec_k_nosm3_8
+	.type	spec_k_nosm3_8, #function
+	.align	8
+spec_k_nosm3_8:
+	{
+	  setwd	wsz = 0x40, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,1	0x0, 0x0, %dr8
+	  addd,2	0x0, 0x0, %dr9
+	  rrs,0	%pfpfr, %r10
+	}
+	{
+	  nop 5
+	}
+	{
+	  ands,0	%r10, 0xffffffc0, %r11
+	}
+	{
+	  rws,0	%r11, %pfpfr
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr4
+	}
+	{
+	  addd,0	0x0, 0x0, %dr11
+	}
+	{
+	  mmurw,2	%dr11, %dam_inv
+	}
+	{
+	  nop 7
+	}
+	{
+	  ldd,3	%dr2, 0x0, %dr8, mas=0x4
+	}
+	{
+	  nop 7
+	}
+	{
+	  ldd,5	%dr2, 0x0, %dr8, mas=0x3
+	  rbranch	.Lk_nosm3_8_locked
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  ibranch	.Lk_nosm3_8_out
+	}
+.Lk_nosm3_8_locked:
+	{
+	  addd,1	0x0, 0x1, %dr9
+	  rrd,0	%clkr, %dr5
+	}
+.Lk_nosm3_8_out:
+	{
+	  nop 7
+	  rrs,0	%pfpfr, %r12
+	}
+	{
+	  nop 5
+	  gettagd,2	%dr8, %r6
+	  puttagd,5	%dr8, 0x0, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x0, %dr7
+	  std,5	%dr0, 0x8, %dr6
+	}
+	{
+	  std,2	%dr0, 0x10, %dr9
+	  stw,5	%dr0, 0x18, %r12
+	  rws,0	%r10, %pfpfr
+	}
+	{
+	  subd,0	%dr5, %dr4, %dr0
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	spec_k_nosm3_8, .-spec_k_nosm3_8
+
+	.global	spec_k_nosm0_12
+	.type	spec_k_nosm0_12, #function
+	.align	8
+spec_k_nosm0_12:
+	{
+	  setwd	wsz = 0x40, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,1	0x0, 0x0, %dr8
+	  addd,2	0x0, 0x0, %dr9
+	  rrs,0	%pfpfr, %r10
+	}
+	{
+	  nop 5
+	}
+	{
+	  ands,0	%r10, 0xffffffc0, %r11
+	}
+	{
+	  rws,0	%r11, %pfpfr
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr4
+	}
+	{
+	  addd,0	0x0, 0x0, %dr11
+	}
+	{
+	  mmurw,2	%dr11, %dam_inv
+	}
+	{
+	  nop 7
+	}
+	{
+	  ldd,0	%dr2, 0x0, %dr12, mas=0x4
+	}
+	{
+	  nop 7
+	}
+	{
+	  ldd,5	%dr2, 0x0, %dr12, mas=0x3
+	  rbranch	.Lk_nosm0_12_locked
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  ibranch	.Lk_nosm0_12_out
+	}
+.Lk_nosm0_12_locked:
+	{
+	  addd,1	0x0, 0x1, %dr9
+	  rrd,0	%clkr, %dr5
+	}
+.Lk_nosm0_12_out:
+	{
+	  nop 7
+	  rrs,0	%pfpfr, %r12
+	}
+	{
+	  nop 5
+	  gettagd,2	%dr8, %r6
+	  puttagd,5	%dr8, 0x0, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x0, %dr7
+	  std,5	%dr0, 0x8, %dr6
+	}
+	{
+	  std,2	%dr0, 0x10, %dr9
+	  stw,5	%dr0, 0x18, %r12
+	  rws,0	%r10, %pfpfr
+	}
+	{
+	  subd,0	%dr5, %dr4, %dr0
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	spec_k_nosm0_12, .-spec_k_nosm0_12
+
 	.global	spec_k_otherreg
 	.type	spec_k_otherreg, #function
 	.align	8

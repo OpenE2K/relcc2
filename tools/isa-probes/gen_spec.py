@@ -199,6 +199,19 @@ def main():
     st0 = [["std,2\t%dr2, 0x0, %dr3"], nop]
     st8 = [["std,2\t%dr2, 0x8, %dr3"], nop]
     add("k_match", inv + spld(8) + check(8))
+    # Cost of an intact check: a use of the register in the instruction
+    # right after the check, against the same code with the check
+    # replaced by an empty instruction.
+    use = [["addd,0\t%dr8, 0x1, %dr8"]]
+    add("kt_check_use", inv + spld(8) + [["ldd,5\t%dr2, 0x0, %dr8, mas=0x3",
+                                          "rbranch\t%%LOCKED"]] + use)
+    add("kt_nocheck_use", inv + spld(8) + [["nop"]] + use)
+    # The lock load without ,sm (ALC0 and ALC3, two registers), nothing
+    # in between: does it record an entry?
+    for ch, reg in ((0, 8), (3, 8), (0, 12)):
+        add(f"k_nosm{ch}_{reg}",
+            inv + [[f"ldd,{ch}\t%dr2, 0x0, %dr{reg}, mas=0x4"], nop]
+            + check(reg))
     add("k_otherreg", inv + spld(12) + check(8))
     add("k_otheraddr", inv + spld(8, 8) + check(8))
     add("k_noentry", inv + check(8))

@@ -169,7 +169,7 @@ main (int argc, char **argv)
   DAM (dam_nosm)
   static long big[64] __attribute__ ((aligned (64)));
 #define K(n) big[0] = 7; run (#n, spec_##n, "b[0] 7, store 42", 0, (long) big, 42);
-  K (k_match) K (k_otherreg) K (k_otheraddr) K (k_noentry) K (k_store)
+  K (kt_check_use) K (kt_nocheck_use) K (k_match) K (k_nosm0_8) K (k_nosm3_8) K (k_nosm0_12) K (k_otherreg) K (k_otheraddr) K (k_noentry) K (k_store)
   K (k_store_other) K (k_store_otherreg) K (k_twice) K (k_call)
   K (k_overwrite)
   big[1] = 0x2222; K (k_oa_st0) big[1] = 0x2222; K (k_oa_st8) big[1] = 0;

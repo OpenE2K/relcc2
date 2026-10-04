@@ -288,7 +288,7 @@ CTL_DISTANCES = range(1, 11)
 # overwritten while in flight. Inputs are constants (INIT, %dr1 = cell),
 # so there are no dependences.
 def _ch(fmt, chans):
-    return [fmt.format(c=c, o=8 * c, d="{d}") for c in chans]
+    return [fmt.format(c=c, o=8 * c, o2=16 * c, d="{d}") for c in chans]
 
 
 TP = {
@@ -401,10 +401,114 @@ TP["stld_0"] = (["std,2 %dr1, 0x100, %dr3", "ldd,0 %dr1, 0x100, {d}"],
                 "std + ldd same address")
 TP_DEST = range(8, 64)
 
+# v5 and later (added when --target is v5+): FP operations in ALC2 and
+# ALC5 (v4+ encoding), 128-bit packed operations on whole registers
+# (%qprN), quad loads and stores.  %qpr7 holds (1.0, 1.0) for the
+# throughput kernels; %qpr7 / %qpr8 hold (0.0, 0.0) / (1.0, 1.0) in the
+# chains.
+V5_TP_INIT = "qppackdl,0 %dr4, %dr4, %qpr7"
+QP_INIT = ("qppackdl,0 %dr4, %dr4, %qpr2; qppackdl,1 %dr5, %dr5, %qpr7; "
+           "qppackdl,3 %dr4, %dr4, %qpr8")
+SCHED_V5 = {
+    "faddd_c5": ("%dr4", [("faddd,5 %dr2, %dr5, %dr2", None)], 8),
+    "faddd_c2": ("%dr4", [("faddd,2 %dr2, %dr5, %dr2", None)], 8),
+    "fmuld_c5": ("%dr4", [("fmuld,5 %dr2, %dr4, %dr2", None)], 8),
+    "fmul_addd_c5": ("%dr4", [("fmul_addd,5 %dr2, %dr4, %dr5, %dr2", None)], 12),
+    "faddd_c5_to_addd": ("%dr4", [("faddd,5 %dr2, %dr5, %dr2", None),
+                                  ("addd,5 %dr2, %dr5, %dr2", 12)], 10),
+    "faddd_c5_to_faddd_c0": ("%dr4", [("faddd,5 %dr2, %dr5, %dr2", None),
+                                      ("faddd,0 %dr2, %dr5, %dr2", 12)], 8),
+    "faddd_c0_to_faddd_c5": ("%dr4", [("faddd,0 %dr2, %dr5, %dr2", None),
+                                      ("faddd,5 %dr2, %dr5, %dr2", 12)], 8),
+    "qpfaddd": (QP_INIT, [("qpfaddd,0 %qpr2, %qpr7, %qpr2", None)], 8),
+    "qpfaddd_c5": (QP_INIT, [("qpfaddd,5 %qpr2, %qpr7, %qpr2", None)], 8),
+    "qpfmuld": (QP_INIT, [("qpfmuld,0 %qpr2, %qpr8, %qpr2", None)], 8),
+    "qpfmul_addd": (QP_INIT, [("qpfmul_addd,0 %qpr2, %qpr8, %qpr7, %qpr2",
+                               None)], 12),
+    "qpaddd": (QP_INIT, [("qpaddd,0 %qpr2, %qpr7, %qpr2", None)], 8),
+    "qpand": (QP_INIT, [("qpand,0 %qpr2, %qpr2, %qpr2", None)], 8),
+    "ldqp": ("%dr1", [("ldqp,0 %dr2, 0x0, %qpr2", None)], 16),
+    "ldqp_to_addd": ("%dr1", [("ldqp,0 %dr2, 0x0, %qpr2", None),
+                              ("addd,0 %dr2, %dr5, %dr2", 16)], 16),
+    "ldqp_to_qpand": ("%dr1", [("ldqp,0 %dr2, 0x0, %qpr2", None),
+                               ("qpand,0 %qpr2, %qpr2, %qpr2", 16)], 16),
+    "ldd_to_addd_v5": ("%dr1", [("ldd,0 %dr2, 0x0, %dr2", None),
+                                ("addd,0 %dr2, %dr5, %dr2", 16)], 8),
+}
+TP_V5 = {
+    "v5_faddd_6": (_ch("faddd,{c} %dr4, %dr5, {d}", range(6)), "6 faddd"),
+    "v5_fmuld_6": (_ch("fmuld,{c} %dr4, %dr4, {d}", range(6)), "6 fmuld"),
+    "v5_fmul_addd_6": (_ch("fmul_addd,{c} %dr4, %dr4, %dr5, {d}", range(6)),
+                       "6 fmul_addd"),
+    "v5_qpfaddd_6": (_ch("qpfaddd,{c} %qpr7, %qpr7, {d}", range(6)),
+                     "6 qpfaddd"),
+    "v5_qpfmuld_6": (_ch("qpfmuld,{c} %qpr7, %qpr7, {d}", range(6)),
+                     "6 qpfmuld"),
+    "v5_ldqp_4": (_ch("ldqp,{c} %dr1, {o2:#x}, {d}", [0, 2, 3, 5]), "4 ldqp"),
+    "v5_ldqp_1": (_ch("ldqp,{c} %dr1, {o2:#x}, {d}", [0]), "1 ldqp"),
+    "v5_ldqp_2": (_ch("ldqp,{c} %dr1, {o2:#x}, {d}", [0, 3]), "2 ldqp (ALC0, 3)"),
+    "v5_ldqp_2b": (_ch("ldqp,{c} %dr1, {o2:#x}, {d}", [0, 2]), "2 ldqp (ALC0, 2)"),
+    "v5_ldqp_3": (_ch("ldqp,{c} %dr1, {o2:#x}, {d}", [0, 2, 3]), "3 ldqp"),
+    "v5_ldqp_4far": (["ldqp,0 %dr1, 0x0, {d}", "ldqp,2 %dr1, 0x100, {d}",
+                      "ldqp,3 %dr1, 0x200, {d}", "ldqp,5 %dr1, 0x300, {d}"],
+                     "4 ldqp, 256 bytes apart"),
+    "v5_ldd_4": (_ch("ldd,{c} %dr1, {o:#x}, {d}", [0, 2, 3, 5]), "4 ldd"),
+    "v5_stqp_2": (["stqp,2 %dr1, 0x100, %qpr7", "stqp,5 %dr1, 0x140, %qpr7"],
+                  "2 stqp, 64 bytes apart"),
+}
+TP2_V5 = {
+    # fdivd, then faddd in ALC5 G cycles later, then 8 quiet cycles.
+    **{f"v5_fdivd_faddd5_g{g}": ([f"fdivd,5 %dr4, %dr4, {{d}}"]
+                                 + ([f"nop {g - 1}"] if g > 1 else []),
+                                 ["faddd,5 %dr4, %dr5, {d}", "nop 7"],
+                                 f"fdivd, faddd,5 {g} later, 8 quiet")
+       for g in range(1, 9)},
+    # fdivd, K cycles, faddd in ALC5, M cycles, repeated (no conflict:
+    # K + M cycles per pair).
+    **{f"v5_div{k}_add{m}": (["fdivd,5 %dr4, %dr4, {d}"]
+                             + ([f"nop {k - 1}"] if k > 1 else []),
+                             ["faddd,5 %dr4, %dr5, {d}"]
+                             + ([f"nop {m - 1}"] if m > 1 else []),
+                             f"fdivd, {k} cycles, faddd,5, {m} cycles")
+       for k in range(1, 6) for m in range(1, 6)},
+    # faddd in ALC5, then fdivd G cycles later.
+    **{f"v5_faddd5_fdivd_g{g}": ([f"faddd,5 %dr4, %dr5, {{d}}"]
+                                 + ([f"nop {g - 1}"] if g > 1 else []),
+                                 ["fdivd,5 %dr4, %dr4, {d}", "nop 7"],
+                                 f"faddd,5, fdivd {g} later, 8 quiet")
+       for g in range(1, 9)},
+    "v5_fdivd_faddd5_alt": (["fdivd,5 %dr4, %dr4, {d}"],
+                            ["faddd,5 %dr4, %dr5, {d}"],
+                            "fdivd and faddd alternating in ALC5"),
+}
+
+
+# Patterns of four instructions: fdivd in ALC5, then OP in ALC5 G
+# cycles later (G = 9..16), then quiet.  Cycles per instruction times 4
+# is the pattern's cost; without a conflict it is G + 16.
+TPN = {}
+TPN_V5 = {
+    f"v5_fdivd_{op}5_g{g}": ([["fdivd,5 %dr4, %dr4, {d}", "nop 7"],
+                              [f"nop {g - 9}"] if g > 9 else [],
+                              [f"{op},5 %dr4, %dr5, {{d}}", "nop 7"],
+                              ["nop 7"]],
+                             f"fdivd, {op},5 {g} later (no conflict: {g + 16} / 4)")
+    for op in ("faddd", "fmuld") for g in range(9, 17)}
+
+
+def add_v5():
+    """Add the v5+ kernels to the tables (for --target v5 and later)."""
+    SCHED.update(SCHED_V5)
+    TP.update(TP_V5)
+    TP2.update(TP2_V5)
+    TPN.update(TPN_V5)
+
 
 def tp_kernel(name, k):
     if name in TP:
         groups, what = [TP[name][0]], TP[name][1]
+    elif name in TPN:
+        groups, what = TPN[name]
     else:
         a, b, what = TP2[name]
         groups = [a, b]
@@ -419,6 +523,8 @@ def tp_kernel(name, k):
                 continue
             if op.startswith(("fadds", "fdivs", "fsqrts", "sdivs")):
                 ops.append(op.replace("{d}", f"%r{reg}"))
+            elif op.startswith(("qp", "ldqp")):
+                ops.append(op.replace("{d}", f"%qpr{reg}"))
             else:
                 ops.append(op.replace("{d}", f"%dr{reg}"))
             r += 1
@@ -443,6 +549,7 @@ def tp_kernel(name, k):
 	}}
 	{{
 	  nop 7
+	  {V5_TP_INIT if name in TP_V5 else ""}
 	}}
 	{{
 	  nop 7
@@ -496,7 +603,7 @@ def lat_kernel(name, k):
 	}}
 	{{
 	  nop 5
-	  {init if " " in init else f"addd,0 0x0, {init}, %dr2"}
+	  {init.replace("; ", chr(10) + chr(9) + "  ") if " " in init else f"addd,0 0x0, {init}, %dr2"}
 	}}
 	{{
 	  nop 7
@@ -572,7 +679,7 @@ def sched_kernel(name, gap, table=SCHED):
 	}}
 	{{
 	  nop 5
-	  {init if " " in init else f"addd,0 0x0, {init}, %dr2"}
+	  {init.replace("; ", chr(10) + chr(9) + "  ") if " " in init else f"addd,0 0x0, {init}, %dr2"}
 	}}
 	{{
 	  nop 7
@@ -1048,7 +1155,7 @@ rdclk:
 	.size	rdclk, .-rdclk
 """]
     decl, lat_rows, ctl_rows, hz_rows, tp_rows = [], [], [], [], []
-    for name in list(TP) + list(TP2):
+    for name in list(TP) + list(TP2) + list(TPN):
         for k in (K1, K2):
             asm.append(tp_kernel(name, k))
             decl.append(f"long tp_{name}_{k}(long, void *);")
@@ -1346,7 +1453,9 @@ def chase_latency(pts):
 
 
 def tp_what(name):
-    return TP[name][1] if name in TP else TP2[name][2]
+    if name in TP:
+        return TP[name][1]
+    return TPN[name][1] if name in TPN else TP2[name][2]
 
 
 def report(res):
@@ -1461,6 +1570,9 @@ def main():
     if args.only and args.yaml:
         ap.error("--yaml needs a full run")
 
+    m = re.match(r"v(\d+)", args.target)
+    if m and int(m.group(1)) >= 5:
+        add_v5()
     if args.results:
         res = parse(args.results.read_text())
         report(res)

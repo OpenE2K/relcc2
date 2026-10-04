@@ -149,7 +149,10 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     helper for counting in any probe) and loop
                     mode (loops.c; gen_loops.py writes loops.s and
                     loops-cases.h) and memory accesses in one wide
-                    instruction (samewi.c, samewi.s), run on hardware
+                    instruction (samewi.c, samewi.s) and every v5
+                    operation (sem5.c; gen_sem5.py writes sem5.s),
+                    run on hardware; -DSPEC_V5, -DLOOPS_V5, -DAPB_V5
+                    builds add v5 cases
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     compiled to assembly and read, as are atomics.c,
                     asmops.c and stackprot.c; tagtrap.c, dbl.c,
@@ -340,7 +343,14 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   count (write it after `%lsr`); misaligned APB areas give data; the
   compat suite passes for every pair (no register cleaning); Elbrus
   Linux's libatomic is built for v5, so v3 and v5 code can share
-  16-byte atomics there. v4, v6, v7 are not measured.
+  16-byte atomics there; quad lock/check loads work like doubleword
+  ones (entries per register, 32); `stqp`/`staaqp` count as one store
+  for `strmd`; `movaqp` reads 16 bytes, also misaligned; all 703 v5 ALU
+  operations match the community qemu (MCST's differs in
+  `qpslld`/`qpsrld` counts >= 64), packed eq/od compares are quiet,
+  round-to-integral mode bit 3 suppresses inexact, and FP ops set the
+  denormal flag (also v3; no emulator does). v4, v6, v7 are not
+  measured.
 
 ### Schedule scoring (tools/isa-score)
 

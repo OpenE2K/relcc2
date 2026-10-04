@@ -135,12 +135,14 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     monitor events (pmu.c, gen_pmu.py; pmu.h is a
                     helper for counting in any probe) and loop
                     mode (loops.c; gen_loops.py writes loops.s and
-                    loops-cases.h), run on hardware
+                    loops-cases.h) and memory accesses in one wide
+                    instruction (samewi.c, samewi.s), run on hardware
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     compiled to assembly and read, as are atomics.c,
                     asmops.c and stackprot.c; tagtrap.c, dbl.c,
                     ldouble.c, ctpr.c, dso/run.sh and elfops/run.sh run
-                    on hardware, as does litmus.c with litmus.s)
+                    on hardware, as do litmus.c, getsp.c and
+                    reenter.c with their .s files)
 tools/abi/compat/   ABI compatibility suite: gen.py writes caller/callee
                     pairs, run.py builds every compiler pair and runs them
                     under qemu-e2k or, with --remote, on hardware over SSH;
@@ -261,7 +263,7 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   (the guide is wrong), `merge` picks the first operand when the
   predicate is false, shift counts are modulo the width, division by
   zero is SIGFPE, FP `lt`/`le` signal on quiet NaNs, `fmax`/`fmin` are
-  x86-style, `fmul_add` rounds twice, `fcmpud*f` is the quiet FP compare into a register (x86 ZF/PF/CF layout; MCST's qemu wrongly raises invalid), `cmpand*` tests `a & b`, `movtd`/`getpl` to a CTPR only in ALC0, a taken `ibranch` hides a stall in its own instruction. Speculation
+  x86-style, `fmul_add` rounds twice, `fcmpud*f` is the quiet FP compare into a register (x86 ZF/PF/CF layout; MCST's qemu wrongly raises invalid), `cmpand*` tests `a & b`, `movtd`/`getpl` to a CTPR only in ALC0, a taken `ibranch` hides a stall in its own instruction; memory accesses to one address in one wide instruction take effect ALC2 before ALC5 and a load before a store in its cluster (a load in ALC5 sees an ALC2 store; the ALC5 store of two wins; bundle.md). Speculation
   (`spec/isa/speculation.md`, hw): `,sm` faults give diagnostic values
   that trap (SIGILL `ILL_ILLOPN`) only at a non-speculative use,
   including a diagnostic predicate; `ld,sm` is semi-speculative (pages
@@ -269,7 +271,7 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   invalid region), `mas=0x3` loads fully speculative; a speculative FP
   op that would set a flag not already set gives a diagnostic instead
   (the kernel starts processes with all flags set); data speculation:
-  lock load `mas=0x4` (ALC0/3), check load `mas=0x3` (ALC2/5, same
+  lock load `mas=0x4,sm` (ALC0/3; without `,sm` no entry), check load `mas=0x3` (ALC2/5, same
   register) that reloads and sets `%MLOCK` for `rbranch` only if the
   entry was lost (overlapping store, trap, no lock load), kept across
   shallow calls and register overwrites, exactly 32 entries; mod 7 is a fully
@@ -367,7 +369,11 @@ variant I with TP in `%g13`, `__tls_get_addr(module, offset)`, GD/IE/LE
 only and no linker relaxation. MCST ld problems: `R_E2K_ISLOCAL` can't be
 linked, an ifunc referenced with `@GOTOFF` in a PIE fails silently, a
 static link with an ifunc crashes ld; gold (not shipped) breaks dynamic
-links. No stack protector is needed (return addresses live in the
+links. A `getsp` amount must be a window register or `%g16`+ (the
+kernel can't read `%g0`–`%g15` when the stack grows: SIGSEGV for large
+allocations); a `jmp_buf`'s IP (byte 8) can be replaced by a label to
+re-enter a frame (nonlocal goto); lcc's `&&label` is an index, not an
+address. No stack protector is needed (return addresses live in the
 chain stack); lcc 1.31's `-fstack-protector` uses a constant canary
 `0x000d0aff` and protects every function, and its `-strong`/`-all` do
 nothing.
@@ -448,7 +454,7 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 
 0. `docs/spec-poc-findings.md` (the PoC agent's file, untracked): all
    entries so far are folded into `spec/` and `doc/` and removed from it;
-   new ones continue as I8, A15, P6.
+   new ones continue as I13, A17, P8.
 1. Extend the compat suite (see Current state). It runs on the 4C with
    `run.py --target v3 --remote ...`; all pairs match qemu except the
    tag-trap tests, which pass on the 4C. Run it on v5 (8CB) when

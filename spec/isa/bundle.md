@@ -416,7 +416,7 @@ disassembling; the first four also by the proof-of-concept backend,
   (`elbrus_optimizing_compiler_v1.29.16_Jan_22_2026 = 0x0`); nothing
   depends on it.
 
-## Known gas bugs [checked: gas 2.41-29.018, ours and lcc's]
+## Known gas bugs [checked: gas 2.41-29.018, ours and lcc's; 2.41-29.023 native on the 4C and the 8C2]
 
 - **Internal error on a label after a short label difference.** A label
   defined in `.text` after a `.rodata` `.short` or `.byte` holding the

@@ -341,7 +341,10 @@ assembled by its own integrated assembler.
 Nothing in glibc, the kernel, gdb or MCST's runtime libraries uses
 `@ISLOCAL`, `@ISLOCAL32` or `@DYNOPT`, and lcc emitted none of them for
 our probes. Behaviour of MCST ld 2.41, checked by
-`tools/abi/probes/elfops/run.sh` on the 4C:
+`tools/abi/probes/elfops/run.sh` on the 4C, and with the same results
+built for v5 (`run.sh v5.8c2 --remote claude@geofront.lan`) on the
+Elbrus-8C2 under Elbrus Linux 9.5 (glibc 2.35), where the DSO probe
+(`dso/run.sh`) also passes, lazily and with `LD_BIND_NOW=1`:
 
 - **`R_E2K_ISLOCAL` cannot be linked.** Its howto declares a 1-bit field
   while `relocate_section` computes `0xc0 | local`, so every use fails with
@@ -375,7 +378,9 @@ our probes. Behaviour of MCST ld 2.41, checked by
   message (a `FIXME` in the source says so), so ld exits with status 1
   and prints nothing. A **static** link with an ifunc makes ld crash
   (segmentation fault). A compiler should reach ifunc symbols through
-  `@GOT` in PIC code.
+  `@GOT` in PIC code. All three problems (also `R_E2K_ISLOCAL`, above)
+  are still there in the native binutils 2.41-29.023 of ALT Linux on
+  the 4C and of Elbrus Linux 9.5 on the Elbrus-8C2 (checked on both).
 - **`@GOTPLT`** ("inlined PLT entries" in `elfxx-e2k.c`): `ldd` of
   `[ _f32s,_lts0 f@GOTPLT ]` from the GOT base (lcc's `rrd %ip` +
   `_GLOBAL_OFFSET_TABLE_` idiom) gives the function's `.got.plt` slot;

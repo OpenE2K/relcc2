@@ -37,6 +37,7 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | integer multiply (`muls`, `muld`) | 4 | 4 | 5 |
 | FP add, multiply (single and double) | 4 | 4 | 5 |
 | combined FP (`fmul_addd`) | 8 | 8 | 9 |
+| FP min/max (`fmaxd`, `fmind`, packed `pfmaxd`) | — | **2** (also on the 8C2) | — |
 | `fdivs` | 11 | 11 | 13 |
 | `fdivd` | 14 | 14 | 17 |
 | `fsqrts` | — | 12 | 13 |
@@ -337,6 +338,32 @@ v5, as lcc's documentation says for v1–v5. What v5 adds or changes:
   go through L1 and on to L2 alike (L1 is write-through: `std` and
   `stqp` make as many L2 store queries as L1 ones); two `stqp` in one
   instruction, 64 bytes apart, take 1 cycle.
+- **Latencies of every v5 operation** (`bench.py`'s `v5op_*` chains,
+  generated from `binutils-ops.yaml`: each result feeds the next
+  copy's first source; 195 operations, `plog`/`qplog` represented by
+  two tables each):
+
+  | Latency | Operations |
+  |---|---|
+  | 1 | packed integer add/sub (also saturating), logic, shifts (`qpsll*`, `qpsrl*`, `qpsra*`, `qpsrc*`), compares (`qpcmp*`), min/max, averages, signs, horizontal adds (`qphadd*`, `qphsub*`), packs (`qpack*`), shuffles and permutes (`qpshufb`, `qppermb`, `qpmerge`, `qpswitch*`), `qpmsk2sgnb`, `qppackdl`, `plog`/`qplog`, `addcd`/`subcd` (with carry), `getfz*`, `psrc*` |
+  | 2 | packed integer multiplies (`qpmul*`, `qpmadd*`, `qpsadbw`, `qpmpsadbh`, `pmullw`), packed FP compares (`qpfcmp*`), `qpfmax*`/`qpfmin*` |
+  | 4 | packed FP add, subtract, multiply, horizontal and add-subtract forms, round to integral (`qpfdtoifd`, `qpfstoifs`), `qphminposuh`, `qpsgn2mskb` (to an integer register and back) |
+  | 5 | packed conversions (`qpfdtoid`, `qpfstoid`, `qpfstofd`, `qpfstois`, `qpidtofd`, `qpistofd`, `qpistofs`, and the `tr` forms) |
+  | 6 | `qpfdtofs`, `qpfdtois`, `qpfdtoistr`, `qpidtofs` (narrowing, as scalar `fdtofs`) |
+  | 8 | combined packed FP (`qpfadd_*`, `qpfsub_*`, `qpfmul_*`, `qpfhadd_*`, `qpfhsub_*`, `qpfaddsub_*`) |
+
+  So 128-bit operations take the latency of their 64-bit counterparts,
+  and FP min/max is 2, not 4, on v3 too (table above).
+- **Crossings with 128-bit values**: a `qpfaddd` result costs 6 in the
+  other cluster (as scalar FP) and 6 to `addd` (reading the low half), 4
+  to `faddd`; `qpaddd` costs 4 in the other cluster and 4 to `addd`;
+  `addd` → `qpaddd` 1. But a **64-bit FP-side result read by a 128-bit
+  operation pays as if crossing, in the same channel**: `faddd` →
+  `qpfaddd` 6, `fmuld` → `qpfmuld` 6, `faddd` → `qpaddd` 6, `paddw` →
+  `qpaddd` 4 (instead of 4, 4, 4, 1). And packed integer results in the
+  other cluster cost 4 on both machines (`paddw` → `paddw,3`, `qpaddd` →
+  `qpaddd,3`), not latency + 2: an FP-side result in the other cluster
+  costs at least what it costs an integer consumer.
 - **Divider:** `sdivd` every 2 cycles no longer conflicts (2 cycles; v3
   3.4); the other divider distances are as on v3 (`fsqrts` still
   conflicts at 5). An ALC5 FP operation never conflicts with a divide

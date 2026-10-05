@@ -528,13 +528,15 @@ produce slow code: correctness first, then the VLIW work.
 
 ### M5. Prepared control transfers and predication (1–2 months)
 
-- Split calls/branches into prepare + transfer so the scheduler hoists
-  `disp` 5 cycles ahead; `return` early in the epilogue.
+- Split calls/branches into prepare + transfer, every branch prepared,
+  `disp` → conditional `ct` latency 2 (D4); `return` early in the
+  epilogue.
 - If-conversion to predicated code (`define_cond_exec`).
 
 ### M6. Speculation (research-grade)
 
-- Control speculation via selective scheduling (section 7.6).
+- Control speculation, through sched-ebb with the four steps of 7.6
+  item 3 and post-RA renaming, or through selective scheduling.
 - Data speculation (load + check) like ia64's `ld.a`/`chk.a`.
 
 ### M7. Loops (research-grade)
@@ -650,7 +652,30 @@ only creates `cond_exec` after register allocation (ifcvt.cc:5724),
 which suits a post-RA scheduler.
 
 Predicate *logic* (`andp`, `landp` in PLS syllables, "½ cycle") and the
-`%pcnt`/`%LOOP_END` conditions come later.
+`%pcnt`/`%LOOP_END` conditions come later. `landp` is the one to use for
+`&&` chains: its second operand may be a diagnostic predicate when the
+first is false (`spec/isa/semantics.md`, "Predicate logic"), and CLPs
+chain two levels at most in one instruction (bundle.md), so four
+conditions are a tree.
+
+What `define_cond_exec` takes in practice (proof-of-concept back end,
+P20; GCC behaviour checked in the source): gensupport puts the
+cond_exec template *in front of* the insn's (`alter_output_for_insn`,
+gensupport.cc:2128), while E2K writes the condition after the operands
+(`addd a, b, c ? ~%pred3`), so every predicable template ends in a
+punctuation code that prints the condition for a `COND_EXEC` and nothing
+otherwise (`*` C templates are left alone); per-alternative `predicable`
+(to keep loads and stores out) needs an `enabled` attribute, which
+gensupport combines with its `ce_enabled` (md.texi); sched-deps drops
+the output dependence between two writes of one register under
+opposite predicates (`sched_insns_conditions_mutex_p`) and puts both in
+one wide instruction, which the hardware accepts. Post-reload
+if-conversion (ce3) is the only user. The gain is small (zlib and xz
+4%, CoreMark none, `MAX_CONDITIONAL_EXECUTE` 6), and under an FP
+compare's predicate it can lose (the compare's latency joins a loop's
+recurrence): lcc's lead on branchy code comes from whole loops turned
+into predicated blocks and pipelined (7.7, "Branchy loops"), not from
+diamonds.
 
 ### D4. Control transfers
 
@@ -658,7 +683,7 @@ Predicate *logic* (`andp`, `landp` in PLS syllables, "½ cycle") and the
 |---|---|---|---|
 | M1 | `ibranch label [? %predN]` | — | `return %ctpr3` + `ct %ctpr3` in one pattern |
 | M2 | same | one pattern printing `disp %ctpr1, f` and `call %ctpr1, wbs=W` | same |
-| M5 | prepare (`disp %ctprN`) and transfer (`ct %ctprN [? pred]`) as separate insns; `%ctpr1–3` an allocatable class; scheduler latency 5 between them | same, prepare hoisted | `return` hoisted 6 cycles |
+| M5 | prepare (`disp %ctprN`) and transfer (`ct %ctprN [? pred]`) as separate insns; `%ctpr1–3` an allocatable class; scheduler latency 2 between them (below) | same, prepare hoisted | `return` hoisted 6 cycles |
 
 Interlocks make the M1/M2 forms correct (the hardware waits for the
 prepared target, guide 4.4 "неподготовленный переход"); M5 makes them
@@ -666,8 +691,23 @@ fast. The same holds for the compare that produces a branch's predicate
 (interlocked, latency 3, `spec/isa/timing.md`). C6x's "real insn + shadow" pairs
 tied with `record_delay_slot_pair` (c6x.cc:5118, haifa-sched.cc:730) are
 the closest existing model of "these two must be N cycles apart", but
-for E2K a plain dependence with latency 5 between the `disp` insn and the
-`ct` insn (via the CTPR register) is enough, since early is fine.
+for E2K a plain dependence between the `disp` insn and the `ct` insn
+(via the CTPR register) is enough, since early is fine. Give it latency
+**2**, not 5: a `ct` that is not taken waits only until 2 cycles after
+its `disp`, and a taken one `5 − D`, still less than an `ibranch`
+(`control-transfer.md`, "Costs"); latency 5 stretches every short block,
+the fall-through path included. Prepare **every** branch whose block has
+a CTPR free after the jump, taking the CTPRs in turn so each `disp` can
+move above the transfer before it, and add an anti dependence of at
+least 1 from a transfer to a later `disp` of the same CTPR (gas rejects
+both in one instruction before v6). In the proof-of-concept back end
+(P15) that took taken-`ibranch` cycles in CoreMark from 171 M to about
+4 M (fetch bubbles 16.3% → 3.4% of cycles; CoreMark +14.9%, Linpack
+−4.7% time on the 8C2), with no profile. One trap: a predicated op or
+`merge` in the wide instruction of a taken **return** reads a predicate
+written one instruction earlier as it was before the compare, without
+a stall (timing.md, "Hazards"; branches and calls wait), so the bundler
+must keep 2 cycles there and not rely on the interlock.
 
 Indirect calls: `movtd %reg, %ctprN` (latency 9) then `call`.
 
@@ -735,7 +775,28 @@ functions, and the ABI is the same either way. How to get there:
 - Under `dbl = 0`, after a 32-bit integer operation the upper half of the
   register is unknown (old value and tag). Don't tell GCC that SImode
   operations extend; emit `sxt` (or a 64-bit operation) whenever a 64-bit
-  value is needed, as lcc does.
+  value is needed, as lcc does. That alone is not enough: GCC forms
+  **paradoxical subregs** by itself, which read the upper half anyway
+  (combine's `force_to_mode`, combine.cc:8754–9024, turns a masked
+  `(zero_extend:DI (subreg:HI (ashift:SI x 1)))` into
+  `(and:DI (ashift:DI (subreg:DI (reg:SI) 0) 1) 0x1fe)`; rtl.texi says the
+  upper bits "may or may not be defined"). On E2K they may hold a
+  diagnostic tag left by any dead `,sm` result, and the 64-bit operation
+  traps (the proof-of-concept back end, P12: CoreMark's `crc16`, SIGILL
+  on the 8C2). Reject a paradoxical subreg of a value of 4 bytes or less
+  in the operand predicates (the move source included) and zero-extend
+  such a source in the move expander.
+- With `dbl = 1`, give every integer ALU pattern an extending twin,
+  `(zero_extend:DI (op:SI …))`: the whole group extends, `merges` and the
+  bit counts included (`registers.md`). Combine then folds an extension
+  whose operand has no other use; for the rest enable REE (`-free`, which
+  each target turns on itself, e.g. i386-common.cc:2057), which
+  eliminates more (when the destination differs it leaves a copy) but
+  treats a 32-bit `if_then_else` as a conditional copy and looks through
+  it; the proof-of-concept back end (P21) adds a small pass after REE
+  that rewrites an extending operation earlier in the block to set the
+  64-bit register (zlib's deflate.c: 149 extensions at `-O2`, 90 with REE,
+  74 with the pass; lcc 7).
 - Under either setting 32-bit FP operations (`fadds`) and `movts` keep
   the upper half, and signed values still need `sxt`.
 - Partly written registers can keep a diagnostic tag in the upper half,
@@ -1029,9 +1090,20 @@ Privileged state registers (which gas pads) don't appear in user code.
 If later passes could insert labels inside a group, wrap each group in a
 `SEQUENCE` as C6x does (`c6x_gen_bundles`, c6x.cc:4622).
 
-### 7.5 Explicit channels (optional)
+### 7.5 Explicit channels (needed for speed)
 
-gas chooses channels, so the port need not. If gas ever rejects a group
+gas chooses channels, so the port need not for correctness, but it must
+for speed: gas gives each operation the first free channel it allows,
+so a consumer scheduled one cycle after its producer often lands in the
+other cluster and stalls a 4-cycle step (timing.md, "Clusters"), and
+the crossing costs in the latencies can only be used once the port knows
+the channels. The proof-of-concept back end (P14) prints every
+operation's channel (`addd,3`, as lcc does), choosing per wide
+instruction the assignment, among the v3 channel sets and gas's
+store/load exclusions, with the fewest stall cycles given where each
+operand's producer went: interlock stalls in CoreMark 6.0% → 3.4% of
+cycles on the 4C (CoreMark +2.8%, Linpack −1% time on the 8C2). Make it
+a step of M5. If gas ever rejects a group
 the DFA accepted (the DFA modelled a channel rule too loosely), either fix
 the DFA or print channels yourself the way C6x prints units: record after
 each issue which `alc` units became reserved (`c6x_variable_issue`,
@@ -1107,7 +1179,46 @@ load needs no `BEGIN_CONTROL` check. The exceptions, all measured:
   inserts checks for `BEGIN_CONTROL` speculation
   (`create_check_block_twin`, haifa-sched.cc:8347); E2K needs none, so
   the port should present moved loads as safe rather than as
-  control-speculative.
+  control-speculative. How, in sched-ebb (the proof-of-concept back end,
+  P16; torture, zstd, GMP, pcre2 and expat suites pass on the 4C and the
+  8C2):
+  1. In `TARGET_SCHED_DEPENDENCIES_EVALUATION_HOOK` (called after
+     `add_deps_for_risky_insns`, sched-ebb.cc:510) delete the jump → load
+     dependences (from `deps_may_trap_p`, which decides by address,
+     sched-deps.cc:505, and from the risky-insn pass) when the load's
+     register is dead on the jump's other path. Don't use `MEM_NOTRAP_P`
+     for this: GCC sets it on jump-table loads (`gen_const_mem` in
+     `do_tablejump`, expr.cc:14348), which do trap above their range
+     check.
+  2. Record each insn's block before sched2 and print `,sm` on every
+     insn that ended up in an earlier block.
+  3. In the same hook, make every insn without a speculative form (FP,
+     stores, multi-operation patterns) depend on the jumps before it.
+  4. A data-speculation check is built as a copy of the load with the
+     load's back dependences, which no longer include the jumps: make a
+     load a lock load only once every jump it followed is scheduled, or
+     the check rises above the test guarding its address.
+
+  Haifa's own `BEGIN_CONTROL` path is dead code in GCC
+  (P13): `haifa_note_dep` rebuilds the dependence with `init_dep`, which
+  drops the speculative status (sched-deps.cc:1861, 113), and
+  `sched_analyze_2` makes a load's jump dependence speculative only under
+  sel-sched (sched-deps.cc:2690); with both fixed,
+  `create_check_block_twin` copies the load's forward dependences to the
+  check without their `DEP_REPLACE` (`init_dep_1`), turning a breakable
+  dependence into a hard one (283 torture ICEs until skipped). Even
+  working, a check holds every use of the load below the branch, so it
+  isn't worth it here. **Renaming after register allocation** decides
+  how much moves (P17): `list = list->next` in a search loop writes a
+  register live on the exit path, and regrename, which renames whole
+  def-use chains without splitting them or inserting copies, can't free
+  it; a small pass that gives such a value, in a block entered only by
+  falling through from a conditional jump, a register free in both
+  successors (copied back where needed) did (CoreMark's `find` 18 → 12
+  cycles a node, +8.1% on the 8C2). Make predicates `LOCAL_REGNO` first
+  (as call-saved registers they are live at the function's end), honour
+  a call's `CALL_INSN_FUNCTION_USAGE` (argument registers aren't in its
+  pattern), and stop at a later use of the register as half of a pair.
 - *Selective scheduling* (sel-sched) has a mode without checks,
   `SEL_SCHED_SPEC_DONT_CHECK_CONTROL` (sel-sched.cc:3208), used by ia64
   with `-msel-sched-dont-check-control-spec`; hooks as ia64's
@@ -1282,6 +1393,43 @@ check-free semi-speculative form works.
   trap from restarting the unit.
 
   So APB could come right after counted loops, before modulo scheduling.
+- **While loops** can be pipelined without `%lsr`, `loop_mode` or `abp`
+  if the exit test sits in the last stage (the proof-of-concept back end,
+  P18, on the 8C2): the kernel ends with `abn abnf=1, abnt=1; ct %ctprN
+  ? p`, every other operation of the iteration is no later (stores in the
+  last stage), so the iteration the loop leaves on is complete and the
+  earlier stages ran only speculative work; prologue and ring naming as
+  for counted loops (`spec/isa/loops.md`, "For a compiler"). With the
+  compare → `ct` delay of 3 and predicates not rotating, II ≥ 3. Two
+  exits merge into one block: the second runs speculatively, the loop
+  end tests `landp ~exit1, stay2`, and after the loop the first exit's
+  compare runs again on the last iteration's values. Fold register
+  copies into their sources first, or a pointer chase pays an ALU op and
+  a crossing a node. CoreMark +14% (`find` 3 cycles a node, lcc about 9).
+- **DAM inside a pipelined loop** (a load that may read what an earlier
+  iteration stored, `core_list_reverse`; P19, 4C and 8C2): the lock load
+  runs stages ahead (ALC0, `,sm`, `mas=0x4`), the check (`mas=0x3`, ALC5,
+  `rbranch`) goes in the last stage, after the stores it moved above and
+  before those storing what it loaded; DAM entries follow the physical
+  register through `abn`, so the check names the register as it is
+  called after the rotations. When the check reloads, the compensation
+  code redoes, in order and under the check iteration's ring names,
+  every instance that used the early value since the lock load (later
+  loads through it, the exit compares), then branches back past the
+  check; the ring must keep their operands alive until the check, and
+  the check's `rbranch` and the loop's `ct` can't share an instruction.
+  CoreMark +9% (reverse 8 → 3 cycles a node).
+- **Branchy loops** are where lcc's lead on integer code comes from
+  (zlib `-9`: lcc 1.18 s, the proof-of-concept back end 2.24 s on the
+  8C2; P22): lcc turns a chain of tests (zlib's `longest_match`) into one
+  predicated block, every load speculative and the conditions joined by
+  `landp` trees, and pipelines the loop. GCC won't get there by itself
+  (tree ifcombine merges only blocks without loads or arithmetic, RTL
+  if-conversion handles diamonds): it is a target pass after register
+  allocation that merges such chains into one block and one branch,
+  tail-duplicates the block a rare path re-enters, and hands the result
+  to the while-loop pipeliner. Merging alone was 5% slower; with
+  pipelining zlib `-9` took 1.26 s.
   It can be tested only on hardware: MCST's qemu gives wrong results for
   APB loops that receive signals.
 

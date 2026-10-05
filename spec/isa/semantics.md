@@ -178,9 +178,26 @@ A swapped load costs nothing extra: 64 dependent `ldd` take 309 cycles
 with and without `be`, on both machines. Both qemus agree. lcc emits it
 only for its `__builtin_e2k_ld_*_be` / `st_*_be` builtins
 (`e2kintrin.h`, 32, 64 and 128 bits); `__builtin_bswap64 (*p)` stays a
-plain `ldd` plus `pshufb`, so folding a byte swap into the access is
-open to a compiler. (The array prefetch unit has its own `be` bit in
-`mova`, apb.md.)
+plain `ldd` plus `pshufb` with the mask 0x0001020304050607, and
+`*p = __builtin_bswap64 (v)` a `pshufb` plus `std`. Folding the swap into
+the access (`mas_be.c` with `mas_be_loops.c` at `-O3`; same on the 4C
+and the 8C2):
+
+- **saves latency on a dependent path**: 64 dependent `ldd` + `pshufb`
+  (the swapped value used as the next address) take 629 cycles against
+  309 with `mas=0x8`, 5 cycles a step (the shuffle plus the packed →
+  integer crossing, timing.md). Scalar code that parses big-endian data
+  sits on this path;
+- **saves nothing in a pipelined loop**: lcc's sum and copy loops over
+  2,048 elements in L1 run at the same speed either way (4C 1.49–1.51
+  ns, 8C2 0.78–0.83 ns per element), the `pshufb` taking a free ALU slot
+  and its latency only a stage; the MAS form is a few instructions
+  shorter (12 against 15 for the sum on v3).
+
+So a compiler should fold a byte swap into an adjacent load or store
+(as GCC's `bswap` pass and patterns like x86's `movbe` do): never worse,
+5 cycles better on dependent paths. (The array prefetch unit has its
+own `be` bit in `mova`, apb.md.)
 
 ## The denormal flag [hw]
 

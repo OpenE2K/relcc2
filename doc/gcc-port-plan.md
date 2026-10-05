@@ -501,6 +501,11 @@ produce slow code: correctness first, then the VLIW work.
   double` (80-bit, `nfx=0` in functions that use it), `__float128` via
   soft-fp in libgcc, division (hardware on ALC5), all standard names the
   middle end wants.
+  `bswap<mode>2` with a memory operand (or a combine pattern for
+  `(bswap (mem))` and `(set (mem) (bswap ...))`) can use MAS bit 3, a
+  byte-swapped load or store at no cost: 5 cycles shorter than lcc's
+  `ldd` + `pshufb` on a dependent path, the same in pipelined loops
+  (`spec/isa/semantics.md`, "Byte-swapped memory accesses").
 - PIC/PIE and TLS exactly as `spec/abi/elf.md` (GOT base via `rrd %ip` +
   `_GLOBAL_OFFSET_TABLE_` literal in the same wide instruction). In PIC
   code reach ifunc symbols through `@GOT`: MCST ld cannot link a

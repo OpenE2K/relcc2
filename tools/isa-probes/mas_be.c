@@ -7,15 +7,26 @@
      $LCC -O1 tools/isa-probes/mas_be.c tools/isa-probes/mas_be.s -o mas_be
      $LCC5 -O1 -DMBE_V5 tools/isa-probes/mas_be.c tools/isa-probes/mas_be.s \
        tools/isa-probes/mas_be-v5.s -o mas_be      # v5: also ldqp/stqp
-     ./mas_be                             # on hardware  */
+     ./mas_be                             # on hardware
+
+   Add tools/isa-probes/mas_be_loops.c, compiled separately at -O3, for
+   the loop timings (sum and copy through __builtin_bswap64 or through
+   lcc's _be builtins).  */
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 void mbe_loads (unsigned long *, const void *);
 void mbe_stores (void *, unsigned long);
 long chase_plain (void *, long, long);
 long chase_be (void *, long, long);
+long chase_shuf (void *, long, long);
+unsigned long sum_shuf (const unsigned long *, long);
+unsigned long sum_be (const unsigned long *, long);
+void copy_shuf (unsigned long *, const unsigned long *, long);
+void copy_be_st (unsigned long *, const unsigned long *, long);
+void copy_be_ld (unsigned long *, const unsigned long *, long);
 #ifdef MBE_V5
 void mbe_quad (unsigned long *, const void *);
 #endif
@@ -56,14 +67,54 @@ main (void)
   static unsigned long cell, cellbe;
   cell = (unsigned long) &cell;
   cellbe = __builtin_bswap64 ((unsigned long) &cellbe);
-  long best[2] = { 1L << 60, 1L << 60 };
+  long best[3] = { 1L << 60, 1L << 60, 1L << 60 };
   for (int r = 0; r < 20; r++)
     {
-      long a = chase_plain (&cell, 0, 0), b = chase_be (&cellbe, 0, 0);
+      long a = chase_plain (&cell, 0, 0), b = chase_be (&cellbe, 0, 0),
+           c = chase_shuf (&cellbe, 0, 0);
       best[0] = a < best[0] ? a : best[0];
       best[1] = b < best[1] ? b : best[1];
+      best[2] = c < best[2] ? c : best[2];
     }
-  printf ("64 dependent loads: plain %ld cycles, mas 8 %ld cycles\n",
-          best[0], best[1]);
+  printf ("64 dependent loads: plain %ld cycles, mas 8 %ld, ldd + pshufb "
+          "%ld\n", best[0], best[1], best[2]);
+
+  /* Loops over 2,048 elements (16 KiB, in L1 after the first run):
+     best of 2,000 runs, in ns per element.  */
+  enum { N = 2048 };
+  static unsigned long a[N] __attribute__ ((aligned (64))),
+    d[N] __attribute__ ((aligned (64)));
+  for (int i = 0; i < N; i++)
+    a[i] = 0x0102030405060708UL * (i + 1);
+  struct { const char *name; int kind; } loops[] = {
+    { "sum, bswap64 (ldd + pshufb)", 0 }, { "sum, ld_64s_be (mas 8)", 1 },
+    { "copy, bswap64", 2 }, { "copy, st_64s_be (mas 8)", 3 },
+    { "copy, ld_64s_be (mas 8)", 4 } };
+  unsigned long check[2] = { 0, 0 };
+  for (int k = 0; k < 5; k++)
+    {
+      double b = 1e30;
+      for (int r = 0; r < 2000; r++)
+        {
+          struct timespec t0, t1;
+          clock_gettime (CLOCK_MONOTONIC, &t0);
+          switch (loops[k].kind)
+            {
+            case 0: check[0] = sum_shuf (a, N); break;
+            case 1: check[1] = sum_be (a, N); break;
+            case 2: copy_shuf (d, a, N); break;
+            case 3: copy_be_st (d, a, N); break;
+            case 4: copy_be_ld (d, a, N); break;
+            }
+          clock_gettime (CLOCK_MONOTONIC, &t1);
+          double ns = (t1.tv_sec - t0.tv_sec) * 1e9 + (t1.tv_nsec - t0.tv_nsec);
+          b = ns < b ? ns : b;
+        }
+      if (k >= 2 && d[5] != __builtin_bswap64 (a[5]))
+        printf ("  wrong copy\n");
+      printf ("%-30s %.3f ns/element\n", loops[k].name, b / N);
+    }
+  if (check[0] != check[1])
+    printf ("  sums differ\n");
   return 0;
 }

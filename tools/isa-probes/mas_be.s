@@ -473,3 +473,404 @@
 	  subd,0	%dr5, %dr4, %dr0
 	}
 	end	chase_be
+
+! The same chase through lcc's swap: ldd, then pshufb with the mask
+! 0x0001020304050607 (what lcc emits for __builtin_bswap64 (*p)).
+	fn	chase_shuf
+	{
+	  addd,0	0x0, _f64,_lts0 0x1020304050607, %dr6
+	}
+	{
+	  rrd,0	%clkr, %dr4
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr0
+	}
+	{
+	  pshufb,0	%dr0, %dr0, %dr6, %dr0
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  subd,0	%dr5, %dr4, %dr0
+	}
+	end	chase_shuf

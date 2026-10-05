@@ -251,6 +251,15 @@ lock `mas=0x4` (always with `,sm`) and the check `mas=0x3` [lcc].
 | `st` | 3, store and unlock | ALC2 (ALC5 for quad) | stores and removes the entry of its **data** register |
 | `st` | 5, unlock | ALC2 (ALC5 for quad) | removes the entry of its data register; **does not write memory** |
 | `st` | 4, no check | any store channel | stores without removing entries: a later check of the overwritten bytes passes with the stale value |
+| `ld` (not speculative) | 4, fill | ALC0 | an ordinary load [hw: `mas_mod.c`, 4C and 8C2] |
+| `ld` | 6, I/O | ALC2 | SIGILL `ILL_PRVOPC` (privileged) |
+| `ld` | 2, 3 or 6 in ALC0 (reserved) | ALC0 | SIGILL `ILL_ILLOPC` |
+| `ld`, `st` | 0 with `m1` (bit 4, 0x10) set | any | an ordinary access: `m1` is ignored |
+
+Not tried, on purpose, on the shared machines: mod 1 (no address
+translation), mod 7 in ALC2/5 and stores with mod 7 (MMU, cache and TLB
+operations, kernel `asm/mas.h`), stores with mod 1 or 6, and the
+lock-wait load with mod 5.
 
 With mod 7 a load can move above both a branch and a store: the check,
 placed under the guard, turns into a normal load whenever the

@@ -856,6 +856,11 @@ each one cost it a debugging session:
 - **Short label-difference tables** crash MCST gas when a `.text`
   label follows them (`spec/isa/bundle.md`, "Known gas bugs"): keep
   `CASE_VECTOR_SHORTEN_MODE` at `SImode` or wider.
+- **A reload right after its store** (a spill and its fill, a stack
+  argument read back) in the very next instruction gets its value about
+  8 cycles late; one cycle of distance removes it. Matching is per
+  aligned doubleword (`spec/isa/timing.md`, "Memory"); give the
+  scheduler that dependence a latency of 2 rather than 1.
 - **Memory accesses in one wide instruction** are ordered (ALC2 before
   ALC5, a load before a store in its cluster; `spec/isa/bundle.md`): a
   load in ALC5 sees a store in ALC2 of its own instruction, and of two

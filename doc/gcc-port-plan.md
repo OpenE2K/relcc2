@@ -1253,6 +1253,11 @@ check-free semi-speculative form works.
   - on v3/v4, elements aligned to their size (otherwise the `mova`
     returns a diagnostic value), proven or checked at run time as lcc
     does.
+  - no store during the loop to an element of a streamed array that a
+    later `mova` reads: the buffer doesn't see stores, and how far it
+    has prefetched varies. Stores to elements already read are fine;
+    lcc versions loops that may alias on a run-time pointer comparison
+    (`spec/isa/apb.md`, "Stores into a prefetched array").
 
   So APB could come right after counted loops, before modulo scheduling.
   It can be tested only on hardware: MCST's qemu gives wrong results for

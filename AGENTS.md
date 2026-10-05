@@ -331,7 +331,8 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   SIGILL), and after any interrupt the kernel recomputes positions from
   `%ilcr − %lsr`, so APB is correct only in a `loop_mode` loop counted
   by `%lsr` (written before `bap`) with every area advanced once per
-  iteration. lcc's loops are 2–22× faster with it. Loads
+  iteration; the buffer doesn't see stores, so nothing may write an
+  element a later `mova` reads (lcc versions loops that may alias). lcc's loops are 2–22× faster with it. Loads
   are scheduled for L1;
   `--memory` measures beyond-L1 latency for reference only.
   Throughput (`bench.py` `tp`): every channel takes an operation every
@@ -510,9 +511,9 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
    generations with `tools/isa-timing/bench.py`; loop-mode and
    speculation leftovers (`spec/isa/loops.md`, `speculation.md`, "Not
    checked yet").
-3. APB leftovers (`spec/isa/apb.md`, "Not checked yet"): AAU stores
-   into areas `mova` reads, and v5+ on hardware. Protected (`e2k128`) and 32-bit
-   modes.
+3. APB leftovers (`spec/isa/apb.md`, "Not checked yet"): what `%aabf`
+   does and whether `dcd` changes streaming timing; v6+. Protected
+   (`e2k128`) and 32-bit modes.
 4. ELF leftovers: `@PREF` (`pref %iprN, sym`; source only so far).
 
 ## Open questions for the owner

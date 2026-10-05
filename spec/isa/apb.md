@@ -304,9 +304,8 @@ NUMA node; reproducible within 1%):
   element until about 1 KiB (`asz` 4), where a stream from memory runs
   nearly as fast as from L1. A one-instruction loop needs `asz` ≥ 2
   (4C) or ≥ 1 (8C2) to run an element per cycle even from L1.
-- The unit fetches at most one new 64-byte line every 2 cycles from L1
-  and about one every 3.2 cycles from memory (step 8), on both machines
-  (about 30 GB/s on the 8C2).
+- An area fetches at most one new 64-byte line every 2 cycles from L1
+  and about one every 3.2 cycles from memory (step 8), on both machines.
 - `dcd` changes nothing on the 8C2. On the 4C, `dcd` 2 and 3 slow the
   line rate from memory to one every 5.5 cycles (step 8), and `dcd` 3
   also slows consecutive elements (9.4 cycles at `asz` 1–2, 6.9 at 3,
@@ -316,6 +315,25 @@ NUMA node; reproducible within 1%):
   not measured.
 - lcc gives each half of the buffer 32 units (2 KiB): with three
   arrays, areas of 512 B, 512 B and 1 KiB.
+
+Several arrays at once (`multi*` cases: K areas 64 MiB apart, one
+`movad` from each per iteration, areas 0 and 1 in the left half, 2 and
+3 in the right; cycles per iteration):
+
+| Arrays × area | consecutive elements, memory: 4C | 8C2 | a line per element, L1: 4C, 8C2 | a line per element, memory: 4C | 8C2 |
+|---|---|---|---|---|---|
+| 1 × 1 KiB | 1.10 | 1.19 | 2.0 | 3.2 | 3.2 |
+| 2 × 1 KiB | 1.19 | 1.21 | 2.0 | 7.4 | 6.7 |
+| 4 × 1 KiB | 1.85 | 1.75 | 2.0 | 15.1 | 14.8 |
+| 2 × 512 B | 1.82 | 1.73 | 2.0 | 7.3 | 6.7 |
+| 4 × 512 B | 2.39 | 2.06 | 2.0 | 14.7 | 13.6 |
+
+The 2-cycle line limit from L1 is per area (four areas fetch four lines
+in 2 cycles), but from memory all areas share one rate of about a line
+every 3.2–3.75 cycles: about 14 GB/s on the 4C (0.8 GHz, two of three
+memory channels populated) and 27 GB/s on the 8C2, for one core. Larger
+areas still help when several streams compete (4 × 1 KiB against
+4 × 512 B).
 ## AAU stores [lcc, source, hw]
 
 `staa{b,h,w,d,q}` (channels 2 and 5) store to `AAD[d].base +
@@ -436,5 +454,4 @@ program receives signals.
 - v6+.
 - What `%aabf` does (no effect seen), and whether a cache-bypassing
   `dcd` keeps other data cached.
-- Several areas streaming from memory at once (how the line rate is
-  shared).
+- Several cores streaming at once.

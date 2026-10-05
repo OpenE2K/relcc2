@@ -512,7 +512,7 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
    speculation leftovers (`spec/isa/loops.md`, `speculation.md`, "Not
    checked yet").
 3. APB leftovers (`spec/isa/apb.md`, "Not checked yet"): what `%aabf`
-   does, several areas from memory at once; v6+. Protected
+   does; v6+. Protected
    (`e2k128`) and 32-bit modes.
 4. ELF leftovers: `@PREF` (`pref %iprN, sym`; source only so far).
 

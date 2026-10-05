@@ -1482,3 +1482,166 @@
 	  subd,0	%dr5, %dr4, %dr0
 	}
 	end	chase_st_mas
+
+
+	fn	mis_ldh1
+	{
+	  ldh,0	%dr1, 0x1, %dr4
+	}
+	{
+	  nop 5
+	}
+	{
+	  std,2	%dr0, 0x0, %dr4
+	}
+	end	mis_ldh1
+
+	fn	mis_ldh1_be
+	{
+	  ldh,0	%dr1, 0x1, %dr4, mas=0x8
+	}
+	{
+	  nop 5
+	}
+	{
+	  std,2	%dr0, 0x0, %dr4
+	}
+	end	mis_ldh1_be
+
+	fn	mis_ldw1
+	{
+	  ldw,0	%dr1, 0x1, %dr4
+	}
+	{
+	  nop 5
+	}
+	{
+	  std,2	%dr0, 0x0, %dr4
+	}
+	end	mis_ldw1
+
+	fn	mis_ldw1_be
+	{
+	  ldw,0	%dr1, 0x1, %dr4, mas=0x8
+	}
+	{
+	  nop 5
+	}
+	{
+	  std,2	%dr0, 0x0, %dr4
+	}
+	end	mis_ldw1_be
+
+	fn	mis_ldw2
+	{
+	  ldw,0	%dr1, 0x2, %dr4
+	}
+	{
+	  nop 5
+	}
+	{
+	  std,2	%dr0, 0x0, %dr4
+	}
+	end	mis_ldw2
+
+	fn	mis_ldw2_be
+	{
+	  ldw,0	%dr1, 0x2, %dr4, mas=0x8
+	}
+	{
+	  nop 5
+	}
+	{
+	  std,2	%dr0, 0x0, %dr4
+	}
+	end	mis_ldw2_be
+
+	fn	mis_ldd3
+	{
+	  ldd,0	%dr1, 0x3, %dr4
+	}
+	{
+	  nop 5
+	}
+	{
+	  std,2	%dr0, 0x0, %dr4
+	}
+	end	mis_ldd3
+
+	fn	mis_ldd3_be
+	{
+	  ldd,0	%dr1, 0x3, %dr4, mas=0x8
+	}
+	{
+	  nop 5
+	}
+	{
+	  std,2	%dr0, 0x0, %dr4
+	}
+	end	mis_ldd3_be
+
+	fn	mis_ldd4
+	{
+	  ldd,0	%dr1, 0x4, %dr4
+	}
+	{
+	  nop 5
+	}
+	{
+	  std,2	%dr0, 0x0, %dr4
+	}
+	end	mis_ldd4
+
+	fn	mis_ldd4_be
+	{
+	  ldd,0	%dr1, 0x4, %dr4, mas=0x8
+	}
+	{
+	  nop 5
+	}
+	{
+	  std,2	%dr0, 0x0, %dr4
+	}
+	end	mis_ldd4_be
+
+	fn	mis_sth1
+	{
+	  sth,2	%dr1, 0x1, %dr2
+	}
+
+	end	mis_sth1
+
+	fn	mis_sth1_be
+	{
+	  sth,2	%dr1, 0x1, %dr2, mas=0x8
+	}
+
+	end	mis_sth1_be
+
+	fn	mis_stw2
+	{
+	  stw,2	%dr1, 0x2, %dr2
+	}
+
+	end	mis_stw2
+
+	fn	mis_stw2_be
+	{
+	  stw,2	%dr1, 0x2, %dr2, mas=0x8
+	}
+
+	end	mis_stw2_be
+
+	fn	mis_std4
+	{
+	  std,2	%dr1, 0x4, %dr2
+	}
+
+	end	mis_std4
+
+	fn	mis_std4_be
+	{
+	  std,2	%dr1, 0x4, %dr2, mas=0x8
+	}
+
+	end	mis_std4_be

@@ -155,6 +155,33 @@ as `r == 0 || r == 0x40` [lcc]. **MCST's qemu raises invalid for
   together give the correctly rounded result [guide 10.4.2]; `fsqrts` is
   one.
 
+## Byte-swapped memory accesses (MAS bit 3) [hw]
+
+The MAS byte of a load or store (`mas=N` in gas) is, for ordinary
+accesses [source: kernel `asm/mas.h`, MCST qemu `mas-format.h`]: bits
+0–2 `mod` (the access kind: speculation.md, atomics.md), **bit 3 `be`**,
+bit 4 `m1`, bits 5–6 the cache hints (timing.md, "Memory"). `be` = 1
+makes the access big-endian: the loaded bytes are reversed, then
+zero-extended; a store writes its low bytes most significant first
+(`tools/isa-probes/mas_be.c`, 4C and Elbrus-8C2 alike; memory holding
+`01 02 … 10`):
+
+| Access with `mas=0x8` | Result |
+|---|---|
+| `ldb` | 0x01 (one byte: nothing to swap) |
+| `ldh`, `ldw`, `ldd` | 0x0102, 0x01020304, 0x0102030405060708 |
+| `ldd,sm …, mas=0xb` (fully speculative, mod 3, + `be`) | 0x0102030405060708 |
+| `sth`, `stw`, `std`, `stb` of 0x0102030405060708 | `07 08`, `05 06 07 08`, `01 02 … 08`, `08` |
+| `ldqp`, `stqp` (v5) | all 16 bytes reversed |
+
+A swapped load costs nothing extra: 64 dependent `ldd` take 309 cycles
+with and without `be`, on both machines. Both qemus agree. lcc emits it
+only for its `__builtin_e2k_ld_*_be` / `st_*_be` builtins
+(`e2kintrin.h`, 32, 64 and 128 bits); `__builtin_bswap64 (*p)` stays a
+plain `ldd` plus `pshufb`, so folding a byte swap into the access is
+open to a compiler. (The array prefetch unit has its own `be` bit in
+`mova`, apb.md.)
+
 ## The denormal flag [hw]
 
 FP operations set `%pfpfr` bit 1 (`de`, denormal; no `FE_` name in

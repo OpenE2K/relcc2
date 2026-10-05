@@ -255,6 +255,46 @@ read of `%lsr`, and never a call inside a loop-mode loop.
   speculative.
 - Values that live across stages go in `%b[]`; a value produced in
   stage s and used k iterations later is named `%b[n + 2k]` at the use.
+- **Schedule with the crossing cost** (timing.md) on every dependence
+  whose producer and consumer may land in different clusters, which is
+  any dependence when gas picks the channels: a one-instruction kernel
+  that carries an integer value to the next iteration at exactly its
+  latency runs 1,000 iterations in 1,001 cycles with the consumer in the
+  producer's cluster but 4,989 with it in the other one (a 4-cycle stall
+  every iteration), and 1,001 again when the use waits one more
+  iteration (`rot_*` cases, 4C and Elbrus-8C2 alike). Padding only adds
+  stages; an operation's use of its own previous result stays in one
+  channel and needs no padding. (Proof-of-concept back end: daxpy at
+  II 1 ran at about 5 cycles per element with plain latencies, 0.75 ns
+  with crossings added, lcc 0.70.)
+- **No `loop_mode` is needed** if the kernel's stores all sit in its
+  last stage and every other operation is speculative: with `lcnt` = n
+  (and `vlc`, no `pcnt`, `ecnt` or `strmd`) the kernel runs n times;
+  iteration k runs stage s of source iteration k + S − 1 − s, so the
+  last S − 1 kernel iterations only run early stages of iterations past
+  the end, whose loads are speculative and whose results nothing
+  stores. The peeled prologue runs stages 0..S−2 of iterations 0..S−2
+  under the names those values have after the skipped rotations.
+  `abn abnf=1` also rotates on the iteration that leaves the loop, so
+  afterwards the last iteration's value written as `%b[X]` is
+  `%b[X + 2]` (`rot_exit`, 4C and 8C2), and one defined in stage D is
+  `%b[X + 2 (S − D)]`. (Proof-of-concept back end, 4C and 8C2: sums,
+  dot products, scaling, copies and daxpy for n = 1..1023, including
+  n below the stage count and overlapping arrays.)
+- **In a function that calls**, the ring must not stay above the
+  outgoing pairs at a call: the callee would inherit the ring with them
+  (`wsz − wbs` pairs, registers.md), and the PLT stub's `setwd wsz = 8`
+  traps with SIGILL `ILL_ILLOPC` (proof-of-concept back end, 4C). lcc
+  keeps the window at locals + 4 outgoing pairs (`setbn rsz = 3, rbs`
+  at the outgoing pairs, calls with that `wbs`), and around the loop
+  **grows the window** with a second `setwd` and a ring starting at the
+  outgoing pairs (`setwd wsz = 0x1d; setbn rsz = 0xf, rbs = 0xd`), then
+  shrinks it back after the loop (`setwd wsz = 0x11; setbn rsz = 0x3,
+  rbs = 0xd, rcur = 0`) [lcc]. The proof-of-concept back end instead
+  puts the ring between the locals and the outgoing pairs (calls with
+  `wbs` above it, `setbn rsz = 3` at the outgoing pairs after the loop),
+  which also works on the 4C and keeps the diagnostic values the last
+  kernel iterations leave in the ring out of the argument registers.
 - A loop with a call (lcc never pipelines one, guide 6.3.3) must save
   `%lsr` around it unless the callee is known not to run a loop:
   calls don't preserve it, they just don't change it.

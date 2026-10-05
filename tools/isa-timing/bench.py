@@ -313,6 +313,17 @@ TP = {
     "fdtoid_4": (_ch("fdtoid,{c} %dr4, {d}", [0, 1, 3, 4]), "4 fdtoid"),
     "paddw_2": (_ch("paddw,{c} %dr3, %dr5, {d}", [0, 3]), "2 paddw"),
     "popcntd_2": (_ch("popcntd,{c} %dr3, {d}", [1, 4]), "2 popcntd"),
+    # Combined integer operations: two simple operations in one channel
+    # (ALC1/4 only), alone and with four ordinary ones: 8 simple
+    # operations in one instruction if they all issue every cycle.
+    "add_addd_2": (_ch("add_addd,{c} %dr3, %dr5, %dr3, {d}", [1, 4]),
+                   "2 add_addd"),
+    "add_addd2_addd4": (_ch("add_addd,{c} %dr3, %dr5, %dr3, {d}", [1, 4])
+                        + _ch("addd,{c} %dr3, %dr5, {d}", [0, 2, 3, 5]),
+                        "2 add_addd + 4 addd"),
+    "shl_addd2_addd4": (_ch("shl_addd,{c} %dr3, %dr5, %dr3, {d}", [1, 4])
+                        + _ch("addd,{c} %dr3, %dr5, {d}", [0, 2, 3, 5]),
+                        "2 shl_addd + 4 addd"),
     "ldd_1": (_ch("ldd,{c} %dr1, {o:#x}, {d}", [0]), "1 ldd"),
     "ldd_2": (_ch("ldd,{c} %dr1, {o:#x}, {d}", [0, 3]), "2 ldd (ALC0, 3)"),
     "ldd_4": (_ch("ldd,{c} %dr1, {o:#x}, {d}", [0, 2, 3, 5]), "4 ldd"),

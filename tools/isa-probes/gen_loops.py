@@ -29,9 +29,10 @@ BACK = ["loop_mode", "alc\talcf=1, alct=1", "ct\t%ctpr1 ? %NOT_LOOP_END"]
 
 
 def case(name, body, setbn="rsz = 0x3, rbs = 0x8, rcur = 0x0", setbp=None,
-         early=None, pre=(), extra="", lsr1=None):
+         early=None, pre=(), extra="", lsr1=None, post=()):
     """BODY: the loop's wide instructions; the last one should end with
-    BACK.  %dr10 counts iterations in a separate instruction."""
+    BACK.  %dr10 counts iterations in a separate instruction.  POST:
+    instructions right after the loop."""
     out = [f"\n\t.global\tloop_{name}\n\t.type\tloop_{name}, #function\n"
            f"\t.align\t8\nloop_{name}:\n"]
 
@@ -70,6 +71,8 @@ def case(name, body, setbn="rsz = 0x3, rbs = 0x8, rcur = 0x0", setbp=None,
         wi("rwd,0\t%dr1, %lsr", *([f"nop {early - 1}"] if early > 1 else []))
     out.append(f".L{name}_loop:\n")
     for g in body:
+        wi(*g)
+    for g in post:
         wi(*g)
     wi("rrd,0\t%clkr, %dr9")
     wi("rrd,0\t%lsr, %dr6")
@@ -266,6 +269,22 @@ loop_clobber:
     # Throughput: an empty loop_mode loop of one instruction, and the
     # counting loop.
     add("one", [BACK])
+    # A one-instruction kernel whose value goes to the next iteration
+    # through rotation: ALC0 writes %b[0], read one cycle later as %b[2]
+    # (exactly the integer latency) in the same cluster (ALC1) or the
+    # other (ALC3, which needs one cycle more), or as %b[4] (padded by an
+    # iteration) in ALC3.
+    abn = ["abn\tabnf=1, abnt=1"]
+    for tag, ch, rd in (("same", 1, 2), ("cross", 3, 2),
+                        ("cross_pad", 3, 4)):
+        add(f"rot_{tag}", [["addd,0\t%dr10, 0x1, %b[0]",
+                            f"addd,{ch}\t%b[{rd}], 0x0, %b[6]"]
+                           + BACK + abn])
+    # Where abn abnf=1 leaves the last iteration's value: iteration k
+    # writes k to %b[0]; after the loop %dr11..13 = %b[0], %b[2], %b[4].
+    add("rot_exit", [count + ["addd,0\t%dr10, 0x0, %b[0]"] + BACK + abn],
+        post=[["addd,0\t0x0, %b[0], %dr11", "addd,1\t0x0, %b[2], %dr12",
+               "addd,2\t0x0, %b[4], %dr13"]])
     v5 = []
     # v5+: %lsr1 written after %lsr (as lcc does) or before it, with the
     # counting loop and the store loop.

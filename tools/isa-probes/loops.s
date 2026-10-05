@@ -4072,3 +4072,440 @@ loop_one:
 	  ct	%ctpr3
 	}
 	.size	loop_one, .-loop_one
+
+	.global	loop_rot_same
+	.type	loop_rot_same, #function
+	.align	8
+loop_rot_same:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  setbn	rsz = 0x3, rbs = 0x8, rcur = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr10
+	  addd,1	0x0, 0x0, %dr11
+	  addd,2	0x0, 0x0, %dr12
+	  addd,3	0x0, 0x0, %dr13
+	}
+	{
+	  addd,0	0x0, 0x100, %dr16
+	  addd,1	0x0, 0x101, %dr17
+	  addd,2	0x0, 0x102, %dr18
+	  addd,3	0x0, 0x103, %dr19
+	  addd,4	0x0, 0x104, %dr20
+	  addd,5	0x0, 0x105, %dr21
+	}
+	{
+	  addd,0	0x0, 0x106, %dr22
+	  addd,1	0x0, 0x107, %dr23
+	  disp	%ctpr1, .Lrot_same_loop
+	}
+	{
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  rrd,0	%lsr, %dr4
+	}
+	{
+	  rrd,0	%ilcr, %dr5
+	}
+	{
+	  nop 5
+	}
+	{
+	  rrd,0	%clkr, %dr8
+	}
+.Lrot_same_loop:
+	{
+	  addd,0	%dr10, 0x1, %b[0]
+	  addd,1	%b[2], 0x0, %b[6]
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  abn	abnf=1, abnt=1
+	}
+	{
+	  rrd,0	%clkr, %dr9
+	}
+	{
+	  rrd,0	%lsr, %dr6
+	}
+	{
+	  rrd,0	%ilcr, %dr7
+	}
+	{
+	  nop 5
+	}
+	{
+	  std,2	%dr0, 0x0, %dr10
+	  std,5	%dr0, 0x8, %dr11
+	}
+	{
+	  std,2	%dr0, 0x10, %dr12
+	  std,5	%dr0, 0x18, %dr13
+	}
+	{
+	  std,2	%dr0, 0x20, %dr4
+	  std,5	%dr0, 0x28, %dr5
+	}
+	{
+	  std,2	%dr0, 0x30, %dr6
+	  std,5	%dr0, 0x38, %dr7
+	}
+	{
+	  std,2	%dr0, 0x40, %dr16
+	  std,5	%dr0, 0x48, %dr17
+	}
+	{
+	  std,2	%dr0, 0x50, %dr18
+	  std,5	%dr0, 0x58, %dr19
+	}
+	{
+	  std,2	%dr0, 0x60, %dr20
+	  std,5	%dr0, 0x68, %dr21
+	}
+	{
+	  std,2	%dr0, 0x70, %dr22
+	  std,5	%dr0, 0x78, %dr23
+	}
+	{
+	  subd,0	%dr9, %dr8, %dr0
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	loop_rot_same, .-loop_rot_same
+
+	.global	loop_rot_cross
+	.type	loop_rot_cross, #function
+	.align	8
+loop_rot_cross:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  setbn	rsz = 0x3, rbs = 0x8, rcur = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr10
+	  addd,1	0x0, 0x0, %dr11
+	  addd,2	0x0, 0x0, %dr12
+	  addd,3	0x0, 0x0, %dr13
+	}
+	{
+	  addd,0	0x0, 0x100, %dr16
+	  addd,1	0x0, 0x101, %dr17
+	  addd,2	0x0, 0x102, %dr18
+	  addd,3	0x0, 0x103, %dr19
+	  addd,4	0x0, 0x104, %dr20
+	  addd,5	0x0, 0x105, %dr21
+	}
+	{
+	  addd,0	0x0, 0x106, %dr22
+	  addd,1	0x0, 0x107, %dr23
+	  disp	%ctpr1, .Lrot_cross_loop
+	}
+	{
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  rrd,0	%lsr, %dr4
+	}
+	{
+	  rrd,0	%ilcr, %dr5
+	}
+	{
+	  nop 5
+	}
+	{
+	  rrd,0	%clkr, %dr8
+	}
+.Lrot_cross_loop:
+	{
+	  addd,0	%dr10, 0x1, %b[0]
+	  addd,3	%b[2], 0x0, %b[6]
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  abn	abnf=1, abnt=1
+	}
+	{
+	  rrd,0	%clkr, %dr9
+	}
+	{
+	  rrd,0	%lsr, %dr6
+	}
+	{
+	  rrd,0	%ilcr, %dr7
+	}
+	{
+	  nop 5
+	}
+	{
+	  std,2	%dr0, 0x0, %dr10
+	  std,5	%dr0, 0x8, %dr11
+	}
+	{
+	  std,2	%dr0, 0x10, %dr12
+	  std,5	%dr0, 0x18, %dr13
+	}
+	{
+	  std,2	%dr0, 0x20, %dr4
+	  std,5	%dr0, 0x28, %dr5
+	}
+	{
+	  std,2	%dr0, 0x30, %dr6
+	  std,5	%dr0, 0x38, %dr7
+	}
+	{
+	  std,2	%dr0, 0x40, %dr16
+	  std,5	%dr0, 0x48, %dr17
+	}
+	{
+	  std,2	%dr0, 0x50, %dr18
+	  std,5	%dr0, 0x58, %dr19
+	}
+	{
+	  std,2	%dr0, 0x60, %dr20
+	  std,5	%dr0, 0x68, %dr21
+	}
+	{
+	  std,2	%dr0, 0x70, %dr22
+	  std,5	%dr0, 0x78, %dr23
+	}
+	{
+	  subd,0	%dr9, %dr8, %dr0
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	loop_rot_cross, .-loop_rot_cross
+
+	.global	loop_rot_cross_pad
+	.type	loop_rot_cross_pad, #function
+	.align	8
+loop_rot_cross_pad:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  setbn	rsz = 0x3, rbs = 0x8, rcur = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr10
+	  addd,1	0x0, 0x0, %dr11
+	  addd,2	0x0, 0x0, %dr12
+	  addd,3	0x0, 0x0, %dr13
+	}
+	{
+	  addd,0	0x0, 0x100, %dr16
+	  addd,1	0x0, 0x101, %dr17
+	  addd,2	0x0, 0x102, %dr18
+	  addd,3	0x0, 0x103, %dr19
+	  addd,4	0x0, 0x104, %dr20
+	  addd,5	0x0, 0x105, %dr21
+	}
+	{
+	  addd,0	0x0, 0x106, %dr22
+	  addd,1	0x0, 0x107, %dr23
+	  disp	%ctpr1, .Lrot_cross_pad_loop
+	}
+	{
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  rrd,0	%lsr, %dr4
+	}
+	{
+	  rrd,0	%ilcr, %dr5
+	}
+	{
+	  nop 5
+	}
+	{
+	  rrd,0	%clkr, %dr8
+	}
+.Lrot_cross_pad_loop:
+	{
+	  addd,0	%dr10, 0x1, %b[0]
+	  addd,3	%b[4], 0x0, %b[6]
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  abn	abnf=1, abnt=1
+	}
+	{
+	  rrd,0	%clkr, %dr9
+	}
+	{
+	  rrd,0	%lsr, %dr6
+	}
+	{
+	  rrd,0	%ilcr, %dr7
+	}
+	{
+	  nop 5
+	}
+	{
+	  std,2	%dr0, 0x0, %dr10
+	  std,5	%dr0, 0x8, %dr11
+	}
+	{
+	  std,2	%dr0, 0x10, %dr12
+	  std,5	%dr0, 0x18, %dr13
+	}
+	{
+	  std,2	%dr0, 0x20, %dr4
+	  std,5	%dr0, 0x28, %dr5
+	}
+	{
+	  std,2	%dr0, 0x30, %dr6
+	  std,5	%dr0, 0x38, %dr7
+	}
+	{
+	  std,2	%dr0, 0x40, %dr16
+	  std,5	%dr0, 0x48, %dr17
+	}
+	{
+	  std,2	%dr0, 0x50, %dr18
+	  std,5	%dr0, 0x58, %dr19
+	}
+	{
+	  std,2	%dr0, 0x60, %dr20
+	  std,5	%dr0, 0x68, %dr21
+	}
+	{
+	  std,2	%dr0, 0x70, %dr22
+	  std,5	%dr0, 0x78, %dr23
+	}
+	{
+	  subd,0	%dr9, %dr8, %dr0
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	loop_rot_cross_pad, .-loop_rot_cross_pad
+
+	.global	loop_rot_exit
+	.type	loop_rot_exit, #function
+	.align	8
+loop_rot_exit:
+	{
+	  setwd	wsz = 0x20, nfx = 0x1, dbl = 0x0
+	  setbn	rsz = 0x3, rbs = 0x8, rcur = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr10
+	  addd,1	0x0, 0x0, %dr11
+	  addd,2	0x0, 0x0, %dr12
+	  addd,3	0x0, 0x0, %dr13
+	}
+	{
+	  addd,0	0x0, 0x100, %dr16
+	  addd,1	0x0, 0x101, %dr17
+	  addd,2	0x0, 0x102, %dr18
+	  addd,3	0x0, 0x103, %dr19
+	  addd,4	0x0, 0x104, %dr20
+	  addd,5	0x0, 0x105, %dr21
+	}
+	{
+	  addd,0	0x0, 0x106, %dr22
+	  addd,1	0x0, 0x107, %dr23
+	  disp	%ctpr1, .Lrot_exit_loop
+	}
+	{
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  rrd,0	%lsr, %dr4
+	}
+	{
+	  rrd,0	%ilcr, %dr5
+	}
+	{
+	  nop 5
+	}
+	{
+	  rrd,0	%clkr, %dr8
+	}
+.Lrot_exit_loop:
+	{
+	  addd,3	%dr10, 0x1, %dr10
+	  addd,0	%dr10, 0x0, %b[0]
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  abn	abnf=1, abnt=1
+	}
+	{
+	  addd,0	0x0, %b[0], %dr11
+	  addd,1	0x0, %b[2], %dr12
+	  addd,2	0x0, %b[4], %dr13
+	}
+	{
+	  rrd,0	%clkr, %dr9
+	}
+	{
+	  rrd,0	%lsr, %dr6
+	}
+	{
+	  rrd,0	%ilcr, %dr7
+	}
+	{
+	  nop 5
+	}
+	{
+	  std,2	%dr0, 0x0, %dr10
+	  std,5	%dr0, 0x8, %dr11
+	}
+	{
+	  std,2	%dr0, 0x10, %dr12
+	  std,5	%dr0, 0x18, %dr13
+	}
+	{
+	  std,2	%dr0, 0x20, %dr4
+	  std,5	%dr0, 0x28, %dr5
+	}
+	{
+	  std,2	%dr0, 0x30, %dr6
+	  std,5	%dr0, 0x38, %dr7
+	}
+	{
+	  std,2	%dr0, 0x40, %dr16
+	  std,5	%dr0, 0x48, %dr17
+	}
+	{
+	  std,2	%dr0, 0x50, %dr18
+	  std,5	%dr0, 0x58, %dr19
+	}
+	{
+	  std,2	%dr0, 0x60, %dr20
+	  std,5	%dr0, 0x68, %dr21
+	}
+	{
+	  std,2	%dr0, 0x70, %dr22
+	  std,5	%dr0, 0x78, %dr23
+	}
+	{
+	  subd,0	%dr9, %dr8, %dr0
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	loop_rot_exit, .-loop_rot_exit

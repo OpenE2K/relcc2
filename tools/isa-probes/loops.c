@@ -331,6 +331,15 @@ main (int argc, char **argv)
   run_loads (lsrl (5, 2, 0, 2));
   /* Throughput.  */
   run ("one", loop_one, lsr (1000, 0, 1, 0, 0, 0), 0);
+  /* A value carried to the next iteration by rotation, at exactly its
+     latency, in the same cluster, the other one, and padded.  */
+  run ("rot_same", loop_rot_same, lsr (1000, 0, 1, 0, 0, 0), 0);
+  run ("rot_cross", loop_rot_cross, lsr (1000, 0, 1, 0, 0, 0), 0);
+  run ("rot_cross_pad", loop_rot_cross_pad, lsr (1000, 0, 1, 0, 0, 0), 0);
+  /* Where the last iteration's value is after the loop (abn abnf=1):
+     printed as pcnt0 pcnt1 lcntex = %b[0], %b[2], %b[4].  */
+  run ("rot_exit", loop_rot_exit, lsr (5, 0, 1, 0, 0, 0), 0);
+  run ("rot_exit", loop_rot_exit, lsr (1, 0, 1, 0, 0, 0), 0);
   run ("count", loop_count, lsr (1000, 0, 1, 0, 0, 0), 0);
   return 0;
 }

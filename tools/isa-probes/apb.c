@@ -134,9 +134,10 @@ run (const char *name, long (*f) (unsigned long *, void *, void *),
       mprotect (m + pagesize, pagesize, PROT_NONE);
       b1 = m + pagesize - 16;
     }
-  else if (strcmp (name, "pagefault") == 0)
+  else if (strcmp (name, "pagefault") == 0
+           || strcmp (name, "aabf_pagefault") == 0 || strstr (name, "_pf_"))
     b2 = fresh_pages (1);
-  else if (strcmp (name, "signal") == 0)
+  else if (strcmp (name, "signal") == 0 || strcmp (name, "aabf_signal") == 0)
     {
       fixpage = fresh_pages (1);
       mprotect (fixpage, pagesize, PROT_NONE);
@@ -149,7 +150,8 @@ run (const char *name, long (*f) (unsigned long *, void *, void *),
      arrays, so both start from their initial contents every run.  */
   init ();
   long first = f (out, b1, b2), cycles = first;
-  int once = strcmp (name, "pagefault") == 0 || strcmp (name, "signal") == 0
+  int once = strstr (name, "pagefault") || strstr (name, "signal")
+             || strstr (name, "_pf_")
              || strcmp (name, "guard") == 0 || strncmp (name, "cold", 4) == 0;
   if (!once)
     {

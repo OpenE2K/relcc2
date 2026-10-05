@@ -334,6 +334,33 @@ def main():
         add(f"aabf_{v:x}", [({}, None)], seq(4), base, between={
             1: [[f"adds,0\t0x0, {v:#x}, %r3"], ["aaurw,2\t%r3, %aabf0"],
                 nop7, nop7]})
+    # %aabf before bap (setup writes go before bap), all sixteen, with
+    # all ones and with 0; and a write followed by a trap (page fault,
+    # signal), when the kernel saves and restarts the unit.
+    for v in (0, 0xffffffff):
+        add(f"aabf_pre_{v:x}", [({}, None)], seq(4),
+            base + [(f"%aabf{i}", v) for i in range(16)])
+    for t in ("pagefault", "signal"):
+        add(f"aabf_{t}", [({}, None)], seq(4), base, between={
+            1: [["adds,0\t0x0, 0xffffffff, %r3"], ["aaurw,2\t%r3, %aabf0"],
+                nop7] + load})
+    # Which values and registers matter with a trap after the write.
+    for reg, v in (("aabf0", 0), ("aabf0", 1), ("aabf0", 2),
+                   ("aabf0", 0x80000000), ("aabf0", 0xffff),
+                   ("aabf0", 0xffff0000), ("aabf1", 0xffffffff),
+                   ("aabf15", 0xffffffff)) + tuple(
+                       (f"aabf{i}", 0) for i in range(2, 15)):
+        add(f"{reg}_pf_{v:x}", [({}, None)], seq(4), base, between={
+            1: [[f"addd,0\t0x0, _f64,_lts0 {v:#x}, %dr3"],
+                [f"aaurw,2\t%r3, %{reg}"], nop7] + load})
+    # The same with the stream in the right half (channel 2, area 32).
+    for i in range(4):
+        # (%dr2 is the page the trap's load faults on, so the right half
+        # reads the first array from byte 512.)
+        add(f"aabfr{i}_pf_0", [({}, {"disp": 512})], [[mova(2)]] * 4,
+            base, between={
+            1: [["addd,0\t0x0, 0x0, %dr3"], [f"aaurw,2\t%r3, %aabf{i}"],
+                nop7] + load})
     add("aabf1_ff", [({}, None)], seq(4), base, between={
         1: [["adds,0\t0x0, 0xff, %r3"], ["aaurw,2\t%r3, %aabf1"], nop7,
             nop7]})

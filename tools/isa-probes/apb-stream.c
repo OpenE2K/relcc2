@@ -8,6 +8,12 @@
      $LCC -O1 tools/isa-probes/apb-stream.c tools/isa-probes/apb-stream.s \
        -o apb-stream
      ./apb-stream                         # on hardware
+     ./apb-stream one CASE [T]            # CASE from memory, 40 runs: for
+                                          # several copies on several cores,
+                                          # all starting at time T (seconds
+                                          # of CLOCK_REALTIME)
+     ./apb-stream hot CASE KB             # time to reread KB of hot data
+                                          # after CASE streams 32 MiB
 
    Each line: the case (step in elements, dcd, asz; multiK: K arrays at
    once), and the best of five runs in cycles per iteration (one
@@ -18,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define CASE(n, a, d, s, k) \
   long stream_##n (const long *, unsigned long, long *);
@@ -59,12 +66,99 @@ best (long (*f) (const long *, unsigned long, long *), long n, int step,
   return b;
 }
 
+static const struct
+{
+  const char *name;
+  long (*f) (const long *, unsigned long, long *);
+  int step, k;
+} cases[] = {
+#define CASE(n, a, d, s, k) { #n, stream_##n, s, k },
+#include "apb-stream-cases.h"
+#undef CASE
+};
+
+static double
+now (void)
+{
+  struct timespec t;
+  clock_gettime (CLOCK_MONOTONIC, &t);
+  return t.tv_sec + t.tv_nsec * 1e-9;
+}
+
+/* Nanoseconds per 64-byte line to reread HOT bytes, one load a line.  */
+static double
+reread (const volatile long *hot, long bytes)
+{
+  double t = now ();
+  long s = 0;
+  for (long i = 0; i < bytes / 8; i += 8)
+    s += hot[i];
+  t = now () - t;
+  if (s == 42)
+    puts ("");
+  return t * 1e9 / (bytes / 64);
+}
+
 int
-main (void)
+main (int argc, char **argv)
 {
   big = aligned_alloc (4096, bign * sizeof (long));
   for (long i = 0; i < bign; i++)
     big[i] = i;
+  if (argc > 2)
+    {
+      unsigned c = 0;
+      while (c < sizeof cases / sizeof *cases
+             && strcmp (cases[c].name, argv[2]) != 0)
+        c++;
+      if (c == sizeof cases / sizeof *cases)
+        return 2;
+      if (strcmp (argv[1], "one") == 0)
+        {
+          if (argc > 3)
+            {
+              struct timespec t;
+              do
+                clock_gettime (CLOCK_REALTIME, &t);
+              while (t.tv_sec < atol (argv[3]));
+            }
+          /* The timed loop only, back to back (no checks in between,
+             so that copies on other cores overlap): the mean of 40
+             runs over fresh stretches.  */
+          long n = 1L << 20, st = cases[c].step, cyc, sum = 0;
+          for (int r = 0; r < 40; r++)
+            {
+              if (pos + n * st + 4096 >= bign)
+                pos = 0;
+              cases[c].f (big + pos, 0xff2000000000UL | n, &cyc);
+              pos += n * st + 4096;
+              sum += cyc;
+            }
+          printf ("%s %.2f\n", argv[2], (double) sum / 40 / n);
+          return 0;
+        }
+      if (strcmp (argv[1], "hot") == 0 && argc > 3)
+        {
+          long bytes = atol (argv[3]) << 10;
+          long *hot = aligned_alloc (4096, bytes);
+          memset (hot, 1, bytes);
+          double base = 1e30, after = 1e30;
+          for (int r = 0; r < 5; r++)
+            {
+              reread (hot, bytes);
+              double x = reread (hot, bytes);
+              base = x < base ? x : base;
+              long cyc;
+              cases[c].f (big + (r << 22), 0xff2000000000UL | 4L << 20, &cyc);
+              x = reread (hot, bytes);
+              after = x < after ? x : after;
+            }
+          printf ("%s hot %ld KiB: %.2f ns/line before, %.2f after\n",
+                  argv[2], bytes >> 10, base, after);
+          return 0;
+        }
+      return 2;
+    }
   printf ("case          L1   memory  (cycles per iteration)\n");
   /* Several arrays: 1 Mi iterations, each array within its 64 MiB.  */
 #define CASE(n, a, d, s, k) \

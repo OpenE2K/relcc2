@@ -9,16 +9,18 @@
        -o apb-stream
      ./apb-stream                         # on hardware
 
-   Each line: the case (step in elements, dcd, asz), and the best of
-   five runs in cycles per iteration for 2,048 iterations (data in L1
-   after a first pass) and for 4 Mi iterations over a fresh stretch of
-   a 512 MiB array (from memory).  */
+   Each line: the case (step in elements, dcd, asz; multiK: K arrays at
+   once), and the best of five runs in cycles per iteration (one
+   element of each array) for 2,048 iterations (data in L1 after a
+   first pass) and for 4 Mi iterations (1 Mi for multi*) over a fresh
+   stretch of a 512 MiB array (from memory).  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define CASE(n, a, d, s) long stream_##n (const long *, unsigned long, long *);
+#define CASE(n, a, d, s, k) \
+  long stream_##n (const long *, unsigned long, long *);
 #include "apb-stream-cases.h"
 #undef CASE
 
@@ -26,20 +28,22 @@ static long *big;
 static const long bign = 64L << 20;   /* 512 MiB of longs */
 static long pos;                       /* next fresh element */
 
+/* K arrays 64 MiB apart (multi_* cases): a stretch of K * 64 MiB.  */
 static double
 best (long (*f) (const long *, unsigned long, long *), long n, int step,
-      int fresh)
+      int fresh, int k)
 {
   double b = 1e30;
   for (int r = 0; r < 5; r++)
     {
       const long *a = big;
+      long span = k > 1 ? k * (8L << 20) : n * step + 4096;
       if (fresh)
         {
-          if (pos + n * step >= bign)
+          if (pos + span >= bign)
             pos = 0;
           a = big + pos;
-          pos += n * step + 4096;
+          pos += span;
         }
       else
         f (a, 0xff2000000000UL | n, &(long) { 0 });
@@ -61,10 +65,12 @@ main (void)
   big = aligned_alloc (4096, bign * sizeof (long));
   for (long i = 0; i < bign; i++)
     big[i] = i;
-  printf ("case          L1   memory  (cycles per element)\n");
-#define CASE(n, a, d, s) \
-  printf ("%-12s %5.2f %7.2f\n", #n, best (stream_##n, 2048, s, 0), \
-          best (stream_##n, 4L << 20, s, 1));
+  printf ("case          L1   memory  (cycles per iteration)\n");
+  /* Several arrays: 1 Mi iterations, each array within its 64 MiB.  */
+#define CASE(n, a, d, s, k) \
+  printf ("%-14s %5.2f %7.2f\n", #n, best (stream_##n, 2048, s, 0, k), \
+          best (stream_##n, k > 1 || #n[0] == 'm' ? 1L << 20 : 4L << 20, \
+                s, 1, k));
 #include "apb-stream-cases.h"
 #undef CASE
   return 0;

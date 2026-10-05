@@ -76,7 +76,7 @@ stream_s1_d0_a0:
 	.align	8
 .Ls1_d0_a0_prog:
 	{
-	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=0, abs=0, disp=0
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=0, abs=0, disp=0x0
 	}
 	.size	stream_s1_d0_a0, .-stream_s1_d0_a0
 
@@ -153,7 +153,7 @@ stream_s1_d0_a1:
 	.align	8
 .Ls1_d0_a1_prog:
 	{
-	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=1, abs=0, disp=0
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=1, abs=0, disp=0x0
 	}
 	.size	stream_s1_d0_a1, .-stream_s1_d0_a1
 
@@ -230,7 +230,7 @@ stream_s1_d0_a2:
 	.align	8
 .Ls1_d0_a2_prog:
 	{
-	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=2, abs=0, disp=0
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=2, abs=0, disp=0x0
 	}
 	.size	stream_s1_d0_a2, .-stream_s1_d0_a2
 
@@ -307,7 +307,7 @@ stream_s1_d0_a3:
 	.align	8
 .Ls1_d0_a3_prog:
 	{
-	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0x0
 	}
 	.size	stream_s1_d0_a3, .-stream_s1_d0_a3
 
@@ -384,7 +384,7 @@ stream_s1_d0_a4:
 	.align	8
 .Ls1_d0_a4_prog:
 	{
-	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0x0
 	}
 	.size	stream_s1_d0_a4, .-stream_s1_d0_a4
 
@@ -461,7 +461,7 @@ stream_s1_d0_a5:
 	.align	8
 .Ls1_d0_a5_prog:
 	{
-	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=5, abs=0, disp=0
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=5, abs=0, disp=0x0
 	}
 	.size	stream_s1_d0_a5, .-stream_s1_d0_a5
 
@@ -538,7 +538,7 @@ stream_s1_d1_a0:
 	.align	8
 .Ls1_d1_a0_prog:
 	{
-	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=0, abs=0, disp=0
+	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=0, abs=0, disp=0x0
 	}
 	.size	stream_s1_d1_a0, .-stream_s1_d1_a0
 
@@ -615,7 +615,7 @@ stream_s1_d1_a1:
 	.align	8
 .Ls1_d1_a1_prog:
 	{
-	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=1, abs=0, disp=0
+	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=1, abs=0, disp=0x0
 	}
 	.size	stream_s1_d1_a1, .-stream_s1_d1_a1
 
@@ -692,7 +692,7 @@ stream_s1_d1_a2:
 	.align	8
 .Ls1_d1_a2_prog:
 	{
-	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=2, abs=0, disp=0
+	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=2, abs=0, disp=0x0
 	}
 	.size	stream_s1_d1_a2, .-stream_s1_d1_a2
 
@@ -769,7 +769,7 @@ stream_s1_d1_a3:
 	.align	8
 .Ls1_d1_a3_prog:
 	{
-	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0
+	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0x0
 	}
 	.size	stream_s1_d1_a3, .-stream_s1_d1_a3
 
@@ -846,7 +846,7 @@ stream_s1_d1_a4:
 	.align	8
 .Ls1_d1_a4_prog:
 	{
-	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0
+	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0x0
 	}
 	.size	stream_s1_d1_a4, .-stream_s1_d1_a4
 
@@ -923,7 +923,7 @@ stream_s1_d1_a5:
 	.align	8
 .Ls1_d1_a5_prog:
 	{
-	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=5, abs=0, disp=0
+	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=5, abs=0, disp=0x0
 	}
 	.size	stream_s1_d1_a5, .-stream_s1_d1_a5
 
@@ -1000,7 +1000,7 @@ stream_s1_d2_a0:
 	.align	8
 .Ls1_d2_a0_prog:
 	{
-	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=0, abs=0, disp=0
+	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=0, abs=0, disp=0x0
 	}
 	.size	stream_s1_d2_a0, .-stream_s1_d2_a0
 
@@ -1077,7 +1077,7 @@ stream_s1_d2_a1:
 	.align	8
 .Ls1_d2_a1_prog:
 	{
-	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=1, abs=0, disp=0
+	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=1, abs=0, disp=0x0
 	}
 	.size	stream_s1_d2_a1, .-stream_s1_d2_a1
 
@@ -1154,7 +1154,7 @@ stream_s1_d2_a2:
 	.align	8
 .Ls1_d2_a2_prog:
 	{
-	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=2, abs=0, disp=0
+	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=2, abs=0, disp=0x0
 	}
 	.size	stream_s1_d2_a2, .-stream_s1_d2_a2
 
@@ -1231,7 +1231,7 @@ stream_s1_d2_a3:
 	.align	8
 .Ls1_d2_a3_prog:
 	{
-	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0
+	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0x0
 	}
 	.size	stream_s1_d2_a3, .-stream_s1_d2_a3
 
@@ -1308,7 +1308,7 @@ stream_s1_d2_a4:
 	.align	8
 .Ls1_d2_a4_prog:
 	{
-	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0
+	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0x0
 	}
 	.size	stream_s1_d2_a4, .-stream_s1_d2_a4
 
@@ -1385,7 +1385,7 @@ stream_s1_d2_a5:
 	.align	8
 .Ls1_d2_a5_prog:
 	{
-	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=5, abs=0, disp=0
+	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=5, abs=0, disp=0x0
 	}
 	.size	stream_s1_d2_a5, .-stream_s1_d2_a5
 
@@ -1462,7 +1462,7 @@ stream_s1_d3_a0:
 	.align	8
 .Ls1_d3_a0_prog:
 	{
-	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=0, abs=0, disp=0
+	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=0, abs=0, disp=0x0
 	}
 	.size	stream_s1_d3_a0, .-stream_s1_d3_a0
 
@@ -1539,7 +1539,7 @@ stream_s1_d3_a1:
 	.align	8
 .Ls1_d3_a1_prog:
 	{
-	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=1, abs=0, disp=0
+	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=1, abs=0, disp=0x0
 	}
 	.size	stream_s1_d3_a1, .-stream_s1_d3_a1
 
@@ -1616,7 +1616,7 @@ stream_s1_d3_a2:
 	.align	8
 .Ls1_d3_a2_prog:
 	{
-	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=2, abs=0, disp=0
+	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=2, abs=0, disp=0x0
 	}
 	.size	stream_s1_d3_a2, .-stream_s1_d3_a2
 
@@ -1693,7 +1693,7 @@ stream_s1_d3_a3:
 	.align	8
 .Ls1_d3_a3_prog:
 	{
-	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0
+	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0x0
 	}
 	.size	stream_s1_d3_a3, .-stream_s1_d3_a3
 
@@ -1770,7 +1770,7 @@ stream_s1_d3_a4:
 	.align	8
 .Ls1_d3_a4_prog:
 	{
-	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0
+	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0x0
 	}
 	.size	stream_s1_d3_a4, .-stream_s1_d3_a4
 
@@ -1847,7 +1847,7 @@ stream_s1_d3_a5:
 	.align	8
 .Ls1_d3_a5_prog:
 	{
-	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=5, abs=0, disp=0
+	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=5, abs=0, disp=0x0
 	}
 	.size	stream_s1_d3_a5, .-stream_s1_d3_a5
 
@@ -1924,7 +1924,7 @@ stream_s8_d0_a0:
 	.align	8
 .Ls8_d0_a0_prog:
 	{
-	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=0, abs=0, disp=0
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=0, abs=0, disp=0x0
 	}
 	.size	stream_s8_d0_a0, .-stream_s8_d0_a0
 
@@ -2001,7 +2001,7 @@ stream_s8_d0_a1:
 	.align	8
 .Ls8_d0_a1_prog:
 	{
-	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=1, abs=0, disp=0
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=1, abs=0, disp=0x0
 	}
 	.size	stream_s8_d0_a1, .-stream_s8_d0_a1
 
@@ -2078,7 +2078,7 @@ stream_s8_d0_a2:
 	.align	8
 .Ls8_d0_a2_prog:
 	{
-	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=2, abs=0, disp=0
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=2, abs=0, disp=0x0
 	}
 	.size	stream_s8_d0_a2, .-stream_s8_d0_a2
 
@@ -2155,7 +2155,7 @@ stream_s8_d0_a3:
 	.align	8
 .Ls8_d0_a3_prog:
 	{
-	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0x0
 	}
 	.size	stream_s8_d0_a3, .-stream_s8_d0_a3
 
@@ -2232,7 +2232,7 @@ stream_s8_d0_a4:
 	.align	8
 .Ls8_d0_a4_prog:
 	{
-	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0x0
 	}
 	.size	stream_s8_d0_a4, .-stream_s8_d0_a4
 
@@ -2309,7 +2309,7 @@ stream_s8_d0_a5:
 	.align	8
 .Ls8_d0_a5_prog:
 	{
-	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=5, abs=0, disp=0
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=5, abs=0, disp=0x0
 	}
 	.size	stream_s8_d0_a5, .-stream_s8_d0_a5
 
@@ -2386,7 +2386,7 @@ stream_s8_d1_a0:
 	.align	8
 .Ls8_d1_a0_prog:
 	{
-	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=0, abs=0, disp=0
+	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=0, abs=0, disp=0x0
 	}
 	.size	stream_s8_d1_a0, .-stream_s8_d1_a0
 
@@ -2463,7 +2463,7 @@ stream_s8_d1_a1:
 	.align	8
 .Ls8_d1_a1_prog:
 	{
-	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=1, abs=0, disp=0
+	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=1, abs=0, disp=0x0
 	}
 	.size	stream_s8_d1_a1, .-stream_s8_d1_a1
 
@@ -2540,7 +2540,7 @@ stream_s8_d1_a2:
 	.align	8
 .Ls8_d1_a2_prog:
 	{
-	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=2, abs=0, disp=0
+	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=2, abs=0, disp=0x0
 	}
 	.size	stream_s8_d1_a2, .-stream_s8_d1_a2
 
@@ -2617,7 +2617,7 @@ stream_s8_d1_a3:
 	.align	8
 .Ls8_d1_a3_prog:
 	{
-	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0
+	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0x0
 	}
 	.size	stream_s8_d1_a3, .-stream_s8_d1_a3
 
@@ -2694,7 +2694,7 @@ stream_s8_d1_a4:
 	.align	8
 .Ls8_d1_a4_prog:
 	{
-	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0
+	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0x0
 	}
 	.size	stream_s8_d1_a4, .-stream_s8_d1_a4
 
@@ -2771,7 +2771,7 @@ stream_s8_d1_a5:
 	.align	8
 .Ls8_d1_a5_prog:
 	{
-	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=5, abs=0, disp=0
+	  fapb	ct=1, dcd=1, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=5, abs=0, disp=0x0
 	}
 	.size	stream_s8_d1_a5, .-stream_s8_d1_a5
 
@@ -2848,7 +2848,7 @@ stream_s8_d2_a0:
 	.align	8
 .Ls8_d2_a0_prog:
 	{
-	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=0, abs=0, disp=0
+	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=0, abs=0, disp=0x0
 	}
 	.size	stream_s8_d2_a0, .-stream_s8_d2_a0
 
@@ -2925,7 +2925,7 @@ stream_s8_d2_a1:
 	.align	8
 .Ls8_d2_a1_prog:
 	{
-	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=1, abs=0, disp=0
+	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=1, abs=0, disp=0x0
 	}
 	.size	stream_s8_d2_a1, .-stream_s8_d2_a1
 
@@ -3002,7 +3002,7 @@ stream_s8_d2_a2:
 	.align	8
 .Ls8_d2_a2_prog:
 	{
-	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=2, abs=0, disp=0
+	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=2, abs=0, disp=0x0
 	}
 	.size	stream_s8_d2_a2, .-stream_s8_d2_a2
 
@@ -3079,7 +3079,7 @@ stream_s8_d2_a3:
 	.align	8
 .Ls8_d2_a3_prog:
 	{
-	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0
+	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0x0
 	}
 	.size	stream_s8_d2_a3, .-stream_s8_d2_a3
 
@@ -3156,7 +3156,7 @@ stream_s8_d2_a4:
 	.align	8
 .Ls8_d2_a4_prog:
 	{
-	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0
+	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0x0
 	}
 	.size	stream_s8_d2_a4, .-stream_s8_d2_a4
 
@@ -3233,7 +3233,7 @@ stream_s8_d2_a5:
 	.align	8
 .Ls8_d2_a5_prog:
 	{
-	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=5, abs=0, disp=0
+	  fapb	ct=1, dcd=2, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=5, abs=0, disp=0x0
 	}
 	.size	stream_s8_d2_a5, .-stream_s8_d2_a5
 
@@ -3310,7 +3310,7 @@ stream_s8_d3_a0:
 	.align	8
 .Ls8_d3_a0_prog:
 	{
-	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=0, abs=0, disp=0
+	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=0, abs=0, disp=0x0
 	}
 	.size	stream_s8_d3_a0, .-stream_s8_d3_a0
 
@@ -3387,7 +3387,7 @@ stream_s8_d3_a1:
 	.align	8
 .Ls8_d3_a1_prog:
 	{
-	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=1, abs=0, disp=0
+	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=1, abs=0, disp=0x0
 	}
 	.size	stream_s8_d3_a1, .-stream_s8_d3_a1
 
@@ -3464,7 +3464,7 @@ stream_s8_d3_a2:
 	.align	8
 .Ls8_d3_a2_prog:
 	{
-	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=2, abs=0, disp=0
+	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=2, abs=0, disp=0x0
 	}
 	.size	stream_s8_d3_a2, .-stream_s8_d3_a2
 
@@ -3541,7 +3541,7 @@ stream_s8_d3_a3:
 	.align	8
 .Ls8_d3_a3_prog:
 	{
-	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0
+	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0x0
 	}
 	.size	stream_s8_d3_a3, .-stream_s8_d3_a3
 
@@ -3618,7 +3618,7 @@ stream_s8_d3_a4:
 	.align	8
 .Ls8_d3_a4_prog:
 	{
-	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0
+	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0x0
 	}
 	.size	stream_s8_d3_a4, .-stream_s8_d3_a4
 
@@ -3695,6 +3695,824 @@ stream_s8_d3_a5:
 	.align	8
 .Ls8_d3_a5_prog:
 	{
-	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=5, abs=0, disp=0
+	  fapb	ct=1, dcd=3, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=5, abs=0, disp=0x0
 	}
 	.size	stream_s8_d3_a5, .-stream_s8_d3_a5
+
+	.global	stream_multi1_s1_a4
+	.type	stream_multi1_s1_a4, #function
+	.align	8
+stream_multi1_s1_a4:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  setbn	rsz = 0x7, rbs = 0x8, rcur = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %b[0]
+	  addd,1	0x0, 0x0, %b[2]
+	  addd,2	0x0, 0x0, %b[4]
+	  addd,3	0x0, 0x0, %b[6]
+	  addd,4	0x0, 0x0, %b[8]
+	  addd,5	0x0, 0x0, %b[10]
+	}
+	{
+	  addd,0	0x0, 0x0, %b[12]
+	  addd,1	0x0, 0x0, %b[14]
+	}
+	{
+	  ldisp	%ctpr2, .Lmulti1_s1_a4_prog
+	  aaurwd,2	%dr0, %aad0
+	  addd,1	0x0, 0x0, %dr8
+	  addd,3	0x0, 0x0, %dr9
+	  addd,4	0x0, 0x1, %dr10
+	}
+	{
+	  aaurw,2	%r10, %aaincr1
+	  disp	%ctpr1, .Lmulti1_s1_a4_loop
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 7
+	  bap
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	  rrd,0	%clkr, %dr4
+	}
+.Lmulti1_s1_a4_loop:
+	{
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  abn	abnf=1, abnt=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  movad,0	area=0, ind=0, am=1, be=0, %b[0]
+	  addd,0	%dr9, %b[12], %dr9
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  nop 7
+	  disp	%ctpr2, disp=0x0
+	}
+	{
+	  addd,0	%dr9, 0x0, %dr0
+	  subd,1	%dr5, %dr4, %dr6
+	}
+	{
+	  std,2	%dr2, 0x0, %dr6
+	}
+	{
+	  ct	%ctpr3
+	}
+	.align	8
+.Lmulti1_s1_a4_prog:
+	{
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0x0
+	}
+	.size	stream_multi1_s1_a4, .-stream_multi1_s1_a4
+
+	.global	stream_multi2_s1_a4
+	.type	stream_multi2_s1_a4, #function
+	.align	8
+stream_multi2_s1_a4:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  setbn	rsz = 0x7, rbs = 0x8, rcur = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %b[0]
+	  addd,1	0x0, 0x0, %b[2]
+	  addd,2	0x0, 0x0, %b[4]
+	  addd,3	0x0, 0x0, %b[6]
+	  addd,4	0x0, 0x0, %b[8]
+	  addd,5	0x0, 0x0, %b[10]
+	}
+	{
+	  addd,0	0x0, 0x0, %b[12]
+	  addd,1	0x0, 0x0, %b[14]
+	}
+	{
+	  ldisp	%ctpr2, .Lmulti2_s1_a4_prog
+	  aaurwd,2	%dr0, %aad0
+	  addd,1	0x0, 0x0, %dr8
+	  addd,3	0x0, 0x0, %dr9
+	  addd,4	0x0, 0x1, %dr10
+	}
+	{
+	  aaurw,2	%r10, %aaincr1
+	  disp	%ctpr1, .Lmulti2_s1_a4_loop
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 7
+	  bap
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	  rrd,0	%clkr, %dr4
+	}
+.Lmulti2_s1_a4_loop:
+	{
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  abn	abnf=1, abnt=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  movad,0	area=0, ind=0, am=1, be=0, %b[0]
+	  addd,0	%dr9, %b[12], %dr9
+	  movad,1	area=1, ind=0, am=1, be=0, %dr11
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  nop 7
+	  disp	%ctpr2, disp=0x0
+	}
+	{
+	  addd,0	%dr9, 0x0, %dr0
+	  subd,1	%dr5, %dr4, %dr6
+	}
+	{
+	  std,2	%dr2, 0x0, %dr6
+	}
+	{
+	  ct	%ctpr3
+	}
+	.align	8
+.Lmulti2_s1_a4_prog:
+	{
+	  fapb	ct=0, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0x0
+	}
+	{
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=16, disp=0x4000000
+	}
+	.size	stream_multi2_s1_a4, .-stream_multi2_s1_a4
+
+	.global	stream_multi4_s1_a4
+	.type	stream_multi4_s1_a4, #function
+	.align	8
+stream_multi4_s1_a4:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  setbn	rsz = 0x7, rbs = 0x8, rcur = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %b[0]
+	  addd,1	0x0, 0x0, %b[2]
+	  addd,2	0x0, 0x0, %b[4]
+	  addd,3	0x0, 0x0, %b[6]
+	  addd,4	0x0, 0x0, %b[8]
+	  addd,5	0x0, 0x0, %b[10]
+	}
+	{
+	  addd,0	0x0, 0x0, %b[12]
+	  addd,1	0x0, 0x0, %b[14]
+	}
+	{
+	  ldisp	%ctpr2, .Lmulti4_s1_a4_prog
+	  aaurwd,2	%dr0, %aad0
+	  addd,1	0x0, 0x0, %dr8
+	  addd,3	0x0, 0x0, %dr9
+	  addd,4	0x0, 0x1, %dr10
+	}
+	{
+	  aaurw,2	%r10, %aaincr1
+	  disp	%ctpr1, .Lmulti4_s1_a4_loop
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 7
+	  bap
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	  rrd,0	%clkr, %dr4
+	}
+.Lmulti4_s1_a4_loop:
+	{
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  abn	abnf=1, abnt=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  movad,0	area=0, ind=0, am=1, be=0, %b[0]
+	  addd,0	%dr9, %b[12], %dr9
+	  movad,1	area=1, ind=0, am=1, be=0, %dr11
+	  movad,2	area=0, ind=0, am=1, be=0, %dr12
+	  movad,3	area=1, ind=0, am=1, be=0, %dr13
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  nop 7
+	  disp	%ctpr2, disp=0x0
+	}
+	{
+	  addd,0	%dr9, 0x0, %dr0
+	  subd,1	%dr5, %dr4, %dr6
+	}
+	{
+	  std,2	%dr2, 0x0, %dr6
+	}
+	{
+	  ct	%ctpr3
+	}
+	.align	8
+.Lmulti4_s1_a4_prog:
+	{
+	  fapb	ct=0, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0x0
+	  fapb	dpl=0, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0x8000000
+	}
+	{
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=16, disp=0x4000000
+	  fapb	dpl=0, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=16, disp=0xc000000
+	}
+	.size	stream_multi4_s1_a4, .-stream_multi4_s1_a4
+
+	.global	stream_multi2_s1_a3
+	.type	stream_multi2_s1_a3, #function
+	.align	8
+stream_multi2_s1_a3:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  setbn	rsz = 0x7, rbs = 0x8, rcur = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %b[0]
+	  addd,1	0x0, 0x0, %b[2]
+	  addd,2	0x0, 0x0, %b[4]
+	  addd,3	0x0, 0x0, %b[6]
+	  addd,4	0x0, 0x0, %b[8]
+	  addd,5	0x0, 0x0, %b[10]
+	}
+	{
+	  addd,0	0x0, 0x0, %b[12]
+	  addd,1	0x0, 0x0, %b[14]
+	}
+	{
+	  ldisp	%ctpr2, .Lmulti2_s1_a3_prog
+	  aaurwd,2	%dr0, %aad0
+	  addd,1	0x0, 0x0, %dr8
+	  addd,3	0x0, 0x0, %dr9
+	  addd,4	0x0, 0x1, %dr10
+	}
+	{
+	  aaurw,2	%r10, %aaincr1
+	  disp	%ctpr1, .Lmulti2_s1_a3_loop
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 7
+	  bap
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	  rrd,0	%clkr, %dr4
+	}
+.Lmulti2_s1_a3_loop:
+	{
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  abn	abnf=1, abnt=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  movad,0	area=0, ind=0, am=1, be=0, %b[0]
+	  addd,0	%dr9, %b[12], %dr9
+	  movad,1	area=1, ind=0, am=1, be=0, %dr11
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  nop 7
+	  disp	%ctpr2, disp=0x0
+	}
+	{
+	  addd,0	%dr9, 0x0, %dr0
+	  subd,1	%dr5, %dr4, %dr6
+	}
+	{
+	  std,2	%dr2, 0x0, %dr6
+	}
+	{
+	  ct	%ctpr3
+	}
+	.align	8
+.Lmulti2_s1_a3_prog:
+	{
+	  fapb	ct=0, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0x0
+	}
+	{
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=8, disp=0x4000000
+	}
+	.size	stream_multi2_s1_a3, .-stream_multi2_s1_a3
+
+	.global	stream_multi4_s1_a3
+	.type	stream_multi4_s1_a3, #function
+	.align	8
+stream_multi4_s1_a3:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  setbn	rsz = 0x7, rbs = 0x8, rcur = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %b[0]
+	  addd,1	0x0, 0x0, %b[2]
+	  addd,2	0x0, 0x0, %b[4]
+	  addd,3	0x0, 0x0, %b[6]
+	  addd,4	0x0, 0x0, %b[8]
+	  addd,5	0x0, 0x0, %b[10]
+	}
+	{
+	  addd,0	0x0, 0x0, %b[12]
+	  addd,1	0x0, 0x0, %b[14]
+	}
+	{
+	  ldisp	%ctpr2, .Lmulti4_s1_a3_prog
+	  aaurwd,2	%dr0, %aad0
+	  addd,1	0x0, 0x0, %dr8
+	  addd,3	0x0, 0x0, %dr9
+	  addd,4	0x0, 0x1, %dr10
+	}
+	{
+	  aaurw,2	%r10, %aaincr1
+	  disp	%ctpr1, .Lmulti4_s1_a3_loop
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 7
+	  bap
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	  rrd,0	%clkr, %dr4
+	}
+.Lmulti4_s1_a3_loop:
+	{
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  abn	abnf=1, abnt=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  movad,0	area=0, ind=0, am=1, be=0, %b[0]
+	  addd,0	%dr9, %b[12], %dr9
+	  movad,1	area=1, ind=0, am=1, be=0, %dr11
+	  movad,2	area=0, ind=0, am=1, be=0, %dr12
+	  movad,3	area=1, ind=0, am=1, be=0, %dr13
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  nop 7
+	  disp	%ctpr2, disp=0x0
+	}
+	{
+	  addd,0	%dr9, 0x0, %dr0
+	  subd,1	%dr5, %dr4, %dr6
+	}
+	{
+	  std,2	%dr2, 0x0, %dr6
+	}
+	{
+	  ct	%ctpr3
+	}
+	.align	8
+.Lmulti4_s1_a3_prog:
+	{
+	  fapb	ct=0, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0x0
+	  fapb	dpl=0, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0x8000000
+	}
+	{
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=8, disp=0x4000000
+	  fapb	dpl=0, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=8, disp=0xc000000
+	}
+	.size	stream_multi4_s1_a3, .-stream_multi4_s1_a3
+
+	.global	stream_multi1_s8_a4
+	.type	stream_multi1_s8_a4, #function
+	.align	8
+stream_multi1_s8_a4:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  setbn	rsz = 0x7, rbs = 0x8, rcur = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %b[0]
+	  addd,1	0x0, 0x0, %b[2]
+	  addd,2	0x0, 0x0, %b[4]
+	  addd,3	0x0, 0x0, %b[6]
+	  addd,4	0x0, 0x0, %b[8]
+	  addd,5	0x0, 0x0, %b[10]
+	}
+	{
+	  addd,0	0x0, 0x0, %b[12]
+	  addd,1	0x0, 0x0, %b[14]
+	}
+	{
+	  ldisp	%ctpr2, .Lmulti1_s8_a4_prog
+	  aaurwd,2	%dr0, %aad0
+	  addd,1	0x0, 0x0, %dr8
+	  addd,3	0x0, 0x0, %dr9
+	  addd,4	0x0, 0x8, %dr10
+	}
+	{
+	  aaurw,2	%r10, %aaincr1
+	  disp	%ctpr1, .Lmulti1_s8_a4_loop
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 7
+	  bap
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	  rrd,0	%clkr, %dr4
+	}
+.Lmulti1_s8_a4_loop:
+	{
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  abn	abnf=1, abnt=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  movad,0	area=0, ind=0, am=1, be=0, %b[0]
+	  addd,0	%dr9, %b[12], %dr9
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  nop 7
+	  disp	%ctpr2, disp=0x0
+	}
+	{
+	  addd,0	%dr9, 0x0, %dr0
+	  subd,1	%dr5, %dr4, %dr6
+	}
+	{
+	  std,2	%dr2, 0x0, %dr6
+	}
+	{
+	  ct	%ctpr3
+	}
+	.align	8
+.Lmulti1_s8_a4_prog:
+	{
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0x0
+	}
+	.size	stream_multi1_s8_a4, .-stream_multi1_s8_a4
+
+	.global	stream_multi2_s8_a4
+	.type	stream_multi2_s8_a4, #function
+	.align	8
+stream_multi2_s8_a4:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  setbn	rsz = 0x7, rbs = 0x8, rcur = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %b[0]
+	  addd,1	0x0, 0x0, %b[2]
+	  addd,2	0x0, 0x0, %b[4]
+	  addd,3	0x0, 0x0, %b[6]
+	  addd,4	0x0, 0x0, %b[8]
+	  addd,5	0x0, 0x0, %b[10]
+	}
+	{
+	  addd,0	0x0, 0x0, %b[12]
+	  addd,1	0x0, 0x0, %b[14]
+	}
+	{
+	  ldisp	%ctpr2, .Lmulti2_s8_a4_prog
+	  aaurwd,2	%dr0, %aad0
+	  addd,1	0x0, 0x0, %dr8
+	  addd,3	0x0, 0x0, %dr9
+	  addd,4	0x0, 0x8, %dr10
+	}
+	{
+	  aaurw,2	%r10, %aaincr1
+	  disp	%ctpr1, .Lmulti2_s8_a4_loop
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 7
+	  bap
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	  rrd,0	%clkr, %dr4
+	}
+.Lmulti2_s8_a4_loop:
+	{
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  abn	abnf=1, abnt=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  movad,0	area=0, ind=0, am=1, be=0, %b[0]
+	  addd,0	%dr9, %b[12], %dr9
+	  movad,1	area=1, ind=0, am=1, be=0, %dr11
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  nop 7
+	  disp	%ctpr2, disp=0x0
+	}
+	{
+	  addd,0	%dr9, 0x0, %dr0
+	  subd,1	%dr5, %dr4, %dr6
+	}
+	{
+	  std,2	%dr2, 0x0, %dr6
+	}
+	{
+	  ct	%ctpr3
+	}
+	.align	8
+.Lmulti2_s8_a4_prog:
+	{
+	  fapb	ct=0, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0x0
+	}
+	{
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=16, disp=0x4000000
+	}
+	.size	stream_multi2_s8_a4, .-stream_multi2_s8_a4
+
+	.global	stream_multi4_s8_a4
+	.type	stream_multi4_s8_a4, #function
+	.align	8
+stream_multi4_s8_a4:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  setbn	rsz = 0x7, rbs = 0x8, rcur = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %b[0]
+	  addd,1	0x0, 0x0, %b[2]
+	  addd,2	0x0, 0x0, %b[4]
+	  addd,3	0x0, 0x0, %b[6]
+	  addd,4	0x0, 0x0, %b[8]
+	  addd,5	0x0, 0x0, %b[10]
+	}
+	{
+	  addd,0	0x0, 0x0, %b[12]
+	  addd,1	0x0, 0x0, %b[14]
+	}
+	{
+	  ldisp	%ctpr2, .Lmulti4_s8_a4_prog
+	  aaurwd,2	%dr0, %aad0
+	  addd,1	0x0, 0x0, %dr8
+	  addd,3	0x0, 0x0, %dr9
+	  addd,4	0x0, 0x8, %dr10
+	}
+	{
+	  aaurw,2	%r10, %aaincr1
+	  disp	%ctpr1, .Lmulti4_s8_a4_loop
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 7
+	  bap
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	  rrd,0	%clkr, %dr4
+	}
+.Lmulti4_s8_a4_loop:
+	{
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  abn	abnf=1, abnt=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  movad,0	area=0, ind=0, am=1, be=0, %b[0]
+	  addd,0	%dr9, %b[12], %dr9
+	  movad,1	area=1, ind=0, am=1, be=0, %dr11
+	  movad,2	area=0, ind=0, am=1, be=0, %dr12
+	  movad,3	area=1, ind=0, am=1, be=0, %dr13
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  nop 7
+	  disp	%ctpr2, disp=0x0
+	}
+	{
+	  addd,0	%dr9, 0x0, %dr0
+	  subd,1	%dr5, %dr4, %dr6
+	}
+	{
+	  std,2	%dr2, 0x0, %dr6
+	}
+	{
+	  ct	%ctpr3
+	}
+	.align	8
+.Lmulti4_s8_a4_prog:
+	{
+	  fapb	ct=0, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0x0
+	  fapb	dpl=0, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=0, disp=0x8000000
+	}
+	{
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=16, disp=0x4000000
+	  fapb	dpl=0, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=4, abs=16, disp=0xc000000
+	}
+	.size	stream_multi4_s8_a4, .-stream_multi4_s8_a4
+
+	.global	stream_multi2_s8_a3
+	.type	stream_multi2_s8_a3, #function
+	.align	8
+stream_multi2_s8_a3:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  setbn	rsz = 0x7, rbs = 0x8, rcur = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %b[0]
+	  addd,1	0x0, 0x0, %b[2]
+	  addd,2	0x0, 0x0, %b[4]
+	  addd,3	0x0, 0x0, %b[6]
+	  addd,4	0x0, 0x0, %b[8]
+	  addd,5	0x0, 0x0, %b[10]
+	}
+	{
+	  addd,0	0x0, 0x0, %b[12]
+	  addd,1	0x0, 0x0, %b[14]
+	}
+	{
+	  ldisp	%ctpr2, .Lmulti2_s8_a3_prog
+	  aaurwd,2	%dr0, %aad0
+	  addd,1	0x0, 0x0, %dr8
+	  addd,3	0x0, 0x0, %dr9
+	  addd,4	0x0, 0x8, %dr10
+	}
+	{
+	  aaurw,2	%r10, %aaincr1
+	  disp	%ctpr1, .Lmulti2_s8_a3_loop
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 7
+	  bap
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	  rrd,0	%clkr, %dr4
+	}
+.Lmulti2_s8_a3_loop:
+	{
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  abn	abnf=1, abnt=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  movad,0	area=0, ind=0, am=1, be=0, %b[0]
+	  addd,0	%dr9, %b[12], %dr9
+	  movad,1	area=1, ind=0, am=1, be=0, %dr11
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  nop 7
+	  disp	%ctpr2, disp=0x0
+	}
+	{
+	  addd,0	%dr9, 0x0, %dr0
+	  subd,1	%dr5, %dr4, %dr6
+	}
+	{
+	  std,2	%dr2, 0x0, %dr6
+	}
+	{
+	  ct	%ctpr3
+	}
+	.align	8
+.Lmulti2_s8_a3_prog:
+	{
+	  fapb	ct=0, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0x0
+	}
+	{
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=8, disp=0x4000000
+	}
+	.size	stream_multi2_s8_a3, .-stream_multi2_s8_a3
+
+	.global	stream_multi4_s8_a3
+	.type	stream_multi4_s8_a3, #function
+	.align	8
+stream_multi4_s8_a3:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  setbn	rsz = 0x7, rbs = 0x8, rcur = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %b[0]
+	  addd,1	0x0, 0x0, %b[2]
+	  addd,2	0x0, 0x0, %b[4]
+	  addd,3	0x0, 0x0, %b[6]
+	  addd,4	0x0, 0x0, %b[8]
+	  addd,5	0x0, 0x0, %b[10]
+	}
+	{
+	  addd,0	0x0, 0x0, %b[12]
+	  addd,1	0x0, 0x0, %b[14]
+	}
+	{
+	  ldisp	%ctpr2, .Lmulti4_s8_a3_prog
+	  aaurwd,2	%dr0, %aad0
+	  addd,1	0x0, 0x0, %dr8
+	  addd,3	0x0, 0x0, %dr9
+	  addd,4	0x0, 0x8, %dr10
+	}
+	{
+	  aaurw,2	%r10, %aaincr1
+	  disp	%ctpr1, .Lmulti4_s8_a3_loop
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 7
+	  bap
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	  rrd,0	%clkr, %dr4
+	}
+.Lmulti4_s8_a3_loop:
+	{
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  abn	abnf=1, abnt=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  movad,0	area=0, ind=0, am=1, be=0, %b[0]
+	  addd,0	%dr9, %b[12], %dr9
+	  movad,1	area=1, ind=0, am=1, be=0, %dr11
+	  movad,2	area=0, ind=0, am=1, be=0, %dr12
+	  movad,3	area=1, ind=0, am=1, be=0, %dr13
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  nop 7
+	  disp	%ctpr2, disp=0x0
+	}
+	{
+	  addd,0	%dr9, 0x0, %dr0
+	  subd,1	%dr5, %dr4, %dr6
+	}
+	{
+	  std,2	%dr2, 0x0, %dr6
+	}
+	{
+	  ct	%ctpr3
+	}
+	.align	8
+.Lmulti4_s8_a3_prog:
+	{
+	  fapb	ct=0, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0x0
+	  fapb	dpl=0, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=0, disp=0x8000000
+	}
+	{
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=8, disp=0x4000000
+	  fapb	dpl=0, dcd=0, fmt=4, mrng=8, d=0, incr=1, ind=0, asz=3, abs=8, disp=0xc000000
+	}
+	.size	stream_multi4_s8_a3, .-stream_multi4_s8_a3

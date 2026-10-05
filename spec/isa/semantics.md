@@ -147,6 +147,26 @@ as `r == 0 || r == 0x40` [lcc]. **MCST's qemu raises invalid for
   (v5 operations, below), which builds every combined operation,
   integer ones included, as `op2(c, op1(a, b))`. The `f*_mul*` forms are
   v1 only.
+- **Nothing special about them: a combined operation is two ordinary
+  operations chained in one channel.** All 252 integer combined
+  operations of v3 (`and`, `andn`, `or`, `orn`, `xor`, `xorn`, `add`,
+  `sub`, `scl`, `scr`, `shl`, `shr`, `sar`, `getf` then `and` … `xorn`,
+  `add`, `sub`, `rsub`, `s`/`d`; `merge_*`, which takes a predicate, not
+  tried) give exactly what the two ordinary operations give run one
+  after the other, `t = X a, b` then `Y c, t`, on the 4C and the
+  Elbrus-8C2 over six input sets (`tools/isa-probes/icomb.c`, generated
+  by `gen_icomb.py`). The encoding says the same [binutils, both qemus]:
+  ALS opcode bits 0–4 hold **the first operation's own opcode** (`andd`
+  0x01 makes `and_ord` 0x41, `getfd` 0x1f makes `getf_andd` 0x1f; for FP
+  the opcode within the FP group, `faddd` 0x31 → 1, `fmuld` 0x39 → 9),
+  and ALS bits 5–6 with the ALES group (`ICMB0`–`2`, `FCMB0`–`1`) hold
+  **the second operation's opcode shifted right by one** (`and` 0, `or`
+  2, `add` 8, `sub` 9; FP `add` 0, `sub` 1, `mul` 4). The second
+  operation takes `c` as its first operand, so `sub` gives c − t, and
+  the one slot that names no ordinary operation (6, `sxt`'s, for
+  integers; 5 for FP) is `rsub`, t − c. The latency is the sum of the
+  two (integer 1 + 1 = 2, FP 4 + 4 = 8, timing.md) and FP rounds after
+  each stage (below); the integer forms run only in ALC1 and ALC4.
 - `fmul_addd a, b, c, dst` = (a × b) + c with **two roundings** (not
   fused): `(1 + 2^-30)(1 − 2^-30) − 1` gives 0, not −2^-60. Combined FP
   operations may be used only under `-ffp-contract=fast`, never for

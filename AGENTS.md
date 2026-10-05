@@ -500,7 +500,7 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 
 0. `docs/spec-poc-findings.md` (the PoC agent's file, untracked): all
    entries so far are folded into `spec/` and `doc/` and removed from it;
-   new ones continue as I13, A17, P8.
+   new ones continue as I16, A18, P12.
 1. Extend the compat suite (see Current state). It runs on the 4C with
    `run.py --target v3 --remote ...`; all pairs match qemu except the
    tag-trap tests, which pass on the 4C and on the 8C2 (v5, `--target

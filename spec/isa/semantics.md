@@ -188,15 +188,26 @@ and the 8C2):
   309 with `mas=0x8`, 5 cycles a step (the shuffle plus the packed →
   integer crossing, timing.md). Scalar code that parses big-endian data
   sits on this path;
+- **on the store side, saves the instructions and a little latency**:
+  lcc's `htons`/`htonl` before a store (`sa->sin_port = htons (port)`)
+  is a 64-bit mask literal (0x8080808080800001, 0x8080808000010203),
+  `sxt`, `pshufb` and `sth`/`stw`, where `sth`/`stw mas=0x8` alone does
+  it (its `ntohs`/`ntohl` loads likewise add `sxt`, `pshufb`, `sxt`).
+  32 steps of swap, store and reload with `ldw mas=0x8` take 437 cycles
+  through lcc's sequence and 421 with `stw mas=0x8` on the 4C, 501 and
+  425 on the 8C2: the store-to-load round trip hides most of the swap.
+  Filling a `sockaddr_in` with a run-time port and address spends two
+  of the four literal slots and four ALU operations on the swaps;
 - **saves nothing in a pipelined loop**: lcc's sum and copy loops over
   2,048 elements in L1 run at the same speed either way (4C 1.49–1.51
   ns, 8C2 0.78–0.83 ns per element), the `pshufb` taking a free ALU slot
   and its latency only a stage; the MAS form is a few instructions
   shorter (12 against 15 for the sum on v3).
 
-So a compiler should fold a byte swap into an adjacent load or store
-(as GCC's `bswap` pass and patterns like x86's `movbe` do): never worse,
-5 cycles better on dependent paths. (The array prefetch unit has its
+So a compiler should fold a byte swap into an adjacent load or store,
+of any width from 16 bits (as GCC's `bswap` pass and patterns like
+x86's `movbe` do): never worse, 5 cycles better on dependent load paths,
+and two to four operations and a literal fewer each time. (The array prefetch unit has its
 own `be` bit in `mova`, apb.md.)
 
 ## The denormal flag [hw]

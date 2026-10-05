@@ -151,7 +151,8 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     mode (loops.c; gen_loops.py writes loops.s and
                     loops-cases.h) and memory accesses in one wide
                     instruction (samewi.c, samewi.s) and every v5
-                    operation (sem5.c; gen_sem5.py writes sem5.s),
+                    operation (sem5.c; gen_sem5.py writes sem5.s)
+                    and global register rotation (abg.c, abg.s),
                     run on hardware; -DSPEC_V5, -DLOOPS_V5, -DAPB_V5
                     builds add v5 cases
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
@@ -359,8 +360,11 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   operations match the community qemu (MCST's differs in
   `qpslld`/`qpsrld` counts >= 64), packed eq/od compares are quiet,
   round-to-integral mode bit 3 suppresses inexact, and FP ops set the
-  denormal flag (also v3; no emulator does). v4, v6, v7 are not
-  measured.
+  denormal flag (also v3; no emulator does); global register rotation
+  (`abg`, `%bgr`; loops.md) is an x87-style stack: `abgd` pushes and
+  traps on overflow, `abgi` pops, reading an invalid rotating global
+  traps only in ALC4/5 and non-speculatively (the same on the 4C). v4,
+  v6, v7 are not measured.
 
 ### Schedule scoring (tools/isa-score)
 

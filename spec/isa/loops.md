@@ -273,29 +273,46 @@ read of `%lsr`, and never a call inside a loop-mode loop.
 
 The rest of `loops.c` matches the 4C under the community qemu.
 
-## Global register rotation (`abg`, `%bgr`) [source]
+## Global register rotation (`abg`, `%bgr`) [hw: Elbrus-8C2 and 4C, source]
 
-`%bgr` (11 bits): `val` (bits 0–7) marks which of the eight rotating
-registers are valid, `cur` (bits 8–10) is the rotation offset; the
-kernel starts processes with `val` = 0xff. `%g24`–`%g31` map to physical
-global `24 + ((cur + n) & 7)`; `%g0`–`%g23` don't rotate. Reading a
-rotating global whose `val` bit is clear, non-speculatively in ALC4 or
-ALC5, raises `exc_fp_stack_u`, which the kernel turns into SIGFPE
-(`FPE_FLTINV`); there is also an `exc_fp_stack_o`. This is an x87-style
-register stack, presumably for MCST's x86 binary translator (`abgi` /
-`abgd` push and pop; v6 replaces `abg` with `abgc`/`rbgc`, bundle.md).
-MCST's qemu decodes `abg` but doesn't execute it (TODO); the community
-qemu doesn't either. lcc never emits it, so a compiler can ignore it.
+Run on the Elbrus-8C2 (v5) and the 4C (v3) by `tools/isa-probes/abg.c`
+(one case per process). Everything below holds on both.
 
-**Don't probe it on shared hardware**: on the 4C an `abg 2` followed by
-reads of `%dg24`, `%dg25`, `%dg31` killed the process with SIGFPE, and
-a second run (single `abg 2` and `abg 1`, signal handlers that
-`siglongjmp` out, then `rws` to `%bgr`) took the machine down; the
-serial console caught nothing and the cause is unknown. The cases are
-kept out of `loops.c`.
+`%bgr` (11 bits): `val` (bits 0–7) marks which of the eight physical
+rotating registers are valid, `cur` (bits 8–10) is the rotation offset.
+Processes start with `%bgr` = 0x0ff (`cur` 0, all valid), and user code
+can read and write it with `rrs`/`rws`. `%g24`–`%g31` name physical
+global `24 + ((cur + n) & 7)`; `%g0`–`%g23` don't rotate. Each 64-bit
+half of a quad access (`movtq %qg24`, v5 `qpand %qpg24`) rotates on its
+own, also with an odd `cur`.
+
+It is an x87-style register stack (presumably for MCST's x86 binary
+translator), `cur` being the top:
+
+| Operation | Effect | Trap |
+|---|---|---|
+| `abg 1` (`abgd`, push) | `cur` −= 1 (mod 8), then set `val` bit `cur` | SIGFPE `FPE_FLTINV` if that bit was already set (overflow) |
+| `abg 2` (`abgi`, pop) | clear `val` bit `cur`, then `cur` += 1 | never, even if the bit was clear |
+| `abg 3` | as `abg 1` | as `abg 1` |
+| read of `%g24`–`%g31` in ALC4/ALC5 | the value | SIGFPE `FPE_FLTINV` if the physical register's `val` bit is clear (`exc_fp_stack_u`) |
+| the same read with `,sm`, or in ALC0–ALC3 | the value, not diagnostic | never |
+| write of `%g24`–`%g31` | the value | never; `val` doesn't change |
+
+The kernel's trap entry saves `%bgr` and sets it to 0x0ff before
+touching the globals, restores it on return, and starts signal handlers
+with 0x0ff (`trap_table.S.h`, `signal.c`); a trap taken with invalid
+slots is harmless on both machines.
+
+lcc never emits `abg` or touches `%bgr`, so a compiler can ignore them;
+the ABI treats `%g24`–`%g31` as scratch (spec/abi/registers.md). v6
+replaces `abg` with `abgc`/`rbgc` (bundle.md). Neither emulator runs
+this: MCST's qemu stops at `rrs %bgr` ("exception handling is
+unimplemented") and decodes `abg` without executing it; the community
+qemu gives SIGILL.
 
 ## Not checked yet
 
-- `abg` semantics on hardware (see above: not to be run casually).
+- The delays of `abg` and `rws %bgr` (the probe waits `wait all_e`
+  and 5 cycles after each).
 - What `ldovl` does.
 - v6+.

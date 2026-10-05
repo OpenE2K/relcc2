@@ -1334,7 +1334,7 @@ Useful next pieces of relcc2 work for the port, in rough order:
 4. **Speculation leftovers** (`spec/isa/speculation.md`, done for v3
    and v5): v6+.
 5. **Loop mode leftovers** (`spec/isa/loops.md`, "Not checked yet"):
-   `abg`, `ldovl`, v6+.
+   `ldovl`, v6+ (`abg` is done on v5; lcc never emits it).
 6. Review of the port's output against `spec/` and lcc, and test
    triage.
 

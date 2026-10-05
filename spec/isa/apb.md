@@ -76,7 +76,7 @@ APS fields (APLS is the 32-bit `disp`):
 |---|---|---|
 | 31 | `ct` (left) / `dpl` (right) | `ct = 1`: last instruction of the program; it must be set in the last instruction's left half. `dpl = 1`: the right half's other fields are ignored and its area streams the same array as the left half's, with a position of its own (channels 2 and 3 read element 0, then 1, as channels 0 and 1 do) [hw]; lcc always writes 0 |
 | 30 | `si` | Secondary index, v1 only; gas rejects it on v2+ |
-| 28–29 | `dcd` | Cache control: 0 all caches; 2 bypass DCACHE2; 3 bypass DCACHE2 and ECACHE [guide]. lcc writes 0. Values 1–3 return the same data as 0; a stream with 2 (4C) or 3 (both) leaves other cached data alone, where 0 evicts it (Timing) [hw] |
+| 28–29 | `dcd` | "Data cache disabled" (kernel `aau_context.h`; the guide's "cd", flag disabling the cache memories): 0 all caches; 1 reserved; 2 DCACHE2 off; 3 DCACHE2 and ECACHE off [guide]. Values 1–3 return the same data as 0; a stream with 2 (4C) or 3 (both) leaves other cached data alone, where 0 evicts it (Timing) [hw]. lcc always writes 0: also under `#pragma vector nontemporal`, `-fcache-opt`, `-fcache-opt-l2` and `-floop-st-dcache-mode=nocache_wc_force`, in 1.29.16 for v3, v5, v6 and in 1.31.05 [lcc]; it bypasses caches only per access, through the MAS (timing.md, "Memory") |
 | 25–27 | `fmt` | Element format: 1 byte, 2 half, 3 word, 4 double, 5 quad, 7 quad packed (both qemus accept 7 as a 16-byte format; on the Elbrus-8C2 any `mova` from an area with `fmt` 7 is SIGILL, `movaqp` or `movad`, `mrng` 16 or 32, so it is not a v5 format there). Used to scale the increment and to check alignment |
 | 20–24 | `mrng` | Bytes a `mova` may read per step, from 1 to 31; 0 means 32 |
 | 15–19 | `d` | Descriptor `%aadN` (0–31) |

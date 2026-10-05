@@ -265,6 +265,17 @@ whose 320 KB matrix leaves L1 and which uses no array prefetch, runs
 12% slower than isa-score's L1 model on the 8C2 and 6% faster on the
 4C.
 
+
+**Cache hints in the MAS** [source: kernel `asm/mas.h`; lcc]: for
+ordinary accesses (MAS `mod` 0) bits 5–6 (`dc_ch`) choose the caches
+the access may fill: 0 all, 1 not L1, 2 not L1 or L2, 3 none
+(`CACHE_BYPASS_*`). lcc's builtins (`e2kintrin.h`) use them: `ld_*_t1`
+is `mas=0x20`, `ld_*_t2` `mas=0x40`, `ld_*_nta` `mas=0x60` (v3 and v5);
+`st_*_nt` is a plain store on v3 and `mas=0x40` on v5; the stores of a
+loop under `#pragma vector nontemporal` ("no caching at any level, write
+combining") get `mas=0x60`. Their timing is not measured. The array
+prefetch unit has its own per-area control, `dcd` (apb.md).
+
 ## Array prefetch
 
 Measured by `tools/isa-probes/apb.c`, not `bench.py`; details in

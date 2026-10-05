@@ -576,9 +576,13 @@ with `wbs=W`. Then `%b[i]` is the i-th outgoing register *whatever the
 window size*, so nothing needs renaming after register allocation.
 (ia64 instead renames registers in its printed output, `ia64.cc:3566`;
 that is not needed here.) Results come back in the same `%b[0..7]`.
-Caveat: rotating loops (M7) also want `%b[]`; at that point outgoing
-registers must be printed as `%rN` with the final window size (ia64's
-renaming approach), or the loop's rotating area placed elsewhere.
+Caveat: rotating loops (M7) also want `%b[]`. lcc keeps `%b[0..7]` as
+the outgoing registers and, around a pipelined loop, grows the window
+with a second `setwd` and a ring starting at the outgoing pairs, then
+shrinks it back before any call; the proof of concept instead puts the
+ring between the locals and the outgoing pairs (spec/isa/loops.md "For a
+compiler"). Either way the ring must not be above the outgoing pairs at
+a call.
 
 **Static chain** (for nested functions and trampolines): use `%g12`,
 which MCST's libffi already uses for its closures
@@ -599,6 +603,19 @@ Predicates are also preserved (each call gets a fresh predicate file).
 
 **Register allocation order**: prefer low window registers so the window
 stays small (`REG_ALLOC_ORDER`; ia64.h:446 for the same idea).
+`LOCAL_REGNO` (the window registers) alone is not enough: IRA exempts
+such registers from the prologue save cost (`calculate_saved_nregs`,
+ira-color.cc:1818), but LRA's `find_hard_regno_for_1` (lra-assigns.cc,
+the `df_regs_ever_live_p` check) and regrename's `check_new_reg_p`
+(regrename.cc:352) treat a not yet used call-saved register as needing a
+save, so they prefer call-clobbered globals and the outgoing `%b[0..7]`:
+after unrolling, the proof of concept found a leaf daxpy's values in
+`%b[]` while `%r4`–`%r63` stayed unused, and values in `%b[]` block a
+pipelined loop. It exempts `LOCAL_REGNO` in both places and keeps
+regrename out of `%b[]` (`HARD_REGNO_RENAME_OK`); making `%b[0..7]`
+fixed instead broke vector results returned in `%b[0]` (pr123753,
+pr86363 at `-Os`). Under real pressure (a full window) allocation still
+uses `%b[]`.
 
 ### D2. Window size
 
@@ -911,6 +928,16 @@ Written in `.md` with `define_automaton`, `define_cpu_unit`,
   uses 7 automata with `ndfa`, `collapse-ndfa`, `no-comb-vect`
   (c6x.md:267). `automata_option "v"` writes a `.dfa` file showing the
   generated automaton.
+- **Use `(automata_option "ndfa")`**, as ia64 (ia64.md:204) and C6x
+  do: it is needed for correctness of the packing, not only size. The
+  channel exclusions (a load in ALC3 with a store in ALC2, a load in
+  ALC0 with a store in ALC5; bundle.md) make a deterministic automaton
+  reject wide instructions that fit, because it commits to the first
+  free alternative: two loads take ALC0 and ALC2 and the store has
+  nowhere to go, while loads in ALC0 and ALC5 with the store in ALC2
+  fit with three more operations. With `ndfa` the proof of concept's
+  daxpy kernel fits one wide instruction (`docs/spec-poc-findings.md`
+  P8).
 - Declare the channel units with `define_query_cpu_unit` if you want to
   read the chosen channel back (7.5); that also needs
   `#define CPU_UNITS_QUERY 1` in `e2k.h`.
@@ -1171,6 +1198,27 @@ check-free semi-speculative form works.
   (`hwloop_optimize`, c6x.cc:5478, `set_modulo_params`,
   haifa-sched.cc:580) — the closest model for E2K's hardware loop mode.
   Selective scheduling can also pipeline (`-fsel-sched-pipelining`).
+- **Modulo scheduling pitfalls** found by the proof-of-concept back end
+  (spec/isa/loops.md "For a compiler" has the hardware side: schedule
+  with the crossing cost, a kernel with its stores in the last stage
+  needs no `loop_mode`, keep the ring away from the outgoing registers
+  at calls):
+  - *`restrict` cliques hold within one iteration only.* The dependence
+    cliques GCC gives an inlined function's `restrict` parameters order
+    the references of one call, but RTL's `may_alias_p`, which SMS uses
+    for dependences between iterations (ddg.cc:379), believes them
+    across iterations too (tree-ssa-alias.cc:2527); tree-data-ref.cc
+    trusts only clique 1 and `loop->owned_clique` for cross-iteration
+    queries (:3076). `gcc.dg/torture/pr90328.c` failed once pipelined;
+    the proof of concept asks again without the cliques for other ones.
+  - *Dataflow doesn't know that `setbn` renames `%b[]`.* Between a
+    pipelined loop's `setbn` and the one after it, ring names that are
+    also `%b[0..7]` look like the outgoing registers, so a call argument
+    set up in `%b[0]` before the loop was deleted as dead
+    (`pr111048.c`, `va-arg-22.c` at `-Os`). Make the first `setbn` use
+    `%b[0..7]` and the second set them, and make the kernel use every
+    ring name at its end (a value read in the next iteration under
+    another name looks dead).
 - **Rotating registers**: two different things share the name.
   *Window shifting* — each call slides the register window, as SPARC's
   `save`/`restore` and E2K's `call wbs=` do — is handled by hardware and

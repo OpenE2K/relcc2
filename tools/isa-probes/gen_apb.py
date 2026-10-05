@@ -44,7 +44,8 @@ FAPB = dict(dcd=0, fmt=4, mrng=8, d=0, incr=0, ind=0, asz=5, abs=0, disp=0)
 
 def fapb(half, last, f):
     f = {**FAPB, **f}
-    flag = f"ct={int(last)}" if half == "l" else "dpl=0"
+    flag = (f"ct={int(last)}" if half == "l"
+            else f"dpl={f.get('dpl', 0)}")
     return (f"fapb\t{flag}, dcd={f['dcd']}, fmt={f['fmt']}, mrng={f['mrng']}, "
             f"d={f['d']}, incr={f['incr']}, ind={f['ind']}, asz={f['asz']}, "
             f"abs={f['abs']}, disp={f['disp']}")
@@ -291,6 +292,51 @@ def main():
     # far away made the 8C2's kernel loop on the trap: don't.)
     add("incr64", [({"incr": 1, "fmt": 1, "mrng": 1}, None)],
         seq(2, fmt=1), base + [("%aaincr1", (1 << 32) | 1)])
+    # Stores into an area being read: element I of the first array, read
+    # by the I-th mova, is overwritten (with 0x5555000000000000 + 8 * I)
+    # after mova 0 by an ordinary std or an AAU staad (%aad1 = the array,
+    # %aasti1 = 8 * I), with or without a wait before mova I.
+    def st(i, kind):
+        v = [f"addd,0\t0x0, _f64,_lts0 {0x5555000000000000 + 8 * i:#x}, %dr3"]
+        if kind == "std":
+            return [v, ["nop 2"], [f"std,2\t%dr1, {8 * i:#x}, %dr3"]]
+        return [v, ["nop 2"], ["staad,5\t%dr3, %aad1[ %aasti1 ]"]]
+    stsetup = base + [("%aad1", "%dr1")]
+    wait = [["nop 7"]] * 8
+    for kind in ("std", "staad"):
+        for i in (1, 2, 7):
+            setup = stsetup + [("%aasti1", 8 * i)]
+            add(f"st_{kind}{i}", [({}, None)], seq(8), setup,
+                between={0: st(i, kind)})
+            add(f"st_{kind}{i}_wait", [({}, None)], seq(8), setup,
+                between={0: st(i, kind) + wait})
+        # Before the first mova, right after bap: element 0.
+        add(f"st_{kind}0_early", [({}, None)], seq(4),
+            stsetup + [("%aasti1", 0)], between={-1: st(0, kind)})
+    # Element 40 (beyond what 8 movas prefetch), stored after mova 0;
+    # the area's step is 5 doubles (AAINCR1 = 5), so mova 8 reads it.
+    add("st_std40_far", [({"incr": 1}, None)], seq(9),
+        stsetup + [("%aaincr1", 5)], between={0: st(40, "std") + wait})
+    # dpl = 1 in the right half: does it duplicate the left half's area
+    # (the second array is in %aad1)?  "halves" is the dpl = 0 control.
+    add("dpl", [({"d": 0}, {"d": 1, "dpl": 1})],
+        [[mova(0, am=1), mova(2, am=1)], [mova(1, am=1), mova(3, am=1)]],
+        base + [("%aad1", "%dr2")])
+    add("dpl_both", [({"d": 0}, {"d": 0, "dpl": 1})],
+        [[mova(0, am=1), mova(2, am=1)], [mova(1, am=1), mova(3, am=1)]],
+        base)
+    # Cache control: the same reads with dcd 1, 2, 3, warm and cold.
+    for dcd in (1, 2, 3):
+        add(f"dcd{dcd}", [({"dcd": dcd}, None)], seq(4), base)
+        add(f"cold40_dcd{dcd}", [({"dcd": dcd}, None)], seq(4), base, gap=40)
+    # %aabf writes other than 0 between movas (aabf is the 0 case).
+    for v in (1, 0xff, 0xffffffff):
+        add(f"aabf_{v:x}", [({}, None)], seq(4), base, between={
+            1: [[f"adds,0\t0x0, {v:#x}, %r3"], ["aaurw,2\t%r3, %aabf0"],
+                nop7, nop7]})
+    add("aabf1_ff", [({}, None)], seq(4), base, between={
+        1: [["adds,0\t0x0, 0xff, %r3"], ["aaurw,2\t%r3, %aabf1"], nop7,
+            nop7]})
     v3 = list(CASES)
     CASES.clear()
     # v5+: 128-bit movas (movaqp), fmt 5 (quad) and 7 (quad packed),

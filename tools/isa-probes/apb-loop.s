@@ -289,3 +289,62 @@ loopE:
 	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=0, ind=0, asz=5, abs=0, disp=0
 	}
 	.size	loopE, .-loopE
+
+! long loopF(const long *a, unsigned long lsr, long *iters): loopA with
+! %lsr as given, to run epilogue iterations (ecnt) with movas kept on
+! (ldmc = 1): sums a[0..lcnt+ecnt-1].
+	.global	loopF
+	.type	loopF, #function
+	.align	8
+loopF:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  ldisp	%ctpr2, .LFprog
+	  aaurwd,2	%dr0, %aad0
+	  addd,1	0x0, 0x0, %dr8
+	  addd,3	0x0, 0x0, %dr9
+	  addd,4	0x0, 0x0, %dr10
+	}
+	{
+	  disp	%ctpr1, .LFloop
+	  rwd,0	%dr1, %lsr
+	}
+	{
+	  nop 7
+	  bap
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+.LFloop:
+	{
+	  loop_mode
+	  alc	alcf=1, alct=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  movad,0	area=0, ind=0, am=1, be=0, %dr8
+	  addd,0	%dr9, %dr8, %dr9
+	  addd,1	%dr10, 0x1, %dr10
+	}
+	{
+	  nop 7
+	  disp	%ctpr2, disp=0x0
+	}
+	{
+	  addd,0	%dr9, %dr8, %dr0
+	  std,2	%dr2, 0x0, %dr10
+	}
+	{
+	  ct	%ctpr3
+	}
+	.align	8
+.LFprog:
+	{
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=0, ind=0, asz=5, abs=0, disp=0
+	}
+	.size	loopF, .-loopF

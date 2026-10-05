@@ -10,6 +10,9 @@
             loop counters stale
      loopE  as loopA with a given %lsr: what movad returns in epilogue
             iterations (ecnt) for each ldmc and ldovl (spec/isa/loops.md)
+     loopF  loopA with a given %lsr: short loops (lcnt 8, ecnt 31,
+            ldmc 1) run many times, so that some interrupts land in
+            epilogue iterations
 
    After a trap the kernel rebuilds each area's position from the loop
    counters (%ilcr - %lsr), so only loopA stays correct on hardware.
@@ -31,6 +34,7 @@ long loopA (const long *, long, long *);
 long loopB (const long *, long, long *);
 long loopC (const long *, long, long *, char *);
 long loopE (const long *, unsigned long, long *);
+long loopF (const long *, unsigned long, long *);
 
 static volatile long ticks;
 
@@ -103,6 +107,27 @@ main (int argc, char **argv)
       for (long i = 0; i < it && i < 16; i++)
         printf (" %ld%s", out[2 * i], out[2 * i + 1] ? "(tag)" : "");
       printf ("\n");
+    }
+  /* Epilogue iterations with movas kept on (ldmc 1), under the same
+     interrupts: lcnt 8 + ecnt 31 iterations sum a[0..38].  */
+  for (int ldmc = 1; ldmc >= 0; ldmc--)
+    {
+      unsigned long lsr = 8 | 31UL << 32 | 1UL << 37 | (unsigned long) ldmc << 39
+                          | 255UL << 40;
+      long bad = 0, reps2 = 1000000, first = -1, firstit = -1;
+      ticks = 0;
+      for (long r = 0; r < reps2; r++)
+        {
+          long iters = -1, s = loopF (a, lsr, &iters);
+          if (r == 0)
+            first = s, firstit = iters;
+          else if (s != first || iters != firstit)
+            bad++;
+        }
+      printf ("loopF ldmc %d: %ld iterations, sum %ld (%s); %ld of %ld "
+              "runs differ, %ld signals\n", ldmc, firstit, first,
+              first == 39 * 40 / 2 ? "all 39 elements" : "not 1..39", bad,
+              reps2, ticks);
     }
   return 0;
 }

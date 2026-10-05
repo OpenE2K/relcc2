@@ -79,12 +79,24 @@ evict (void)
 }
 
 static void
+init (void)
+{
+  for (int i = 0; i < N; i++)
+    {
+      arr1[i] = 0x8182838485000000UL + 8 * i;
+      arr2[i] = 0x4200000000000000UL + 8 * i;
+    }
+}
+
+static void
 describe (unsigned long v)
 {
   if ((v >> 32) == 0x81828384 && (v & 0xff000000) == 0x85000000)
     printf ("  [a+%lu]", v & 0xffffff);
   else if ((v >> 56) == 0x42 && (v & 0x00ffffffff000000) == 0)
     printf ("  [b+%lu]", v & 0xffffff);
+  else if ((v >> 48) == 0x5555)
+    printf ("  [stored a+%lu]", v & 0xffffff);
 }
 
 static void
@@ -133,12 +145,17 @@ run (const char *name, long (*f) (unsigned long *, void *, void *),
   else if (strncmp (name, "cold", 4) == 0)
     evict ();
   /* Run twice and report the second (warm) run, except for the cases
-     whose first run is the point.  */
+     whose first run is the point.  The st_* cases store into the
+     arrays, so both start from their initial contents every run.  */
+  init ();
   long first = f (out, b1, b2), cycles = first;
   int once = strcmp (name, "pagefault") == 0 || strcmp (name, "signal") == 0
              || strcmp (name, "guard") == 0 || strncmp (name, "cold", 4) == 0;
   if (!once)
-    cycles = f (out, b1, b2);
+    {
+      init ();
+      cycles = f (out, b1, b2);
+    }
   printf (" cycles %ld", cycles);
   if (!once)
     printf (" (first run %ld)", first);
@@ -169,11 +186,6 @@ main (int argc, char **argv)
   sigaction (SIGBUS, &sa, NULL);
   sigaction (SIGFPE, &sa, NULL);
   setvbuf (stdout, NULL, _IOLBF, 0);
-  for (int i = 0; i < N; i++)
-    {
-      arr1[i] = 0x8182838485000000UL + 8 * i;
-      arr2[i] = 0x4200000000000000UL + 8 * i;
-    }
 #define CASE(n, r, a) \
   if (argc < 2 || strcmp (argv[1], #n) == 0) \
     run (#n, apb_##n, r, a);

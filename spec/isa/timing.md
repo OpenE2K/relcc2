@@ -193,6 +193,7 @@ operation every cycle, at full width:
 |---|---|
 | 6 `addd`; 4 `muld`; 4 `faddd`, `fadds`, `fmuld`, `fmul_addd` or `fdtoid`; 4 `faddd` + 2 `addd` | 1 |
 | 2 `paddw` (ALC0, 3 only on v3); 2 `popcntd` (ALC1, 4) | 1 |
+| 2 `add_addd` (ALC1, 4); 2 `add_addd` or `shl_addd` + 4 `addd`: **8 simple integer operations** (4C and 8C2) | 1 |
 | 4 `ldd` or `ldw`; 4 `ldd` + 2 `addd` | 1 |
 | 1 `std` (ALC2 or 5); a store with loads in any allowed channels, far apart | 1 |
 
@@ -235,6 +236,16 @@ A compiler cannot see most addresses, but it can for one base register
 (stack slots, structure fields): don't put two stores whose offsets
 agree modulo 256 within 64 bytes, or a store and a load in the same 32
 bytes, in one instruction.
+
+**Combined operations widen the instruction.** A combined operation is
+two ordinary ones chained in one channel (semantics.md) with the
+latency of both, so it saves no time on a dependent path, but it takes
+one channel slot: with two integer combined operations in ALC1/4 an
+instruction does 8 simple integer operations a cycle instead of 6, and
+4 `fmul_addd` give 8 FP operations a cycle on v3's four FP channels. It
+also leaves the intermediate result unwritten. Where channels limit a
+schedule (pipelined loops), combining is worth up to a third more
+integer work per cycle, and twice the FP work.
 
 ## Memory
 

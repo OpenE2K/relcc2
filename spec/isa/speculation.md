@@ -252,13 +252,14 @@ lock `mas=0x4` (always with `,sm`) and the check `mas=0x3` [lcc].
 | `st` | 5, unlock | ALC2 (ALC5 for quad) | removes the entry of its data register; **does not write memory** |
 | `st` | 4, no check | any store channel | stores without removing entries: a later check of the overwritten bytes passes with the stale value |
 | `ld` (not speculative) | 4, fill | ALC0 | an ordinary load [hw: `mas_mod.c`, 4C and 8C2] |
-| `ld` | 6, I/O | ALC2 | SIGILL `ILL_PRVOPC` (privileged) |
+| `ld` | 6, I/O (MMIO) | ALC2, ALC5 | an access to I/O space, as the kernel's `inb`/`inw`/`inl` do (`asm/io.h`, `MAS_IO_OPERATION`, at `IO_AREA_PHYS_BASE + port`); privileged: SIGILL `ILL_PRVOPC` in user mode [hw] |
+| `st` | 6, I/O (MMIO) | ALC2, ALC5 | the store form, the kernel's `outb`/`outw`/`outl` [source; not run here, see below] |
 | `ld` | 2, 3 or 6 in ALC0 (reserved) | ALC0 | SIGILL `ILL_ILLOPC` |
 | `ld`, `st` | 0 with `m1` (bit 4, 0x10) set | any | an ordinary access: `m1` is ignored |
 
 Not tried, on purpose, on the shared machines: mod 1 (no address
 translation), mod 7 in ALC2/5 and stores with mod 7 (MMU, cache and TLB
-operations, kernel `asm/mas.h`), stores with mod 1 or 6, and the
+operations, kernel `asm/mas.h`), stores with mod 1 or 6 (MMIO), and the
 lock-wait load with mod 5.
 
 With mod 7 a load can move above both a branch and a store: the check,

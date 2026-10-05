@@ -506,8 +506,10 @@ produce slow code: correctness first, then the VLIW work.
   MAS bit 3, a byte-swapped load or store at no cost: `ntohs`, `htonl`
   and friends on network data (`sockaddr_in`, packet headers) become one
   access instead of lcc's mask literal, `sxt` and `pshufb`, 5 cycles
-  shorter on a dependent load path (`spec/isa/semantics.md`,
-  "Byte-swapped memory accesses").
+  shorter on a dependent load path. **Only for accesses aligned to their
+  size** (`MEM_ALIGN`): a misaligned byte-swapped access is SIGBUS where
+  a plain one works, which is why lcc folds only under `-ffast`
+  (`spec/isa/semantics.md`, "Byte-swapped memory accesses").
 - PIC/PIE and TLS exactly as `spec/abi/elf.md` (GOT base via `rrd %ip` +
   `_GLOBAL_OFFSET_TABLE_` literal in the same wide instruction). In PIC
   code reach ifunc symbols through `@GOT`: MCST ld cannot link a

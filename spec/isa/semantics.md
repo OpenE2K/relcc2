@@ -173,42 +173,48 @@ zero-extended; a store writes its low bytes most significant first
 | `ldd,sm …, mas=0xb` (fully speculative, mod 3, + `be`) | 0x0102030405060708 |
 | `sth`, `stw`, `std`, `stb` of 0x0102030405060708 | `07 08`, `05 06 07 08`, `01 02 … 08`, `08` |
 | `ldqp`, `stqp` (v5) | all 16 bytes reversed |
+| any of them at an address not aligned to its size (`ldh` +1, `ldw` +1/+2, `ldd` +3/+4, `sth` +1, `stw` +2, `std` +4) | **SIGBUS**, where the same access without `be` works |
 
 A swapped load costs nothing extra: 64 dependent `ldd` take 309 cycles
-with and without `be`, on both machines. Both qemus agree. lcc emits it
-only for its `__builtin_e2k_ld_*_be` / `st_*_be` builtins
-(`e2kintrin.h`, 32, 64 and 128 bits); `__builtin_bswap64 (*p)` stays a
-plain `ldd` plus `pshufb` with the mask 0x0001020304050607, and
-`*p = __builtin_bswap64 (v)` a `pshufb` plus `std`. Folding the swap into
-the access (`mas_be.c` with `mas_be_loops.c` at `-O3`; same on the 4C
+with and without `be`, on both machines. Both qemus agree on the data
+(`mas_be.c` at `-O3`, 4C and Elbrus-8C2 alike).
+
+lcc folds a byte swap into the access only under **`-ffast`** (from
+`-O2`; none of its component options alone does it), its set of
+"potentially dangerous optimisations": the misaligned case above. At
+`-O3` and `-O4`, `__builtin_bswap64 (*p)` is a plain `ldd` plus `pshufb`
+with the mask 0x0001020304050607, `sa->sin_port = htons (port)` a 64-bit
+mask literal (0x8080808080800001; 0x8080808000010203 for `htonl`),
+`sxt`, `pshufb` and `sth`, and `ntohs`/`ntohl` loads add `sxt`,
+`pshufb`, `sxt`; with `-ffast` each is one `ldh`/`ldw`/`ldd`/`sth`/`stw`
+with `mas=0x8`. Its `__builtin_e2k_ld_*_be` / `st_*_be` builtins
+(`e2kintrin.h`, 32, 64 and 128 bits) always use the bit. What the fold
+buys (`mas_be.c` with `mas_be_loops.c`, both at `-O3`; same on the 4C
 and the 8C2):
 
-- **saves latency on a dependent path**: 64 dependent `ldd` + `pshufb`
+- **latency on a dependent load path**: 64 dependent `ldd` + `pshufb`
   (the swapped value used as the next address) take 629 cycles against
   309 with `mas=0x8`, 5 cycles a step (the shuffle plus the packed →
   integer crossing, timing.md). Scalar code that parses big-endian data
   sits on this path;
-- **on the store side, saves the instructions and a little latency**:
-  lcc's `htons`/`htonl` before a store (`sa->sin_port = htons (port)`)
-  is a 64-bit mask literal (0x8080808080800001, 0x8080808000010203),
-  `sxt`, `pshufb` and `sth`/`stw`, where `sth`/`stw mas=0x8` alone does
-  it (its `ntohs`/`ntohl` loads likewise add `sxt`, `pshufb`, `sxt`).
-  32 steps of swap, store and reload with `ldw mas=0x8` take 437 cycles
-  through lcc's sequence and 421 with `stw mas=0x8` on the 4C, 501 and
-  425 on the 8C2: the store-to-load round trip hides most of the swap.
-  Filling a `sockaddr_in` with a run-time port and address spends two
-  of the four literal slots and four ALU operations on the swaps;
-- **saves nothing in a pipelined loop**: lcc's sum and copy loops over
-  2,048 elements in L1 run at the same speed either way (4C 1.49–1.51
-  ns, 8C2 0.78–0.83 ns per element), the `pshufb` taking a free ALU slot
-  and its latency only a stage; the MAS form is a few instructions
-  shorter (12 against 15 for the sum on v3).
+- **on the store side, instructions and a little latency**: 32 steps of
+  swap, store and reload with `ldw mas=0x8` take 437 cycles through
+  lcc's sequence and 421 with `stw mas=0x8` on the 4C, 501 and 425 on
+  the 8C2 (the store-to-load round trip hides most of the swap); filling
+  a `sockaddr_in` with a run-time port and address spends two of the
+  four literal slots and four ALU operations on the swaps;
+- **nothing in a pipelined loop**: lcc's sum and copy loops over 2,048
+  elements in L1 run at the same speed either way (4C 1.49 ns, 8C2 0.78
+  ns per element), the `pshufb` taking a free ALU slot and its latency
+  only a stage; the MAS form is a few instructions shorter.
 
-So a compiler should fold a byte swap into an adjacent load or store,
-of any width from 16 bits (as GCC's `bswap` pass and patterns like
-x86's `movbe` do): never worse, 5 cycles better on dependent load paths,
-and two to four operations and a literal fewer each time. (The array prefetch unit has its
-own `be` bit in `mova`, apb.md.)
+So a compiler should fold a byte swap into an adjacent load or store of
+16 to 64 bits **when the access is known to be aligned to its size**
+(GCC: `MEM_ALIGN` at least the mode's size; members of packed structures
+and accesses through byte pointers don't qualify): never worse, 5 cycles
+better on dependent load paths, two to four operations and a literal
+fewer each time. (The array prefetch unit has its own `be` bit in
+`mova`, apb.md.)
 
 ## The denormal flag [hw]
 

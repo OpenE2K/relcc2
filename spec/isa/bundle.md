@@ -294,7 +294,13 @@ PLS0 and PLS1 each contain two ELPs and one CLP. PLS2 contains only a CLP.
   | 5 | vdst: also write the result to a register predicate |
   | 0–4 | pdst: the destination `%predN` |
 
-  The result goes to `@p(4 + i)`.
+  The result goes to `@p(4 + i)`. A CLP may read the result of another
+  CLP of the same instruction, **two levels at most**: gas rejects a
+  third ("maximal supported cascading of 2 exceeded for {C/M}LP2",
+  `tc-e2k.c`, `verify_pls_insns`, citing MCST's iset description), so
+  four conditions in one instruction are a tree, `landp (landp (c1, c2),
+  landp (c3, c4))`; lcc never chains three. Run on the 4C and the
+  Elbrus-8C2 for all 16 inputs (`preds.c`, `tree_*`).
 
 ## CDS: condition syllables [decoded for RLP and MRGC on ALC0–5]
 

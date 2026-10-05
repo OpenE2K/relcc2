@@ -175,6 +175,30 @@ as `r == 0 || r == 0x40` [lcc]. **MCST's qemu raises invalid for
   together give the correctly rounded result [guide 10.4.2]; `fsqrts` is
   one.
 
+## Predicate logic [hw, source]
+
+A CLP (bundle.md, "PLS") combines two primary predicates `@pK`, each
+optionally negated: `andp` and `landp` both give `c0 && c1`, `movep`
+copies [source: MCST qemu `translate-pls.c`]. They differ in diagnostic
+(tagged) predicates, which a speculative compare of a diagnostic value
+yields (speculation.md) (`tools/isa-probes/preds.c`, `lp_*`; 4C and
+Elbrus-8C2 alike; a `ct` on the result traps with SIGILL `ILL_ILLOPN` if
+it is diagnostic):
+
+| Operation | first operand | second operand | Result |
+|---|---|---|---|
+| `landp` | false | diagnostic | **false, clean** |
+| `landp` | true | diagnostic | diagnostic |
+| `landp` | diagnostic | false or true | diagnostic |
+| `andp` | false or true | diagnostic | diagnostic |
+
+So only `landp`'s second operand is lazy, as C's `&&` is: a chain
+`landp (landp (c1, c2), c3)` evaluates `c1 && c2 && c3` with each
+condition computed speculatively under the ones before it, which is
+how lcc merges a chain of branches into one (zlib's `longest_match`)
+and how a loop combines an exit test with a second, speculative one.
+Chains are limited to two levels in one instruction (bundle.md).
+
 ## Byte-swapped memory accesses (MAS bit 3) [hw]
 
 The MAS byte of a load or store (`mas=N` in gas) is, for ordinary

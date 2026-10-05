@@ -174,7 +174,13 @@ the second operation, so the producer → consumer distance is 2 more):
 | `muld` | `faddd,0` (FP side) | 6 |
 | `faddd` | `addd,0` | 7 |
 
-Not affected: the same pairs feeding FP consumers, stores, and
+The same conflict delays an FP-side result going to an **FP consumer in
+the other cluster** (`fmuld,0` → `faddd,3`: 6 cycles, 7 with an
+`addd,0` 2 cycles after the `fmuld`), but not one in the producer's
+cluster (`fmuld,0` → `faddd,1`: 4 either way); 4C and Elbrus-8C2 alike
+(`fmuld_to_faddd_*` kernels; the proof-of-concept back end's finding I19:
+a pipelined daxpy kernel at 6.0 cycles an iteration instead of 4.6 from
+this). Not affected: FP consumers in the producer's cluster, stores, and
 operations in any other channel. lcc's `-O0` code hits it (`muls,0`
 then `ldb,0` two cycles later in a hash loop: 17 cycles per iteration
 instead of 13). A scheduler should keep the producer's channel free of
@@ -351,6 +357,7 @@ bytes (isa-score models this).
 |---|---|---|
 | ALU, multiply, divide, load → register use | yes | values correct at any distance ≥ 1, also integer ↔ FP and across clusters |
 | compare → predicated ALU op, `ct ? pred`, `ibranch ? pred` | yes | correct at distance ≥ 1 |
+| compare → predicated op or `merge` in the wide instruction of a **taken return** (`ct %ctpr3` after `return`) | **no** | at distance 1 the op reads the predicate as it was before the compare, with no stall; at distance 2 it reads the new value. A taken branch (`ct %ctpr1`, near or far), a `call`, a `ct` that is not taken and no transfer all wait (`tools/isa-probes/preds.c`, `i17_*`; 4C and Elbrus-8C2; the proof-of-concept back end's finding I17, where a `merge` in a return's instruction broke expat). Keep a compare 2 instructions before any predicate reader in a return's instruction. |
 | compare → `andp`, `andp` → predicated ALU op | yes | correct at distance ≥ 1 |
 | `andp` → `andp` in the same wide instruction (a CLP reading `@p4` written by an earlier CLP) | — | sees the new value: predicate logic chains inside one instruction |
 | compare → `andp` through `%spred0` in the same instruction | ? | read the old (false) value both on the 4C and under qemu; how `%spred` is meant to be used is not known yet |

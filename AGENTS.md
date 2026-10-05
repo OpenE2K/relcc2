@@ -158,6 +158,8 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     gen_icomb.py write their .s files),
                     and byte-swapped accesses (mas_be.c,
                     mas_be.s, mas_be-v5.s, mas_be_loops.c),
+                    and predicate timing and logic (preds.c,
+                    gen_preds.py)
                     and MAS cache hints and kinds (mas_hint.c,
                     gen_mas_hint.py; mas_mod.c, mas_mod.s) and
                     store-to-load timing (stld.c, stld.s),

@@ -11,8 +11,9 @@
                           # context switches as well
 
    On v3, lcc uses APB for loads wider than a byte only when it can
-   assume alignment (-faligned) or checks it at run time.  Check with
-   -S that sumd, suml and dot contain fapb.  */
+   prove or assume alignment (-faligned, -ffast); these loops take plain
+   pointers, so build with -faligned.  Check with -S that sumd, suml and
+   dot contain fapb.  */
 
 #include <signal.h>
 #include <stdio.h>

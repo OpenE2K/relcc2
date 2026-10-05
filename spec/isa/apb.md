@@ -426,10 +426,16 @@ result is the swapped high doubleword). An area with `fmt` 7 makes the
   the iteration (`a[i]`, `a[k*i + c]`, `p++`, structure fields); reads
   of up to 32 bytes per array per iteration (more are split into
   several areas). Up to 32 arrays and 8 increments [guide 6.6].
-- On v3 it needs alignment of 2-, 4- and 8-byte elements: with
-  `-faligned` it assumes it, otherwise it checks the address at run time
-  and keeps a copy of the loop without APB. Byte arrays never got APB in
-  our probes.
+- On v3 it needs alignment of 2-, 4- and 8-byte elements: at `-O3` and
+  `-O4` it uses APB only where it can prove it (global arrays, a pointer
+  passed through `__builtin_assume_aligned`) or with `-faligned` or
+  `-ffast`, which let it assume it; a loop over a plain pointer gets no
+  APB (lcc 1.29.16 for v3 and v3.4c, 1.31.05; no run-time alignment
+  check was seen, although lcc's changelog mentions versioning).
+  On v5 and v6 it uses APB for the same loops without any of these.
+  Byte arrays never got APB in our probes.
+- It always writes `dcd = 0` (`-O3`, `-O4`, `-ffast`, `#pragma vector
+  nontemporal`; v3, v5, v6).
 - Prologue: `ldisp`, the AAU writes, `rwd %lsr`, the first iterations'
   elements loaded with ordinary `ld` into the rotating registers, then
   `bap` and a `ct %ctpr1` into the loop.

@@ -1260,8 +1260,12 @@ check-free semi-speculative form works.
     (`spec/isa/apb.md`, "Stores into a prefetched array").
 
   Size each area for the prefetch depth: about 1 KiB (`asz` 4) lets one
-  stream from memory run at L1 speed; write `dcd = 0`, as lcc does
-  (`spec/isa/apb.md`, "Timing").
+  stream from memory run at L1 speed. `dcd = 0`, as lcc writes, is the
+  safe default; a large array read once can use `dcd` 2 (v3) or 3 (v5)
+  to keep the rest of the cache, at no cost to the stream
+  (`spec/isa/apb.md`, "Timing"). End the loop as lcc does, `{ disp
+  %ctpr2, disp=0x0; aaurw 0, %aabf0 }`: the `%aabf0` write keeps a later
+  trap from restarting the unit.
 
   So APB could come right after counted loops, before modulo scheduling.
   It can be tested only on hardware: MCST's qemu gives wrong results for

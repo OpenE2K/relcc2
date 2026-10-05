@@ -1259,6 +1259,10 @@ check-free semi-speculative form works.
     lcc versions loops that may alias on a run-time pointer comparison
     (`spec/isa/apb.md`, "Stores into a prefetched array").
 
+  Size each area for the prefetch depth: about 1 KiB (`asz` 4) lets one
+  stream from memory run at L1 speed; write `dcd = 0`, as lcc does
+  (`spec/isa/apb.md`, "Timing").
+
   So APB could come right after counted loops, before modulo scheduling.
   It can be tested only on hardware: MCST's qemu gives wrong results for
   APB loops that receive signals.

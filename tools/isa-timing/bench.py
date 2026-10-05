@@ -173,6 +173,21 @@ SCHED = {
     "faddd_to_addd_p0": ("%dr4", [("faddd,0 %dr2, %dr5, %dr2", 2),
                                   ("addd,0 %dr5, %dr5, %dr7", None),
                                   ("addd,1 %dr2, %dr5, %dr2", 12)], 8),
+    # The same conflict with an FP consumer (PoC finding I19): fmuld,0
+    # feeding faddd in the other cluster (ALC3) or the same (ALC1), with
+    # an addd,0 2 cycles after the fmuld, or an addd,2 (no conflict).
+    "fmuld_to_faddd_c1": ("%dr4", [("fmuld,0 %dr2, %dr4, %dr2", 2),
+                                   ("addd,2 %dr5, %dr5, %dr7", None),
+                                   ("faddd,1 %dr2, %dr5, %dr2", 12)], 8),
+    "fmuld_to_faddd_c1_p0": ("%dr4", [("fmuld,0 %dr2, %dr4, %dr2", 2),
+                                      ("addd,0 %dr5, %dr5, %dr7", None),
+                                      ("faddd,1 %dr2, %dr5, %dr2", 12)], 8),
+    "fmuld_to_faddd_x": ("%dr4", [("fmuld,0 %dr2, %dr4, %dr2", 2),
+                                  ("addd,2 %dr5, %dr5, %dr7", None),
+                                  ("faddd,3 %dr2, %dr5, %dr2", 12)], 8),
+    "fmuld_to_faddd_x_p0": ("%dr4", [("fmuld,0 %dr2, %dr4, %dr2", 2),
+                                     ("addd,0 %dr5, %dr5, %dr7", None),
+                                     ("faddd,3 %dr2, %dr5, %dr2", 12)], 8),
     "addd_to_ldd": ("%dr1", [("addd,0 %dr2, %dr5, %dr2", None),
                              ("ldd,0 %dr2, 0x0, %dr2", 12)], 6),
     "faddd_to_fmuld": ("%dr4", [("faddd,0 %dr2, %dr5, %dr2", None),

@@ -22,6 +22,8 @@ void mbe_stores (void *, unsigned long);
 long chase_plain (void *, long, long);
 long chase_be (void *, long, long);
 long chase_shuf (void *, long, long);
+long chase_st_lcc (long, void *);
+long chase_st_mas (long, void *);
 unsigned long sum_shuf (const unsigned long *, long);
 unsigned long sum_be (const unsigned long *, long);
 void copy_shuf (unsigned long *, const unsigned long *, long);
@@ -78,6 +80,17 @@ main (void)
     }
   printf ("64 dependent loads: plain %ld cycles, mas 8 %ld, ldd + pshufb "
           "%ld\n", best[0], best[1], best[2]);
+  static unsigned int word __attribute__ ((aligned (8)));
+  long bs[2] = { 1L << 60, 1L << 60 };
+  for (int r = 0; r < 20; r++)
+    {
+      long a = chase_st_lcc (0x11223344, &word),
+           b = chase_st_mas (0x11223344, &word);
+      bs[0] = a < bs[0] ? a : bs[0];
+      bs[1] = b < bs[1] ? b : bs[1];
+    }
+  printf ("32 x (swap + stw, ldw mas 8): sxt + pshufb + stw %ld cycles, "
+          "stw mas 8 %ld\n", bs[0], bs[1]);
 
   /* Loops over 2,048 elements (16 KiB, in L1 after the first run):
      best of 2,000 runs, in ns per element.  */

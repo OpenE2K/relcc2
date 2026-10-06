@@ -12,8 +12,9 @@ Joins five sources:
                                exactly one rule, in the file of the
                                version that introduced it
   spec/isa/binutils-ops.yaml ISA versions, channels, operand formats
-  spec/isa/timing-e2s.yaml,  measured scheduled latencies (4C, 8C2)
-  spec/isa/timing-e8c2.yaml
+  spec/isa/timing-e2s.yaml,  measured scheduled latencies (4C, 8C2,
+  spec/isa/timing-e8c2.yaml, 2C3)
+  spec/isa/timing-e2c3.yaml
   spec/isa/lcc-usage.yaml    how often lcc's system libraries use it
   tools/**/probes .s files   which hardware probes execute it
 
@@ -34,42 +35,43 @@ ISA = ROOT / "spec" / "isa"
 
 # Probe assembly -> (probe, machines it ran on).  "4C" is the Elbrus 4C
 # (v3), "8C2" the Elbrus-8C2 (v5), "2C3" the Elbrus-2C3 (v6).
+MACHINE_ISET = {"4C": 3, "8C2": 5, "2C3": 6}
 PROBES = {
-    "semantics.s": ("semantics.c", "4C"),
-    "semp.s": ("semp.c", "4C, 8C2"),
-    "sem5.s": ("sem5.c", "8C2"),
-    "semx.s": ("semx.c", "4C, 8C2"),
-    "semx-v4.s": ("semx.c", "8C2"),
-    "semfx.s": ("semfx.c", "4C, 8C2"),
-    "semc.s": ("semc.c", "4C, 8C2"),
-    "semc-v5.s": ("semc.c", "8C2"),
-    "fcomb.s": ("fcomb.c", "4C, 8C2"),
-    "icomb.s": ("icomb.c", "4C, 8C2"),
-    "sqrt.s": ("sqrt.c", "4C, 8C2"),
-    "getf.s": ("getf.c", "4C, 8C2"),
-    "divx.s": ("divx.c", "4C, 8C2"),
-    "stmqp.s": ("stmqp.c", "8C2"),
-    "mas_be.s": ("mas_be.c", "4C, 8C2"),
-    "mas_be-v5.s": ("mas_be.c", "8C2"),
+    "semantics.s": ("semantics.c", "4C, 2C3"),
+    "semp.s": ("semp.c", "4C, 8C2, 2C3"),
+    "sem5.s": ("sem5.c", "8C2, 2C3"),
+    "semx.s": ("semx.c", "4C, 8C2, 2C3"),
+    "semx-v4.s": ("semx.c", "8C2, 2C3"),
+    "semfx.s": ("semfx.c", "4C, 8C2, 2C3"),
+    "semc.s": ("semc.c", "4C, 8C2, 2C3"),
+    "semc-v5.s": ("semc.c", "8C2, 2C3"),
+    "fcomb.s": ("fcomb.c", "4C, 8C2, 2C3"),
+    "icomb.s": ("icomb.c", "4C, 8C2, 2C3"),
+    "sqrt.s": ("sqrt.c", "4C, 8C2, 2C3"),
+    "getf.s": ("getf.c", "4C, 8C2, 2C3"),
+    "divx.s": ("divx.c", "4C, 8C2, 2C3"),
+    "stmqp.s": ("stmqp.c", "8C2, 2C3"),
+    "mas_be.s": ("mas_be.c", "4C, 8C2, 2C3"),
+    "mas_be-v5.s": ("mas_be.c", "8C2, 2C3"),
     "mas_hint.s": ("mas_hint.c", "4C, 8C2"),
-    "mas_mod.s": ("mas_mod.c", "4C, 8C2"),
-    "preds.s": ("preds.c", "4C, 8C2"),
-    "loops.s": ("loops.c", "4C, 8C2"),
-    "loops-v5.s": ("loops.c", "8C2"),
-    "apb.s": ("apb.c", "4C, 8C2"),
-    "apb-v5.s": ("apb.c", "8C2"),
+    "mas_mod.s": ("mas_mod.c", "4C, 8C2, 2C3"),
+    "preds.s": ("preds.c", "4C, 8C2, 2C3"),
+    "loops.s": ("loops.c", "4C, 8C2, 2C3"),
+    "loops-v5.s": ("loops.c", "8C2, 2C3"),
+    "apb.s": ("apb.c", "4C, 8C2, 2C3"),
+    "apb-v5.s": ("apb.c", "8C2, 2C3"),
     "apb-loop.s": ("apb-loop.c", "4C"),
-    "apb-stream.s": ("apb-stream.c", "4C, 8C2"),
-    "spec.s": ("spec.c", "4C, 8C2"),
-    "spec-v5.s": ("spec.c", "8C2"),
-    "samewi.s": ("samewi.c", "4C, 8C2"),
-    "stld.s": ("stld.c", "4C, 8C2"),
+    "apb-stream.s": ("apb-stream.c", "4C, 8C2, 2C3"),
+    "spec.s": ("spec.c", "4C, 8C2, 2C3"),
+    "spec-v5.s": ("spec.c", "8C2, 2C3"),
+    "samewi.s": ("samewi.c", "4C, 8C2, 2C3"),
+    "stld.s": ("stld.c", "4C, 8C2, 2C3"),
     "p28.s": ("p28.c", "4C, 8C2"),
     "abg.s": ("abg.c", "4C, 8C2"),
     "pmu.s": ("pmu.c", "4C"),
-    "v2ops.s": ("v2ops.c", "4C, 8C2"),
-    "ctlops.s": ("ctlops.c", "4C, 8C2"),
-    "semfx-v4.s": ("semfx.c", "8C2"),
+    "v2ops.s": ("v2ops.c", "4C, 8C2, 2C3"),
+    "ctlops.s": ("ctlops.c", "4C, 8C2, 2C3"),
+    "semfx-v4.s": ("semfx.c", "8C2, 2C3"),
     "sem6.s": ("sem6.c", "2C3"),
 }
 ABI_PROBES = "tools/abi/probes"
@@ -169,14 +171,22 @@ def probe_runs(ops):
 
 
 def latencies():
+    """Operation -> latency cells: the first machine's value, and the
+    2C3's where v6 differs from it."""
     out = {}
-    for path, tag in ((ISA / "timing-e2s.yaml", ""), (ISA / "timing-e8c2.yaml",
-                                                      " (v5)")):
+    for path, tag in ((ISA / "timing-e2s.yaml", ""),
+                      (ISA / "timing-e8c2.yaml", " (v5)"),
+                      (ISA / "timing-e2c3.yaml", " (v6)")):
         data = yaml.safe_load(path.read_text())
         for k, v in (data.get("scheduled_latency") or {}).items():
-            name = k[len("v5op_"):] if k.startswith("v5op_") else k
-            if v.get("latency") is not None and name not in out:
-                out[name] = f"{v['latency']}{tag}"
+            name = re.sub(r"^v[56]op_", "", k)
+            if v.get("latency") is None:
+                continue
+            if name not in out:
+                out[name] = [f"{v['latency']}{tag}"]
+            elif tag == " (v6)" and not any(
+                    c.split()[0] == str(v["latency"]) for c in out[name]):
+                out[name].append(f"{v['latency']} (v6)")
     return out
 
 
@@ -242,7 +252,7 @@ def render(rules_doc, ops, owner):
                 does += f" **Use:** {r['use'].strip()}"
             if r.get("see"):
                 does += f" ({r['see'].strip()})"
-            lats = sorted({lat[n] for n in names if n in lat},
+            lats = sorted({c for n in names for c in lat.get(n, [])},
                           key=lambda x: (len(x), x))
             latcell = ", ".join(lats[:3]) + ("…" if len(lats) > 3 else "")
             if r.get("lat"):
@@ -252,10 +262,11 @@ def render(rules_doc, ops, owner):
             ucell = f"{kfmt(u3)} / {kfmt(u5)}" if u3 or u5 else ""
             tags = set().union(*(runs.get(n, set()) for n in names))
             probes = sorted({t[0] for t in tags})
-            # A v4+ operation can only have run on the 8C2.
+            # An operation runs only on machines of its version or later.
             machines = sorted({m for n in names for t in runs.get(n, ())
                                for m in t[1].split(", ")
-                               if not (m == "4C" and min(ops[n]["isets"]) > 3)})
+                               if MACHINE_ISET[m] >= min(ops[n]["isets"])},
+                              key=MACHINE_ISET.get)
             ran = sum(1 for n in names if n in runs)
             if r.get("status"):
                 chk = r["status"].strip()
@@ -267,8 +278,8 @@ def render(rules_doc, ops, owner):
                     chk += f"; {ran} of {len(names)}"
             elif any(n in timed for n in names):
                 chk = "timed only (bench.py)"
-            elif min(isets or {0}) >= 6:
-                chk = "v6+: no hardware here"
+            elif min(isets or {0}) >= 7:
+                chk = "v7: no hardware"
             else:
                 chk = "—"
             out.append(f"| {opcell} | {isets_text(isets)} | {chans_text(chans)}"

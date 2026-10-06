@@ -465,7 +465,7 @@ groups:
   - ops: clpandp clplandp
     does: "Stand-alone predicate logic outside a wide instruction, `clpandp %predA, %predB, %predC` (gas expands it into PLS syllables); runs in user mode."
   - ops: srp crp slrp
-    does: "SS bits that set (`srp`), clear (`crp`) or set a loop (`slrp`) recovery point, with an optional condition `? %predN` (binutils `parse_srp_args`); not used by lcc. In user mode `crp` runs on both machines, `srp` and `slrp` run on the 4C but are SIGILL `ILL_ILLOPC` on the 8C2."
+    does: "SS bits that set (`srp`), clear (`crp`) or set a loop (`slrp`) recovery point, with an optional condition `? %predN` (binutils `parse_srp_args`); not used by lcc. In user mode `crp` runs on every machine, `srp` and `slrp` run on the 4C but are SIGILL `ILL_ILLOPC` on the 8C2 and SIGBUS `BUS_OBJERR` on the 2C3 (v6)."
   - ops: set_mark vfdi
     does: "SS bits (`set_mark` the `sw` bit, `vfdi` a verify bit); both run in user mode without visible effect; meaning not documented."
 

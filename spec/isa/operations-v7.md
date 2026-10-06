@@ -13,7 +13,7 @@ can run them yet. The columns are those of
 
 | Operations | ISA | ALC | Does | Lat | lcc v3 / v5 | Run on hardware |
 |---|---|---|---|---|---|---|
-| `qpackhbss`, `qpackhbus`, `qpackwhss`, `qpackwhus` | 7–8 | 0,1,3,4 | Narrowing packs; the community qemu implements them with the v5 `qpack*` helpers (a's lanes in the high 64 bits). |  |  | v6+: no hardware here |
+| `qpackhbss`, `qpackhbus`, `qpackwhss`, `qpackwhus` | 7–8 | 0,1,3,4 | Narrowing packs; the community qemu implements them with the v5 `qpack*` helpers (a's lanes in the high 64 bits). |  |  | v7: no hardware |
 | `qppermb_lt3`, `qpinss_lt3`, `qpinsd_lt3`, `qplog_0x00_lt3`, `qplog_0x01_lt3`, `qplog_0x02_lt3`, … (259 operations) | 7 | 0–5 | v7 encodings with the table or selector in a literal (binutils); not implemented in qemu. |  |  | v7; no open source |
 | `qpcm2b`, `qpcm2h`, `qpcm2w`, `qpcm2d`, `qps2cmh`, `qps2cmw`, … (38 operations) | 7–8 | 0–5 | Operations no open source implements: dot products (`qpidot*`, `qpbfdots`), bfloat16 conversion (`qpfstobf`), AES (`qpaes*`) and Kuznyechik/Streebog (`qpkuz*`, `qpsbgltr*`, `qpmgme`) rounds, table lookups (`qptbl_*`), masks (`qpcm2*`, `qps2*`). Only names and operand formats (binutils) are known. |  |  | v7; no open source |
 

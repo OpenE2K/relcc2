@@ -58,8 +58,11 @@ CLASSES = {
     "fdivs":  dict(lat=11, to_int=13, fpside=True),
     "fdivd":  dict(lat=14, to_int=16, fpside=True),
     "fsqrt":  dict(lat=12, to_int=14, fpside=True),
-    "conv":   dict(lat=5, to_int=6, fpside=True),
-    "conv6":  dict(lat=6, to_int=7, fpside=True),    # fdtofs
+    # Conversions: 4 to a consumer that reads the result in the format
+    # it was produced in; reading it in another one (a double as a
+    # single, an integer as a double: +1; a single as a double: +2) is
+    # not modelled (timing.md, "Formats").
+    "conv":   dict(lat=4, to_int=6, fpside=True),
     "fcmpr":  dict(lat=2, to_int=4, fpside=True),    # FP compare to a register
     "fminmax": dict(lat=2, to_int=4, fpside=True),   # fmax/fmin, also packed
     "pslow":  dict(lat=4, to_int=6, fpside=True),    # qphminposuh, qpsgn2mskb
@@ -180,8 +183,6 @@ def classify(name):
         return "pslow"
     if n in ("qpfdtoifd", "qpfstoifs"):
         return "fp"
-    if n in ("fdtofs", "qpfdtofs", "qpfdtois", "qpfdtoistr", "qpidtofs"):
-        return "conv6"
     if re.match(r"(f[sdx]|i[sd]|pf|qpf|qpf[sd]|qpi[sd])to", n) or n in ("movif", "movfi"):
         return "conv"
     if re.match(r"(p?fcmp|qpfcmp)", n):

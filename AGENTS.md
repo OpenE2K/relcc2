@@ -118,9 +118,9 @@ differ from v6.
 
 ```
 spec/isa/      ISA spec: operations-v3.md, operations-v5.md (what v4/v5 add:
-               the 8C2), operations-v6.md (v6/v7): every operation, what it
-               does, latency, lcc's use, which probe ran it; generated from
-               operations-v{3,5,6}.yaml,
+               the 8C2), operations-v6.md, operations-v7.md (what v6, v7
+               add): every operation, what it does, latency, lcc's use,
+               which probe ran it; generated from operations-v*.yaml,
                bundle.md (wide instruction format), control-transfer.md
                (branches, calls, CTPRs), semantics.md (what operations
                compute), apb.md (array prefetch), speculation.md
@@ -404,12 +404,13 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   traps only in ALC4/5 and non-speculatively (the same on the 4C). v4,
   v6, v7 are not measured.
 
-### Operation reference (spec/isa/operations-v3.md, -v5.md, -v6.md)
+### Operation reference (spec/isa/operations-v3.md, -v5.md, -v6.md, -v7.md)
 
 Split by our hardware: `operations-v3.yaml` has everything up to v3
 (the 4C), `operations-v5.yaml` what v4 and v5 add (the 8C2; its header
 also covers v5's behaviour changes, lcc's v5 idioms and v3
-equivalents), `operations-v6.yaml` v6 and v7 (no hardware). Every
+equivalents), `operations-v6.yaml` and `operations-v7.yaml` what v6
+and v7 add (no hardware). Every
 operation from v2 on (2,149 after leaving out the v1-only ones: no
 working Elbrus-3M exists) has a rule in the file of the version that
 introduced it (the generator checks this): what it

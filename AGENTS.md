@@ -207,7 +207,7 @@ tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     asmops.c and stackprot.c; tagtrap.c, dbl.c,
                     ldouble.c, ctpr.c, dso/run.sh and elfops/run.sh run
                     on hardware, as do litmus.c, getsp.c and
-                    reenter.c with their .s files)
+                    reenter.c with their .s files, and litmus_rmw.c)
 tools/abi/compat/   ABI compatibility suite: gen.py writes caller/callee
                     pairs, run.py builds every compiler pair and runs them
                     under qemu-e2k or, with --remote, on hardware over SSH;

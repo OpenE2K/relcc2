@@ -104,7 +104,11 @@ exactly 32 units (`asz` 3 + 3 + 4 above = 8 + 8 + 16).
 
 `aaurwd` to a `%aad` sets the base and the rw bits and clears the high
 half (qemu). User code can execute `aaurrd` on the 4C, but every
-register read that way returned 0 [hw], so the state is not observable.
+register read that way returned 0 [hw]; `aaurrq` of a `%aad` does read
+the descriptor back: after `aaurwq` of (0x0123456789abcdef, 0x10) its
+low half is `0x1800456789abcdef`, the base's 48 bits with bits 59–60
+set (semantics.md, "Memory, tag and descriptor operations"; 4C and
+8C2). The positions the unit keeps (`%aaldi`, ...) stay unobservable.
 
 How lcc sets them up:
 

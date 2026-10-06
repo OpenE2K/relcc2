@@ -80,9 +80,9 @@ codebase's size. relcc2 does not decompile anything (see decision 4).
 | MCST's LLVM 13 port (lccrt) | https://github.com/OpenE2K/llvm-lccrt/releases/tag/v8.2 (x86 host binaries from OS Elbrus 8.2) | Its `liblccopt` plugin is lcc's code generator with full debug info. Planned black-box source for timing tables (run under gdb, dump data); never decompile into the repo |
 | Opcode spreadsheet | https://docs.google.com/spreadsheets/d/1p8K5DWBsXTpCDk3TdFwMaTFIadAFuxaH4zfnJXUxK94 | Generated from older binutils that still had the table generator. **Not independent of binutils** |
 
-Hardware: the owner has an Elbrus 4C (v3) and 8CB (v5); they know people
-with v6 machines. v7 is in development. Timings are the same for v1..v5 and
-differ from v6.
+Hardware: the owner has an Elbrus 4C (v3) and 8CB (v5); a contact lends an
+Elbrus-2C3 (v6). v7 is in development. Timings are the same for v1..v5 and
+differ from v6 (measured: timing.md, "Elbrus-2C3 (v6)").
 
 - **4C (v3)**: `ssh -i secrets/id_ed25519 -o IdentitiesOnly=yes
   claude@ringo.lan` (key in untracked `secrets/`, never commit or copy it).
@@ -108,6 +108,16 @@ differ from v6.
   timing matters (`e2k-v3` is generic, only forward compatible); the
   directory names say which lcc builds are tuned for a CPU. Its system
   libatomic is built for the 8C2 (16-byte atomics in hardware).
+- **2C3 (v6)**: a contact's machine on the internet; the owner gives the
+  address and port (not recorded here), the same key. Elbrus-2C3
+  (E2C3, cpu family 6), 2 cores, 2000 MHz (`performance`), 15 GiB,
+  Elbrus Linux 9.5.5, native lcc 1.29.16 (`e2k-2c3-linux`), gdb, perf.
+  Same rules as the others (`~/relcc2/<task>`, short runs, remove only
+  that). Build with `/opt/mcst/lcc-1.29.16.e2k-v6.2c3.linux-6.1`
+  (`v5.8c2` binaries are 8C2-only: "Exec format error"; qemu's v6 is
+  the 16C, so use `v6.16c` builds there). `bench.py`, `run.py`,
+  `profile.py` and `validate.py` take `--ssh-port`; give `validate.py`
+  `--cpu 0` (no core 2).
 - Nearly every Elbrus system ships MCST's lcc as the default compiler (OS
   Elbrus and ALT Linux), so tests may assume lcc on the target.
 - ALT Linux ships no 32-bit or protected-mode (`e2k128`) runtime. Keep those
@@ -118,8 +128,8 @@ differ from v6.
 
 ```
 spec/isa/      ISA spec: operations-v3.md, operations-v5.md (what v4/v5 add:
-               the 8C2), operations-v6.md, operations-v7.md (what v6, v7
-               add): every operation, what it does, latency, lcc's use,
+               the 8C2), operations-v6.md (v6: the 2C3),
+               operations-v7.md: every operation, what it does, latency, lcc's use,
                which probe ran it; generated from operations-v*.yaml,
                bundle.md (wide instruction format), control-transfer.md
                (branches, calls, CTPRs), semantics.md (what operations
@@ -140,7 +150,7 @@ docs/          spec-poc-findings.md: spec problems found by toolchains/gcc-claud
 tools/setup/   install reference toolchains into toolchains/
 tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas;
                     count_lcc_ops.py (lcc-usage.yaml), gen_operations.py
-                    (operations-v{3,5,6}.md)
+                    (operations-v{3,5,6,7}.md)
 tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
 tools/isa-timing/   latency/hazard microbenchmarks run on hardware over SSH
 tools/isa-score/    scores a compiled program's use of E2K parallelism:
@@ -159,6 +169,8 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     loops-cases.h) and memory accesses in one wide
                     instruction (samewi.c, samewi.s) and every v5
                     operation (sem5.c; gen_sem5.py writes sem5.s)
+                    and every v6 operation (sem6.c; gen_sem6.py
+                    writes sem6.s)
                     and global register rotation (abg.c, abg.s),
                     and combined FP and integer operations
                     (fcomb.c, icomb.c; gen_fcomb.py and
@@ -265,6 +277,8 @@ python3 tools/abi/compat/run.py toolchains/compat/gen
 python3 tools/abi/compat/run.py toolchains/compat/gen --target v3 \
     --remote claude@ringo.lan -o toolchains/compat/ringo-v3
                                                   # on the 4C, ~30 s: 0 unexpected
+                                                  # (also on the 2C3: --target
+                                                  # v6.2c3 --ssh-port ...)
 python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
 python3 tools/isa-score/selftest.py               # stall rule vs timing-e2s.yaml: ok
 python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
@@ -401,8 +415,22 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   denormal flag (also v3; no emulator does); global register rotation
   (`abg`, `%bgr`; loops.md) is an x87-style stack: `abgd` pushes and
   traps on overflow, `abgi` pops, reading an invalid rotating global
-  traps only in ALC4/5 and non-speculatively (the same on the 4C). v4,
-  v6, v7 are not measured.
+  traps only in ALC4/5 and non-speculatively (the same on the 4C).
+  The Elbrus-2C3 (v6; timing.md "Elbrus-2C3 (v6)", semantics.md "v6
+  operations"): every v3–v5 operation computes the same (about 195,000
+  probe lines identical to the 8C2's) and every v3/v5 latency, crossing,
+  stall rule and CTPR delay holds, except: **L1 loads 5 cycles** in
+  either cluster, `ldqp` through L1 (5, four a cycle), integer compare /
+  predicate logic → predicated op 1, no divider–ALC5 or store+load
+  32-byte block conflicts, `fxsqrtu` 18; L2 13 cycles (2 MiB, no L3),
+  memory ~220; APB areas deliver 32 bytes a cycle and keep their
+  positions across traps; a late `%lsr` write ends the loop after one
+  iteration; a compare before a taken return is seen. The v6 operations
+  (`sem6.c`): fused `fma*` (5 cycles, rounded once), `clmul` 4, packed
+  compares into a predicate (any/all lane, 4 / 5 to `ct`), `qpsrad`,
+  `qpcext`, `pmrgp`, `qpcheck*` (SIGBUS unless equal), x87 helpers
+  `mkfsw`/`modbgv`/`vfbgv`; the community qemu gets the packed FMAs
+  wrong. The compat suite passes there. v4 and v7 are not measured.
 
 ### Operation reference (spec/isa/operations-v3.md, -v5.md, -v6.md, -v7.md)
 
@@ -410,7 +438,7 @@ Split by our hardware: `operations-v3.yaml` has everything up to v3
 (the 4C), `operations-v5.yaml` what v4 and v5 add (the 8C2; its header
 also covers v5's behaviour changes, lcc's v5 idioms and v3
 equivalents), `operations-v6.yaml` and `operations-v7.yaml` what v6
-and v7 add (no hardware). Every
+(the 2C3) and v7 (no hardware) add. Every
 operation from v2 on (2,149 after leaving out the v1-only ones: no
 working Elbrus-3M exists) has a rule in the file of the version that
 introduced it (the generator checks this): what it
@@ -421,7 +449,8 @@ mnemonics in lcc 1.29.16's v3 and v5 sysroot libraries: about 360
 operations) and the probes whose assembly runs each operation, and
 fails if an operation has no rule or two. Every v3–v5 user-mode
 operation has run on hardware except `movaq` (apb.md) and `mmurr`
-(monitors.md); v6/v7 ones come from the community qemu or are known by
+(monitors.md), and every v6 ALU operation but `ibranchd`/`icalld` ran
+on the 2C3; v7 ones come from the community qemu or are known by
 name only. The v1–v2-only operations are SIGILL on v3 and v5 (except two
 reused encodings); `setsft` is a software trap (SIGTRAP).
 
@@ -445,7 +474,9 @@ possible/achieved score does not. `validate/` (about a minute on the
 model is within 6% once `profile.py` measures which transfers were
 taken (a second sampled run, EXEC − `NO_CT_TAKEN`): fetch bubbles are
 taken `ibranch`es (6 cycles) and taken `ct`s waiting for a late
-prepare, nothing else (control-transfer.md, "Instruction fetch"). v6/v7 use v3 latencies.
+prepare, nothing else (control-transfer.md, "Instruction fetch"). v6
+uses the 2C3's latencies (`validate.py --target v6.2c3`: within 1%
+except two APB loops, 0.85 and 1.19); v7 uses v6's.
 
 ### ABI (spec/abi) — written, checked by the compat suite under qemu-e2k and on the 4C (v3)
 
@@ -576,6 +607,10 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 None at the moment.
 
 ## Gotchas
+
+- On the 2C3 `clock_gettime` advances in about 330 ns steps (clock source
+  `sclkr`): time short loops with `%clkr` there (`mas_be.c`'s ns figures
+  read 0).
 
 - MCST's qemu cannot deliver hardware exceptions as signals: division by
   zero, a taken `ct` through an empty CTPR, a too-small `setwd`, a

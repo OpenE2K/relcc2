@@ -251,7 +251,7 @@ def main():
         + check(8))
     # Capacity: N speculative loads into %dr16.. from b + 8i, then a
     # check of the first (into %dr16, from b).
-    for n in (2, 4, 8, 16, 24, 32, 48):
+    for n in (2, 4, 8, 16, 24, 32, 33, 40, 44, 48):
         groups = list(inv)
         for i in range(n):
             groups += [[f"ldd,{(0, 3)[i % 2]},sm\t%dr2, {8 * i:#x}, "
@@ -358,7 +358,7 @@ def main():
     qadd("q_ldd_check", inv + qlock() + check(8))
     # Capacity in quad entries: N quad locks into %qpr16.., then a check
     # of the first.
-    for n in (16, 24, 32, 40):
+    for n in (16, 24, 32, 33, 40, 44, 48):
         groups = list(inv)
         for i in range(n):
             groups += [[f"ldqp,{(0, 3)[i % 2]},sm\t%dr2, {16 * i:#x}, "

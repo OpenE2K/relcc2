@@ -1566,6 +1566,194 @@ spec_q_cap32:
 	}
 	.size	spec_q_cap32, .-spec_q_cap32
 
+	.global	spec_q_cap33
+	.type	spec_q_cap33, #function
+	.align	8
+spec_q_cap33:
+	{
+	  setwd	wsz = 0x40, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,1	0x0, 0x0, %dr8
+	  addd,2	0x0, 0x0, %dr9
+	  rrs,0	%pfpfr, %r10
+	}
+	{
+	  nop 5
+	}
+	{
+	  ands,0	%r10, 0xffffffc0, %r11
+	}
+	{
+	  rws,0	%r11, %pfpfr
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr4
+	}
+	{
+	  addd,0	0x0, 0x0, %dr11
+	}
+	{
+	  mmurw,2	%dr11, %dam_inv
+	}
+	{
+	  nop 7
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x0, %qpr16, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x10, %qpr17, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x20, %qpr18, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x30, %qpr19, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x40, %qpr20, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x50, %qpr21, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x60, %qpr22, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x70, %qpr23, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x80, %qpr24, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x90, %qpr25, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0xa0, %qpr26, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0xb0, %qpr27, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0xc0, %qpr28, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0xd0, %qpr29, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0xe0, %qpr30, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0xf0, %qpr31, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x100, %qpr32, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x110, %qpr33, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x120, %qpr34, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x130, %qpr35, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x140, %qpr36, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x150, %qpr37, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x160, %qpr38, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x170, %qpr39, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x180, %qpr40, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x190, %qpr41, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x1a0, %qpr42, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x1b0, %qpr43, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x1c0, %qpr44, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x1d0, %qpr45, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x1e0, %qpr46, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x1f0, %qpr47, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x200, %qpr48, mas=0x4
+	}
+	{
+	  nop 7
+	}
+	{
+	  ldqp,5	%dr2, 0x0, %qpr16, mas=0x3
+	  rbranch	.Lq_cap33_locked
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  ibranch	.Lq_cap33_out
+	}
+.Lq_cap33_locked:
+	{
+	  addd,1	0x0, 0x1, %dr9
+	  rrd,0	%clkr, %dr5
+	}
+.Lq_cap33_out:
+	{
+	  nop 7
+	  rrs,0	%pfpfr, %r12
+	}
+	{
+	  nop 5
+	  gettagd,2	%dr8, %r6
+	  puttagd,5	%dr8, 0x0, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x0, %dr7
+	  std,5	%dr0, 0x8, %dr6
+	}
+	{
+	  std,2	%dr0, 0x10, %dr9
+	  stw,5	%dr0, 0x18, %r12
+	  rws,0	%r10, %pfpfr
+	}
+	{
+	  subd,0	%dr5, %dr4, %dr0
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	spec_q_cap33, .-spec_q_cap33
+
 	.global	spec_q_cap40
 	.type	spec_q_cap40, #function
 	.align	8
@@ -1774,3 +1962,457 @@ spec_q_cap40:
 	  ct	%ctpr3
 	}
 	.size	spec_q_cap40, .-spec_q_cap40
+
+	.global	spec_q_cap44
+	.type	spec_q_cap44, #function
+	.align	8
+spec_q_cap44:
+	{
+	  setwd	wsz = 0x40, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,1	0x0, 0x0, %dr8
+	  addd,2	0x0, 0x0, %dr9
+	  rrs,0	%pfpfr, %r10
+	}
+	{
+	  nop 5
+	}
+	{
+	  ands,0	%r10, 0xffffffc0, %r11
+	}
+	{
+	  rws,0	%r11, %pfpfr
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr4
+	}
+	{
+	  addd,0	0x0, 0x0, %dr11
+	}
+	{
+	  mmurw,2	%dr11, %dam_inv
+	}
+	{
+	  nop 7
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x0, %qpr16, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x10, %qpr17, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x20, %qpr18, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x30, %qpr19, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x40, %qpr20, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x50, %qpr21, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x60, %qpr22, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x70, %qpr23, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x80, %qpr24, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x90, %qpr25, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0xa0, %qpr26, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0xb0, %qpr27, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0xc0, %qpr28, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0xd0, %qpr29, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0xe0, %qpr30, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0xf0, %qpr31, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x100, %qpr32, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x110, %qpr33, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x120, %qpr34, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x130, %qpr35, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x140, %qpr36, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x150, %qpr37, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x160, %qpr38, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x170, %qpr39, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x180, %qpr40, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x190, %qpr41, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x1a0, %qpr42, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x1b0, %qpr43, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x1c0, %qpr44, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x1d0, %qpr45, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x1e0, %qpr46, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x1f0, %qpr47, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x200, %qpr48, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x210, %qpr49, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x220, %qpr50, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x230, %qpr51, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x240, %qpr52, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x250, %qpr53, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x260, %qpr54, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x270, %qpr55, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x280, %qpr56, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x290, %qpr57, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x2a0, %qpr58, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x2b0, %qpr59, mas=0x4
+	}
+	{
+	  nop 7
+	}
+	{
+	  ldqp,5	%dr2, 0x0, %qpr16, mas=0x3
+	  rbranch	.Lq_cap44_locked
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  ibranch	.Lq_cap44_out
+	}
+.Lq_cap44_locked:
+	{
+	  addd,1	0x0, 0x1, %dr9
+	  rrd,0	%clkr, %dr5
+	}
+.Lq_cap44_out:
+	{
+	  nop 7
+	  rrs,0	%pfpfr, %r12
+	}
+	{
+	  nop 5
+	  gettagd,2	%dr8, %r6
+	  puttagd,5	%dr8, 0x0, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x0, %dr7
+	  std,5	%dr0, 0x8, %dr6
+	}
+	{
+	  std,2	%dr0, 0x10, %dr9
+	  stw,5	%dr0, 0x18, %r12
+	  rws,0	%r10, %pfpfr
+	}
+	{
+	  subd,0	%dr5, %dr4, %dr0
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	spec_q_cap44, .-spec_q_cap44
+
+	.global	spec_q_cap48
+	.type	spec_q_cap48, #function
+	.align	8
+spec_q_cap48:
+	{
+	  setwd	wsz = 0x40, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,1	0x0, 0x0, %dr8
+	  addd,2	0x0, 0x0, %dr9
+	  rrs,0	%pfpfr, %r10
+	}
+	{
+	  nop 5
+	}
+	{
+	  ands,0	%r10, 0xffffffc0, %r11
+	}
+	{
+	  rws,0	%r11, %pfpfr
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr4
+	}
+	{
+	  addd,0	0x0, 0x0, %dr11
+	}
+	{
+	  mmurw,2	%dr11, %dam_inv
+	}
+	{
+	  nop 7
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x0, %qpr16, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x10, %qpr17, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x20, %qpr18, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x30, %qpr19, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x40, %qpr20, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x50, %qpr21, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x60, %qpr22, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x70, %qpr23, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x80, %qpr24, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x90, %qpr25, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0xa0, %qpr26, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0xb0, %qpr27, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0xc0, %qpr28, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0xd0, %qpr29, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0xe0, %qpr30, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0xf0, %qpr31, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x100, %qpr32, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x110, %qpr33, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x120, %qpr34, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x130, %qpr35, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x140, %qpr36, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x150, %qpr37, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x160, %qpr38, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x170, %qpr39, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x180, %qpr40, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x190, %qpr41, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x1a0, %qpr42, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x1b0, %qpr43, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x1c0, %qpr44, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x1d0, %qpr45, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x1e0, %qpr46, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x1f0, %qpr47, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x200, %qpr48, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x210, %qpr49, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x220, %qpr50, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x230, %qpr51, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x240, %qpr52, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x250, %qpr53, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x260, %qpr54, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x270, %qpr55, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x280, %qpr56, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x290, %qpr57, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x2a0, %qpr58, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x2b0, %qpr59, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x2c0, %qpr60, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x2d0, %qpr61, mas=0x4
+	}
+	{
+	  ldqp,0,sm	%dr2, 0x2e0, %qpr62, mas=0x4
+	}
+	{
+	  ldqp,3,sm	%dr2, 0x2f0, %qpr63, mas=0x4
+	}
+	{
+	  nop 7
+	}
+	{
+	  ldqp,5	%dr2, 0x0, %qpr16, mas=0x3
+	  rbranch	.Lq_cap48_locked
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr5
+	}
+	{
+	  ibranch	.Lq_cap48_out
+	}
+.Lq_cap48_locked:
+	{
+	  addd,1	0x0, 0x1, %dr9
+	  rrd,0	%clkr, %dr5
+	}
+.Lq_cap48_out:
+	{
+	  nop 7
+	  rrs,0	%pfpfr, %r12
+	}
+	{
+	  nop 5
+	  gettagd,2	%dr8, %r6
+	  puttagd,5	%dr8, 0x0, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x0, %dr7
+	  std,5	%dr0, 0x8, %dr6
+	}
+	{
+	  std,2	%dr0, 0x10, %dr9
+	  stw,5	%dr0, 0x18, %r12
+	  rws,0	%r10, %pfpfr
+	}
+	{
+	  subd,0	%dr5, %dr4, %dr0
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	spec_q_cap48, .-spec_q_cap48

@@ -102,7 +102,8 @@ main (int argc, char **argv)
       Q (q_match) Q (q_match_3_2) Q (q_match_2_5) Q (q_nosm) Q (q_lock7)
       Q (q_store_lo) Q (q_store_hi) Q (q_store_next) Q (q_twice)
       Q (q_stqp_over_ldd) Q (q_ldd_check)
-      Q (q_cap16) Q (q_cap24) Q (q_cap32) Q (q_cap40)
+      Q (q_cap16) Q (q_cap24) Q (q_cap32) Q (q_cap33) Q (q_cap40)
+      Q (q_cap44) Q (q_cap48)
       return 0;
     }
 #endif
@@ -208,7 +209,7 @@ main (int argc, char **argv)
   run ("k_trap", spec_k_trap, "no fault (control)", (long) &cell[0],
        (long) big, 42);
   K (k_cap2) K (k_cap4) K (k_cap8) K (k_cap16) K (k_cap24) K (k_cap32)
-  K (k_cap48)
+  K (k_cap33) K (k_cap40) K (k_cap44) K (k_cap48)
 
   /* MAS mod 7 and mod 4 lock loads from a.  */
 #define LOCKS(n) \

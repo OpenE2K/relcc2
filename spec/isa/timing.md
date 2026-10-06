@@ -339,16 +339,16 @@ Measured with `tools/isa-probes/mas_hint.c` (hand-written loops,
 64-byte line, then rereading a hot working set (ns per line; the 4C on
 one node):
 
-| Access | 4C stream | 4C hot set after it | 8C2 stream | 8C2 hot set after it |
-|---|---|---|---|---|
-| `ldd` | 4.8 | evicted (256 KiB: 16 → 121) | 2.22 | evicted, from L1, L2 and L3 |
-| `ldd mas=0x20` | 4.4 | evicted (48 KiB partly kept) | 2.25 | evicted |
-| `ldd mas=0x40` | 7.6 | **kept** | 2.15 | evicted |
-| `ldd mas=0x60` | 7.6 | **kept** | **1.77** | **kept** (48 KiB to 4 MiB) |
-| `std` | 12.5 | evicted | 4.0 | evicted |
-| `std mas=0x20` | 12.3 | evicted | 4.0 | evicted |
-| `std mas=0x40` | 11.4 | **kept** | 3.8 | evicted |
-| `std mas=0x60` | 12.9 | **kept** | **3.0** | **kept** |
+| Access | 4C stream | 4C hot set after it | 8C2 stream | 8C2 hot set after it | 2C3 stream | 2C3 hot set after it |
+|---|---|---|---|---|---|---|
+| `ldd` | 4.8 | evicted (256 KiB: 16 → 121) | 2.22 | evicted, from L1, L2 and L3 | 1.42 | evicted (48 KiB too) |
+| `ldd mas=0x20` | 4.4 | evicted (48 KiB partly kept) | 2.25 | evicted | 1.41 | 48 KiB kept, larger evicted |
+| `ldd mas=0x40` | 7.6 | **kept** | 2.15 | evicted | 1.40 | **kept** (to 1 MiB) |
+| `ldd mas=0x60` | 7.6 | **kept** | **1.77** | **kept** (48 KiB to 4 MiB) | 1.40 | **kept** |
+| `std` | 12.5 | evicted | 4.0 | evicted | 4.3 | evicted |
+| `std mas=0x20` | 12.3 | evicted | 4.0 | evicted | 4.3 | evicted |
+| `std mas=0x40` | 11.4 | **kept** | 3.8 | evicted | **3.4** | **kept** |
+| `std mas=0x60` | 12.9 | **kept** | **3.0** | **kept** | **2.9** | **kept** |
 
 So the hints behave as APB's `dcd` does (apb.md): on the 4C, bypassing
 L2 (`0x40`) or everything (`0x60`) keeps other data cached at the price
@@ -357,7 +357,10 @@ of about 1.6× slower streamed loads (stores cost nothing extra); on the
 against 2.22 ns a line, stores 3.0 against 4.0), while `0x20` and
 `0x40` act as plain accesses. For data read or written once, `0x60` is
 the hint to use on v5 and `0x40` on v3; lcc's automatic `0x20` changes
-little on either.
+little on either. On the 2C3 (v6; 2 MiB L2, no L3) every hint streams
+loads at the same speed (1.4 ns a line), `0x40` and `0x60` keep the hot
+set for loads and stores alike, and they make streamed stores faster
+(3.4 and 2.9 against 4.3 ns): there either is free.
 
 **Store to load** (`tools/isa-probes/stld.c`, 4C and 8C2 alike): a load
 of a doubleword just stored, issued in the **very next** instruction,

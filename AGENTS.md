@@ -166,7 +166,13 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     gen_sqrt.py, check_sqrt.py on the host)
                     and MAS cache hints and kinds (mas_hint.c,
                     gen_mas_hint.py; mas_mod.c, mas_mod.s) and
-                    store-to-load timing (stld.c, stld.s),
+                    store-to-load timing (stld.c, stld.s)
+                    and the remaining v3-v5 user-mode operations:
+                    scalar (semx.c, gen_semx.py, semx-sets.h;
+                    check_semx.c on an x86 host; divx.c, divx.s),
+                    80-bit (semfx.c, gen_semfx.py; check_semfx.c on
+                    an x86 host), memory, tag and descriptor
+                    (semc.c, gen_semc.py; stmqp.c, stmqp.s),
                     run on hardware; -DSPEC_V5, -DLOOPS_V5, -DAPB_V5
                     builds add v5 cases
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
@@ -295,7 +301,7 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   (the guide is wrong), `merge` picks the first operand when the
   predicate is false, shift counts are modulo the width, division by
   zero is SIGFPE, FP `lt`/`le` signal on quiet NaNs, `fmax`/`fmin` are
-  x86-style, `fmul_add` rounds twice, combined operations `X_Y a, b, c` are two ordinary operations chained, `Y(c, X(a, b))` (encoded as the first one's opcode plus the second's; `_sub` is c − (a X b), `_rsub` (a X b) − c), MAS bit 3 makes any aligned load or store byte-swapped at no cost (misaligned: SIGBUS; lcc folds `bswap` into it only under `-ffast`; it saves 5 cycles on dependent load paths, nothing in pipelined loops), `fcmpud*f` is the quiet FP compare into a register (x86 ZF/PF/CF layout; MCST's qemu wrongly raises invalid), `cmpand*` tests `a & b`, `movtd`/`getpl` to a CTPR only in ALC0, a taken `ibranch` hides a stall in its own instruction; memory accesses to one address in one wide instruction take effect ALC2 before ALC5 and a load before a store in its cluster (a load in ALC5 sees an ALC2 store; the ALC5 store of two wins; bundle.md). Speculation
+  x86-style, `fmul_add` rounds twice, combined operations `X_Y a, b, c` are two ordinary operations chained, `Y(c, X(a, b))` (encoded as the first one's opcode plus the second's; `_sub` is c − (a X b), `_rsub` (a X b) − c), MAS bit 3 makes any aligned load or store byte-swapped at no cost (misaligned: SIGBUS; lcc folds `bswap` into it only under `-ffast`; it saves 5 cycles on dependent load paths, nothing in pipelined loops), `fcmpud*f` is the quiet FP compare into a register (x86 ZF/PF/CF layout; MCST's qemu wrongly raises invalid), `cmpand*` tests `a & b`, `movtd`/`getpl` to a CTPR only in ALC0, a taken `ibranch` hides a stall in its own instruction; every other v3 user-mode ALU operation has a checked model (`semx.c`, `semfx.c`, `semc.c`: x86 SSE and x87 references match every line on the 4C and 8C2): `smulx`/`umulx` 32×32→64, `insfs`/`insfd` field insert, 64÷32 `sdivx`/`udivx`/`smodx`/`umodx` (SIGFPE on a quotient that doesn't fit; the remainders by a leading-zero shift rule), `fdtoifd`/`fstoifs` = `roundsd`, `fscale*` (v4) = `ldexp`, the `*_f{b,h,w,d}` forms return x86 EFLAGS and `cctop*` test them, the 80-bit `fx*` operations are exactly x87 code (an `fxadddd` rounds to 64 bits, then to double), the protected-mode, segment and privileged loads and stores fault, `stmqp` (v5) is a byte-masked store that needs 16-byte alignment; memory accesses to one address in one wide instruction take effect ALC2 before ALC5 and a load before a store in its cluster (a load in ALC5 sees an ALC2 store; the ALC5 store of two wins; bundle.md). Speculation
   (`spec/isa/speculation.md`, hw): `,sm` faults give diagnostic values
   that trap (SIGILL `ILL_ILLOPN`) only at a non-speculative use,
   including a diagnostic predicate; `ld,sm` is semi-speculative (pages

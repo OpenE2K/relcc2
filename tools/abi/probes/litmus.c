@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define LINE __attribute__ ((aligned (64)))
 
@@ -228,7 +229,8 @@ static void *
 q_read (void *arg)
 {
   (void) arg;
-  pin (cpu[0] + 2);
+  /* A third CPU, or the first one's on a two-core machine (the 2C3).  */
+  pin (cpu[0] + 2 < sysconf (_SC_NPROCESSORS_ONLN) ? cpu[0] + 2 : cpu[0]);
   while (!done)
     {
       unsigned __int128 v = __atomic_load_n (&q, __ATOMIC_ACQUIRE);

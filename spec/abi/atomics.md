@@ -72,6 +72,14 @@ loop around a **locked load** and an **unlocking store**. lcc's
 | seq_cst store | release store, then `wait st_c = 1` |
 | fence of any order, `__sync_synchronize` | `wait ld_c = 1, st_c = 1` |
 
+lcc's code for the 8C2 (v5) adds `sal = 1, sas = 1` (the v5+ `wait`
+bits, bundle.md) to the release and seq_cst stores' `wait`; its code for
+the 2C3 (v6) is the v3 code above, without them. Read-modify-writes
+are the same on all three. v6 has MAS encodings for load-acquire and
+store-release (kernel `asm/mas.h`: `MAS_LOAD_ACQUIRE_V6`,
+`MAS_STORE_RELEASE_V6`, bit 4 set with `mod` 3) and a "watch for
+modification" load, but lcc 1.29.16 doesn't use them.
+
 `wait` waits for the completion of earlier loads (`ld_c`) and stores
 (`st_c`). lcc 1.31 also has `__builtin_e2k_read_barrier`,
 `_write_barrier`, `_mem_barrier` and `_barrier`, each a compiler barrier
@@ -106,7 +114,10 @@ counts are low because the two threads rarely overlap closely, so
 (v5, 300,000 tries per variant, built for v3 and for v5) gives the same
 picture with far more SB outcomes (870 to 5,052, against 5 on the 4C),
 none for MP or LB, and once more an MP outcome with both stores in one
-instruction.
+instruction. The Elbrus-2C3 (v6, its two cores, 200,000 tries, built for
+the 2C3) too: SB 326 and 263 (in one instruction), none with a `wait`,
+none for MP (including release/acquire) or LB; its 16-byte atomics
+(inline, lock-free) count exactly with no torn read.
 
 For a compiler on v3 that means: seq_cst stores and fences need the
 `wait` (or a locked read-modify-write); acquire loads and release

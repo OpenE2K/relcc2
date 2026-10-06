@@ -514,7 +514,14 @@ produce slow code: correctness first, then the VLIW work.
   "Other scalar operations" and "80-bit operations", all checked on the
   4C and the 8C2): `smulx`/`umulx` for `mulsidi3`/`umulsidi3` (lcc uses
   them for `(long) a * b`); `insfs`/`insfd` for `insv` (lcc stores a
-  bit-field with `insf` and a rotate back, `scl`); `fscales`/`fscaled`
+  bit-field with `insf` and a rotate back, `scl`); `getfd`/`getfs` for
+  `extzv`/`extv` and the `zero_extract`/`sign_extract` that combine
+  makes of shift-and-mask and shift-pair idioms, and for `and` with a
+  low mask wider than 32 bits (a 16-bit descriptor instead of lcc's
+  64-bit literal); the descriptor's BYTE field must be ((offset + len −
+  1) mod width) / 8 or v3 sign-extends from the wrong bit, and on v5
+  `getfz` also covers masks with up to 7 low zeros
+  (`spec/isa/semantics.md`, "Field extract"); `fscales`/`fscaled`
   for `ldexp<mode>3` on v4+ with `-fno-math-errno` (lcc: `scalbnf`
   under `-ffast`). The 64 ÷ 32 `sdivx`/`udivx`/`smodx`/`umodx` trap on
   quotients that don't fit, so they suit only proven ranges; lcc

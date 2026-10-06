@@ -237,7 +237,15 @@ or ALC5; without `,sm` no entry; mod 7 works; a second check reloads.
 Entries are per register, not per size: a doubleword check (`ldd …
 %drN, mas=0x3`) of a quad-locked register finds the entry, and a
 `stqp` over a doubleword entry removes it. A quad entry counts as one
-of the 32 (32 quad locks fit, 40 don't).
+of the 32: 32 quad locks always fit, 40 never do, and a 33rd is
+sometimes kept (2 runs in 3; `q_cap33`).
+
+**v6** [hw: Elbrus-2C3, `spec.c` and `./spec v5`]: every case gives the
+8C2's result (values, tags, `%MLOCK`, flags, signals; only cycles
+differ), with the same 32 doubleword entries (`k_cap32` kept, `k_cap33`
+lost, every run). Quad entries vary more: 33 to 44 quad locks sometimes
+keep the first entry and 48 never do. A compiler should count on 32
+entries; a lost entry only makes the check reload.
 
 Other MAS kinds [hw; qemu `mas-format.h`]. lcc 1.29.16 emits only the
 lock `mas=0x4` (always with `,sm`) and the check `mas=0x3` [lcc].
@@ -359,5 +367,5 @@ where the guard is false.
 
 - Quad lock and check loads on v3 (`ldq` exists only in protected
   mode there).
-- v5+ (`masf4` encodings on v6, partial speculative loads across pages on
-  v7, kernel `cpu_features.h`).
+- `masf4` encodings on v6, partial speculative loads across pages on
+  v7 (kernel `cpu_features.h`).

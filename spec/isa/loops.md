@@ -64,7 +64,9 @@ signal context [source], and they are scratch across calls
 `rwd %lsr` takes 4 cycles to take effect: a `rrd %lsr` 1–3 cycles later
 reads the old value ([timing.md](timing.md)), and a loop whose first
 `alc` comes 1–3 cycles after the write runs **one iteration too many**
-(6 instead of 5) [hw]. Write `%lsr` at least 4 cycles before the loop.
+(6 instead of 5) [hw]. On v6 (the Elbrus-2C3) the same loop runs **one**
+iteration and leaves (`early1`–`early3`; 4 cycles is enough there too).
+Write `%lsr` at least 4 cycles before the loop.
 
 ## Instruction controls [source: bundle.md, gas]
 
@@ -350,9 +352,17 @@ this: MCST's qemu stops at `rrs %bgr` ("exception handling is
 unimplemented") and decodes `abg` without executing it; the community
 qemu gives SIGILL.
 
+## v6 [hw: Elbrus-2C3]
+
+`loops.c` (with the v5 cases) gives the 8C2's results on the 2C3 except
+the late `%lsr` write above: counts, `%pcnt`/`%lcntex`, store
+suppression, rotation, `%lsr1`, quad stores and the behaviour across
+signals and page faults are the same. gas rejects `abg` for v6
+("not supported on elbrus-v6"), so `abg.c` doesn't build there.
+
 ## Not checked yet
 
 - The delays of `abg` and `rws %bgr` (the probe waits `wait all_e`
   and 5 cycles after each).
 - What `ldovl` does.
-- v6+.
+- v6's `abgc`/`rbgc`; v7.

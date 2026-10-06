@@ -228,7 +228,9 @@ start + step × iterations,  iterations = %ilcr.lcnt − %lsr.lcnt
                             (+ the epilogue count when lcnt reached 0)
 ```
 
-(`kernel/cpu/iset_v3.c`; v6 saves the positions instead). So the number
+(`kernel/cpu/iset_v3.c`; v6 saves the positions instead, and on the
+2C3 a trap between movas outside a loop leaves them in place: "v6",
+below). So the number
 of `am` advances of every area must equal the number of loop-mode
 iterations done, **at every instruction where an interrupt can arrive**.
 Interrupts arrive at any instruction (timer, other CPUs), so this is a
@@ -498,8 +500,33 @@ So APB code has to be tested on hardware, and code built by lcc with
 APB (`-O2` and above) can give wrong results under MCST's qemu when the
 program receives signals.
 
+## v6 [hw: Elbrus-2C3]
+
+`apb.c` (with the v5 cases), `apb-stream.c` and `apb-lcc.c` built by the
+2C3-tuned lcc, run on the 2C3 next to the 8C2. Address arithmetic,
+`am`, `ind`, `be`, narrow movas, halves, areas, `movaqp`, the stores
+the buffer doesn't see, `dpl`, `dcd`, `%aabf0`, the SIGILL after a call,
+a return, `eap` or a `%ctpr2` write: all as on the 8C2. What differs:
+
+| | 8C2 (v5) | 2C3 (v6) |
+|---|---|---|
+| Trap (page fault, signal handler) between movas outside a loop | positions recomputed from the loop counters: the next element repeats | **positions kept**: the next `mova` continues where it was (the kernel saves `%aaldi`, above). Inside a `loop_mode` loop both are correct |
+| `mova` wider than `fmt` (`movad` on `fmt = 3`) | diagnostic | **data** (the 8 bytes at the position) |
+| Diagnostic value | `eaed0f70eaed0f70`, tag 1 | `4000000040000000`, tag 1 |
+| `aaurrd %aaldi0` after two `movad` | 0x40 | 0x10 (the position in bytes) |
+| Bytes one area delivers a cycle | 16 | **32**: lcc's two-`movaqp` loop runs an iteration a cycle (`apb-lcc.c` sum of `long`s: 0.14 ns, 0.28 cycles, per element) |
+| A line per `mova` (step 8), from L1 | a line every 2 cycles per area | a line a cycle; with 2 areas in one half 2 cycles, 4 areas (two per half) 2 cycles |
+| The same from memory, one area | 3.2 cycles | 2.7 |
+| Consecutive elements from memory, `asz` 0 … 5 | 10.4, 5.5, 2.9, 1.5, 1.15, 1.14 | 11.4, 5.8, 2.9, 1.47, 1.10, 1.10 |
+| `mova` → consumer | (see Timing) | 5 cycles; a consumer 1–4 cycles after it stalls 4 |
+| First `mova` without a stall after `bap` | 20 cycles of `nop` (`gap20`) | 18 (`gap18`) |
+
+lcc's loops pass on the 2C3: 0 wrong of 900 results under about 10,000
+timer signals, and the guard page case; APB makes its sum 19× and its
+dot product 7× faster on a 64 MiB array there.
+
 ## Not checked yet
 
-- v6+.
+- v6 on the Elbrus-16C; v7.
 - Why only `%aabfN` with bit 1 of N clear act (the encodings are
   `0x30 | N << 7`).

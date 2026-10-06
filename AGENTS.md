@@ -160,6 +160,8 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     mas_be.s, mas_be-v5.s, mas_be_loops.c),
                     and predicate timing and logic (preds.c,
                     gen_preds.py)
+                    and every v3 packed operation (semp.c;
+                    gen_semp.py writes semp.s)
                     and square roots and reciprocals (sqrt.c,
                     gen_sqrt.py, check_sqrt.py on the host)
                     and MAS cache hints and kinds (mas_hint.c,

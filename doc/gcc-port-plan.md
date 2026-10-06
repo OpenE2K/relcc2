@@ -938,7 +938,8 @@ each one cost it a debugging session:
   `tablejump` expander.
 - Facts from `spec/isa/semantics.md` that are GCC settings:
   `SHIFT_COUNT_TRUNCATED` 1; `fmul_add*` are not fused (only with
-  `-ffp-contract=fast`, never `fma`); `fmax`/`fmin` are x86-style, not C's;
+  `-ffp-contract=fast`, never `fma`; v6's `fma*` are fused, "What a v6
+  mode adds"); `fmax`/`fmin` are x86-style, not C's;
   FP `lt`/`le` signal on quiet NaNs and `eq`/`uod` don't; integer compares
   have no `ne`/`gt`/`ge` forms.
 - GCC 17 defaults to C23, where `int f();` takes no arguments: run the
@@ -1044,9 +1045,12 @@ Written in `.md` with `define_automaton`, `define_cpu_unit`,
   4, → `ct` 5; `andp` chains inside one wide instruction (0) and costs 1
   through a `%pred`, 2 to a predicated op and 3 to `ct`. Schedule loads
   for an L1 hit, as lcc does. A stall
-  costs about a whole latency extra, so latencies must be exact. v6 and
-  later differ (e.g. load→use 5, binutils comment in `bfd/elfxx-e2k.c`
-  `build_plt_entry`) and still need measuring.
+  costs about a whole latency extra, so latencies must be exact. v6
+  differs (measured on an Elbrus-2C3, timing.md "Elbrus-2C3 (v6)"):
+  load→use 5 in either cluster, `ldqp` 5, integer compare or `andp` →
+  predicated op 1; everything else as v3. So `-mtune` needs per-version
+  latencies at least for loads and predicates; a v3 schedule run on
+  v6 stalls 4 cycles at every load consumed 3–4 cycles later.
 - **Size**: keep automata small by splitting independent resources into
   separate `define_automaton`s (ALU channels, literals, control); C6x
   uses 7 automata with `ndfa`, `collapse-ndfa`, `no-comb-vect`
@@ -1670,7 +1674,8 @@ Decided by the owner:
   testing: lcc's v3 code passes the whole compat suite (lcc → lcc,
   1,853 tests) under MCST's qemu as v5, v6 and v7, and the suite
   passes on the Elbrus-8C2 (v5) for every pair; the community can test
-  v4 and v6. The 8C2 does not fill fresh registers with tagged values
+  v4. The suite also passes on an Elbrus-2C3 (v6, lcc's 2C3 build,
+  every pair). The 8C2 does not fill fresh registers with tagged values
   (only qemu does), and v6 has longer load latencies (performance
   only).
 
@@ -1693,4 +1698,31 @@ a few ways, a guide to what an `-march=elbrus-v5` mode needs first:
 
 Everything else (latencies, hazards, control transfer, the ABI) is the
 same as v3 on the 8C2.
+
+### What a v6 mode adds (lcc 1.29.16 for the 2C3, measured)
+
+Measured on an Elbrus-2C3 (timing.md "Elbrus-2C3 (v6)", semantics.md
+"v6 operations", operations-v6.md). For `-march=elbrus-v6` and
+`-mtune` for it:
+
+- **Scheduling**: loads 5 cycles (any cluster), `ldqp` 5 and four a
+  cycle (so 128-bit loads become single `ldqp`, as lcc's 2C3 libraries
+  do: 5,747 of them), integer compare → predicated op 1, packed compare
+  into a predicate 4 (5 to `ct`), FMA 5. The divider no longer delays
+  ALC5 FP operations; the store bank rule stays.
+- **Fused multiply-add**: `fma`/`fms`/`fnma`/`fnms` scalar and `qp`
+  patterns (`fma<mode>4`, `fms<mode>4`, `fnma<mode>4`, `fnms<mode>4`),
+  rounded once, 5 cycles against `fmul_add`'s 8; contraction under
+  `-ffp-contract=fast` (GCC's default for GNU C) then uses them. lcc's
+  2C3 libraries use `fmad` 857 times.
+- **Vector exits**: `qpcmpeqbop`/`qpcmpeqbap` (a compare straight into
+  a predicate) for `cbranch` on vectors and the string functions,
+  `qpmrgp` for a select by a predicate, `qpsrad` for 64-bit arithmetic
+  shifts, `clmull`/`clmulh` for carry-less multiplies.
+- **APB**: 32 bytes a cycle per area, so two `movaqp` from one area per
+  iteration cost nothing extra.
+- **`%lsr` written too late** ends a v6 loop after one iteration (v3/v5:
+  one extra); the 4-cycle rule covers both.
+
+The ABI is unchanged (the compat suite passes on the 2C3).
 

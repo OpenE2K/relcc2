@@ -1,0 +1,284 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Write spec/isa/operations.md: every E2K operation, what it does, and
+what is known about it.
+
+Joins five sources:
+
+  spec/isa/operations.yaml   what each operation computes (hand-written
+                             rules; every operation must match exactly
+                             one rule, or this tool fails)
+  spec/isa/binutils-ops.yaml ISA versions, channels, operand formats
+  spec/isa/timing-e2s.yaml,  measured scheduled latencies (4C, 8C2)
+  spec/isa/timing-e8c2.yaml
+  spec/isa/lcc-usage.yaml    how often lcc's system libraries use it
+  tools/**/probes .s files   which hardware probes execute it
+
+  python3 tools/isa-extract/gen_operations.py          # write the page
+  python3 tools/isa-extract/gen_operations.py --check  # only check rules
+"""
+
+import argparse
+import glob
+import re
+import sys
+from pathlib import Path
+
+import yaml
+
+ROOT = Path(__file__).resolve().parents[2]
+ISA = ROOT / "spec" / "isa"
+
+# Probe assembly -> (probe, machines it ran on).  "4C" is the Elbrus 4C
+# (v3), "8C2" the Elbrus-8C2 (v5).
+PROBES = {
+    "semantics.s": ("semantics.c", "4C"),
+    "semp.s": ("semp.c", "4C, 8C2"),
+    "sem5.s": ("sem5.c", "8C2"),
+    "semx.s": ("semx.c", "4C, 8C2"),
+    "semx-v4.s": ("semx.c", "8C2"),
+    "semfx.s": ("semfx.c", "4C, 8C2"),
+    "semc.s": ("semc.c", "4C, 8C2"),
+    "semc-v5.s": ("semc.c", "8C2"),
+    "fcomb.s": ("fcomb.c", "4C, 8C2"),
+    "icomb.s": ("icomb.c", "4C, 8C2"),
+    "sqrt.s": ("sqrt.c", "4C, 8C2"),
+    "getf.s": ("getf.c", "4C, 8C2"),
+    "divx.s": ("divx.c", "4C, 8C2"),
+    "stmqp.s": ("stmqp.c", "8C2"),
+    "mas_be.s": ("mas_be.c", "4C, 8C2"),
+    "mas_be-v5.s": ("mas_be.c", "8C2"),
+    "mas_hint.s": ("mas_hint.c", "4C, 8C2"),
+    "mas_mod.s": ("mas_mod.c", "4C, 8C2"),
+    "preds.s": ("preds.c", "4C, 8C2"),
+    "loops.s": ("loops.c", "4C, 8C2"),
+    "loops-v5.s": ("loops.c", "8C2"),
+    "apb.s": ("apb.c", "4C, 8C2"),
+    "apb-v5.s": ("apb.c", "8C2"),
+    "apb-loop.s": ("apb-loop.c", "4C"),
+    "apb-stream.s": ("apb-stream.c", "4C, 8C2"),
+    "spec.s": ("spec.c", "4C, 8C2"),
+    "spec-v5.s": ("spec.c", "8C2"),
+    "samewi.s": ("samewi.c", "4C, 8C2"),
+    "stld.s": ("stld.c", "4C, 8C2"),
+    "p28.s": ("p28.c", "4C, 8C2"),
+    "abg.s": ("abg.c", "4C, 8C2"),
+    "pmu.s": ("pmu.c", "4C"),
+    "v2ops.s": ("v2ops.c", "4C, 8C2"),
+    "ctlops.s": ("ctlops.c", "4C, 8C2"),
+    "semfx-v4.s": ("semfx.c", "8C2"),
+}
+ABI_PROBES = "tools/abi/probes"
+
+
+def expand(spec):
+    """'add{s,d} sub{s,d}' -> ['adds', 'addd', 'subs', 'subd']."""
+    out = []
+    for word in spec.split():
+        parts = [""]
+        for m in re.finditer(r"\{([^}]*)\}|([^{]+)", word):
+            alts = m.group(1).split(",") if m.group(1) is not None \
+                else [m.group(2)]
+            parts = [p + a for p in parts for a in alts]
+        out += parts
+    return out
+
+
+def load_ops():
+    data = yaml.safe_load((ISA / "binutils-ops.yaml").read_text())
+    ops = {}
+    for e in data["alu_ops"]:
+        o = ops.setdefault(e["name"], {"isets": set(), "channels": set(),
+                                       "args": set(), "unit": "alu"})
+        o["isets"] |= set(e.get("isets") or [])
+        o["channels"] |= set(e.get("channels") or [])
+        if e.get("args"):
+            o["args"].add(e["args"])
+    for e in data["manual_ops"]:
+        o = ops.setdefault(e["name"], {"isets": set(), "channels": set(),
+                                       "args": set(), "unit": "control"})
+        o["isets"] |= set(e.get("isets") or [])
+    # v1 (Elbrus-3M) is gone: no working machine exists, so operations
+    # only it had are left out.
+    v1 = {n for n, o in ops.items() if o["isets"] and max(o["isets"]) == 1}
+    return {n: o for n, o in ops.items() if n not in v1}, v1
+
+
+def assign(rules_doc, ops, v1=()):
+    """Map every operation to its rule; report misses and doubles."""
+    owner, errors = {}, []
+    for g in rules_doc["groups"]:
+        for r in g["rules"]:
+            names = []
+            if "ops" in r:
+                names = expand(r["ops"])
+                for n in names:
+                    if n not in ops and n not in v1:
+                        errors.append(f"{g['title']}: unknown operation {n}")
+            if "match" in r:
+                rx = re.compile(r["match"])
+                names += [n for n in ops if rx.fullmatch(n) and n not in names]
+            r["_names"] = [n for n in names if n in ops]
+            for n in r["_names"]:
+                if n in owner:
+                    errors.append(f"{n}: matched by '{owner[n]['does'][:40]}'"
+                                  f" and '{r['does'][:40]}'")
+                owner.setdefault(n, r)
+    missing = sorted(n for n in ops if n not in owner)
+    return owner, errors, missing
+
+
+def probe_runs(ops):
+    runs = {}
+    files = glob.glob(str(ROOT / "tools" / "isa-probes" / "*.s"))
+    files += glob.glob(str(ROOT / ABI_PROBES / "*.s"))
+    files += glob.glob(str(ROOT / ABI_PROBES / "*" / "*.s"))
+    for f in files:
+        name = Path(f).name
+        tag = PROBES.get(name)
+        if tag is None:
+            if ABI_PROBES not in f:
+                sys.exit(f"{f}: add it to PROBES")
+            tag = (f"abi/{Path(f).relative_to(ROOT / ABI_PROBES)}", "4C")
+        for line in Path(f).read_text().splitlines():
+            m = re.match(r"\s+([a-z][a-z0-9_]*)(,|\s|$)", line)
+            if m and m.group(1) in ops:
+                runs.setdefault(m.group(1), set()).add(tag)
+    bench = (ROOT / "tools" / "isa-timing" / "bench.py").read_text()
+    timed = {n for n in ops if re.search(r'["(\s]' + n + r",\d", bench)}
+    return runs, timed
+
+
+def latencies():
+    out = {}
+    for path, tag in ((ISA / "timing-e2s.yaml", ""), (ISA / "timing-e8c2.yaml",
+                                                      " (v5)")):
+        data = yaml.safe_load(path.read_text())
+        for k, v in (data.get("scheduled_latency") or {}).items():
+            name = k[len("v5op_"):] if k.startswith("v5op_") else k
+            if v.get("latency") is not None and name not in out:
+                out[name] = f"{v['latency']}{tag}"
+    return out
+
+
+def isets_text(s):
+    s = sorted(s)
+    if not s:
+        return ""
+    runs, start = [], s[0]
+    for a, b in zip(s, s[1:] + [None]):
+        if b != a + 1:
+            runs.append(f"{start}" if start == a else f"{start}–{a}")
+            if b is not None:
+                start = b
+    return ", ".join(runs)
+
+
+def chans_text(s):
+    if not s:
+        return ""
+    s = sorted(s)
+    if s == list(range(6)):
+        return "0–5"
+    return ",".join(map(str, s))
+
+
+def kfmt(n):
+    if n >= 10000:
+        return f"{n // 1000}k"
+    if n >= 1000:
+        return f"{n / 1000:.1f}k"
+    return str(n)
+
+
+def cell(text):
+    return text.replace("|", "\\|")
+
+
+def render(rules_doc, ops, owner):
+    lat = latencies()
+    usage = yaml.safe_load((ISA / "lcc-usage.yaml").read_text())["counts"]
+    runs, timed = probe_runs(ops)
+    out = [l.rstrip() for l in rules_doc["header"].splitlines()]
+    out.append("")
+    for g in rules_doc["groups"]:
+        out += [f"## {g['title']}", ""]
+        if g.get("intro"):
+            out += [g["intro"].strip(), ""]
+        out += ["| Operations | ISA | ALC | Does | Lat | lcc v3 / v5 | Run on hardware |",
+                "|---|---|---|---|---|---|---|"]
+        for r in g["rules"]:
+            names = r["_names"]
+            if not names:
+                continue
+            isets = set().union(*(ops[n]["isets"] for n in names))
+            chans = set().union(*(ops[n]["channels"] for n in names))
+            if r.get("compact") or len(names) > 12:
+                shown = ", ".join(f"`{n}`" for n in names[:6])
+                opcell = f"{shown}, … ({len(names)} operations)"
+            else:
+                opcell = ", ".join(f"`{n}`" for n in names)
+            does = r["does"].strip().replace("\n", " ")
+            if r.get("use"):
+                does += f" **Use:** {r['use'].strip()}"
+            if r.get("see"):
+                does += f" ({r['see'].strip()})"
+            lats = sorted({lat[n] for n in names if n in lat},
+                          key=lambda x: (len(x), x))
+            latcell = ", ".join(lats[:3]) + ("…" if len(lats) > 3 else "")
+            if r.get("lat"):
+                latcell = str(r["lat"]).strip()
+            u3 = sum(usage.get(n, [0, 0])[0] for n in names)
+            u5 = sum(usage.get(n, [0, 0])[1] for n in names)
+            ucell = f"{kfmt(u3)} / {kfmt(u5)}" if u3 or u5 else ""
+            tags = set().union(*(runs.get(n, set()) for n in names))
+            probes = sorted({t[0] for t in tags})
+            # A v4+ operation can only have run on the 8C2.
+            machines = sorted({m for n in names for t in runs.get(n, ())
+                               for m in t[1].split(", ")
+                               if not (m == "4C" and min(ops[n]["isets"]) > 3)})
+            ran = sum(1 for n in names if n in runs)
+            if r.get("status"):
+                chk = r["status"].strip()
+            elif probes:
+                chk = ", ".join(p.replace(".c", "") for p in probes[:4])
+                chk += "…" if len(probes) > 4 else ""
+                chk += f" ({', '.join(machines)})"
+                if ran < len(names):
+                    chk += f"; {ran} of {len(names)}"
+            elif any(n in timed for n in names):
+                chk = "timed only (bench.py)"
+            elif min(isets or {0}) >= 6:
+                chk = "v6+: no hardware here"
+            else:
+                chk = "—"
+            out.append(f"| {opcell} | {isets_text(isets)} | {chans_text(chans)}"
+                       f" | {cell(does)} | {latcell} | {ucell} | {cell(chk)} |")
+        out.append("")
+    return "\n".join(out) + "\n"
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--check", action="store_true")
+    ap.add_argument("--rules", type=Path, default=ISA / "operations.yaml")
+    ap.add_argument("--out", type=Path, default=ISA / "operations.md")
+    args = ap.parse_args()
+    ops, v1 = load_ops()
+    rules_doc = yaml.safe_load(args.rules.read_text())
+    owner, errors, missing = assign(rules_doc, ops, v1)
+    for e in errors:
+        print("error:", e)
+    if missing:
+        print(f"{len(missing)} operations without a rule:", " ".join(missing))
+    if errors or missing:
+        sys.exit(1)
+    print(f"{len(ops)} operations, all covered by "
+          f"{sum(len(g['rules']) for g in rules_doc['groups'])} rules")
+    if not args.check:
+        args.out.write_text(render(rules_doc, ops, owner))
+        print("written", args.out)
+
+
+if __name__ == "__main__":
+    main()

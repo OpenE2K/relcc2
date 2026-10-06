@@ -1724,5 +1724,9 @@ Measured on an Elbrus-2C3 (timing.md "Elbrus-2C3 (v6)", semantics.md
 - **`%lsr` written too late** ends a v6 loop after one iteration (v3/v5:
   one extra); the 4-cycle rule covers both.
 
-The ABI is unchanged (the compat suite passes on the 2C3).
+The ABI is unchanged (the compat suite passes on the 2C3). What tuning
+buys there: lcc's 2C3-tuned code runs CoreMark 1.19× and Linpack 1.35×
+faster than its generic v3 code on the same machine, and interlock
+stalls fall from 30% of CoreMark's cycles to 2%, so `-mtune=elbrus-v6`
+(5-cycle loads) is worth having even with `-march=elbrus-v3`.
 

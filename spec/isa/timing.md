@@ -591,6 +591,17 @@ whose cycles differ from the 8C2's are the ones that use a load 3–4
 cycles after it (+4 each), a `disp` and a false `ct` in one instruction
 (2 cycles, 3 before) and 64-deep recursion (+20, chain-stack refill).
 
+**What tuning for v6 is worth**: lcc's generic v3 code and its
+2C3-tuned code (`-O3`), both run on the 2C3: CoreMark 4,411 against
+5,266 iterations a second (1.19×), Linpack (size 200, 4,096 fixed
+repetitions) 4.59 s against 3.39 s (1.35×). In the v3 CoreMark 30% of
+the cycles are interlock stalls (`BUB_E2`), 2% in the tuned one: v3
+code consumes loads 3 cycles out, and each such use stalls a 4-cycle
+step on v6. isa-score with the v6 model predicts the v3 binary there
+within 8% (measured / achieved 1.08). So a compiler that runs on v6
+should schedule loads for 5 cycles even when it emits v3 code
+(`-mtune`).
+
 **v6 control transfers** (`ctl6.c`; control-transfer.md): a taken
 `ibranchd` costs 12 cycles beyond its instruction however early its
 target register is ready (13 a block, against 7 for `ibranch` and for a

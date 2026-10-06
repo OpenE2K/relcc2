@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Write semx.s and semx-ops.h: the v3 scalar ALU operations no other
-probe runs (32-bit compares, single and register-result FP compares,
+probe checks (32-bit compares, single and register-result FP compares,
 conversions, fsub, single fmin/fmax, fscale, insfs, mpsadbh, the 32x32
 and 64/32 multiplies and divides, the x86-translator flag forms and
 cctop*, the combined merge_*), for semx.c (spec/isa/semantics.md,
@@ -30,10 +30,10 @@ REG = {"d": "%dr", "s": "%r", "q": "%qr", "p": "%qpr"}
 SKIP_PREFIX = ("fx", "movx", "movtc", "movtr", "gettag", "gettc", "gettst",
                "invtc", "puttag", "aptoap", "cudtoap", "gdtoap", "getsap",
                "getpl", "vfsi", "ld", "st", "aaur", "idtofx", "istofx",
-               "fstofx")
+               "fstofx", "fdtofx")
 KINDS = {"ALOPF1", "ALOPF2", "ALOPF11", "ALOPF12", "ALOPF7", "ALOPF8",
          "ALOPF21", "ALOPF21_MERGE"}
-# Named in another probe's text but never run there.
+# Named in another probe's text but never run with checked values.
 FORCE = {"insfd", "insfs", "mpsadbh"}
 # This sweep's own files (semx, semfx, semc and their helpers): not "other
 # probes".
@@ -43,13 +43,13 @@ V4 = {"fscaled", "fscales"}
 
 
 def covered():
-    """Operations other probes already run (see tools/isa-probes)."""
+    """Operations other probes already run (see tools/isa-probes); bench.py
+    only times operations, so it doesn't count."""
     import glob
     import re
     words = set()
     for f in (glob.glob(str(HERE / "*.s")) + glob.glob(str(HERE / "gen_*.py"))
-              + glob.glob(str(ROOT / "tools/abi/probes/*.s"))
-              + [str(ROOT / "tools/isa-timing/bench.py")]):
+              + glob.glob(str(ROOT / "tools/abi/probes/*.s"))):
         if any(k in Path(f).name for k in SWEEP):
             continue
         words |= set(re.findall(r"\b[a-z][a-z0-9_]*\b", Path(f).read_text()))

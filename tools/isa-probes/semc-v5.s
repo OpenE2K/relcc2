@@ -1406,3 +1406,48 @@ sc_143:
 	  ct	%ctpr3
 	}
 	.size	sc_143, .-sc_143
+
+	.global	sc_149
+	.type	sc_149, #function
+	.align	8
+sc_149:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, _f64,_lts0 0x0123456789abcdef, %dr2
+	}
+	{
+	  addd,0	0x0, _f64,_lts0 0x5555555555555555, %dr4
+	}
+	{
+	  addd,0	0x0, _f64,_lts0 0x5555555555555555, %dr5
+	  addd,2	0x0, 0x10, %dr3
+	  addd,3	0x0, 0xff, %dr8
+	  addd,4	%dr0, 0x0, %dr6
+	  addd,5	0x0, 0x0, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldq,0	%dr0, %dr3, %qr4
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  std,2	%dr1, 0x0, %dr4
+	  std,5	%dr1, 0x8, %dr5
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	sc_149, .-sc_149

@@ -197,9 +197,9 @@ ref (const char *name, unsigned cw, u64 a0, u64 a1, u64 b0, u64 b1,
       push (name[1] == 'd' ? 'd' : 's', 1, a0, 0);
       pop ('x', 0, 0, r0, r1);
     }
-  else if (!strcmp (name, "fstofx"))
+  else if (!strcmp (name, "fstofx") || !strcmp (name, "fdtofx"))
     {
-      push ('s', 0, a0, 0);
+      push (name[1], 0, a0, 0);
       pop ('x', 0, 0, r0, r1);
     }
   else if (!strncmp (name, "fxto", 4))
@@ -215,7 +215,13 @@ ref (const char *name, unsigned cw, u64 a0, u64 a1, u64 b0, u64 b1,
     {
       push ('s', 1, b0, 0);
       push ('x', 0, a0, a1);
+      /* x87 fscale is exact; fxscale rounds to the precision control
+         like an arithmetic operation, which fmul by 1 reproduces (only
+         below extended precision: on a tiny result it would also raise
+         the denormal flag).  */
       __asm__ volatile ("fscale; fstp %st(1)");
+      if (((cw >> 8) & 3) != 3)
+        __asm__ volatile ("fld1; fmulp");
       pop ('x', 0, 0, r0, r1);
     }
   else

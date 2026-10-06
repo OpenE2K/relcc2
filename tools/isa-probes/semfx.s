@@ -19,6 +19,82 @@ fx_0:
 	  rrs,0	%fpsr, %r13
 	}
 	{
+	  ldd,0	%dr0, 0x0, %dr2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
+	  addd,2	0x0, 0x0, %dr6
+	}
+	{
+	  rws,0	%r4, %fpcr
+	}
+	{
+	  rws,0	0x0, %fpsr
+	}
+	{
+	  nop 7
+	}
+	{
+	  fdtofx,0	%r2, %r5
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  movfi,0	%r5, %r6
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrs,0	%fpsr, %r7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr1, 0x0, %dr5
+	  std,5	%dr1, 0x8, %dr6
+	}
+	{
+	  stw,2	%dr1, 0x10, %r7
+	}
+	{
+	  rws,0	%r12, %fpcr
+	}
+	{
+	  rws,0	%r13, %fpsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	fx_0, .-fx_0
+
+	.global	fx_1
+	.type	fx_1, #function
+	.align	8
+fx_1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
+	  return	%ctpr3
+	  adds,1	%r2, 0x0, %r4
+	}
+	{
+	  rrs,0	%fpcr, %r12
+	}
+	{
+	  rrs,0	%fpsr, %r13
+	}
+	{
 	  ldw,0	%dr0, 0x0, %r2
 	}
 	{
@@ -77,12 +153,12 @@ fx_0:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_0, .-fx_0
+	.size	fx_1, .-fx_1
 
-	.global	fx_1
-	.type	fx_1, #function
+	.global	fx_2
+	.type	fx_2, #function
 	.align	8
-fx_1:
+fx_2:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -160,12 +236,12 @@ fx_1:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_1, .-fx_1
+	.size	fx_2, .-fx_2
 
-	.global	fx_2
-	.type	fx_2, #function
+	.global	fx_3
+	.type	fx_3, #function
 	.align	8
-fx_2:
+fx_3:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -246,12 +322,12 @@ fx_2:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_2, .-fx_2
+	.size	fx_3, .-fx_3
 
-	.global	fx_3
-	.type	fx_3, #function
+	.global	fx_4
+	.type	fx_4, #function
 	.align	8
-fx_3:
+fx_4:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -329,12 +405,12 @@ fx_3:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_3, .-fx_3
+	.size	fx_4, .-fx_4
 
-	.global	fx_4
-	.type	fx_4, #function
+	.global	fx_5
+	.type	fx_5, #function
 	.align	8
-fx_4:
+fx_5:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -415,93 +491,6 @@ fx_4:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_4, .-fx_4
-
-	.global	fx_5
-	.type	fx_5, #function
-	.align	8
-fx_5:
-	{
-	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
-	  return	%ctpr3
-	  adds,1	%r2, 0x0, %r4
-	}
-	{
-	  rrs,0	%fpcr, %r12
-	}
-	{
-	  rrs,0	%fpsr, %r13
-	}
-	{
-	  ldd,0	%dr0, 0x0, %dr8
-	  ldd,2	%dr0, 0x8, %dr9
-	}
-	{
-	  nop 2
-	}
-	{
-	  movif,0	%dr8, %r9, %r2
-	}
-	{
-	  ldd,0	%dr0, 0x10, %dr8
-	  ldd,2	%dr0, 0x18, %dr9
-	}
-	{
-	  nop 2
-	}
-	{
-	  movif,0	%dr8, %r9, %r3
-	}
-	{
-	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
-	  addd,2	0x0, 0x0, %dr6
-	}
-	{
-	  rws,0	%r4, %fpcr
-	}
-	{
-	  rws,0	0x0, %fpsr
-	}
-	{
-	  nop 7
-	}
-	{
-	  fxaddxd,0	%r2, %r3, %r5
-	}
-	{
-	  nop 7
-	}
-	{
-	  nop 7
-	}
-	{
-	  nop 7
-	}
-	{
-	  rrs,0	%fpsr, %r7
-	}
-	{
-	  nop 2
-	}
-	{
-	  std,2	%dr1, 0x0, %dr5
-	  std,5	%dr1, 0x8, %dr6
-	}
-	{
-	  stw,2	%dr1, 0x10, %r7
-	}
-	{
-	  rws,0	%r12, %fpcr
-	}
-	{
-	  rws,0	%r13, %fpsr
-	}
-	{
-	  nop 5
-	}
-	{
-	  ct	%ctpr3
-	}
 	.size	fx_5, .-fx_5
 
 	.global	fx_6
@@ -553,7 +542,7 @@ fx_6:
 	  nop 7
 	}
 	{
-	  fxaddxs,0	%r2, %r3, %r5
+	  fxaddxd,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -640,6 +629,93 @@ fx_7:
 	  nop 7
 	}
 	{
+	  fxaddxs,0	%r2, %r3, %r5
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrs,0	%fpsr, %r7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr1, 0x0, %dr5
+	  std,5	%dr1, 0x8, %dr6
+	}
+	{
+	  stw,2	%dr1, 0x10, %r7
+	}
+	{
+	  rws,0	%r12, %fpcr
+	}
+	{
+	  rws,0	%r13, %fpsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	fx_7, .-fx_7
+
+	.global	fx_8
+	.type	fx_8, #function
+	.align	8
+fx_8:
+	{
+	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
+	  return	%ctpr3
+	  adds,1	%r2, 0x0, %r4
+	}
+	{
+	  rrs,0	%fpcr, %r12
+	}
+	{
+	  rrs,0	%fpsr, %r13
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr8
+	  ldd,2	%dr0, 0x8, %dr9
+	}
+	{
+	  nop 2
+	}
+	{
+	  movif,0	%dr8, %r9, %r2
+	}
+	{
+	  ldd,0	%dr0, 0x10, %dr8
+	  ldd,2	%dr0, 0x18, %dr9
+	}
+	{
+	  nop 2
+	}
+	{
+	  movif,0	%dr8, %r9, %r3
+	}
+	{
+	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
+	  addd,2	0x0, 0x0, %dr6
+	}
+	{
+	  rws,0	%r4, %fpcr
+	}
+	{
+	  rws,0	0x0, %fpsr
+	}
+	{
+	  nop 7
+	}
+	{
 	  fxaddxx,0	%r2, %r3, %r5
 	}
 	{
@@ -679,12 +755,12 @@ fx_7:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_7, .-fx_7
+	.size	fx_8, .-fx_8
 
-	.global	fx_8
-	.type	fx_8, #function
+	.global	fx_9
+	.type	fx_9, #function
 	.align	8
-fx_8:
+fx_9:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -762,12 +838,12 @@ fx_8:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_8, .-fx_8
+	.size	fx_9, .-fx_9
 
-	.global	fx_9
-	.type	fx_9, #function
+	.global	fx_10
+	.type	fx_10, #function
 	.align	8
-fx_9:
+fx_10:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -845,12 +921,12 @@ fx_9:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_9, .-fx_9
+	.size	fx_10, .-fx_10
 
-	.global	fx_10
-	.type	fx_10, #function
+	.global	fx_11
+	.type	fx_11, #function
 	.align	8
-fx_10:
+fx_11:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -932,12 +1008,12 @@ fx_10:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_10, .-fx_10
+	.size	fx_11, .-fx_11
 
-	.global	fx_11
-	.type	fx_11, #function
+	.global	fx_12
+	.type	fx_12, #function
 	.align	8
-fx_11:
+fx_12:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -1015,12 +1091,12 @@ fx_11:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_11, .-fx_11
+	.size	fx_12, .-fx_12
 
-	.global	fx_12
-	.type	fx_12, #function
+	.global	fx_13
+	.type	fx_13, #function
 	.align	8
-fx_12:
+fx_13:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -1098,12 +1174,12 @@ fx_12:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_12, .-fx_12
+	.size	fx_13, .-fx_13
 
-	.global	fx_13
-	.type	fx_13, #function
+	.global	fx_14
+	.type	fx_14, #function
 	.align	8
-fx_13:
+fx_14:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -1185,12 +1261,12 @@ fx_13:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_13, .-fx_13
+	.size	fx_14, .-fx_14
 
-	.global	fx_14
-	.type	fx_14, #function
+	.global	fx_15
+	.type	fx_15, #function
 	.align	8
-fx_14:
+fx_15:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -1268,12 +1344,12 @@ fx_14:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_14, .-fx_14
+	.size	fx_15, .-fx_15
 
-	.global	fx_15
-	.type	fx_15, #function
+	.global	fx_16
+	.type	fx_16, #function
 	.align	8
-fx_15:
+fx_16:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -1351,12 +1427,12 @@ fx_15:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_15, .-fx_15
+	.size	fx_16, .-fx_16
 
-	.global	fx_16
-	.type	fx_16, #function
+	.global	fx_17
+	.type	fx_17, #function
 	.align	8
-fx_16:
+fx_17:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -1438,12 +1514,12 @@ fx_16:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_16, .-fx_16
+	.size	fx_17, .-fx_17
 
-	.global	fx_17
-	.type	fx_17, #function
+	.global	fx_18
+	.type	fx_18, #function
 	.align	8
-fx_17:
+fx_18:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -1521,12 +1597,12 @@ fx_17:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_17, .-fx_17
+	.size	fx_18, .-fx_18
 
-	.global	fx_18
-	.type	fx_18, #function
+	.global	fx_19
+	.type	fx_19, #function
 	.align	8
-fx_18:
+fx_19:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -1604,12 +1680,12 @@ fx_18:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_18, .-fx_18
+	.size	fx_19, .-fx_19
 
-	.global	fx_19
-	.type	fx_19, #function
+	.global	fx_20
+	.type	fx_20, #function
 	.align	8
-fx_19:
+fx_20:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -1691,12 +1767,12 @@ fx_19:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_19, .-fx_19
+	.size	fx_20, .-fx_20
 
-	.global	fx_20
-	.type	fx_20, #function
+	.global	fx_21
+	.type	fx_21, #function
 	.align	8
-fx_20:
+fx_21:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -1774,12 +1850,12 @@ fx_20:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_20, .-fx_20
+	.size	fx_21, .-fx_21
 
-	.global	fx_21
-	.type	fx_21, #function
+	.global	fx_22
+	.type	fx_22, #function
 	.align	8
-fx_21:
+fx_22:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -1857,12 +1933,12 @@ fx_21:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_21, .-fx_21
+	.size	fx_22, .-fx_22
 
-	.global	fx_22
-	.type	fx_22, #function
+	.global	fx_23
+	.type	fx_23, #function
 	.align	8
-fx_22:
+fx_23:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -1944,12 +2020,12 @@ fx_22:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_22, .-fx_22
+	.size	fx_23, .-fx_23
 
-	.global	fx_23
-	.type	fx_23, #function
+	.global	fx_24
+	.type	fx_24, #function
 	.align	8
-fx_23:
+fx_24:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -2027,12 +2103,12 @@ fx_23:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_23, .-fx_23
+	.size	fx_24, .-fx_24
 
-	.global	fx_24
-	.type	fx_24, #function
+	.global	fx_25
+	.type	fx_25, #function
 	.align	8
-fx_24:
+fx_25:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -2110,12 +2186,12 @@ fx_24:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_24, .-fx_24
+	.size	fx_25, .-fx_25
 
-	.global	fx_25
-	.type	fx_25, #function
+	.global	fx_26
+	.type	fx_26, #function
 	.align	8
-fx_25:
+fx_26:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -2162,89 +2238,6 @@ fx_25:
 	}
 	{
 	  fxcmpnltxb,0	%r2, %r3, %pred1
-	}
-	{
-	  nop 7
-	}
-	{
-	  addd,0	0x1, 0x0, %dr6 ? %pred1
-	}
-	{
-	  nop 7
-	}
-	{
-	  rrs,0	%fpsr, %r7
-	}
-	{
-	  nop 2
-	}
-	{
-	  std,2	%dr1, 0x0, %dr5
-	  std,5	%dr1, 0x8, %dr6
-	}
-	{
-	  stw,2	%dr1, 0x10, %r7
-	}
-	{
-	  rws,0	%r12, %fpcr
-	}
-	{
-	  rws,0	%r13, %fpsr
-	}
-	{
-	  nop 5
-	}
-	{
-	  ct	%ctpr3
-	}
-	.size	fx_25, .-fx_25
-
-	.global	fx_26
-	.type	fx_26, #function
-	.align	8
-fx_26:
-	{
-	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
-	  return	%ctpr3
-	  adds,1	%r2, 0x0, %r4
-	}
-	{
-	  rrs,0	%fpcr, %r12
-	}
-	{
-	  rrs,0	%fpsr, %r13
-	}
-	{
-	  ldd,0	%dr0, 0x0, %dr8
-	  ldd,2	%dr0, 0x8, %dr9
-	}
-	{
-	  nop 2
-	}
-	{
-	  movif,0	%dr8, %r9, %r2
-	}
-	{
-	  ldd,0	%dr0, 0x10, %dr3
-	}
-	{
-	  nop 2
-	}
-	{
-	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
-	  addd,2	0x0, 0x0, %dr6
-	}
-	{
-	  rws,0	%r4, %fpcr
-	}
-	{
-	  rws,0	0x0, %fpsr
-	}
-	{
-	  nop 7
-	}
-	{
-	  fxcmpoddb,0	%r2, %r3, %pred1
 	}
 	{
 	  nop 7
@@ -2327,6 +2320,89 @@ fx_27:
 	  nop 7
 	}
 	{
+	  fxcmpoddb,0	%r2, %r3, %pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x1, 0x0, %dr6 ? %pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrs,0	%fpsr, %r7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr1, 0x0, %dr5
+	  std,5	%dr1, 0x8, %dr6
+	}
+	{
+	  stw,2	%dr1, 0x10, %r7
+	}
+	{
+	  rws,0	%r12, %fpcr
+	}
+	{
+	  rws,0	%r13, %fpsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	fx_27, .-fx_27
+
+	.global	fx_28
+	.type	fx_28, #function
+	.align	8
+fx_28:
+	{
+	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
+	  return	%ctpr3
+	  adds,1	%r2, 0x0, %r4
+	}
+	{
+	  rrs,0	%fpcr, %r12
+	}
+	{
+	  rrs,0	%fpsr, %r13
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr8
+	  ldd,2	%dr0, 0x8, %dr9
+	}
+	{
+	  nop 2
+	}
+	{
+	  movif,0	%dr8, %r9, %r2
+	}
+	{
+	  ldd,0	%dr0, 0x10, %dr3
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
+	  addd,2	0x0, 0x0, %dr6
+	}
+	{
+	  rws,0	%r4, %fpcr
+	}
+	{
+	  rws,0	0x0, %fpsr
+	}
+	{
+	  nop 7
+	}
+	{
 	  fxcmpoddf,0	%r2, %r3, %r5
 	}
 	{
@@ -2363,12 +2439,12 @@ fx_27:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_27, .-fx_27
+	.size	fx_28, .-fx_28
 
-	.global	fx_28
-	.type	fx_28, #function
+	.global	fx_29
+	.type	fx_29, #function
 	.align	8
-fx_28:
+fx_29:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -2446,12 +2522,12 @@ fx_28:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_28, .-fx_28
+	.size	fx_29, .-fx_29
 
-	.global	fx_29
-	.type	fx_29, #function
+	.global	fx_30
+	.type	fx_30, #function
 	.align	8
-fx_29:
+fx_30:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -2529,12 +2605,12 @@ fx_29:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_29, .-fx_29
+	.size	fx_30, .-fx_30
 
-	.global	fx_30
-	.type	fx_30, #function
+	.global	fx_31
+	.type	fx_31, #function
 	.align	8
-fx_30:
+fx_31:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -2616,12 +2692,12 @@ fx_30:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_30, .-fx_30
+	.size	fx_31, .-fx_31
 
-	.global	fx_31
-	.type	fx_31, #function
+	.global	fx_32
+	.type	fx_32, #function
 	.align	8
-fx_31:
+fx_32:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -2703,12 +2779,12 @@ fx_31:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_31, .-fx_31
+	.size	fx_32, .-fx_32
 
-	.global	fx_32
-	.type	fx_32, #function
+	.global	fx_33
+	.type	fx_33, #function
 	.align	8
-fx_32:
+fx_33:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -2786,12 +2862,12 @@ fx_32:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_32, .-fx_32
+	.size	fx_33, .-fx_33
 
-	.global	fx_33
-	.type	fx_33, #function
+	.global	fx_34
+	.type	fx_34, #function
 	.align	8
-fx_33:
+fx_34:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -2869,12 +2945,12 @@ fx_33:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_33, .-fx_33
+	.size	fx_34, .-fx_34
 
-	.global	fx_34
-	.type	fx_34, #function
+	.global	fx_35
+	.type	fx_35, #function
 	.align	8
-fx_34:
+fx_35:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -2956,12 +3032,12 @@ fx_34:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_34, .-fx_34
+	.size	fx_35, .-fx_35
 
-	.global	fx_35
-	.type	fx_35, #function
+	.global	fx_36
+	.type	fx_36, #function
 	.align	8
-fx_35:
+fx_36:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -3039,12 +3115,12 @@ fx_35:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_35, .-fx_35
+	.size	fx_36, .-fx_36
 
-	.global	fx_36
-	.type	fx_36, #function
+	.global	fx_37
+	.type	fx_37, #function
 	.align	8
-fx_36:
+fx_37:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -3122,12 +3198,12 @@ fx_36:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_36, .-fx_36
+	.size	fx_37, .-fx_37
 
-	.global	fx_37
-	.type	fx_37, #function
+	.global	fx_38
+	.type	fx_38, #function
 	.align	8
-fx_37:
+fx_38:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -3209,12 +3285,12 @@ fx_37:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_37, .-fx_37
+	.size	fx_38, .-fx_38
 
-	.global	fx_38
-	.type	fx_38, #function
+	.global	fx_39
+	.type	fx_39, #function
 	.align	8
-fx_38:
+fx_39:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -3292,12 +3368,12 @@ fx_38:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_38, .-fx_38
+	.size	fx_39, .-fx_39
 
-	.global	fx_39
-	.type	fx_39, #function
+	.global	fx_40
+	.type	fx_40, #function
 	.align	8
-fx_39:
+fx_40:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -3378,12 +3454,12 @@ fx_39:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_39, .-fx_39
+	.size	fx_40, .-fx_40
 
-	.global	fx_40
-	.type	fx_40, #function
+	.global	fx_41
+	.type	fx_41, #function
 	.align	8
-fx_40:
+fx_41:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -3461,12 +3537,12 @@ fx_40:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_40, .-fx_40
+	.size	fx_41, .-fx_41
 
-	.global	fx_41
-	.type	fx_41, #function
+	.global	fx_42
+	.type	fx_42, #function
 	.align	8
-fx_41:
+fx_42:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -3547,12 +3623,12 @@ fx_41:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_41, .-fx_41
+	.size	fx_42, .-fx_42
 
-	.global	fx_42
-	.type	fx_42, #function
+	.global	fx_43
+	.type	fx_43, #function
 	.align	8
-fx_42:
+fx_43:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -3630,12 +3706,12 @@ fx_42:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_42, .-fx_42
+	.size	fx_43, .-fx_43
 
-	.global	fx_43
-	.type	fx_43, #function
+	.global	fx_44
+	.type	fx_44, #function
 	.align	8
-fx_43:
+fx_44:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -3716,12 +3792,12 @@ fx_43:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_43, .-fx_43
+	.size	fx_44, .-fx_44
 
-	.global	fx_44
-	.type	fx_44, #function
+	.global	fx_45
+	.type	fx_45, #function
 	.align	8
-fx_44:
+fx_45:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -3799,12 +3875,12 @@ fx_44:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_44, .-fx_44
+	.size	fx_45, .-fx_45
 
-	.global	fx_45
-	.type	fx_45, #function
+	.global	fx_46
+	.type	fx_46, #function
 	.align	8
-fx_45:
+fx_46:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -3885,93 +3961,6 @@ fx_45:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_45, .-fx_45
-
-	.global	fx_46
-	.type	fx_46, #function
-	.align	8
-fx_46:
-	{
-	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
-	  return	%ctpr3
-	  adds,1	%r2, 0x0, %r4
-	}
-	{
-	  rrs,0	%fpcr, %r12
-	}
-	{
-	  rrs,0	%fpsr, %r13
-	}
-	{
-	  ldd,0	%dr0, 0x0, %dr8
-	  ldd,2	%dr0, 0x8, %dr9
-	}
-	{
-	  nop 2
-	}
-	{
-	  movif,0	%dr8, %r9, %r2
-	}
-	{
-	  ldd,0	%dr0, 0x10, %dr8
-	  ldd,2	%dr0, 0x18, %dr9
-	}
-	{
-	  nop 2
-	}
-	{
-	  movif,0	%dr8, %r9, %r3
-	}
-	{
-	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
-	  addd,2	0x0, 0x0, %dr6
-	}
-	{
-	  rws,0	%r4, %fpcr
-	}
-	{
-	  rws,0	0x0, %fpsr
-	}
-	{
-	  nop 7
-	}
-	{
-	  fxdivxd,5	%r2, %r3, %r5
-	}
-	{
-	  nop 7
-	}
-	{
-	  nop 7
-	}
-	{
-	  nop 7
-	}
-	{
-	  rrs,0	%fpsr, %r7
-	}
-	{
-	  nop 2
-	}
-	{
-	  std,2	%dr1, 0x0, %dr5
-	  std,5	%dr1, 0x8, %dr6
-	}
-	{
-	  stw,2	%dr1, 0x10, %r7
-	}
-	{
-	  rws,0	%r12, %fpcr
-	}
-	{
-	  rws,0	%r13, %fpsr
-	}
-	{
-	  nop 5
-	}
-	{
-	  ct	%ctpr3
-	}
 	.size	fx_46, .-fx_46
 
 	.global	fx_47
@@ -4023,7 +4012,7 @@ fx_47:
 	  nop 7
 	}
 	{
-	  fxdivxs,5	%r2, %r3, %r5
+	  fxdivxd,5	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -4110,6 +4099,93 @@ fx_48:
 	  nop 7
 	}
 	{
+	  fxdivxs,5	%r2, %r3, %r5
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrs,0	%fpsr, %r7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr1, 0x0, %dr5
+	  std,5	%dr1, 0x8, %dr6
+	}
+	{
+	  stw,2	%dr1, 0x10, %r7
+	}
+	{
+	  rws,0	%r12, %fpcr
+	}
+	{
+	  rws,0	%r13, %fpsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	fx_48, .-fx_48
+
+	.global	fx_49
+	.type	fx_49, #function
+	.align	8
+fx_49:
+	{
+	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
+	  return	%ctpr3
+	  adds,1	%r2, 0x0, %r4
+	}
+	{
+	  rrs,0	%fpcr, %r12
+	}
+	{
+	  rrs,0	%fpsr, %r13
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr8
+	  ldd,2	%dr0, 0x8, %dr9
+	}
+	{
+	  nop 2
+	}
+	{
+	  movif,0	%dr8, %r9, %r2
+	}
+	{
+	  ldd,0	%dr0, 0x10, %dr8
+	  ldd,2	%dr0, 0x18, %dr9
+	}
+	{
+	  nop 2
+	}
+	{
+	  movif,0	%dr8, %r9, %r3
+	}
+	{
+	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
+	  addd,2	0x0, 0x0, %dr6
+	}
+	{
+	  rws,0	%r4, %fpcr
+	}
+	{
+	  rws,0	0x0, %fpsr
+	}
+	{
+	  nop 7
+	}
+	{
 	  fxdivxx,5	%r2, %r3, %r5
 	}
 	{
@@ -4149,12 +4225,12 @@ fx_48:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_48, .-fx_48
+	.size	fx_49, .-fx_49
 
-	.global	fx_49
-	.type	fx_49, #function
+	.global	fx_50
+	.type	fx_50, #function
 	.align	8
-fx_49:
+fx_50:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -4232,12 +4308,12 @@ fx_49:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_49, .-fx_49
+	.size	fx_50, .-fx_50
 
-	.global	fx_50
-	.type	fx_50, #function
+	.global	fx_51
+	.type	fx_51, #function
 	.align	8
-fx_50:
+fx_51:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -4318,12 +4394,12 @@ fx_50:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_50, .-fx_50
+	.size	fx_51, .-fx_51
 
-	.global	fx_51
-	.type	fx_51, #function
+	.global	fx_52
+	.type	fx_52, #function
 	.align	8
-fx_51:
+fx_52:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -4401,12 +4477,12 @@ fx_51:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_51, .-fx_51
+	.size	fx_52, .-fx_52
 
-	.global	fx_52
-	.type	fx_52, #function
+	.global	fx_53
+	.type	fx_53, #function
 	.align	8
-fx_52:
+fx_53:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -4487,93 +4563,6 @@ fx_52:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_52, .-fx_52
-
-	.global	fx_53
-	.type	fx_53, #function
-	.align	8
-fx_53:
-	{
-	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
-	  return	%ctpr3
-	  adds,1	%r2, 0x0, %r4
-	}
-	{
-	  rrs,0	%fpcr, %r12
-	}
-	{
-	  rrs,0	%fpsr, %r13
-	}
-	{
-	  ldd,0	%dr0, 0x0, %dr8
-	  ldd,2	%dr0, 0x8, %dr9
-	}
-	{
-	  nop 2
-	}
-	{
-	  movif,0	%dr8, %r9, %r2
-	}
-	{
-	  ldd,0	%dr0, 0x10, %dr8
-	  ldd,2	%dr0, 0x18, %dr9
-	}
-	{
-	  nop 2
-	}
-	{
-	  movif,0	%dr8, %r9, %r3
-	}
-	{
-	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
-	  addd,2	0x0, 0x0, %dr6
-	}
-	{
-	  rws,0	%r4, %fpcr
-	}
-	{
-	  rws,0	0x0, %fpsr
-	}
-	{
-	  nop 7
-	}
-	{
-	  fxmulxd,0	%r2, %r3, %r5
-	}
-	{
-	  nop 7
-	}
-	{
-	  nop 7
-	}
-	{
-	  nop 7
-	}
-	{
-	  rrs,0	%fpsr, %r7
-	}
-	{
-	  nop 2
-	}
-	{
-	  std,2	%dr1, 0x0, %dr5
-	  std,5	%dr1, 0x8, %dr6
-	}
-	{
-	  stw,2	%dr1, 0x10, %r7
-	}
-	{
-	  rws,0	%r12, %fpcr
-	}
-	{
-	  rws,0	%r13, %fpsr
-	}
-	{
-	  nop 5
-	}
-	{
-	  ct	%ctpr3
-	}
 	.size	fx_53, .-fx_53
 
 	.global	fx_54
@@ -4625,7 +4614,7 @@ fx_54:
 	  nop 7
 	}
 	{
-	  fxmulxs,0	%r2, %r3, %r5
+	  fxmulxd,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -4712,6 +4701,93 @@ fx_55:
 	  nop 7
 	}
 	{
+	  fxmulxs,0	%r2, %r3, %r5
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrs,0	%fpsr, %r7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr1, 0x0, %dr5
+	  std,5	%dr1, 0x8, %dr6
+	}
+	{
+	  stw,2	%dr1, 0x10, %r7
+	}
+	{
+	  rws,0	%r12, %fpcr
+	}
+	{
+	  rws,0	%r13, %fpsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	fx_55, .-fx_55
+
+	.global	fx_56
+	.type	fx_56, #function
+	.align	8
+fx_56:
+	{
+	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
+	  return	%ctpr3
+	  adds,1	%r2, 0x0, %r4
+	}
+	{
+	  rrs,0	%fpcr, %r12
+	}
+	{
+	  rrs,0	%fpsr, %r13
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr8
+	  ldd,2	%dr0, 0x8, %dr9
+	}
+	{
+	  nop 2
+	}
+	{
+	  movif,0	%dr8, %r9, %r2
+	}
+	{
+	  ldd,0	%dr0, 0x10, %dr8
+	  ldd,2	%dr0, 0x18, %dr9
+	}
+	{
+	  nop 2
+	}
+	{
+	  movif,0	%dr8, %r9, %r3
+	}
+	{
+	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
+	  addd,2	0x0, 0x0, %dr6
+	}
+	{
+	  rws,0	%r4, %fpcr
+	}
+	{
+	  rws,0	0x0, %fpsr
+	}
+	{
+	  nop 7
+	}
+	{
 	  fxmulxx,0	%r2, %r3, %r5
 	}
 	{
@@ -4751,12 +4827,12 @@ fx_55:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_55, .-fx_55
+	.size	fx_56, .-fx_56
 
-	.global	fx_56
-	.type	fx_56, #function
+	.global	fx_57
+	.type	fx_57, #function
 	.align	8
-fx_56:
+fx_57:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -4834,12 +4910,12 @@ fx_56:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_56, .-fx_56
+	.size	fx_57, .-fx_57
 
-	.global	fx_57
-	.type	fx_57, #function
+	.global	fx_58
+	.type	fx_58, #function
 	.align	8
-fx_57:
+fx_58:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -4920,12 +4996,12 @@ fx_57:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_57, .-fx_57
+	.size	fx_58, .-fx_58
 
-	.global	fx_58
-	.type	fx_58, #function
+	.global	fx_59
+	.type	fx_59, #function
 	.align	8
-fx_58:
+fx_59:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -5003,12 +5079,12 @@ fx_58:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_58, .-fx_58
+	.size	fx_59, .-fx_59
 
-	.global	fx_59
-	.type	fx_59, #function
+	.global	fx_60
+	.type	fx_60, #function
 	.align	8
-fx_59:
+fx_60:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -5089,12 +5165,12 @@ fx_59:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_59, .-fx_59
+	.size	fx_60, .-fx_60
 
-	.global	fx_60
-	.type	fx_60, #function
+	.global	fx_61
+	.type	fx_61, #function
 	.align	8
-fx_60:
+fx_61:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -5165,12 +5241,12 @@ fx_60:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_60, .-fx_60
+	.size	fx_61, .-fx_61
 
-	.global	fx_61
-	.type	fx_61, #function
+	.global	fx_62
+	.type	fx_62, #function
 	.align	8
-fx_61:
+fx_62:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -5241,12 +5317,12 @@ fx_61:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_61, .-fx_61
+	.size	fx_62, .-fx_62
 
-	.global	fx_62
-	.type	fx_62, #function
+	.global	fx_63
+	.type	fx_63, #function
 	.align	8
-fx_62:
+fx_63:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -5321,12 +5397,12 @@ fx_62:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_62, .-fx_62
+	.size	fx_63, .-fx_63
 
-	.global	fx_63
-	.type	fx_63, #function
+	.global	fx_64
+	.type	fx_64, #function
 	.align	8
-fx_63:
+fx_64:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -5407,12 +5483,12 @@ fx_63:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_63, .-fx_63
+	.size	fx_64, .-fx_64
 
-	.global	fx_64
-	.type	fx_64, #function
+	.global	fx_65
+	.type	fx_65, #function
 	.align	8
-fx_64:
+fx_65:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -5493,12 +5569,12 @@ fx_64:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_64, .-fx_64
+	.size	fx_65, .-fx_65
 
-	.global	fx_65
-	.type	fx_65, #function
+	.global	fx_66
+	.type	fx_66, #function
 	.align	8
-fx_65:
+fx_66:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -5583,12 +5659,12 @@ fx_65:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_65, .-fx_65
+	.size	fx_66, .-fx_66
 
-	.global	fx_66
-	.type	fx_66, #function
+	.global	fx_67
+	.type	fx_67, #function
 	.align	8
-fx_66:
+fx_67:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -5669,12 +5745,12 @@ fx_66:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_66, .-fx_66
+	.size	fx_67, .-fx_67
 
-	.global	fx_67
-	.type	fx_67, #function
+	.global	fx_68
+	.type	fx_68, #function
 	.align	8
-fx_67:
+fx_68:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -5755,12 +5831,12 @@ fx_67:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_67, .-fx_67
+	.size	fx_68, .-fx_68
 
-	.global	fx_68
-	.type	fx_68, #function
+	.global	fx_69
+	.type	fx_69, #function
 	.align	8
-fx_68:
+fx_69:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -5845,12 +5921,12 @@ fx_68:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_68, .-fx_68
+	.size	fx_69, .-fx_69
 
-	.global	fx_69
-	.type	fx_69, #function
+	.global	fx_70
+	.type	fx_70, #function
 	.align	8
-fx_69:
+fx_70:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -5928,12 +6004,12 @@ fx_69:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_69, .-fx_69
+	.size	fx_70, .-fx_70
 
-	.global	fx_70
-	.type	fx_70, #function
+	.global	fx_71
+	.type	fx_71, #function
 	.align	8
-fx_70:
+fx_71:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -6014,12 +6090,12 @@ fx_70:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_70, .-fx_70
+	.size	fx_71, .-fx_71
 
-	.global	fx_71
-	.type	fx_71, #function
+	.global	fx_72
+	.type	fx_72, #function
 	.align	8
-fx_71:
+fx_72:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -6097,12 +6173,12 @@ fx_71:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_71, .-fx_71
+	.size	fx_72, .-fx_72
 
-	.global	fx_72
-	.type	fx_72, #function
+	.global	fx_73
+	.type	fx_73, #function
 	.align	8
-fx_72:
+fx_73:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -6183,93 +6259,6 @@ fx_72:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_72, .-fx_72
-
-	.global	fx_73
-	.type	fx_73, #function
-	.align	8
-fx_73:
-	{
-	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
-	  return	%ctpr3
-	  adds,1	%r2, 0x0, %r4
-	}
-	{
-	  rrs,0	%fpcr, %r12
-	}
-	{
-	  rrs,0	%fpsr, %r13
-	}
-	{
-	  ldd,0	%dr0, 0x0, %dr8
-	  ldd,2	%dr0, 0x8, %dr9
-	}
-	{
-	  nop 2
-	}
-	{
-	  movif,0	%dr8, %r9, %r2
-	}
-	{
-	  ldd,0	%dr0, 0x10, %dr8
-	  ldd,2	%dr0, 0x18, %dr9
-	}
-	{
-	  nop 2
-	}
-	{
-	  movif,0	%dr8, %r9, %r3
-	}
-	{
-	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
-	  addd,2	0x0, 0x0, %dr6
-	}
-	{
-	  rws,0	%r4, %fpcr
-	}
-	{
-	  rws,0	0x0, %fpsr
-	}
-	{
-	  nop 7
-	}
-	{
-	  fxsubxd,0	%r2, %r3, %r5
-	}
-	{
-	  nop 7
-	}
-	{
-	  nop 7
-	}
-	{
-	  nop 7
-	}
-	{
-	  rrs,0	%fpsr, %r7
-	}
-	{
-	  nop 2
-	}
-	{
-	  std,2	%dr1, 0x0, %dr5
-	  std,5	%dr1, 0x8, %dr6
-	}
-	{
-	  stw,2	%dr1, 0x10, %r7
-	}
-	{
-	  rws,0	%r12, %fpcr
-	}
-	{
-	  rws,0	%r13, %fpsr
-	}
-	{
-	  nop 5
-	}
-	{
-	  ct	%ctpr3
-	}
 	.size	fx_73, .-fx_73
 
 	.global	fx_74
@@ -6321,7 +6310,7 @@ fx_74:
 	  nop 7
 	}
 	{
-	  fxsubxs,0	%r2, %r3, %r5
+	  fxsubxd,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -6408,16 +6397,13 @@ fx_75:
 	  nop 7
 	}
 	{
-	  fxsubxx,0	%r2, %r3, %r5
+	  fxsubxs,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
 	}
 	{
 	  nop 7
-	}
-	{
-	  movfi,0	%r5, %r6
 	}
 	{
 	  nop 7
@@ -6475,6 +6461,16 @@ fx_76:
 	  movif,0	%dr8, %r9, %r2
 	}
 	{
+	  ldd,0	%dr0, 0x10, %dr8
+	  ldd,2	%dr0, 0x18, %dr9
+	}
+	{
+	  nop 2
+	}
+	{
+	  movif,0	%dr8, %r9, %r3
+	}
+	{
 	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
 	  addd,2	0x0, 0x0, %dr6
 	}
@@ -6488,13 +6484,16 @@ fx_76:
 	  nop 7
 	}
 	{
-	  fxtofd,0	%r2, %r5
+	  fxsubxx,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
 	}
 	{
 	  nop 7
+	}
+	{
+	  movfi,0	%r5, %r6
 	}
 	{
 	  nop 7
@@ -6565,7 +6564,7 @@ fx_77:
 	  nop 7
 	}
 	{
-	  fxtofs,0	%r2, %r5
+	  fxtofd,0	%r2, %r5
 	}
 	{
 	  nop 7
@@ -6642,7 +6641,7 @@ fx_78:
 	  nop 7
 	}
 	{
-	  fxtoid,0	%r2, %r5
+	  fxtofs,0	%r2, %r5
 	}
 	{
 	  nop 7
@@ -6719,7 +6718,7 @@ fx_79:
 	  nop 7
 	}
 	{
-	  fxtoidtr,0	%r2, %r5
+	  fxtoid,0	%r2, %r5
 	}
 	{
 	  nop 7
@@ -6796,7 +6795,7 @@ fx_80:
 	  nop 7
 	}
 	{
-	  fxtois,0	%r2, %r5
+	  fxtoidtr,0	%r2, %r5
 	}
 	{
 	  nop 7
@@ -6873,7 +6872,7 @@ fx_81:
 	  nop 7
 	}
 	{
-	  fxtoistr,0	%r2, %r5
+	  fxtois,0	%r2, %r5
 	}
 	{
 	  nop 7
@@ -6915,6 +6914,83 @@ fx_81:
 	.type	fx_82, #function
 	.align	8
 fx_82:
+	{
+	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
+	  return	%ctpr3
+	  adds,1	%r2, 0x0, %r4
+	}
+	{
+	  rrs,0	%fpcr, %r12
+	}
+	{
+	  rrs,0	%fpsr, %r13
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr8
+	  ldd,2	%dr0, 0x8, %dr9
+	}
+	{
+	  nop 2
+	}
+	{
+	  movif,0	%dr8, %r9, %r2
+	}
+	{
+	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
+	  addd,2	0x0, 0x0, %dr6
+	}
+	{
+	  rws,0	%r4, %fpcr
+	}
+	{
+	  rws,0	0x0, %fpsr
+	}
+	{
+	  nop 7
+	}
+	{
+	  fxtoistr,0	%r2, %r5
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrs,0	%fpsr, %r7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr1, 0x0, %dr5
+	  std,5	%dr1, 0x8, %dr6
+	}
+	{
+	  stw,2	%dr1, 0x10, %r7
+	}
+	{
+	  rws,0	%r12, %fpcr
+	}
+	{
+	  rws,0	%r13, %fpsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	fx_82, .-fx_82
+
+	.global	fx_83
+	.type	fx_83, #function
+	.align	8
+fx_83:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -6985,12 +7061,12 @@ fx_82:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_82, .-fx_82
+	.size	fx_83, .-fx_83
 
-	.global	fx_83
-	.type	fx_83, #function
+	.global	fx_84
+	.type	fx_84, #function
 	.align	8
-fx_83:
+fx_84:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -7023,86 +7099,6 @@ fx_83:
 	}
 	{
 	  istofx,0	%r2, %r5
-	}
-	{
-	  nop 7
-	}
-	{
-	  nop 7
-	}
-	{
-	  movfi,0	%r5, %r6
-	}
-	{
-	  nop 7
-	}
-	{
-	  rrs,0	%fpsr, %r7
-	}
-	{
-	  nop 2
-	}
-	{
-	  std,2	%dr1, 0x0, %dr5
-	  std,5	%dr1, 0x8, %dr6
-	}
-	{
-	  stw,2	%dr1, 0x10, %r7
-	}
-	{
-	  rws,0	%r12, %fpcr
-	}
-	{
-	  rws,0	%r13, %fpsr
-	}
-	{
-	  nop 5
-	}
-	{
-	  ct	%ctpr3
-	}
-	.size	fx_83, .-fx_83
-
-	.global	fx_84
-	.type	fx_84, #function
-	.align	8
-fx_84:
-	{
-	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
-	  return	%ctpr3
-	  adds,1	%r2, 0x0, %r4
-	}
-	{
-	  rrs,0	%fpcr, %r12
-	}
-	{
-	  rrs,0	%fpsr, %r13
-	}
-	{
-	  ldd,0	%dr0, 0x0, %dr8
-	  ldd,2	%dr0, 0x8, %dr9
-	}
-	{
-	  nop 2
-	}
-	{
-	  movif,0	%dr8, %r9, %r2
-	}
-	{
-	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
-	  addd,2	0x0, 0x0, %dr6
-	}
-	{
-	  rws,0	%r4, %fpcr
-	}
-	{
-	  rws,0	0x0, %fpsr
-	}
-	{
-	  nop 7
-	}
-	{
-	  movx,0	%r2, %r5
 	}
 	{
 	  nop 7
@@ -7182,7 +7178,7 @@ fx_85:
 	  nop 7
 	}
 	{
-	  movxa,0	%r2, %r5
+	  movx,0	%r2, %r5
 	}
 	{
 	  nop 7
@@ -7262,7 +7258,7 @@ fx_86:
 	  nop 7
 	}
 	{
-	  movxc,0	%r2, %r5
+	  movxa,0	%r2, %r5
 	}
 	{
 	  nop 7
@@ -7307,6 +7303,86 @@ fx_86:
 	.type	fx_87, #function
 	.align	8
 fx_87:
+	{
+	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
+	  return	%ctpr3
+	  adds,1	%r2, 0x0, %r4
+	}
+	{
+	  rrs,0	%fpcr, %r12
+	}
+	{
+	  rrs,0	%fpsr, %r13
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr8
+	  ldd,2	%dr0, 0x8, %dr9
+	}
+	{
+	  nop 2
+	}
+	{
+	  movif,0	%dr8, %r9, %r2
+	}
+	{
+	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
+	  addd,2	0x0, 0x0, %dr6
+	}
+	{
+	  rws,0	%r4, %fpcr
+	}
+	{
+	  rws,0	0x0, %fpsr
+	}
+	{
+	  nop 7
+	}
+	{
+	  movxc,0	%r2, %r5
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  movfi,0	%r5, %r6
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrs,0	%fpsr, %r7
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr1, 0x0, %dr5
+	  std,5	%dr1, 0x8, %dr6
+	}
+	{
+	  stw,2	%dr1, 0x10, %r7
+	}
+	{
+	  rws,0	%r12, %fpcr
+	}
+	{
+	  rws,0	%r13, %fpsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	fx_87, .-fx_87
+
+	.global	fx_88
+	.type	fx_88, #function
+	.align	8
+fx_88:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -7394,12 +7470,12 @@ fx_87:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_87, .-fx_87
+	.size	fx_88, .-fx_88
 
-	.global	fx_88
-	.type	fx_88, #function
+	.global	fx_89
+	.type	fx_89, #function
 	.align	8
-fx_88:
+fx_89:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -7487,12 +7563,12 @@ fx_88:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_88, .-fx_88
+	.size	fx_89, .-fx_89
 
-	.global	fx_89
-	.type	fx_89, #function
+	.global	fx_90
+	.type	fx_90, #function
 	.align	8
-fx_89:
+fx_90:
 	{
 	  setwd	wsz = 0x8, nfx = 0x0, dbl = 0x0
 	  return	%ctpr3
@@ -7584,4 +7660,4 @@ fx_89:
 	{
 	  ct	%ctpr3
 	}
-	.size	fx_89, .-fx_89
+	.size	fx_90, .-fx_90

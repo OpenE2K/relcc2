@@ -8,6 +8,8 @@
 
      LCC=/opt/mcst/lcc-1.29.16.e2k-v3.4c.linux-6.1/bin/lcc
      $LCC -O3 tools/isa-probes/semfx.c tools/isa-probes/semfx.s -o semfx
+     $LCC5 -O3 -DSEMFX_V4 tools/isa-probes/semfx.c tools/isa-probes/semfx.s \
+       tools/isa-probes/semfx-v4.s -o semfx  # v4+ (fxscalesx)
      ./semfx > hw.txt                     # on hardware
      cc -O1 tools/isa-probes/check_semfx.c -o check_semfx   # x86 host
      ./check_semfx < hw.txt
@@ -27,12 +29,18 @@ typedef unsigned long u64;
 
 #define OP(i, n, a, b, r) void fx_##i (const u64 *, u64 *, unsigned);
 #include "semfx-ops.h"
+#ifdef SEMFX_V4
+#include "semfx-v4-ops.h"
+#endif
 #undef OP
 
 static const struct { void (*f) (const u64 *, u64 *, unsigned);
                       const char *name, *a, *b, *r; } ops[] = {
 #define OP(i, n, a, b, r) { fx_##i, n, a, b, r },
 #include "semfx-ops.h"
+#ifdef SEMFX_V4
+#include "semfx-v4-ops.h"
+#endif
 #undef OP
 };
 

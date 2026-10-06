@@ -2034,7 +2034,7 @@ sx_35:
 	  nop 7
 	}
 	{
-	  fcmpeqs,0	%r2, %r3, %r5
+	  fcmpeqd,0	%dr2, %dr3, %dr5
 	}
 	{
 	  nop 7
@@ -2065,6 +2065,60 @@ sx_35:
 	.type	sx_36, #function
 	.align	8
 sx_36:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  rrs,0	%pfpfr, %r8
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr2
+	  ldd,2	%dr0, 0x8, %dr3
+	  ldd,3	%dr0, 0x10, %dr4
+	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
+	}
+	{
+	  ands,0	%r8, 0xffffffc0, %r9
+	}
+	{
+	  rws,0	%r9, %pfpfr
+	}
+	{
+	  nop 7
+	}
+	{
+	  fcmpeqs,0	%r2, %r3, %r5
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 2
+	  rrs,0	%pfpfr, %r9
+	}
+	{
+	  std,2	%dr1, 0x0, %dr5
+	  stw,5	%dr1, 0x8, %r9
+	}
+	{
+	  rws,0	%r8, %pfpfr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	sx_36, .-sx_36
+
+	.global	sx_37
+	.type	sx_37, #function
+	.align	8
+sx_37:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -2119,12 +2173,12 @@ sx_36:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_36, .-sx_36
+	.size	sx_37, .-sx_37
 
-	.global	sx_37
-	.type	sx_37, #function
+	.global	sx_38
+	.type	sx_38, #function
 	.align	8
-sx_37:
+sx_38:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -2173,12 +2227,12 @@ sx_37:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_37, .-sx_37
+	.size	sx_38, .-sx_38
 
-	.global	sx_38
-	.type	sx_38, #function
+	.global	sx_39
+	.type	sx_39, #function
 	.align	8
-sx_38:
+sx_39:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -2227,12 +2281,12 @@ sx_38:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_38, .-sx_38
+	.size	sx_39, .-sx_39
 
-	.global	sx_39
-	.type	sx_39, #function
+	.global	sx_40
+	.type	sx_40, #function
 	.align	8
-sx_39:
+sx_40:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -2287,12 +2341,12 @@ sx_39:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_39, .-sx_39
+	.size	sx_40, .-sx_40
 
-	.global	sx_40
-	.type	sx_40, #function
+	.global	sx_41
+	.type	sx_41, #function
 	.align	8
-sx_40:
+sx_41:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -2341,12 +2395,12 @@ sx_40:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_40, .-sx_40
+	.size	sx_41, .-sx_41
 
-	.global	sx_41
-	.type	sx_41, #function
+	.global	sx_42
+	.type	sx_42, #function
 	.align	8
-sx_41:
+sx_42:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -2395,12 +2449,12 @@ sx_41:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_41, .-sx_41
+	.size	sx_42, .-sx_42
 
-	.global	sx_42
-	.type	sx_42, #function
+	.global	sx_43
+	.type	sx_43, #function
 	.align	8
-sx_42:
+sx_43:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -2455,12 +2509,12 @@ sx_42:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_42, .-sx_42
+	.size	sx_43, .-sx_43
 
-	.global	sx_43
-	.type	sx_43, #function
+	.global	sx_44
+	.type	sx_44, #function
 	.align	8
-sx_43:
+sx_44:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -2509,12 +2563,12 @@ sx_43:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_43, .-sx_43
+	.size	sx_44, .-sx_44
 
-	.global	sx_44
-	.type	sx_44, #function
+	.global	sx_45
+	.type	sx_45, #function
 	.align	8
-sx_44:
+sx_45:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -2563,12 +2617,12 @@ sx_44:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_44, .-sx_44
+	.size	sx_45, .-sx_45
 
-	.global	sx_45
-	.type	sx_45, #function
+	.global	sx_46
+	.type	sx_46, #function
 	.align	8
-sx_45:
+sx_46:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -2623,12 +2677,12 @@ sx_45:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_45, .-sx_45
+	.size	sx_46, .-sx_46
 
-	.global	sx_46
-	.type	sx_46, #function
+	.global	sx_47
+	.type	sx_47, #function
 	.align	8
-sx_46:
+sx_47:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -2677,12 +2731,12 @@ sx_46:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_46, .-sx_46
+	.size	sx_47, .-sx_47
 
-	.global	sx_47
-	.type	sx_47, #function
+	.global	sx_48
+	.type	sx_48, #function
 	.align	8
-sx_47:
+sx_48:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -2731,12 +2785,12 @@ sx_47:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_47, .-sx_47
+	.size	sx_48, .-sx_48
 
-	.global	sx_48
-	.type	sx_48, #function
+	.global	sx_49
+	.type	sx_49, #function
 	.align	8
-sx_48:
+sx_49:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -2791,12 +2845,12 @@ sx_48:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_48, .-sx_48
+	.size	sx_49, .-sx_49
 
-	.global	sx_49
-	.type	sx_49, #function
+	.global	sx_50
+	.type	sx_50, #function
 	.align	8
-sx_49:
+sx_50:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -2845,12 +2899,12 @@ sx_49:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_49, .-sx_49
+	.size	sx_50, .-sx_50
 
-	.global	sx_50
-	.type	sx_50, #function
+	.global	sx_51
+	.type	sx_51, #function
 	.align	8
-sx_50:
+sx_51:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -2899,12 +2953,12 @@ sx_50:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_50, .-sx_50
+	.size	sx_51, .-sx_51
 
-	.global	sx_51
-	.type	sx_51, #function
+	.global	sx_52
+	.type	sx_52, #function
 	.align	8
-sx_51:
+sx_52:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -2959,12 +3013,12 @@ sx_51:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_51, .-sx_51
+	.size	sx_52, .-sx_52
 
-	.global	sx_52
-	.type	sx_52, #function
+	.global	sx_53
+	.type	sx_53, #function
 	.align	8
-sx_52:
+sx_53:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -3013,12 +3067,12 @@ sx_52:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_52, .-sx_52
+	.size	sx_53, .-sx_53
 
-	.global	sx_53
-	.type	sx_53, #function
+	.global	sx_54
+	.type	sx_54, #function
 	.align	8
-sx_53:
+sx_54:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -3067,12 +3121,12 @@ sx_53:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_53, .-sx_53
+	.size	sx_54, .-sx_54
 
-	.global	sx_54
-	.type	sx_54, #function
+	.global	sx_55
+	.type	sx_55, #function
 	.align	8
-sx_54:
+sx_55:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -3127,12 +3181,12 @@ sx_54:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_54, .-sx_54
+	.size	sx_55, .-sx_55
 
-	.global	sx_55
-	.type	sx_55, #function
+	.global	sx_56
+	.type	sx_56, #function
 	.align	8
-sx_55:
+sx_56:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -3181,12 +3235,12 @@ sx_55:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_55, .-sx_55
+	.size	sx_56, .-sx_56
 
-	.global	sx_56
-	.type	sx_56, #function
+	.global	sx_57
+	.type	sx_57, #function
 	.align	8
-sx_56:
+sx_57:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -3235,12 +3289,12 @@ sx_56:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_56, .-sx_56
+	.size	sx_57, .-sx_57
 
-	.global	sx_57
-	.type	sx_57, #function
+	.global	sx_58
+	.type	sx_58, #function
 	.align	8
-sx_57:
+sx_58:
 	{
 	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
 	  return	%ctpr3
@@ -3295,60 +3349,6 @@ sx_57:
 	{
 	  ct	%ctpr3
 	}
-	.size	sx_57, .-sx_57
-
-	.global	sx_58
-	.type	sx_58, #function
-	.align	8
-sx_58:
-	{
-	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
-	  return	%ctpr3
-	}
-	{
-	  rrs,0	%pfpfr, %r8
-	}
-	{
-	  ldd,0	%dr0, 0x0, %dr2
-	  ldd,2	%dr0, 0x8, %dr3
-	  ldd,3	%dr0, 0x10, %dr4
-	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
-	}
-	{
-	  ands,0	%r8, 0xffffffc0, %r9
-	}
-	{
-	  rws,0	%r9, %pfpfr
-	}
-	{
-	  nop 7
-	}
-	{
-	  fdtoidtr,0	%dr2, %dr5
-	}
-	{
-	  nop 7
-	}
-	{
-	  nop 7
-	}
-	{
-	  nop 2
-	  rrs,0	%pfpfr, %r9
-	}
-	{
-	  std,2	%dr1, 0x0, %dr5
-	  stw,5	%dr1, 0x8, %r9
-	}
-	{
-	  rws,0	%r8, %pfpfr
-	}
-	{
-	  nop 5
-	}
-	{
-	  ct	%ctpr3
-	}
 	.size	sx_58, .-sx_58
 
 	.global	sx_59
@@ -3378,7 +3378,7 @@ sx_59:
 	  nop 7
 	}
 	{
-	  fdtoifd,0	%dr2, %dr3, %dr5
+	  fdtofs,0	%dr2, %r5
 	}
 	{
 	  nop 7
@@ -3432,7 +3432,7 @@ sx_60:
 	  nop 7
 	}
 	{
-	  fdtoistr,0	%dr2, %r5
+	  fdtoid,0	%dr2, %dr5
 	}
 	{
 	  nop 7
@@ -3486,7 +3486,7 @@ sx_61:
 	  nop 7
 	}
 	{
-	  fmaxs,0	%r2, %r3, %r5
+	  fdtoidtr,0	%dr2, %dr5
 	}
 	{
 	  nop 7
@@ -3540,7 +3540,7 @@ sx_62:
 	  nop 7
 	}
 	{
-	  fmins,0	%r2, %r3, %r5
+	  fdtoifd,0	%dr2, %dr3, %dr5
 	}
 	{
 	  nop 7
@@ -3594,7 +3594,7 @@ sx_63:
 	  nop 7
 	}
 	{
-	  fstoid,0	%r2, %dr5
+	  fdtoistr,0	%dr2, %r5
 	}
 	{
 	  nop 7
@@ -3648,7 +3648,7 @@ sx_64:
 	  nop 7
 	}
 	{
-	  fstoidtr,0	%r2, %dr5
+	  fmaxs,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -3702,7 +3702,7 @@ sx_65:
 	  nop 7
 	}
 	{
-	  fstoifs,0	%r2, %r3, %r5
+	  fmins,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -3756,7 +3756,7 @@ sx_66:
 	  nop 7
 	}
 	{
-	  fsubd,0	%dr2, %dr3, %dr5
+	  fmuls,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -3810,7 +3810,7 @@ sx_67:
 	  nop 7
 	}
 	{
-	  fsubs,0	%r2, %r3, %r5
+	  fstofd,0	%r2, %dr5
 	}
 	{
 	  nop 7
@@ -3864,7 +3864,7 @@ sx_68:
 	  nop 7
 	}
 	{
-	  idtofs,0	%dr2, %r5
+	  fstoid,0	%r2, %dr5
 	}
 	{
 	  nop 7
@@ -3918,7 +3918,7 @@ sx_69:
 	  nop 7
 	}
 	{
-	  incd_fd,0	%dr2, %dr3, %r4, %r5
+	  fstoidtr,0	%r2, %dr5
 	}
 	{
 	  nop 7
@@ -3972,7 +3972,7 @@ sx_70:
 	  nop 7
 	}
 	{
-	  incs_fb,0	%r2, %r3, %r4, %r5
+	  fstoifs,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -4026,7 +4026,7 @@ sx_71:
 	  nop 7
 	}
 	{
-	  incs_fh,0	%r2, %r3, %r4, %r5
+	  fsubd,0	%dr2, %dr3, %dr5
 	}
 	{
 	  nop 7
@@ -4080,7 +4080,7 @@ sx_72:
 	  nop 7
 	}
 	{
-	  incs_fw,0	%r2, %r3, %r4, %r5
+	  fsubs,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -4134,7 +4134,7 @@ sx_73:
 	  nop 7
 	}
 	{
-	  insfd,0	%dr2, %dr3, %dr4, %dr5
+	  idtofd,0	%dr2, %dr5
 	}
 	{
 	  nop 7
@@ -4188,7 +4188,7 @@ sx_74:
 	  nop 7
 	}
 	{
-	  insfs,0	%r2, %r3, %r4, %r5
+	  idtofs,0	%dr2, %r5
 	}
 	{
 	  nop 7
@@ -4242,7 +4242,7 @@ sx_75:
 	  nop 7
 	}
 	{
-	  istofd,0	%r2, %dr5
+	  incd_fd,0	%dr2, %dr3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -4296,7 +4296,7 @@ sx_76:
 	  nop 7
 	}
 	{
-	  istofs,0	%r2, %r5
+	  incs_fb,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -4347,13 +4347,10 @@ sx_77:
 	  rws,0	%r9, %pfpfr
 	}
 	{
-	  cmpesb,0	0x0, 0x1, %pred1
-	}
-	{
 	  nop 7
 	}
 	{
-	  merge_addd,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  incs_fh,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -4404,13 +4401,10 @@ sx_78:
 	  rws,0	%r9, %pfpfr
 	}
 	{
-	  cmpesb,0	0x0, 0x0, %pred1
-	}
-	{
 	  nop 7
 	}
 	{
-	  merge_addd,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  incs_fw,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -4461,13 +4455,10 @@ sx_79:
 	  rws,0	%r9, %pfpfr
 	}
 	{
-	  cmpesb,0	0x0, 0x1, %pred1
-	}
-	{
 	  nop 7
 	}
 	{
-	  merge_adds,1	%r2, %r3, %r4, %r5, %pred1
+	  insfd,0	%dr2, %dr3, %dr4, %dr5
 	}
 	{
 	  nop 7
@@ -4518,13 +4509,10 @@ sx_80:
 	  rws,0	%r9, %pfpfr
 	}
 	{
-	  cmpesb,0	0x0, 0x0, %pred1
-	}
-	{
 	  nop 7
 	}
 	{
-	  merge_adds,1	%r2, %r3, %r4, %r5, %pred1
+	  insfs,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -4575,13 +4563,10 @@ sx_81:
 	  rws,0	%r9, %pfpfr
 	}
 	{
-	  cmpesb,0	0x0, 0x1, %pred1
-	}
-	{
 	  nop 7
 	}
 	{
-	  merge_andd,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  istofd,0	%r2, %dr5
 	}
 	{
 	  nop 7
@@ -4632,13 +4617,10 @@ sx_82:
 	  rws,0	%r9, %pfpfr
 	}
 	{
-	  cmpesb,0	0x0, 0x0, %pred1
-	}
-	{
 	  nop 7
 	}
 	{
-	  merge_andd,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  istofs,0	%r2, %r5
 	}
 	{
 	  nop 7
@@ -4695,7 +4677,7 @@ sx_83:
 	  nop 7
 	}
 	{
-	  merge_andnd,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  merge_addd,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -4752,7 +4734,7 @@ sx_84:
 	  nop 7
 	}
 	{
-	  merge_andnd,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  merge_addd,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -4809,7 +4791,7 @@ sx_85:
 	  nop 7
 	}
 	{
-	  merge_andns,1	%r2, %r3, %r4, %r5, %pred1
+	  merge_adds,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -4866,7 +4848,7 @@ sx_86:
 	  nop 7
 	}
 	{
-	  merge_andns,1	%r2, %r3, %r4, %r5, %pred1
+	  merge_adds,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -4923,7 +4905,7 @@ sx_87:
 	  nop 7
 	}
 	{
-	  merge_ands,1	%r2, %r3, %r4, %r5, %pred1
+	  merge_andd,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -4980,7 +4962,7 @@ sx_88:
 	  nop 7
 	}
 	{
-	  merge_ands,1	%r2, %r3, %r4, %r5, %pred1
+	  merge_andd,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -5037,7 +5019,7 @@ sx_89:
 	  nop 7
 	}
 	{
-	  merge_ord,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  merge_andnd,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -5094,7 +5076,7 @@ sx_90:
 	  nop 7
 	}
 	{
-	  merge_ord,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  merge_andnd,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -5151,7 +5133,7 @@ sx_91:
 	  nop 7
 	}
 	{
-	  merge_ornd,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  merge_andns,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -5208,7 +5190,7 @@ sx_92:
 	  nop 7
 	}
 	{
-	  merge_ornd,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  merge_andns,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -5265,7 +5247,7 @@ sx_93:
 	  nop 7
 	}
 	{
-	  merge_orns,1	%r2, %r3, %r4, %r5, %pred1
+	  merge_ands,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -5322,7 +5304,7 @@ sx_94:
 	  nop 7
 	}
 	{
-	  merge_orns,1	%r2, %r3, %r4, %r5, %pred1
+	  merge_ands,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -5379,7 +5361,7 @@ sx_95:
 	  nop 7
 	}
 	{
-	  merge_ors,1	%r2, %r3, %r4, %r5, %pred1
+	  merge_ord,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -5436,7 +5418,7 @@ sx_96:
 	  nop 7
 	}
 	{
-	  merge_ors,1	%r2, %r3, %r4, %r5, %pred1
+	  merge_ord,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -5493,7 +5475,7 @@ sx_97:
 	  nop 7
 	}
 	{
-	  merge_rsubd,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  merge_ornd,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -5550,7 +5532,7 @@ sx_98:
 	  nop 7
 	}
 	{
-	  merge_rsubd,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  merge_ornd,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -5607,7 +5589,7 @@ sx_99:
 	  nop 7
 	}
 	{
-	  merge_rsubs,1	%r2, %r3, %r4, %r5, %pred1
+	  merge_orns,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -5664,7 +5646,7 @@ sx_100:
 	  nop 7
 	}
 	{
-	  merge_rsubs,1	%r2, %r3, %r4, %r5, %pred1
+	  merge_orns,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -5721,7 +5703,7 @@ sx_101:
 	  nop 7
 	}
 	{
-	  merge_subd,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  merge_ors,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -5778,7 +5760,7 @@ sx_102:
 	  nop 7
 	}
 	{
-	  merge_subd,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  merge_ors,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -5835,7 +5817,7 @@ sx_103:
 	  nop 7
 	}
 	{
-	  merge_subs,1	%r2, %r3, %r4, %r5, %pred1
+	  merge_rsubd,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -5892,7 +5874,7 @@ sx_104:
 	  nop 7
 	}
 	{
-	  merge_subs,1	%r2, %r3, %r4, %r5, %pred1
+	  merge_rsubd,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -5949,7 +5931,7 @@ sx_105:
 	  nop 7
 	}
 	{
-	  merge_xord,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  merge_rsubs,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -6006,7 +5988,7 @@ sx_106:
 	  nop 7
 	}
 	{
-	  merge_xord,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  merge_rsubs,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -6063,7 +6045,7 @@ sx_107:
 	  nop 7
 	}
 	{
-	  merge_xornd,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  merge_subd,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -6120,7 +6102,7 @@ sx_108:
 	  nop 7
 	}
 	{
-	  merge_xornd,1	%dr2, %dr3, %dr4, %dr5, %pred1
+	  merge_subd,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -6177,7 +6159,7 @@ sx_109:
 	  nop 7
 	}
 	{
-	  merge_xorns,1	%r2, %r3, %r4, %r5, %pred1
+	  merge_subs,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -6234,7 +6216,7 @@ sx_110:
 	  nop 7
 	}
 	{
-	  merge_xorns,1	%r2, %r3, %r4, %r5, %pred1
+	  merge_subs,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -6291,7 +6273,7 @@ sx_111:
 	  nop 7
 	}
 	{
-	  merge_xors,1	%r2, %r3, %r4, %r5, %pred1
+	  merge_xord,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -6348,7 +6330,7 @@ sx_112:
 	  nop 7
 	}
 	{
-	  merge_xors,1	%r2, %r3, %r4, %r5, %pred1
+	  merge_xord,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -6399,10 +6381,13 @@ sx_113:
 	  rws,0	%r9, %pfpfr
 	}
 	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	}
+	{
 	  nop 7
 	}
 	{
-	  mpsadbh,1	%dr2, %dr3, %dr5
+	  merge_xornd,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -6453,10 +6438,13 @@ sx_114:
 	  rws,0	%r9, %pfpfr
 	}
 	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	}
+	{
 	  nop 7
 	}
 	{
-	  ord_fd,0	%dr2, %dr3, %r5
+	  merge_xornd,1	%dr2, %dr3, %dr4, %dr5, %pred1
 	}
 	{
 	  nop 7
@@ -6507,10 +6495,13 @@ sx_115:
 	  rws,0	%r9, %pfpfr
 	}
 	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	}
+	{
 	  nop 7
 	}
 	{
-	  ornd_fd,0	%dr2, %dr3, %r5
+	  merge_xorns,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -6561,10 +6552,13 @@ sx_116:
 	  rws,0	%r9, %pfpfr
 	}
 	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	}
+	{
 	  nop 7
 	}
 	{
-	  orns_fb,0	%r2, %r3, %r5
+	  merge_xorns,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -6615,10 +6609,13 @@ sx_117:
 	  rws,0	%r9, %pfpfr
 	}
 	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	}
+	{
 	  nop 7
 	}
 	{
-	  orns_fh,0	%r2, %r3, %r5
+	  merge_xors,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -6669,10 +6666,13 @@ sx_118:
 	  rws,0	%r9, %pfpfr
 	}
 	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	}
+	{
 	  nop 7
 	}
 	{
-	  orns_fw,0	%r2, %r3, %r5
+	  merge_xors,1	%r2, %r3, %r4, %r5, %pred1
 	}
 	{
 	  nop 7
@@ -6726,7 +6726,7 @@ sx_119:
 	  nop 7
 	}
 	{
-	  ors_fb,0	%r2, %r3, %r5
+	  mpsadbh,1	%dr2, %dr3, %dr5
 	}
 	{
 	  nop 7
@@ -6780,7 +6780,7 @@ sx_120:
 	  nop 7
 	}
 	{
-	  ors_fh,0	%r2, %r3, %r5
+	  ord_fd,0	%dr2, %dr3, %r5
 	}
 	{
 	  nop 7
@@ -6834,7 +6834,7 @@ sx_121:
 	  nop 7
 	}
 	{
-	  ors_fw,0	%r2, %r3, %r5
+	  ornd_fd,0	%dr2, %dr3, %r5
 	}
 	{
 	  nop 7
@@ -6888,7 +6888,7 @@ sx_122:
 	  nop 7
 	}
 	{
-	  sard_fd,0	%dr2, %dr3, %r4, %r5
+	  orns_fb,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -6942,7 +6942,7 @@ sx_123:
 	  nop 7
 	}
 	{
-	  sars_fb,0	%r2, %r3, %r4, %r5
+	  orns_fh,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -6996,7 +6996,7 @@ sx_124:
 	  nop 7
 	}
 	{
-	  sars_fh,0	%r2, %r3, %r4, %r5
+	  orns_fw,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -7050,7 +7050,7 @@ sx_125:
 	  nop 7
 	}
 	{
-	  sars_fw,0	%r2, %r3, %r4, %r5
+	  ors_fb,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -7104,7 +7104,7 @@ sx_126:
 	  nop 7
 	}
 	{
-	  scld_fd,0	%dr2, %dr3, %r4, %r5
+	  ors_fh,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -7158,7 +7158,7 @@ sx_127:
 	  nop 7
 	}
 	{
-	  scls_fb,0	%r2, %r3, %r4, %r5
+	  ors_fw,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -7212,7 +7212,7 @@ sx_128:
 	  nop 7
 	}
 	{
-	  scls_fh,0	%r2, %r3, %r4, %r5
+	  sard_fd,0	%dr2, %dr3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -7266,7 +7266,7 @@ sx_129:
 	  nop 7
 	}
 	{
-	  scls_fw,0	%r2, %r3, %r4, %r5
+	  sars_fb,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -7320,7 +7320,7 @@ sx_130:
 	  nop 7
 	}
 	{
-	  scrd_fd,0	%dr2, %dr3, %r4, %r5
+	  sars_fh,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -7374,7 +7374,7 @@ sx_131:
 	  nop 7
 	}
 	{
-	  scrs_fb,0	%r2, %r3, %r4, %r5
+	  sars_fw,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -7428,7 +7428,7 @@ sx_132:
 	  nop 7
 	}
 	{
-	  scrs_fh,0	%r2, %r3, %r4, %r5
+	  scld_fd,0	%dr2, %dr3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -7482,7 +7482,7 @@ sx_133:
 	  nop 7
 	}
 	{
-	  scrs_fw,0	%r2, %r3, %r4, %r5
+	  scls_fb,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -7536,7 +7536,7 @@ sx_134:
 	  nop 7
 	}
 	{
-	  sdivx,5	%dr2, %r3, %r5
+	  scls_fh,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -7590,7 +7590,7 @@ sx_135:
 	  nop 7
 	}
 	{
-	  shld_fd,0	%dr2, %dr3, %r4, %r5
+	  scls_fw,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -7644,7 +7644,7 @@ sx_136:
 	  nop 7
 	}
 	{
-	  shls_fb,0	%r2, %r3, %r4, %r5
+	  scrd_fd,0	%dr2, %dr3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -7698,7 +7698,7 @@ sx_137:
 	  nop 7
 	}
 	{
-	  shls_fh,0	%r2, %r3, %r4, %r5
+	  scrs_fb,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -7752,7 +7752,7 @@ sx_138:
 	  nop 7
 	}
 	{
-	  shls_fw,0	%r2, %r3, %r4, %r5
+	  scrs_fh,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -7806,7 +7806,7 @@ sx_139:
 	  nop 7
 	}
 	{
-	  shrd_fd,0	%dr2, %dr3, %r4, %r5
+	  scrs_fw,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -7860,7 +7860,7 @@ sx_140:
 	  nop 7
 	}
 	{
-	  shrs_fb,0	%r2, %r3, %r4, %r5
+	  sdivx,5	%dr2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -7914,7 +7914,7 @@ sx_141:
 	  nop 7
 	}
 	{
-	  shrs_fh,0	%r2, %r3, %r4, %r5
+	  shld_fd,0	%dr2, %dr3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -7968,7 +7968,7 @@ sx_142:
 	  nop 7
 	}
 	{
-	  shrs_fw,0	%r2, %r3, %r4, %r5
+	  shls_fb,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -8022,7 +8022,7 @@ sx_143:
 	  nop 7
 	}
 	{
-	  smodx,5	%dr2, %r3, %r5
+	  shls_fh,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -8076,7 +8076,7 @@ sx_144:
 	  nop 7
 	}
 	{
-	  smulx,0	%r2, %r3, %dr5
+	  shls_fw,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -8130,7 +8130,7 @@ sx_145:
 	  nop 7
 	}
 	{
-	  smulx_fb,0	%r2, %r3, %r5
+	  shrd_fd,0	%dr2, %dr3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -8184,7 +8184,7 @@ sx_146:
 	  nop 7
 	}
 	{
-	  smulx_fh,0	%r2, %r3, %r5
+	  shrs_fb,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -8238,7 +8238,7 @@ sx_147:
 	  nop 7
 	}
 	{
-	  smulx_fw,0	%r2, %r3, %r5
+	  shrs_fh,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -8292,7 +8292,7 @@ sx_148:
 	  nop 7
 	}
 	{
-	  subd_fd,0	%dr2, %dr3, %r5
+	  shrs_fw,0	%r2, %r3, %r4, %r5
 	}
 	{
 	  nop 7
@@ -8346,7 +8346,7 @@ sx_149:
 	  nop 7
 	}
 	{
-	  subs_fb,0	%r2, %r3, %r5
+	  smodx,5	%dr2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -8400,7 +8400,7 @@ sx_150:
 	  nop 7
 	}
 	{
-	  subs_fh,0	%r2, %r3, %r5
+	  smulx,0	%r2, %r3, %dr5
 	}
 	{
 	  nop 7
@@ -8454,7 +8454,7 @@ sx_151:
 	  nop 7
 	}
 	{
-	  subs_fw,0	%r2, %r3, %r5
+	  smulx_fb,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -8508,7 +8508,7 @@ sx_152:
 	  nop 7
 	}
 	{
-	  udivx,5	%dr2, %r3, %r5
+	  smulx_fh,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -8562,7 +8562,7 @@ sx_153:
 	  nop 7
 	}
 	{
-	  umodx,5	%dr2, %r3, %r5
+	  smulx_fw,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -8616,7 +8616,7 @@ sx_154:
 	  nop 7
 	}
 	{
-	  umulx,0	%r2, %r3, %dr5
+	  subd_fd,0	%dr2, %dr3, %r5
 	}
 	{
 	  nop 7
@@ -8670,7 +8670,7 @@ sx_155:
 	  nop 7
 	}
 	{
-	  umulx_fb,0	%r2, %r3, %r5
+	  subs_fb,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -8724,7 +8724,7 @@ sx_156:
 	  nop 7
 	}
 	{
-	  umulx_fh,0	%r2, %r3, %r5
+	  subs_fh,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -8778,7 +8778,7 @@ sx_157:
 	  nop 7
 	}
 	{
-	  umulx_fw,0	%r2, %r3, %r5
+	  subs_fw,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -8832,7 +8832,7 @@ sx_158:
 	  nop 7
 	}
 	{
-	  xord_fd,0	%dr2, %dr3, %r5
+	  udivx,5	%dr2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -8886,7 +8886,7 @@ sx_159:
 	  nop 7
 	}
 	{
-	  xornd_fd,0	%dr2, %dr3, %r5
+	  umodx,5	%dr2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -8940,7 +8940,7 @@ sx_160:
 	  nop 7
 	}
 	{
-	  xorns_fb,0	%r2, %r3, %r5
+	  umulx,0	%r2, %r3, %dr5
 	}
 	{
 	  nop 7
@@ -8994,7 +8994,7 @@ sx_161:
 	  nop 7
 	}
 	{
-	  xorns_fh,0	%r2, %r3, %r5
+	  umulx_fb,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -9048,7 +9048,7 @@ sx_162:
 	  nop 7
 	}
 	{
-	  xorns_fw,0	%r2, %r3, %r5
+	  umulx_fh,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -9102,7 +9102,7 @@ sx_163:
 	  nop 7
 	}
 	{
-	  xors_fb,0	%r2, %r3, %r5
+	  umulx_fw,0	%r2, %r3, %r5
 	}
 	{
 	  nop 7
@@ -9156,7 +9156,7 @@ sx_164:
 	  nop 7
 	}
 	{
-	  xors_fh,0	%r2, %r3, %r5
+	  xord_fd,0	%dr2, %dr3, %r5
 	}
 	{
 	  nop 7
@@ -9210,7 +9210,7 @@ sx_165:
 	  nop 7
 	}
 	{
-	  xors_fw,0	%r2, %r3, %r5
+	  xornd_fd,0	%dr2, %dr3, %r5
 	}
 	{
 	  nop 7
@@ -9236,3 +9236,327 @@ sx_165:
 	  ct	%ctpr3
 	}
 	.size	sx_165, .-sx_165
+
+	.global	sx_166
+	.type	sx_166, #function
+	.align	8
+sx_166:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  rrs,0	%pfpfr, %r8
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr2
+	  ldd,2	%dr0, 0x8, %dr3
+	  ldd,3	%dr0, 0x10, %dr4
+	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
+	}
+	{
+	  ands,0	%r8, 0xffffffc0, %r9
+	}
+	{
+	  rws,0	%r9, %pfpfr
+	}
+	{
+	  nop 7
+	}
+	{
+	  xorns_fb,0	%r2, %r3, %r5
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 2
+	  rrs,0	%pfpfr, %r9
+	}
+	{
+	  std,2	%dr1, 0x0, %dr5
+	  stw,5	%dr1, 0x8, %r9
+	}
+	{
+	  rws,0	%r8, %pfpfr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	sx_166, .-sx_166
+
+	.global	sx_167
+	.type	sx_167, #function
+	.align	8
+sx_167:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  rrs,0	%pfpfr, %r8
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr2
+	  ldd,2	%dr0, 0x8, %dr3
+	  ldd,3	%dr0, 0x10, %dr4
+	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
+	}
+	{
+	  ands,0	%r8, 0xffffffc0, %r9
+	}
+	{
+	  rws,0	%r9, %pfpfr
+	}
+	{
+	  nop 7
+	}
+	{
+	  xorns_fh,0	%r2, %r3, %r5
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 2
+	  rrs,0	%pfpfr, %r9
+	}
+	{
+	  std,2	%dr1, 0x0, %dr5
+	  stw,5	%dr1, 0x8, %r9
+	}
+	{
+	  rws,0	%r8, %pfpfr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	sx_167, .-sx_167
+
+	.global	sx_168
+	.type	sx_168, #function
+	.align	8
+sx_168:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  rrs,0	%pfpfr, %r8
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr2
+	  ldd,2	%dr0, 0x8, %dr3
+	  ldd,3	%dr0, 0x10, %dr4
+	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
+	}
+	{
+	  ands,0	%r8, 0xffffffc0, %r9
+	}
+	{
+	  rws,0	%r9, %pfpfr
+	}
+	{
+	  nop 7
+	}
+	{
+	  xorns_fw,0	%r2, %r3, %r5
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 2
+	  rrs,0	%pfpfr, %r9
+	}
+	{
+	  std,2	%dr1, 0x0, %dr5
+	  stw,5	%dr1, 0x8, %r9
+	}
+	{
+	  rws,0	%r8, %pfpfr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	sx_168, .-sx_168
+
+	.global	sx_169
+	.type	sx_169, #function
+	.align	8
+sx_169:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  rrs,0	%pfpfr, %r8
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr2
+	  ldd,2	%dr0, 0x8, %dr3
+	  ldd,3	%dr0, 0x10, %dr4
+	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
+	}
+	{
+	  ands,0	%r8, 0xffffffc0, %r9
+	}
+	{
+	  rws,0	%r9, %pfpfr
+	}
+	{
+	  nop 7
+	}
+	{
+	  xors_fb,0	%r2, %r3, %r5
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 2
+	  rrs,0	%pfpfr, %r9
+	}
+	{
+	  std,2	%dr1, 0x0, %dr5
+	  stw,5	%dr1, 0x8, %r9
+	}
+	{
+	  rws,0	%r8, %pfpfr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	sx_169, .-sx_169
+
+	.global	sx_170
+	.type	sx_170, #function
+	.align	8
+sx_170:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  rrs,0	%pfpfr, %r8
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr2
+	  ldd,2	%dr0, 0x8, %dr3
+	  ldd,3	%dr0, 0x10, %dr4
+	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
+	}
+	{
+	  ands,0	%r8, 0xffffffc0, %r9
+	}
+	{
+	  rws,0	%r9, %pfpfr
+	}
+	{
+	  nop 7
+	}
+	{
+	  xors_fh,0	%r2, %r3, %r5
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 2
+	  rrs,0	%pfpfr, %r9
+	}
+	{
+	  std,2	%dr1, 0x0, %dr5
+	  stw,5	%dr1, 0x8, %r9
+	}
+	{
+	  rws,0	%r8, %pfpfr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	sx_170, .-sx_170
+
+	.global	sx_171
+	.type	sx_171, #function
+	.align	8
+sx_171:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  rrs,0	%pfpfr, %r8
+	}
+	{
+	  ldd,0	%dr0, 0x0, %dr2
+	  ldd,2	%dr0, 0x8, %dr3
+	  ldd,3	%dr0, 0x10, %dr4
+	  addd,1	0x0, _f64,_lts0 0x5555555555555555, %dr5
+	}
+	{
+	  ands,0	%r8, 0xffffffc0, %r9
+	}
+	{
+	  rws,0	%r9, %pfpfr
+	}
+	{
+	  nop 7
+	}
+	{
+	  xors_fw,0	%r2, %r3, %r5
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 2
+	  rrs,0	%pfpfr, %r9
+	}
+	{
+	  std,2	%dr1, 0x0, %dr5
+	  stw,5	%dr1, 0x8, %r9
+	}
+	{
+	  rws,0	%r8, %pfpfr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	sx_171, .-sx_171

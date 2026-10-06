@@ -235,10 +235,17 @@ cvt (const char *n, u64 a)
   CV ("idtofs", "cvtsi2ssq %2, %%xmm7\n\tmovq %%xmm7, %0", "r", "r")
   CV ("istofd", "cvtsi2sdl %k2, %%xmm7\n\tmovq %%xmm7, %0", "r", "r")
   CV ("istofs", "cvtsi2ssl %k2, %%xmm7\n\tmovq %%xmm7, %0", "r", "r")
+  CV ("fdtoid", "movq %2, %%xmm7\n\tcvtsd2si %%xmm7, %0", "r", "r")
+  CV ("idtofd", "cvtsi2sdq %2, %%xmm7\n\tmovq %%xmm7, %0", "r", "r")
+  CV ("fdtofs", "movq %2, %%xmm7\n\tcvtsd2ss %%xmm7, %%xmm7\n\t"
+      "movq %%xmm7, %0", "r", "r")
+  CV ("fstofd", "movq %2, %%xmm7\n\tcvtss2sd %%xmm7, %%xmm7\n\t"
+      "movq %%xmm7, %0", "r", "r")
     abort ();
 #undef CV
   SSE_END
-  if (!strcmp (n, "fdtoistr") || !strcmp (n, "idtofs") || !strcmp (n, "istofs"))
+  if (!strcmp (n, "fdtoistr") || !strcmp (n, "idtofs") || !strcmp (n, "istofs")
+      || !strcmp (n, "fdtofs"))
     r = (r & 0xffffffff) | KEEP;
   return r;
 }
@@ -373,10 +380,12 @@ model (const char *n, u64 a, u64 b, u64 c, struct res *r)
         }
     }
   if (!strcmp (n, "fsubd") || !strcmp (n, "fsubs") || !strcmp (n, "fmaxs")
-      || !strcmp (n, "fmins"))
+      || !strcmp (n, "fmins") || !strcmp (n, "fmuls"))
     {
       int s = n[len - 1] == 's';
-      if (n[1] == 's')
+      if (n[1] == 'm' && n[2] == 'u')
+        r->v = SSE_FF ("mulss", "", a, b);
+      else if (n[1] == 's')
         r->v = s ? SSE_FF ("subss", "", a, b) : SSE_FF ("subsd", "", a, b);
       else if (n[2] == 'a')
         r->v = SSE_FF ("maxss", "", a, b);
@@ -402,7 +411,9 @@ model (const char *n, u64 a, u64 b, u64 c, struct res *r)
   if (!strcmp (n, "fstoid") || !strcmp (n, "fstoidtr")
       || !strcmp (n, "fdtoidtr") || !strcmp (n, "fdtoistr")
       || !strcmp (n, "idtofs") || !strcmp (n, "istofd")
-      || !strcmp (n, "istofs"))
+      || !strcmp (n, "istofs") || !strcmp (n, "fdtoid")
+      || !strcmp (n, "idtofd") || !strcmp (n, "fdtofs")
+      || !strcmp (n, "fstofd"))
     {
       r->v = cvt (n, a);
       r->fl = mxcsr;

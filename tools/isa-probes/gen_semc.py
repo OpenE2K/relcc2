@@ -37,7 +37,8 @@ NAMES = (
     "stesmqp stfsb stfsh stfsw stfsd stfsq stfsqp stfsmqp stgsb stgsh stgsw "
     "stgsd stgsq stgsqp stgsmqp stssb stssh stssw stssd stssq stssqp "
     "stssmqp stgdb stgdh stgdw stgdd stgdq stgdqp stgdmqp stapb staph "
-    "stapw stapd stapq stapqp stapmqp strd strqp").split()
+    "stapw stapd stapq stapqp stapmqp strd strqp "
+    "getpl getva vfsi puttc puttst ldq").split()
 REG = {"d": "%dr", "s": "%r", "q": "%qr", "p": "%qpr"}
 
 

@@ -117,14 +117,17 @@ differ from v6.
 ## Repository layout
 
 ```
-spec/isa/      ISA spec: bundle.md (wide instruction format), control-transfer.md
+spec/isa/      ISA spec: operations.md (every operation: what it does, latency,
+               lcc's use, which probe ran it; generated from operations.yaml),
+               bundle.md (wide instruction format), control-transfer.md
                (branches, calls, CTPRs), semantics.md (what operations
                compute), apb.md (array prefetch), speculation.md
                (speculative operations, diagnostic values, DAM),
                loops.md (loop mode, %lsr, rotation),
                monitors.md (performance counters through perf),
                binutils-ops.yaml
-               (every operation), registers.yaml (state and AAU registers)
+               (every operation), registers.yaml (state and AAU registers),
+               lcc-usage.yaml (operation counts in lcc's system libraries)
 spec/abi/      ABI spec for e2k64: data layout, registers + DWARF, calling
                convention, stacks and unwinding, ELF/relocations/PIC/TLS,
                atomics, source-level conventions (macros, asm, options)
@@ -133,7 +136,9 @@ doc/           plans for the owner: gcc-port-plan.md (how to write the GCC port)
 docs/          spec-poc-findings.md: spec problems found by toolchains/gcc-claude
                (kept by the agent working there)
 tools/setup/   install reference toolchains into toolchains/
-tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas
+tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas;
+                    count_lcc_ops.py (lcc-usage.yaml), gen_operations.py
+                    (operations.md)
 tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
 tools/isa-timing/   latency/hazard microbenchmarks run on hardware over SSH
 tools/isa-score/    scores a compiled program's use of E2K parallelism:
@@ -173,7 +178,9 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     80-bit (semfx.c, gen_semfx.py; check_semfx.c on
                     an x86 host), memory, tag and descriptor
                     (semc.c, gen_semc.py; stmqp.c, stmqp.s),
-                    field extract (getf.c, getf.s),
+                    field extract (getf.c, getf.s), v1-v2 operations on
+                    v3+ (v2ops.c, v2ops.s), control operations from user
+                    mode (ctlops.c, ctlops.s),
                     run on hardware; -DSPEC_V5, -DLOOPS_V5, -DAPB_V5
                     builds add v5 cases
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
@@ -241,6 +248,8 @@ tools/setup/build-gcc-docs.sh        # toolchains/gcc-docs/{info,html}: GCC manu
 python3 tools/isa-extract/extract_binutils.py     # regenerate binutils-ops.yaml
 python3 tools/isa-extract/extract_registers.py    # regenerate registers.yaml
 python3 tools/isa-extract/check_encodings.py      # 27,268 cases on v2..v7: all ok
+python3 tools/isa-extract/gen_operations.py --check
+                                                  # every operation has one rule
 tools/isa-decode/build_corpus.sh toolchains/corpus
 python3 tools/isa-decode/compare_objdump.py toolchains/corpus/*.o
                                                   # 6,826 match, 10 known objdump bug
@@ -392,6 +401,21 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   traps on overflow, `abgi` pops, reading an invalid rotating global
   traps only in ALC4/5 and non-speculatively (the same on the 4C). v4,
   v6, v7 are not measured.
+
+### Operation reference (spec/isa/operations.md)
+
+Every operation from v2 on (2,149 after leaving out the v1-only ones:
+no working Elbrus-3M exists) has a rule in `operations.yaml`: what it
+computes, how a compiler uses it, where the details are;
+`gen_operations.py` joins the rules with binutils' ISA versions and
+channels, the measured latencies, lcc's use (`count_lcc_ops.py` counts
+mnemonics in lcc 1.29.16's v3 and v5 sysroot libraries: about 360
+operations) and the probes whose assembly runs each operation, and
+fails if an operation has no rule or two. Every v3–v5 user-mode
+operation has run on hardware except `movaq` (apb.md) and `mmurr`
+(monitors.md); v6/v7 ones come from the community qemu or are known by
+name only. The v1–v2-only operations are SIGILL on v3 and v5 (except two
+reused encodings); `setsft` is a software trap (SIGTRAP).
 
 ### Schedule scoring (tools/isa-score)
 

@@ -179,7 +179,18 @@ packed operation, 177 cases (the 64-bit packed integer and packed FP
 operations, the immediate forms with six immediates each; not the
 combined `pf*_*`, which `fcomb.c` covers, nor the tag operations) over
 40 input sets on the 4C and the Elbrus-8C2, compared with both qemus
-(as `sem5.c` does for v5). Everything matches the community qemu except:
+(as `sem5.c` does for v5). Everything matches the community qemu except
+the points below, so its `target/e2k/helper_vec.c` describes the rest
+(the proof-of-concept back end's finding I21, rechecked): lanes are
+little-endian; compares give all-ones lanes; `pmerge a, b, m` takes b's
+byte where m's byte is negative, else a's; `punpckl*` puts b's lanes at
+even positions; `pack*` puts a's results in the high half; `pmaddh` is
+x86 `pmaddwd` and `psadbw` its namesake; shifts take a count operand
+(counts beyond the lane give 0, arithmetic shifts the sign). On v3 the
+packed add, subtract, min, max, compare and average forms issue only in
+ALC0/3, the multiplies, `pmaddh`, `psadbw`, `punpck*` and `pack*` only in
+ALC1/4, shifts in either pair (binutils-ops.yaml), so 32-bit lanes rarely
+beat six scalar channels. Where the hardware differs:
 
 - **`pshufb` differs between v3 and v5.** Each byte of the third operand
   (the mask) picks a result byte: with bit 7 set, a constant (bits 5–6:
@@ -189,7 +200,8 @@ combined `pf*_*`, which `fcomb.c` covers, nor the tag operations) over
   model; the 8C2 matches it in every byte); on **v3** they are ignored
   and the byte is copied as it is (the 4C, all 320 bytes). Both qemus
   apply the v5 rule to v3 too. A compiler targeting v3 must keep bits
-  4–6 of plain selections clear.
+  4–6 of plain selections clear (finding I21 took the v5 rule from
+  qemu).
 - **`psllql`, `psllqh`, `psrlql`, `psrlqh`** shift `src1:src2` (`src1`
   the high half) as one 128-bit value by **8 × imm** bits (bytes) and
   return its low (`l`) or high (`h`) half; the whole immediate counts,

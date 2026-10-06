@@ -711,6 +711,23 @@ must keep 2 cycles there and not rely on the interlock.
 
 Indirect calls: `movtd %reg, %ctprN` (latency 9) then `call`.
 
+**Conditional returns** (`ct %ctpr3 ? p`, lcc's early exits from leaf
+functions, bzip2's `mainGtU`; the proof-of-concept back end, P27,
+bzip2 −9 2.6% faster) need three things from the port: (1) GCC accepts
+a conditional return only as a plain `(set (pc) (if_then_else c (return)
+(pc)))` (`condjump_p`, jump.cc:789; cfgrtl's "return not followed by
+barrier"), so the pattern can't carry `(use %ctpr3)`: keep `%ctpr3` live
+to the end through `EPILOGUE_USES` in functions that prepare it at
+entry (`df_update_exit_block_uses` once known); (2) sched-deps gives
+registers live at a jump's target a latency-0 anti dependence, which put
+`return %ctpr3` and the conditional `ct` in one instruction, which gas
+rejects before v6 (control-transfer.md, "Restrictions"): add a true
+dependence; (3) what a return block computes, copied above the branch,
+runs on the other path too and must be speculative, and a value written
+under the condition into a register still live on the other path needs
+its dependence on later reads dropped, or every exit waits for the one
+before.
+
 Two hardware facts shape this (`spec/isa/control-transfer.md`, measured
 on the 4C):
 
@@ -1051,6 +1068,22 @@ output:
   the next cycle), and make output dependences cost at least 1 in
   `TARGET_SCHED_ADJUST_COST` (two writes of one register can't share a
   wide instruction).
+- **A taken transfer's whole wide instruction runs.** On ia64 and C6x a
+  taken branch skips the rest of its group; on E2K every operation of
+  the instruction holding a taken `ct` executes (control-transfer.md;
+  `preds.c` shows an `addd` in a taken branch's instruction taking
+  effect). Haifa gives a jump's dependences on later insns latency 0
+  ("Make latency of jump equal to 0 by using anti-dependence",
+  sched-deps.cc:3058), so an insn that must not run on the taken path
+  (one setting a register live at the target, a store, anything without
+  a speculative form) can land in the jump's cycle. In
+  `TARGET_SCHED_ADJUST_COST` make a dependence on a call, or on a jump
+  whose consumer has no speculative form or sets a register live at the
+  jump's target, cost at least 1; print `,sm` on whatever still shares a
+  jump's cycle after it, and on whatever changed blocks, judged by
+  block identity, not by positions recorded before scheduling (the
+  proof-of-concept back end, P23: zstd's fuzzer and GMP crashed until
+  both were fixed; CoreMark −0.75% against the wrong code).
 
 ### 7.4 Printing wide instructions
 
@@ -1406,6 +1439,33 @@ check-free semi-speculative form works.
   compare runs again on the last iteration's values. Fold register
   copies into their sources first, or a pointer chase pays an ALU op and
   a crossing a node. CoreMark +14% (`find` 3 cycles a node, lcc about 9).
+  To go below II 3, give the exit test's predicates **rotating** names
+  as the `%b[]` values get (`setbp psz` with the prologue's `setbn`,
+  `abp` with `abn`, `setbp psz = 0` on leaving; loops.md "Rotation"):
+  strlen at II 1, xz's `lzma_memcmplen` at II 2 (lcc 1) (P24). The loop
+  end is the kernel's last insn, so if another predicate takes the name
+  it reads in the same cycle, dataflow sees the jump read that write
+  (the hardware reads before writing) and deletes the prologue's
+  definition: keep that name free in the loop end's cycle.
+- **Let doloop count only loops that can use `%lsr`** (P25): GCC's RTL
+  doloop converts any loop with a computable count, also one with a
+  second exit (`while (len < limit && a[len] == b[len]) len++`), which on
+  E2K can't run in loop mode; the counter then stays in a register and
+  costs a decrement and a compare per iteration on top of the loop's own
+  variable. Fail `doloop_end` for a loop of two non-empty blocks with two
+  exits (the PoC's kernel went from 7 operations at II 2 to 6 at II 1,
+  lcc's).
+- **Copies into and out of a pipelined loop's ring must be
+  speculative** (`,sm`; P26): before the loop a register may hold a
+  diagnostic value from a speculative load the program never reads on
+  that path, and a plain copy traps (xz's `index_tree_next`, SIGILL). In
+  general, any operation a compiler adds that reads a register on a path
+  where the program didn't must be speculative.
+- **Untested combination** (P28, open): a pipelined loop with both a
+  lock load + check and rotating predicates computed wrong results in
+  GMP's `mpn_bdiv_dbm1c` with overlapping operands (smaller loops were
+  right on the 4C); the PoC refuses it. The compensation code of a lock
+  load presumably must see the same predicates as the kernel would.
 - **DAM inside a pipelined loop** (a load that may read what an earlier
   iteration stored, `core_list_reverse`; P19, 4C and 8C2): the lock load
   runs stages ahead (ALC0, `,sm`, `mas=0x4`), the check (`mas=0x3`, ALC5,

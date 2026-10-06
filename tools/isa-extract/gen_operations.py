@@ -68,11 +68,12 @@ PROBES = {
     "stld.s": ("stld.c", "4C, 8C2, 2C3"),
     "p28.s": ("p28.c", "4C, 8C2"),
     "abg.s": ("abg.c", "4C, 8C2"),
-    "pmu.s": ("pmu.c", "4C"),
+    "pmu.s": ("pmu.c", "4C, 8C2, 2C3"),
     "v2ops.s": ("v2ops.c", "4C, 8C2, 2C3"),
     "ctlops.s": ("ctlops.c", "4C, 8C2, 2C3"),
     "semfx-v4.s": ("semfx.c", "8C2, 2C3"),
     "sem6.s": ("sem6.c", "2C3"),
+    "ctl6.s": ("ctl6.c", "2C3"),
 }
 ABI_PROBES = "tools/abi/probes"
 

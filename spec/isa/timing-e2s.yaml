@@ -3,7 +3,7 @@
 measured_on: 'Elbrus 4C (E2S), elbrus-v3, 750 MHz, ALT Linux'
 lcc_target: v3
 numa: '1:1'
-date: 2026-10-05
+date: 2026-10-06
 throughput:
   addd_1: {cycles_per_instruction: 1.00, what: '1 addd'}
   addd_6: {cycles_per_instruction: 1.00, what: '6 addd'}
@@ -17,6 +17,9 @@ throughput:
   fdtoid_4: {cycles_per_instruction: 1.00, what: '4 fdtoid'}
   paddw_2: {cycles_per_instruction: 1.00, what: '2 paddw'}
   popcntd_2: {cycles_per_instruction: 1.00, what: '2 popcntd'}
+  add_addd_2: {cycles_per_instruction: 1.00, what: '2 add_addd'}
+  add_addd2_addd4: {cycles_per_instruction: 1.00, what: '2 add_addd + 4 addd'}
+  shl_addd2_addd4: {cycles_per_instruction: 1.00, what: '2 shl_addd + 4 addd'}
   ldd_1: {cycles_per_instruction: 1.00, what: '1 ldd'}
   ldd_2: {cycles_per_instruction: 1.00, what: '2 ldd (ALC0, 3)'}
   ldd_4: {cycles_per_instruction: 1.00, what: '4 ldd'}
@@ -25,52 +28,52 @@ throughput:
   std_1: {cycles_per_instruction: 1.00, what: '1 std'}
   std_2: {cycles_per_instruction: 2.02, what: '2 std'}
   std2_addd4: {cycles_per_instruction: 2.02, what: '2 std + 4 addd'}
-  std_2_8: {cycles_per_instruction: 2.02, what: '2 std, 8 bytes apart'}
+  std_2_8: {cycles_per_instruction: 2.01, what: '2 std, 8 bytes apart'}
   std_2_40: {cycles_per_instruction: 1.00, what: '2 std, 64 bytes apart'}
   std_2_100: {cycles_per_instruction: 2.02, what: '2 std, 256 bytes apart'}
-  std_2_0: {cycles_per_instruction: 2.02, what: '2 std, same address'}
+  std_2_0: {cycles_per_instruction: 2.01, what: '2 std, same address'}
   stw_2: {cycles_per_instruction: 1.00, what: '2 stw, 64 bytes apart'}
   std_1_5: {cycles_per_instruction: 1.00, what: '1 std in ALC5'}
-  std1_ldd2: {cycles_per_instruction: 2.02, what: '1 std + 2 ldd'}
+  std1_ldd2: {cycles_per_instruction: 1.00, what: '1 std + 2 ldd'}
   fdivd: {cycles_per_instruction: 5.02, what: 'fdivd'}
-  fdivs: {cycles_per_instruction: 5.03, what: 'fdivs'}
-  fsqrts: {cycles_per_instruction: 7.04, what: 'fsqrts'}
-  sdivd: {cycles_per_instruction: 5.01, what: 'sdivd'}
+  fdivs: {cycles_per_instruction: 5.01, what: 'fdivs'}
+  fsqrts: {cycles_per_instruction: 7.03, what: 'fsqrts'}
+  sdivd: {cycles_per_instruction: 5.02, what: 'sdivd'}
   sdivs: {cycles_per_instruction: 5.02, what: 'sdivs'}
-  fdivd_g2: {cycles_per_instruction: 2.02, what: 'fdivd every 2 cycles'}
+  fdivd_g2: {cycles_per_instruction: 2.01, what: 'fdivd every 2 cycles'}
   fdivd_g3: {cycles_per_instruction: 3.02, what: 'fdivd every 3 cycles'}
   fdivd_g4: {cycles_per_instruction: 4.02, what: 'fdivd every 4 cycles'}
-  fdivd_g5: {cycles_per_instruction: 5.02, what: 'fdivd every 5 cycles'}
+  fdivd_g5: {cycles_per_instruction: 5.01, what: 'fdivd every 5 cycles'}
   fdivd_g6: {cycles_per_instruction: 6.03, what: 'fdivd every 6 cycles'}
-  fdivd_g7: {cycles_per_instruction: 7.04, what: 'fdivd every 7 cycles'}
-  fdivd_g8: {cycles_per_instruction: 8.03, what: 'fdivd every 8 cycles'}
+  fdivd_g7: {cycles_per_instruction: 7.03, what: 'fdivd every 7 cycles'}
+  fdivd_g8: {cycles_per_instruction: 8.04, what: 'fdivd every 8 cycles'}
   fdivs_g2: {cycles_per_instruction: 2.02, what: 'fdivs every 2 cycles'}
   fdivs_g3: {cycles_per_instruction: 3.02, what: 'fdivs every 3 cycles'}
-  fdivs_g4: {cycles_per_instruction: 4.02, what: 'fdivs every 4 cycles'}
-  fdivs_g5: {cycles_per_instruction: 5.02, what: 'fdivs every 5 cycles'}
+  fdivs_g4: {cycles_per_instruction: 4.01, what: 'fdivs every 4 cycles'}
+  fdivs_g5: {cycles_per_instruction: 5.03, what: 'fdivs every 5 cycles'}
   fdivs_g6: {cycles_per_instruction: 6.04, what: 'fdivs every 6 cycles'}
-  fdivs_g7: {cycles_per_instruction: 7.04, what: 'fdivs every 7 cycles'}
+  fdivs_g7: {cycles_per_instruction: 7.03, what: 'fdivs every 7 cycles'}
   fdivs_g8: {cycles_per_instruction: 8.03, what: 'fdivs every 8 cycles'}
-  fsqrts_g2: {cycles_per_instruction: 2.75, what: 'fsqrts every 2 cycles'}
+  fsqrts_g2: {cycles_per_instruction: 2.77, what: 'fsqrts every 2 cycles'}
   fsqrts_g3: {cycles_per_instruction: 3.02, what: 'fsqrts every 3 cycles'}
-  fsqrts_g4: {cycles_per_instruction: 4.02, what: 'fsqrts every 4 cycles'}
-  fsqrts_g5: {cycles_per_instruction: 7.04, what: 'fsqrts every 5 cycles'}
+  fsqrts_g4: {cycles_per_instruction: 4.01, what: 'fsqrts every 4 cycles'}
+  fsqrts_g5: {cycles_per_instruction: 7.03, what: 'fsqrts every 5 cycles'}
   fsqrts_g6: {cycles_per_instruction: 6.03, what: 'fsqrts every 6 cycles'}
   fsqrts_g7: {cycles_per_instruction: 7.02, what: 'fsqrts every 7 cycles'}
   fsqrts_g8: {cycles_per_instruction: 8.04, what: 'fsqrts every 8 cycles'}
   sdivd_g2: {cycles_per_instruction: 3.38, what: 'sdivd every 2 cycles'}
-  sdivd_g3: {cycles_per_instruction: 3.00, what: 'sdivd every 3 cycles'}
+  sdivd_g3: {cycles_per_instruction: 3.02, what: 'sdivd every 3 cycles'}
   sdivd_g4: {cycles_per_instruction: 4.02, what: 'sdivd every 4 cycles'}
-  sdivd_g5: {cycles_per_instruction: 5.02, what: 'sdivd every 5 cycles'}
-  sdivd_g6: {cycles_per_instruction: 6.04, what: 'sdivd every 6 cycles'}
-  sdivd_g7: {cycles_per_instruction: 7.03, what: 'sdivd every 7 cycles'}
+  sdivd_g5: {cycles_per_instruction: 5.01, what: 'sdivd every 5 cycles'}
+  sdivd_g6: {cycles_per_instruction: 6.03, what: 'sdivd every 6 cycles'}
+  sdivd_g7: {cycles_per_instruction: 7.04, what: 'sdivd every 7 cycles'}
   sdivd_g8: {cycles_per_instruction: 8.04, what: 'sdivd every 8 cycles'}
   sdivs_g2: {cycles_per_instruction: 2.02, what: 'sdivs every 2 cycles'}
   sdivs_g3: {cycles_per_instruction: 3.02, what: 'sdivs every 3 cycles'}
-  sdivs_g4: {cycles_per_instruction: 4.02, what: 'sdivs every 4 cycles'}
+  sdivs_g4: {cycles_per_instruction: 4.01, what: 'sdivs every 4 cycles'}
   sdivs_g5: {cycles_per_instruction: 5.02, what: 'sdivs every 5 cycles'}
-  sdivs_g6: {cycles_per_instruction: 6.04, what: 'sdivs every 6 cycles'}
-  sdivs_g7: {cycles_per_instruction: 7.02, what: 'sdivs every 7 cycles'}
+  sdivs_g6: {cycles_per_instruction: 6.03, what: 'sdivs every 6 cycles'}
+  sdivs_g7: {cycles_per_instruction: 7.04, what: 'sdivs every 7 cycles'}
   sdivs_g8: {cycles_per_instruction: 8.04, what: 'sdivs every 8 cycles'}
   stst_8: {cycles_per_instruction: 2.02, what: 'std + std 8 bytes apart'}
   stld_8: {cycles_per_instruction: 2.02, what: 'std + ldd 8 bytes apart'}
@@ -120,17 +123,17 @@ throughput:
   st5_ld2: {cycles_per_instruction: 1.00, what: 'std in ALC5 + ldd in ALC2'}
   st5_ld3: {cycles_per_instruction: 1.00, what: 'std in ALC5 + ldd in ALC3'}
   st5_ld23: {cycles_per_instruction: 1.00, what: 'std in ALC5 + ldd in ALC2, 3'}
-  g_0_0: {cycles_per_instruction: 2.02, what: 'grid'}
-  g_0_8: {cycles_per_instruction: 2.02, what: 'grid'}
+  g_0_0: {cycles_per_instruction: 2.01, what: 'grid'}
+  g_0_8: {cycles_per_instruction: 2.01, what: 'grid'}
   g_0_10: {cycles_per_instruction: 2.02, what: 'grid'}
   g_0_18: {cycles_per_instruction: 2.02, what: 'grid'}
   g_0_20: {cycles_per_instruction: 1.00, what: 'grid'}
   g_8_0: {cycles_per_instruction: 2.02, what: 'grid'}
-  g_8_8: {cycles_per_instruction: 2.02, what: 'grid'}
+  g_8_8: {cycles_per_instruction: 2.01, what: 'grid'}
   g_8_10: {cycles_per_instruction: 2.02, what: 'grid'}
   g_8_18: {cycles_per_instruction: 2.02, what: 'grid'}
   g_8_20: {cycles_per_instruction: 1.00, what: 'grid'}
-  g_10_0: {cycles_per_instruction: 2.02, what: 'grid'}
+  g_10_0: {cycles_per_instruction: 2.01, what: 'grid'}
   g_10_8: {cycles_per_instruction: 2.02, what: 'grid'}
   g_10_10: {cycles_per_instruction: 2.02, what: 'grid'}
   g_10_18: {cycles_per_instruction: 2.02, what: 'grid'}
@@ -144,35 +147,35 @@ throughput:
   g_20_8: {cycles_per_instruction: 1.00, what: 'grid'}
   g_20_10: {cycles_per_instruction: 1.00, what: 'grid'}
   g_20_18: {cycles_per_instruction: 1.00, what: 'grid'}
-  g_20_20: {cycles_per_instruction: 2.02, what: 'grid'}
-  g_100_100: {cycles_per_instruction: 2.02, what: 'grid'}
-  g_100_108: {cycles_per_instruction: 2.02, what: 'grid'}
-  g_100_110: {cycles_per_instruction: 2.02, what: 'grid'}
-  g_100_118: {cycles_per_instruction: 2.02, what: 'grid'}
+  g_20_20: {cycles_per_instruction: 1.90, what: 'grid'}
+  g_100_100: {cycles_per_instruction: 1.90, what: 'grid'}
+  g_100_108: {cycles_per_instruction: 1.00, what: 'grid'}
+  g_100_110: {cycles_per_instruction: 1.00, what: 'grid'}
+  g_100_118: {cycles_per_instruction: 1.00, what: 'grid'}
   g_100_120: {cycles_per_instruction: 1.00, what: 'grid'}
-  g_108_100: {cycles_per_instruction: 2.02, what: 'grid'}
-  g_108_108: {cycles_per_instruction: 2.02, what: 'grid'}
-  g_108_110: {cycles_per_instruction: 2.02, what: 'grid'}
-  g_108_118: {cycles_per_instruction: 2.02, what: 'grid'}
+  g_108_100: {cycles_per_instruction: 1.00, what: 'grid'}
+  g_108_108: {cycles_per_instruction: 1.90, what: 'grid'}
+  g_108_110: {cycles_per_instruction: 1.00, what: 'grid'}
+  g_108_118: {cycles_per_instruction: 1.00, what: 'grid'}
   g_108_120: {cycles_per_instruction: 1.00, what: 'grid'}
-  g_110_100: {cycles_per_instruction: 2.02, what: 'grid'}
-  g_110_108: {cycles_per_instruction: 2.02, what: 'grid'}
-  g_110_110: {cycles_per_instruction: 2.02, what: 'grid'}
-  g_110_118: {cycles_per_instruction: 2.02, what: 'grid'}
+  g_110_100: {cycles_per_instruction: 1.00, what: 'grid'}
+  g_110_108: {cycles_per_instruction: 1.00, what: 'grid'}
+  g_110_110: {cycles_per_instruction: 1.90, what: 'grid'}
+  g_110_118: {cycles_per_instruction: 1.00, what: 'grid'}
   g_110_120: {cycles_per_instruction: 1.00, what: 'grid'}
-  g_118_100: {cycles_per_instruction: 2.02, what: 'grid'}
-  g_118_108: {cycles_per_instruction: 2.02, what: 'grid'}
-  g_118_110: {cycles_per_instruction: 2.02, what: 'grid'}
-  g_118_118: {cycles_per_instruction: 2.02, what: 'grid'}
+  g_118_100: {cycles_per_instruction: 1.00, what: 'grid'}
+  g_118_108: {cycles_per_instruction: 1.00, what: 'grid'}
+  g_118_110: {cycles_per_instruction: 1.00, what: 'grid'}
+  g_118_118: {cycles_per_instruction: 1.90, what: 'grid'}
   g_118_120: {cycles_per_instruction: 1.00, what: 'grid'}
   g_120_100: {cycles_per_instruction: 1.00, what: 'grid'}
   g_120_108: {cycles_per_instruction: 1.00, what: 'grid'}
   g_120_110: {cycles_per_instruction: 1.00, what: 'grid'}
   g_120_118: {cycles_per_instruction: 1.00, what: 'grid'}
-  g_120_120: {cycles_per_instruction: 2.13, what: 'grid'}
-  stld_0: {cycles_per_instruction: 2.02, what: 'std + ldd same address'}
+  g_120_120: {cycles_per_instruction: 1.89, what: 'grid'}
+  stld_0: {cycles_per_instruction: 1.90, what: 'std + ldd same address'}
   fdivd_sdivd: {cycles_per_instruction: 5.01, what: 'fdivd, sdivd alternating'}
-  fdivd_fsqrts: {cycles_per_instruction: 7.04, what: 'fdivd, fsqrts alternating'}
+  fdivd_fsqrts: {cycles_per_instruction: 7.02, what: 'fdivd, fsqrts alternating'}
   alt_st_ld: {cycles_per_instruction: 1.00, what: 'std, then ldd in the same 32 bytes'}
   alt_st_ldfar: {cycles_per_instruction: 1.00, what: 'std, then ldd elsewhere'}
   alt_stld_nop: {cycles_per_instruction: 1.00, what: 'std + ldd in the same 32 bytes every other cycle'}
@@ -185,29 +188,31 @@ back_to_back:
   andd: {cycles_per_step: 1.00, ops_per_step: 1, what: 'bitwise and'}
   shld: {cycles_per_step: 1.00, ops_per_step: 1, what: 'shift left'}
   sxt: {cycles_per_step: 1.00, ops_per_step: 1, what: 'sign extension'}
-  add_addd: {cycles_per_step: 5.02, ops_per_step: 1, what: 'combined integer op'}
-  shl_addd: {cycles_per_step: 5.02, ops_per_step: 1, what: 'combined integer op'}
+  add_addd: {cycles_per_step: 5.01, ops_per_step: 1, what: 'combined integer op'}
+  shl_addd: {cycles_per_step: 5.01, ops_per_step: 1, what: 'combined integer op'}
   muls: {cycles_per_step: 5.02, ops_per_step: 1, what: '32-bit integer multiply'}
-  muld: {cycles_per_step: 5.02, ops_per_step: 1, what: '64-bit integer multiply'}
-  sdivs: {cycles_per_step: 13.06, ops_per_step: 1, what: '32-bit integer divide'}
-  sdivd: {cycles_per_step: 13.06, ops_per_step: 1, what: '64-bit integer divide'}
-  fadds: {cycles_per_step: 5.02, ops_per_step: 1, what: 'single add'}
+  muld: {cycles_per_step: 5.01, ops_per_step: 1, what: '64-bit integer multiply'}
+  sdivs: {cycles_per_step: 13.04, ops_per_step: 1, what: '32-bit integer divide'}
+  sdivd: {cycles_per_step: 13.07, ops_per_step: 1, what: '64-bit integer divide'}
+  fadds: {cycles_per_step: 5.01, ops_per_step: 1, what: 'single add'}
   faddd: {cycles_per_step: 5.02, ops_per_step: 1, what: 'double add'}
   fmuls: {cycles_per_step: 5.02, ops_per_step: 1, what: 'single multiply'}
-  fmuld: {cycles_per_step: 5.02, ops_per_step: 1, what: 'double multiply'}
-  fmul_addd: {cycles_per_step: 9.05, ops_per_step: 1, what: 'combined FP op'}
-  fdivs: {cycles_per_step: 13.05, ops_per_step: 1, what: 'single divide'}
-  fdivd: {cycles_per_step: 17.07, ops_per_step: 1, what: 'double divide'}
-  fsqrts: {cycles_per_step: 13.07, ops_per_step: 1, what: 'single square root'}
+  fmuld: {cycles_per_step: 5.03, ops_per_step: 1, what: 'double multiply'}
+  fmul_addd: {cycles_per_step: 9.04, ops_per_step: 1, what: 'combined FP op'}
+  fdivs: {cycles_per_step: 13.04, ops_per_step: 1, what: 'single divide'}
+  fdivd: {cycles_per_step: 17.05, ops_per_step: 1, what: 'double divide'}
+  fsqrts: {cycles_per_step: 13.05, ops_per_step: 1, what: 'single square root'}
   ldd_l1_ch0: {cycles_per_step: 5.02, ops_per_step: 1, what: 'load, L1 hit, ALC0'}
-  ldd_l1_ch2: {cycles_per_step: 5.02, ops_per_step: 1, what: 'load, L1 hit, ALC2'}
-  ldd_l1_ch3: {cycles_per_step: 5.01, ops_per_step: 1, what: 'load, L1 hit, ALC3'}
+  ldd_l1_ch2: {cycles_per_step: 5.01, ops_per_step: 1, what: 'load, L1 hit, ALC2'}
+  ldd_l1_ch3: {cycles_per_step: 5.02, ops_per_step: 1, what: 'load, L1 hit, ALC3'}
   ldd_l1_ch5: {cycles_per_step: 5.02, ops_per_step: 1, what: 'load, L1 hit, ALC5'}
   pair_int_int: {cycles_per_step: 2.00, ops_per_step: 2, what: 'addd -> addd'}
-  pair_fp_fp: {cycles_per_step: 10.04, ops_per_step: 2, what: 'faddd -> faddd'}
-  pair_int_fp: {cycles_per_step: 10.03, ops_per_step: 2, what: 'addd -> faddd -> addd (both crossings)'}
-  pair_mul_add: {cycles_per_step: 10.04, ops_per_step: 2, what: 'muld -> addd -> muld'}
+  pair_fp_fp: {cycles_per_step: 10.05, ops_per_step: 2, what: 'faddd -> faddd'}
+  pair_int_fp: {cycles_per_step: 10.02, ops_per_step: 2, what: 'addd -> faddd -> addd (both crossings)'}
+  pair_mul_add: {cycles_per_step: 10.03, ops_per_step: 2, what: 'muld -> addd -> muld'}
   pair_ld_add: {cycles_per_step: 6.03, ops_per_step: 2, what: 'ldd -> addd -> ldd (address use)'}
+  fxsqrt_chain: {cycles_per_step: 52.75, ops_per_step: 3, what: "lcc's 80-bit sqrt: fxsqrti, fxsqrtu, fxsqrtt"}
+  fsqrt_chain: {cycles_per_step: 30.10, ops_per_step: 2, what: 'double sqrt: fsqrtid, fsqrttd'}
 scheduled_latency:
   addd:
     latency: 1
@@ -229,121 +234,133 @@ scheduled_latency:
     cycles_per_step_by_gap: {1: 9.06, 2: 9.94, 3: 10.94, 4: 8.06, 5: 9.06, 6: 10.06, 7: 11.06, 8: 8.19, 9: 9.19, 10: 10.19, 11: 11.19, 12: 12.19}
   fdivs:
     latency: 11
-    cycles_per_step_by_gap: {1: 13.10, 2: 13.94, 3: 11.06, 4: 12.06, 5: 12.94, 6: 13.94, 7: 11.06, 8: 12.06, 9: 13.06, 10: 14.23, 11: 11.19, 12: 12.19, 13: 13.19, 14: 14.19, 15: 15.34, 16: 16.32}
+    cycles_per_step_by_gap: {1: 12.94, 2: 13.94, 3: 11.06, 4: 12.06, 5: 12.94, 6: 13.94, 7: 11.06, 8: 12.06, 9: 13.06, 10: 14.17, 11: 11.19, 12: 12.19, 13: 13.19, 14: 14.19, 15: 15.32, 16: 16.32}
   fdivd:
     latency: 14
-    cycles_per_step_by_gap: {1: 17.07, 2: 14.21, 3: 15.21, 4: 16.08, 5: 17.08, 6: 14.20, 7: 15.20, 8: 16.09, 9: 17.07, 10: 14.20, 11: 15.20, 12: 16.20, 13: 17.20, 14: 14.32, 15: 15.32, 16: 16.33, 17: 17.33, 18: 18.33, 19: 19.33, 20: 20.32}
+    cycles_per_step_by_gap: {1: 17.08, 2: 14.06, 3: 15.06, 4: 16.05, 5: 17.06, 6: 14.06, 7: 15.21, 8: 16.05, 9: 17.07, 10: 14.06, 11: 15.17, 12: 16.17, 13: 17.19, 14: 14.19, 15: 15.31, 16: 16.30, 17: 17.31, 18: 18.30, 19: 19.30, 20: 20.34}
   fsqrts:
     latency: 12
-    cycles_per_step_by_gap: {1: 13.06, 2: 13.94, 3: 15.07, 4: 12.06, 5: 13.20, 6: 13.94, 7: 15.08, 8: 12.06, 9: 13.34, 10: 14.19, 11: 15.21, 12: 12.19, 13: 13.19, 14: 14.33, 15: 15.33, 16: 16.34}
+    cycles_per_step_by_gap: {1: 13.06, 2: 13.94, 3: 14.94, 4: 12.06, 5: 13.10, 6: 13.94, 7: 15.07, 8: 12.06, 9: 13.19, 10: 14.31, 11: 15.17, 12: 12.19, 13: 13.19, 14: 14.30, 15: 15.33, 16: 16.32}
   sdivd:
     latency: 11
-    cycles_per_step_by_gap: {1: 12.94, 2: 13.94, 3: 11.06, 4: 12.06, 5: 13.07, 6: 13.94, 7: 11.06, 8: 12.06, 9: 13.21, 10: 14.06, 11: 11.19, 12: 12.19, 13: 13.19, 14: 14.32, 15: 15.32, 16: 16.32}
+    cycles_per_step_by_gap: {1: 13.07, 2: 13.94, 3: 11.06, 4: 12.06, 5: 12.94, 6: 13.94, 7: 11.06, 8: 12.06, 9: 13.06, 10: 14.17, 11: 11.19, 12: 12.19, 13: 13.19, 14: 14.30, 15: 15.30, 16: 16.32}
   ldd:
     latency: 3
     cycles_per_step_by_gap: {1: 5.06, 2: 6.06, 3: 3.19, 4: 4.19, 5: 5.19, 6: 6.19, 7: 7.19, 8: 8.19}
   faddd_to_addd:
     latency: 6
-    cycles_per_step_by_gap: {1: 21.32, 2: 22.32, 3: 19.33, 4: 20.34, 5: 21.34, 6: 18.32, 7: 19.32, 8: 20.32, 9: 21.34, 10: 22.34}
+    cycles_per_step_by_gap: {1: 21.30, 2: 22.32, 3: 19.32, 4: 20.32, 5: 21.32, 6: 18.32, 7: 19.32, 8: 20.32, 9: 21.32, 10: 22.32}
   addd_to_faddd:
     latency: 1
-    cycles_per_step_by_gap: {1: 13.33, 2: 14.19, 3: 15.19, 4: 16.33, 5: 17.34, 6: 18.34}
+    cycles_per_step_by_gap: {1: 13.19, 2: 14.19, 3: 15.31, 4: 16.30, 5: 17.32, 6: 18.33}
   muld_to_addd:
     latency: 6
-    cycles_per_step_by_gap: {1: 21.33, 2: 22.33, 3: 19.34, 4: 20.36, 5: 21.35, 6: 18.34, 7: 19.35, 8: 20.35, 9: 21.34, 10: 22.36}
+    cycles_per_step_by_gap: {1: 21.32, 2: 22.32, 3: 19.32, 4: 20.32, 5: 21.30, 6: 18.32, 7: 19.35, 8: 20.33, 9: 21.32, 10: 22.31}
   ldd_to_addd:
     latency: 3
-    cycles_per_step_by_gap: {1: 17.35, 2: 18.36, 3: 15.36, 4: 16.36, 5: 17.35, 6: 18.34, 7: 19.35, 8: 20.36}
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.32, 3: 15.19, 4: 16.31, 5: 17.30, 6: 18.31, 7: 19.32, 8: 20.32}
   ldb_to_addd:
     latency: 3
-    cycles_per_step_by_gap: {1: 17.34, 2: 18.37, 3: 15.35, 4: 16.34, 5: 17.34, 6: 18.34, 7: 19.32, 8: 20.33}
+    cycles_per_step_by_gap: {1: 17.31, 2: 18.32, 3: 15.32, 4: 16.30, 5: 17.30, 6: 18.33, 7: 19.31, 8: 20.31}
   ldh_to_addd:
     latency: 3
-    cycles_per_step_by_gap: {1: 17.34, 2: 18.34, 3: 15.33, 4: 16.33, 5: 17.32, 6: 18.33, 7: 19.36, 8: 20.35}
+    cycles_per_step_by_gap: {1: 17.30, 2: 18.30, 3: 15.30, 4: 16.33, 5: 17.31, 6: 18.30, 7: 19.32, 8: 20.31}
   ldw_to_addd:
     latency: 3
-    cycles_per_step_by_gap: {1: 17.33, 2: 18.33, 3: 15.33, 4: 16.34, 5: 17.33, 6: 18.32, 7: 19.33, 8: 20.32}
+    cycles_per_step_by_gap: {1: 17.31, 2: 18.32, 3: 15.31, 4: 16.30, 5: 17.33, 6: 18.30, 7: 19.32, 8: 20.32}
   ldd8_to_addd:
     latency: 3
-    cycles_per_step_by_gap: {1: 17.32, 2: 18.33, 3: 15.35, 4: 16.34, 5: 17.32, 6: 18.33, 7: 19.32, 8: 20.34}
+    cycles_per_step_by_gap: {1: 17.30, 2: 18.30, 3: 15.33, 4: 16.32, 5: 17.30, 6: 18.30, 7: 19.32, 8: 20.31}
   muls_to_adds:
     latency: 6
-    cycles_per_step_by_gap: {1: 21.32, 2: 22.34, 3: 19.34, 4: 20.33, 5: 21.32, 6: 18.34, 7: 19.34, 8: 20.33, 9: 21.32, 10: 22.32}
+    cycles_per_step_by_gap: {1: 21.31, 2: 22.30, 3: 19.33, 4: 20.32, 5: 21.32, 6: 18.31, 7: 19.33, 8: 20.32, 9: 21.31, 10: 22.34}
   getfs_to_adds:
     latency: 1
-    cycles_per_step_by_gap: {1: 13.19, 2: 14.32, 3: 15.32, 4: 16.33, 5: 17.34, 6: 18.33}
+    cycles_per_step_by_gap: {1: 13.19, 2: 14.31, 3: 15.32, 4: 16.30, 5: 17.32, 6: 18.30}
   ldb_to_getfs:
     latency: 3
-    cycles_per_step_by_gap: {1: 29.48, 2: 30.34, 3: 27.34, 4: 28.22, 5: 29.19, 6: 30.20, 7: 31.34, 8: 32.36}
+    cycles_per_step_by_gap: {1: 29.19, 2: 30.31, 3: 27.20, 4: 28.34, 5: 29.29, 6: 30.23, 7: 31.32, 8: 32.30}
   muld_to_addd_p0:
     latency: 5
-    cycles_per_step_by_gap: {1: 19.36, 2: 20.37, 3: 21.40, 4: 22.38, 5: 19.35, 6: 20.35, 7: 21.35, 8: 22.36}
+    cycles_per_step_by_gap: {1: 19.30, 2: 20.32, 3: 21.32, 4: 22.32, 5: 19.30, 6: 20.31, 7: 21.30, 8: 22.30}
   muld_to_addd_p1:
     latency: 4
-    cycles_per_step_by_gap: {1: 19.36, 2: 20.35, 3: 21.36, 4: 18.36, 5: 19.35, 6: 20.35, 7: 21.36, 8: 22.34}
+    cycles_per_step_by_gap: {1: 19.31, 2: 20.32, 3: 21.32, 4: 18.32, 5: 19.31, 6: 20.31, 7: 21.33, 8: 22.32}
   muld_to_addd_pl:
     latency: 5
-    cycles_per_step_by_gap: {1: 19.34, 2: 20.33, 3: 21.33, 4: 22.32, 5: 19.34, 6: 20.34, 7: 21.34, 8: 22.34}
+    cycles_per_step_by_gap: {1: 19.32, 2: 20.32, 3: 21.32, 4: 22.30, 5: 19.30, 6: 20.32, 7: 21.30, 8: 22.31}
   muld_to_addd_pf:
     latency: 4
-    cycles_per_step_by_gap: {1: 19.33, 2: 20.32, 3: 21.33, 4: 18.32, 5: 19.33, 6: 20.35, 7: 21.34, 8: 22.33}
+    cycles_per_step_by_gap: {1: 19.30, 2: 20.34, 3: 21.31, 4: 18.31, 5: 19.30, 6: 20.31, 7: 21.32, 8: 22.32}
   faddd_to_addd_p0:
     latency: 5
-    cycles_per_step_by_gap: {1: 19.33, 2: 20.34, 3: 21.34, 4: 22.32, 5: 19.34, 6: 20.32, 7: 21.34, 8: 22.32}
+    cycles_per_step_by_gap: {1: 19.31, 2: 20.31, 3: 21.32, 4: 22.33, 5: 19.30, 6: 20.31, 7: 21.32, 8: 22.32}
+  fmuld_to_faddd_c1:
+    latency: 2
+    cycles_per_step_by_gap: {1: 19.32, 2: 16.30, 3: 17.32, 4: 18.31, 5: 19.32, 6: 20.33, 7: 21.30, 8: 22.32}
+  fmuld_to_faddd_c1_p0:
+    latency: 2
+    cycles_per_step_by_gap: {1: 19.33, 2: 16.32, 3: 17.33, 4: 18.32, 5: 19.30, 6: 20.32, 7: 21.35, 8: 22.33}
+  fmuld_to_faddd_x:
+    latency: 4
+    cycles_per_step_by_gap: {1: 19.30, 2: 20.32, 3: 21.33, 4: 18.30, 5: 19.32, 6: 20.32, 7: 21.32, 8: 22.31}
+  fmuld_to_faddd_x_p0:
+    latency: 5
+    cycles_per_step_by_gap: {1: 19.33, 2: 20.31, 3: 21.31, 4: 22.27, 5: 19.35, 6: 20.32, 7: 21.33, 8: 22.32}
   addd_to_ldd:
     latency: 1
-    cycles_per_step_by_gap: {1: 13.19, 2: 14.32, 3: 15.33, 4: 16.34, 5: 17.33, 6: 18.33}
+    cycles_per_step_by_gap: {1: 13.19, 2: 14.34, 3: 15.32, 4: 16.33, 5: 17.30, 6: 18.33}
   faddd_to_fmuld:
     latency: 4
-    cycles_per_step_by_gap: {1: 17.34, 2: 18.34, 3: 19.33, 4: 16.33, 5: 17.32, 6: 18.33, 7: 19.33, 8: 20.33}
+    cycles_per_step_by_gap: {1: 17.30, 2: 18.32, 3: 19.32, 4: 16.30, 5: 17.32, 6: 18.32, 7: 19.31, 8: 20.31}
   addd_to_fmuld:
     latency: 1
-    cycles_per_step_by_gap: {1: 13.19, 2: 14.34, 3: 15.33, 4: 16.33, 5: 17.34, 6: 18.33}
+    cycles_per_step_by_gap: {1: 13.19, 2: 14.31, 3: 15.30, 4: 16.32, 5: 17.30, 6: 18.32}
   adds_to_fadds:
     latency: 1
-    cycles_per_step_by_gap: {1: 13.34, 2: 14.19, 3: 15.19, 4: 16.33, 5: 17.32, 6: 18.32}
+    cycles_per_step_by_gap: {1: 13.19, 2: 14.31, 3: 15.32, 4: 16.33, 5: 17.30, 6: 18.32}
   addd_to_faddd_x:
     latency: 2
-    cycles_per_step_by_gap: {1: 17.33, 2: 14.36, 3: 15.35, 4: 16.36, 5: 17.34, 6: 18.35}
+    cycles_per_step_by_gap: {1: 17.33, 2: 14.19, 3: 15.30, 4: 16.32, 5: 17.32, 6: 18.31}
   faddd_to_addd_x:
     latency: 6
-    cycles_per_step_by_gap: {1: 21.34, 2: 18.35, 3: 19.35, 4: 20.37, 5: 21.35, 6: 18.34, 7: 19.35, 8: 20.36, 9: 21.34, 10: 22.35}
+    cycles_per_step_by_gap: {1: 21.32, 2: 18.30, 3: 19.31, 4: 20.31, 5: 21.31, 6: 18.31, 7: 19.32, 8: 20.33, 9: 21.33, 10: 22.31}
   addd_to_addd_x:
     latency: 2
-    cycles_per_step_by_gap: {1: 17.36, 2: 14.19, 3: 15.35, 4: 16.34, 5: 17.34, 6: 18.37}
+    cycles_per_step_by_gap: {1: 17.32, 2: 14.34, 3: 15.30, 4: 16.31, 5: 17.31, 6: 18.32}
   faddd_to_faddd_x:
     latency: 6
-    cycles_per_step_by_gap: {1: 21.36, 2: 18.35, 3: 19.35, 4: 20.35, 5: 21.34, 6: 18.34, 7: 19.33, 8: 20.32}
+    cycles_per_step_by_gap: {1: 21.30, 2: 18.32, 3: 19.31, 4: 20.32, 5: 21.30, 6: 18.31, 7: 19.33, 8: 20.32}
   addd_to_addd_c1:
     latency: 1
-    cycles_per_step_by_gap: {1: 13.19, 2: 14.35, 3: 15.34, 4: 16.34, 5: 17.33, 6: 18.34}
+    cycles_per_step_by_gap: {1: 13.19, 2: 14.19, 3: 15.30, 4: 16.32, 5: 17.31, 6: 18.33}
   addd_to_addd_c2:
     latency: 1
-    cycles_per_step_by_gap: {1: 13.19, 2: 14.19, 3: 15.32, 4: 16.33, 5: 17.32, 6: 18.32}
+    cycles_per_step_by_gap: {1: 13.19, 2: 14.19, 3: 15.30, 4: 16.32, 5: 17.32, 6: 18.31}
   addd_to_addd_c4:
     latency: 2
-    cycles_per_step_by_gap: {1: 17.36, 2: 14.32, 3: 15.32, 4: 16.32, 5: 17.32, 6: 18.32}
+    cycles_per_step_by_gap: {1: 17.31, 2: 14.32, 3: 15.32, 4: 16.31, 5: 17.33, 6: 18.33}
   addd3_to_addd0:
     latency: 2
-    cycles_per_step_by_gap: {1: 17.32, 2: 14.19, 3: 15.32, 4: 16.32, 5: 17.34, 6: 18.34}
+    cycles_per_step_by_gap: {1: 17.32, 2: 14.19, 3: 15.19, 4: 16.31, 5: 17.31, 6: 18.32}
   faddd_to_faddd_c1:
     latency: 4
-    cycles_per_step_by_gap: {1: 17.34, 2: 18.34, 3: 19.33, 4: 16.33, 5: 17.34, 6: 18.33, 7: 19.33, 8: 20.34}
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.32, 3: 19.32, 4: 16.32, 5: 17.30, 6: 18.33, 7: 19.31, 8: 20.32}
   faddd_to_faddd_c4:
     latency: 6
-    cycles_per_step_by_gap: {1: 21.33, 2: 18.33, 3: 19.33, 4: 20.34, 5: 21.34, 6: 18.32, 7: 19.33, 8: 20.32}
+    cycles_per_step_by_gap: {1: 21.30, 2: 18.30, 3: 19.30, 4: 20.36, 5: 21.33, 6: 18.31, 7: 19.32, 8: 20.31}
   ldd_to_addd_x:
     latency: 4
-    cycles_per_step_by_gap: {1: 17.33, 2: 18.33, 3: 19.34, 4: 16.32, 5: 17.32, 6: 18.32, 7: 19.33, 8: 20.33}
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.31, 3: 19.34, 4: 16.30, 5: 17.33, 6: 18.30, 7: 19.32, 8: 20.31}
   ldd_to_ldd_x:
     latency: 4
-    cycles_per_step_by_gap: {1: 17.32, 2: 18.32, 3: 19.32, 4: 16.32, 5: 17.34, 6: 18.32, 7: 19.34, 8: 20.32}
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.32, 3: 19.32, 4: 16.31, 5: 17.32, 6: 18.32, 7: 19.32, 8: 20.32}
   addd_to_ldd_x:
     latency: 2
-    cycles_per_step_by_gap: {1: 17.32, 2: 14.34, 3: 15.32, 4: 16.32, 5: 17.34, 6: 18.34}
+    cycles_per_step_by_gap: {1: 17.33, 2: 14.19, 3: 15.31, 4: 16.31, 5: 17.32, 6: 18.31}
   muld_to_muld_x:
     latency: 6
-    cycles_per_step_by_gap: {1: 21.33, 2: 18.32, 3: 19.33, 4: 20.34, 5: 21.33, 6: 18.34, 7: 19.35, 8: 20.36}
+    cycles_per_step_by_gap: {1: 21.32, 2: 18.31, 3: 19.31, 4: 20.30, 5: 21.32, 6: 18.31, 7: 19.32, 8: 20.30}
   paddw:
     latency: 1
     cycles_per_step_by_gap: {1: 1.19, 2: 2.19, 3: 3.19, 4: 4.19, 5: 5.19, 6: 6.19, 7: 7.19, 8: 8.19}
@@ -370,19 +387,19 @@ scheduled_latency:
     cycles_per_step_by_gap: {1: 1.19, 2: 2.19, 3: 3.19, 4: 4.19, 5: 5.19, 6: 6.19, 7: 7.19, 8: 8.19}
   paddw_to_paddw_x:
     latency: 4
-    cycles_per_step_by_gap: {1: 17.34, 2: 18.34, 3: 19.34, 4: 16.34, 5: 17.35, 6: 18.34}
+    cycles_per_step_by_gap: {1: 17.30, 2: 18.31, 3: 19.31, 4: 16.31, 5: 17.30, 6: 18.31}
   paddw_to_addd:
     latency: 4
-    cycles_per_step_by_gap: {1: 17.33, 2: 18.34, 3: 19.33, 4: 16.33, 5: 17.33, 6: 18.33, 7: 19.33, 8: 20.35, 9: 21.34, 10: 22.33}
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.31, 3: 19.30, 4: 16.31, 5: 17.31, 6: 18.30, 7: 19.32, 8: 20.33, 9: 21.30, 10: 22.30}
   addd_to_paddw:
     latency: 1
-    cycles_per_step_by_gap: {1: 13.19, 2: 14.19, 3: 15.33, 4: 16.33, 5: 17.34, 6: 18.33}
+    cycles_per_step_by_gap: {1: 13.19, 2: 14.31, 3: 15.30, 4: 16.30, 5: 17.30, 6: 18.32}
   paddw_to_faddd:
     latency: 1
-    cycles_per_step_by_gap: {1: 13.19, 2: 14.33, 3: 15.33, 4: 16.33, 5: 17.33, 6: 18.33, 7: 19.32, 8: 20.34}
+    cycles_per_step_by_gap: {1: 13.19, 2: 14.19, 3: 15.30, 4: 16.33, 5: 17.30, 6: 18.33, 7: 19.33, 8: 20.32}
   pmullh_to_addd:
     latency: 4
-    cycles_per_step_by_gap: {1: 17.33, 2: 18.32, 3: 19.32, 4: 16.32, 5: 17.32, 6: 18.32, 7: 19.32, 8: 20.32, 9: 21.32, 10: 22.35}
+    cycles_per_step_by_gap: {1: 17.31, 2: 18.32, 3: 19.32, 4: 16.32, 5: 17.32, 6: 18.32, 7: 19.32, 8: 20.33, 9: 21.33, 10: 22.31}
   lzcnts:
     latency: 1
     cycles_per_step_by_gap: {1: 1.19, 2: 2.19, 3: 3.19, 4: 4.19, 5: 5.19, 6: 6.19}
@@ -415,16 +432,16 @@ scheduled_latency:
     cycles_per_step_by_gap: {1: 8.94, 2: 6.06, 3: 7.06, 4: 8.06, 5: 9.06, 6: 6.19, 7: 7.19, 8: 8.19}
   fdtoid_to_addd:
     latency: 6
-    cycles_per_step_by_gap: {1: 21.36, 2: 22.32, 3: 19.32, 4: 20.32, 5: 21.32, 6: 18.32, 7: 19.33, 8: 20.33, 9: 21.32, 10: 22.34}
+    cycles_per_step_by_gap: {1: 21.32, 2: 22.30, 3: 19.32, 4: 20.32, 5: 21.32, 6: 18.32, 7: 19.32, 8: 20.32, 9: 21.33, 10: 22.32}
   addd_to_idtofd:
     latency: 1
-    cycles_per_step_by_gap: {1: 13.35, 2: 14.19, 3: 15.32, 4: 16.33, 5: 17.34, 6: 18.35}
+    cycles_per_step_by_gap: {1: 13.19, 2: 14.30, 3: 15.33, 4: 16.31, 5: 17.31, 6: 18.31}
   fcmpeqd:
     latency: 2
     cycles_per_step_by_gap: {1: 5.06, 2: 2.19, 3: 3.19, 4: 4.19, 5: 5.19, 6: 6.19, 7: 7.19, 8: 8.19}
   fcmpeqd_to_addd:
     latency: 4
-    cycles_per_step_by_gap: {1: 17.34, 2: 18.33, 3: 19.33, 4: 16.33, 5: 17.35, 6: 18.34, 7: 19.32, 8: 20.33, 9: 21.34, 10: 22.34}
+    cycles_per_step_by_gap: {1: 17.31, 2: 18.32, 3: 19.30, 4: 16.31, 5: 17.31, 6: 18.30, 7: 19.30, 8: 20.32, 9: 21.30, 10: 22.32}
   sxt:
     latency: 1
     cycles_per_step_by_gap: {1: 1.19, 2: 2.19, 3: 3.19, 4: 4.19}
@@ -451,22 +468,196 @@ scheduled_latency:
     cycles_per_step_by_gap: {1: 5.06, 2: 6.06, 3: 7.06, 4: 4.19, 5: 5.19, 6: 6.19, 7: 7.19, 8: 8.19, 9: 9.19, 10: 10.19}
   fxdivxx:
     latency: 16
-    cycles_per_step_by_gap: {1: 17.20, 2: 18.09, 3: 19.08, 4: 16.21, 5: 17.20, 6: 18.08, 7: 19.09, 8: 16.20, 9: 17.21, 10: 18.08, 11: 19.10, 12: 16.20, 13: 17.21, 14: 18.21, 15: 19.20, 16: 16.34, 17: 17.34, 18: 18.33, 19: 19.36, 20: 20.36, 21: 21.34, 22: 22.36, 23: 23.36, 24: 24.36}
+    cycles_per_step_by_gap: {1: 17.19, 2: 18.10, 3: 19.05, 4: 16.18, 5: 17.17, 6: 18.07, 7: 19.05, 8: 16.17, 9: 17.18, 10: 18.07, 11: 19.07, 12: 16.17, 13: 17.20, 14: 18.18, 15: 19.19, 16: 16.31, 17: 17.31, 18: 18.30, 19: 19.30, 20: 20.30, 21: 21.30, 22: 22.32, 23: 23.34, 24: 24.30}
   movfi_movif:
     latency: 4
-    cycles_per_step_by_gap: {1: 17.36, 2: 18.36, 3: 19.35, 4: 16.35, 5: 17.35, 6: 18.35, 7: 19.35, 8: 20.35}
+    cycles_per_step_by_gap: {1: 17.31, 2: 18.30, 3: 19.32, 4: 16.30, 5: 17.31, 6: 18.32, 7: 19.32, 8: 20.33}
   fxaddxx_to_addd:
     latency: 7
-    cycles_per_step_by_gap: {1: 21.35, 2: 22.37, 3: 23.37, 4: 20.35, 5: 21.36, 6: 22.34, 7: 19.34, 8: 20.36, 9: 21.35, 10: 22.36}
+    cycles_per_step_by_gap: {1: 21.32, 2: 22.33, 3: 23.32, 4: 20.33, 5: 21.32, 6: 22.30, 7: 19.30, 8: 20.31, 9: 21.32, 10: 22.31}
   fdtofx_fxtofd:
     latency: 5
-    cycles_per_step_by_gap: {1: 17.33, 2: 18.33, 3: 19.33, 4: 20.32, 5: 17.32, 6: 18.33, 7: 19.32, 8: 20.32}
+    cycles_per_step_by_gap: {1: 17.30, 2: 18.33, 3: 19.32, 4: 20.32, 5: 17.30, 6: 18.32, 7: 19.32, 8: 20.30}
+  smulx:
+    latency: 4
+    cycles_per_step_by_gap: {1: 5.06, 2: 6.06, 3: 7.06, 4: 4.19, 5: 5.19, 6: 6.19, 7: 7.19, 8: 8.19}
+  umulx:
+    latency: 4
+    cycles_per_step_by_gap: {1: 5.06, 2: 6.06, 3: 7.06, 4: 4.19, 5: 5.19, 6: 6.19, 7: 7.19, 8: 8.19}
+  smulx_to_addd:
+    latency: 6
+    cycles_per_step_by_gap: {1: 21.33, 2: 22.30, 3: 19.31, 4: 20.32, 5: 21.30, 6: 18.32, 7: 19.32, 8: 20.32, 9: 21.32, 10: 22.30}
+  insfs:
+    latency: 1
+    cycles_per_step_by_gap: {1: 1.19, 2: 2.19, 3: 3.19, 4: 4.19, 5: 5.19, 6: 6.19}
+  insfd:
+    latency: 1
+    cycles_per_step_by_gap: {1: 1.19, 2: 2.19, 3: 3.19, 4: 4.19, 5: 5.19, 6: 6.19}
+  insfd_to_addd_x:
+    latency: 2
+    cycles_per_step_by_gap: {1: 17.32, 2: 14.31, 3: 15.31, 4: 16.31, 5: 17.33, 6: 18.31}
+  sdivx:
+    latency: 11
+    cycles_per_step_by_gap: {1: 12.94, 2: 14.09, 3: 11.06, 4: 12.06, 5: 12.94, 6: 13.94, 7: 11.06, 8: 12.06, 9: 13.17, 10: 14.06, 11: 11.19, 12: 12.19, 13: 13.19, 14: 14.30, 15: 15.30, 16: 16.30, 17: 17.30, 18: 18.31, 19: 19.30, 20: 20.30, 21: 21.32, 22: 22.31, 23: 23.32, 24: 24.32}
+  udivx:
+    latency: 11
+    cycles_per_step_by_gap: {1: 12.94, 2: 14.08, 3: 11.06, 4: 12.06, 5: 12.94, 6: 14.07, 7: 11.06, 8: 12.06, 9: 13.06, 10: 14.06, 11: 11.19, 12: 12.19, 13: 13.19, 14: 14.30, 15: 15.32, 16: 16.31, 17: 17.31, 18: 18.32, 19: 19.31, 20: 20.32, 21: 21.31, 22: 22.30, 23: 23.31, 24: 24.32}
+  smodx:
+    latency: 10
+    cycles_per_step_by_gap: {1: 12.94, 2: 10.06, 3: 11.06, 4: 11.94, 5: 12.94, 6: 10.06, 7: 11.06, 8: 12.06, 9: 13.06, 10: 10.19, 11: 11.19, 12: 12.19, 13: 13.19, 14: 14.30, 15: 15.31, 16: 16.32, 17: 17.31, 18: 18.31, 19: 19.31, 20: 20.30, 21: 21.31, 22: 22.31, 23: 23.31, 24: 24.31}
+  umodx:
+    latency: 10
+    cycles_per_step_by_gap: {1: 12.94, 2: 10.06, 3: 11.06, 4: 11.94, 5: 12.94, 6: 10.06, 7: 11.06, 8: 12.06, 9: 13.20, 10: 10.19, 11: 11.19, 12: 12.19, 13: 13.19, 14: 14.31, 15: 15.30, 16: 16.33, 17: 17.31, 18: 18.31, 19: 19.31, 20: 20.30, 21: 21.33, 22: 22.33, 23: 23.31, 24: 24.34}
+  mpsadbh:
+    latency: 2
+    cycles_per_step_by_gap: {1: 5.06, 2: 2.19, 3: 3.19, 4: 4.19, 5: 5.19, 6: 6.19, 7: 7.19, 8: 8.19}
+  mpsadbh_to_addd:
+    latency: 4
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.32, 3: 19.32, 4: 16.31, 5: 17.32, 6: 18.32, 7: 19.30, 8: 20.33, 9: 21.30, 10: 22.30}
+  fsubd:
+    latency: 4
+    cycles_per_step_by_gap: {1: 5.06, 2: 6.06, 3: 7.06, 4: 4.19, 5: 5.19, 6: 6.19, 7: 7.19, 8: 8.19}
+  fsubs:
+    latency: 4
+    cycles_per_step_by_gap: {1: 5.06, 2: 6.06, 3: 7.06, 4: 4.19, 5: 5.19, 6: 6.19, 7: 7.19, 8: 8.19}
+  fmaxs:
+    latency: 2
+    cycles_per_step_by_gap: {1: 5.06, 2: 2.19, 3: 3.19, 4: 4.19, 5: 5.19, 6: 6.19, 7: 7.19, 8: 8.19}
+  fdtoifd:
+    latency: 4
+    cycles_per_step_by_gap: {1: 5.06, 2: 6.06, 3: 7.06, 4: 4.19, 5: 5.19, 6: 6.19, 7: 7.19, 8: 8.19}
+  fstoifs:
+    latency: 4
+    cycles_per_step_by_gap: {1: 5.06, 2: 6.06, 3: 7.06, 4: 4.19, 5: 5.19, 6: 6.19, 7: 7.19, 8: 8.19}
+  fstoid:
+    latency: 4
+    cycles_per_step_by_gap: {1: 29.46, 2: 30.30, 3: 31.28, 4: 28.32, 5: 29.36, 6: 30.23, 7: 31.34, 8: 32.35}
+  fstoidtr:
+    latency: 4
+    cycles_per_step_by_gap: {1: 29.21, 2: 30.19, 3: 31.30, 4: 28.21, 5: 29.20, 6: 30.34, 7: 31.32, 8: 32.31}
+  fdtoidtr:
+    latency: 4
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.31, 3: 19.32, 4: 16.32, 5: 17.31, 6: 18.30, 7: 19.33, 8: 20.31}
+  fdtoistr:
+    latency: 4
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.32, 3: 19.30, 4: 16.32, 5: 17.30, 6: 18.32, 7: 19.31, 8: 20.30}
+  istofd:
+    latency: 4
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.31, 3: 19.30, 4: 16.30, 5: 17.32, 6: 18.30, 7: 19.32, 8: 20.32}
+  istofs:
+    latency: 4
+    cycles_per_step_by_gap: {1: 29.21, 2: 30.44, 3: 31.32, 4: 28.44, 5: 29.19, 6: 30.32, 7: 31.33, 8: 32.33}
+  idtofs:
+    latency: 4
+    cycles_per_step_by_gap: {1: 29.44, 2: 30.34, 3: 31.32, 4: 28.20, 5: 29.21, 6: 30.21, 7: 31.31, 8: 32.29}
+  idtofd_to_fdtoid:
+    latency: 4
+    cycles_per_step_by_gap: {1: 17.30, 2: 18.30, 3: 19.30, 4: 16.30, 5: 17.30, 6: 18.34, 7: 19.31, 8: 20.30}
+  fdtoid_to_idtofd:
+    latency: 4
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.32, 3: 19.31, 4: 16.32, 5: 17.33, 6: 18.31, 7: 19.31, 8: 20.30}
+  fstofd_to_fdtofs:
+    latency: 4
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.30, 3: 19.31, 4: 16.32, 5: 17.32, 6: 18.31, 7: 19.31, 8: 20.33}
+  fdtofs_to_fstofd:
+    latency: 4
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.32, 3: 19.30, 4: 16.32, 5: 17.30, 6: 18.30, 7: 19.31, 8: 20.32}
+  faddd_to_fadds:
+    latency: 5
+    cycles_per_step_by_gap: {1: 17.31, 2: 18.30, 3: 19.31, 4: 20.34, 5: 17.32, 6: 18.31, 7: 19.30, 8: 20.30}
+  fadds_to_faddd:
+    latency: 6
+    cycles_per_step_by_gap: {1: 21.34, 2: 18.32, 3: 19.32, 4: 20.36, 5: 21.32, 6: 18.31, 7: 19.33, 8: 20.32}
+  fadds_to_fadds:
+    latency: 4
+    cycles_per_step_by_gap: {1: 17.31, 2: 18.31, 3: 19.31, 4: 16.32, 5: 17.31, 6: 18.34, 7: 19.31, 8: 20.31}
+  faddd_to_fdtoid:
+    latency: 4
+    cycles_per_step_by_gap: {1: 17.34, 2: 18.32, 3: 19.32, 4: 16.32, 5: 17.31, 6: 18.31, 7: 19.31, 8: 20.34}
+  fadds_to_fdtoid:
+    latency: 6
+    cycles_per_step_by_gap: {1: 21.31, 2: 18.30, 3: 19.31, 4: 20.32, 5: 21.32, 6: 18.30, 7: 19.30, 8: 20.32}
+  fdtoid_to_faddd:
+    latency: 5
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.33, 3: 19.32, 4: 20.33, 5: 17.33, 6: 18.32, 7: 19.33, 8: 20.33}
+  idtofd_to_faddd:
+    latency: 4
+    cycles_per_step_by_gap: {1: 17.34, 2: 18.32, 3: 19.31, 4: 16.30, 5: 17.30, 6: 18.34, 7: 19.34, 8: 20.32}
+  fstofd_to_fadds:
+    latency: 5
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.33, 3: 19.31, 4: 20.33, 5: 17.32, 6: 18.30, 7: 19.30, 8: 20.31}
+  fdtofs_to_faddd:
+    latency: 6
+    cycles_per_step_by_gap: {1: 21.31, 2: 18.31, 3: 19.34, 4: 20.32, 5: 21.32, 6: 18.32, 7: 19.31, 8: 20.32}
+  fdtofs_to_fadds:
+    latency: 4
+    cycles_per_step_by_gap: {1: 17.30, 2: 18.30, 3: 19.32, 4: 16.31, 5: 17.31, 6: 18.34, 7: 19.32, 8: 20.32}
+  fmuld_to_pfmuls:
+    latency: 5
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.32, 3: 19.32, 4: 20.32, 5: 17.31, 6: 18.31, 7: 19.32, 8: 20.31}
+  fmuld_to_fmuls:
+    latency: 5
+    cycles_per_step_by_gap: {1: 17.31, 2: 18.32, 3: 19.30, 4: 20.35, 5: 17.33, 6: 18.36, 7: 19.31, 8: 20.32}
+  adds_fw:
+    latency: 2
+    cycles_per_step_by_gap: {1: 5.06, 2: 2.19, 3: 3.19, 4: 4.19, 5: 5.19, 6: 6.19}
+  addd_fd:
+    latency: 2
+    cycles_per_step_by_gap: {1: 5.06, 2: 2.19, 3: 3.19, 4: 4.19, 5: 5.19, 6: 6.19}
+  adds_fw_to_adds:
+    latency: 2
+    cycles_per_step_by_gap: {1: 17.30, 2: 14.19, 3: 15.30, 4: 16.30, 5: 17.32, 6: 18.31}
+  shls_fw:
+    latency: 2
+    cycles_per_step_by_gap: {1: 5.06, 2: 2.19, 3: 3.19, 4: 4.19, 5: 5.19, 6: 6.19}
+  incs_fw:
+    latency: 2
+    cycles_per_step_by_gap: {1: 5.06, 2: 2.19, 3: 3.19, 4: 4.19, 5: 5.19, 6: 6.19}
+  smulx_fw:
+    latency: 4
+    cycles_per_step_by_gap: {1: 5.06, 2: 6.06, 3: 7.06, 4: 4.19, 5: 5.19, 6: 6.19, 7: 7.19, 8: 8.19}
+  cctopo_to_merged:
+    latency: 2
+    cycles_per_step_by_gap: {1: 15.19, 2: 14.19, 3: 15.32, 4: 16.31, 5: 17.30, 6: 18.33, 7: 19.33, 8: 20.30}
+  cmpesb_to_merged:
+    latency: 2
+    cycles_per_step_by_gap: {1: 15.30, 2: 14.31, 3: 15.31, 4: 16.32, 5: 17.31, 6: 18.30, 7: 19.30, 8: 20.32}
+  fxadddd:
+    latency: 5
+    cycles_per_step_by_gap: {1: 17.30, 2: 18.32, 3: 19.32, 4: 20.30, 5: 17.32, 6: 18.30, 7: 19.31, 8: 20.34, 9: 21.30, 10: 22.30}
+  fxmuldd:
+    latency: 5
+    cycles_per_step_by_gap: {1: 17.30, 2: 18.30, 3: 19.34, 4: 20.32, 5: 17.32, 6: 18.32, 7: 19.31, 8: 20.34, 9: 21.32, 10: 22.30}
+  fxmulxd:
+    latency: 5
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.32, 3: 19.31, 4: 20.32, 5: 17.31, 6: 18.31, 7: 19.31, 8: 20.31, 9: 21.31, 10: 22.33}
+  fxdivdd:
+    latency: 18
+    cycles_per_step_by_gap: {1: 33.32, 2: 30.21, 3: 31.27, 4: 32.35, 5: 33.35, 6: 30.32, 7: 31.34, 8: 32.30, 9: 33.27, 10: 30.28, 11: 31.34, 12: 32.33, 13: 33.28, 14: 30.19, 15: 31.33, 16: 32.34, 17: 33.31, 18: 30.20, 19: 31.27, 20: 32.31, 21: 33.31, 22: 34.31, 23: 35.34, 24: 36.35}
+  fxtoid:
+    latency: 5
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.31, 3: 19.31, 4: 20.31, 5: 17.32, 6: 18.31, 7: 19.30, 8: 20.30, 9: 21.30, 10: 22.32}
+  idtofx:
+    latency: 5
+    cycles_per_step_by_gap: {1: 17.32, 2: 18.32, 3: 19.31, 4: 20.35, 5: 17.32, 6: 18.31, 7: 19.32, 8: 20.31, 9: 21.31, 10: 22.31}
+  fstofx:
+    latency: 5
+    cycles_per_step_by_gap: {1: 17.31, 2: 18.31, 3: 19.31, 4: 20.31, 5: 17.34, 6: 18.31, 7: 19.31, 8: 20.30, 9: 21.33, 10: 22.32}
+  fxsqrtixx:
+    latency: 11
+    cycles_per_step_by_gap: {1: 69.51, 2: 70.50, 3: 67.44, 4: 68.49, 5: 69.39, 6: 70.31, 7: 67.46, 8: 68.42, 9: 69.48, 10: 70.47, 11: 67.36, 12: 68.42, 13: 69.44, 14: 70.47, 15: 71.47, 16: 72.46, 17: 73.44, 18: 74.44, 19: 75.51, 20: 76.61, 21: 77.74, 22: 78.67, 23: 79.56, 24: 80.58}
+  fxsqrtuxx:
+    latency: 17
+    cycles_per_step_by_gap: {1: 69.83, 2: 74.54, 3: 75.52, 4: 79.99, 5: 78.61, 6: 74.57, 7: 75.50, 8: 73.24, 9: 73.63, 10: 74.46, 11: 75.49, 12: 70.97, 13: 74.65, 14: 74.52, 15: 75.46, 16: 74.49, 17: 73.31, 18: 74.39, 19: 75.46, 20: 76.42, 21: 77.44, 22: 78.46, 23: 79.69, 24: 80.52}
+  fxsqrttxx:
+    latency: 16
+    cycles_per_step_by_gap: {1: 65.35, 2: 66.27, 3: 67.27, 4: 64.35, 5: 65.26, 6: 66.16, 7: 67.15, 8: 64.38, 9: 65.31, 10: 66.22, 11: 67.21, 12: 64.32, 13: 65.27, 14: 66.33, 15: 67.26, 16: 64.41, 17: 65.48, 18: 66.44, 19: 67.45, 20: 68.42, 21: 69.37, 22: 70.52, 23: 71.48, 24: 72.44, 25: 73.60, 26: 74.44, 27: 75.50, 28: 76.55, 29: 77.59, 30: 78.53, 31: 79.57, 32: 80.56}
 pointer_chase_cycles:
   16384: 5.00
 pointer_chase_scheduled:
 branch_cycles_per_block:
   plain1: 1.38
-  ibr_taken: 7.44
+  ibr_taken: 7.38
   ibr_nottaken: 1.38
   ibr_taken_pred: 7.38
   plain3: 8.38
@@ -474,41 +665,41 @@ branch_cycles_per_block:
   ct_taken_ipd0: 8.38
   ct_taken_pred: 8.38
   ct_nottaken: 8.38
-  call_return: 16.38
+  call_return: 16.44
 control_prepare:
   disp:
     latency: 5
     cycles_per_block: {1: 6.38, 2: 6.38, 3: 6.38, 4: 6.38, 5: 6.38, 6: 7.38, 7: 8.38, 8: 9.38, 9: 10.38, 10: 11.38}
   movtd:
     latency: 9
-    cycles_per_block: {1: 18.38, 2: 18.38, 3: 18.38, 4: 18.38, 5: 18.38, 6: 18.38, 7: 18.50, 8: 18.38, 9: 18.38, 10: 19.38}
+    cycles_per_block: {1: 18.38, 2: 18.38, 3: 18.38, 4: 18.38, 5: 18.38, 6: 18.38, 7: 18.38, 8: 18.38, 9: 18.38, 10: 19.38}
   cmp_ct:
     latency: 3
-    cycles_per_block: {1: 4.38, 2: 4.38, 3: 4.38, 4: 5.44, 5: 6.38, 6: 7.38, 7: 8.38, 8: 9.38, 9: 10.38, 10: 11.44}
+    cycles_per_block: {1: 4.38, 2: 4.38, 3: 4.38, 4: 5.38, 5: 6.44, 6: 7.38, 7: 8.38, 8: 9.38, 9: 10.44, 10: 11.38}
   cmp_alu:
     latency: 2
-    cycles_per_block: {1: 4.44, 2: 3.38, 3: 4.44, 4: 5.38, 5: 6.38, 6: 7.38, 7: 8.38, 8: 9.44, 9: 10.44, 10: 11.38}
+    cycles_per_block: {1: 4.44, 2: 3.38, 3: 4.38, 4: 5.44, 5: 6.38, 6: 7.44, 7: 8.38, 8: 9.38, 9: 10.38, 10: 11.44}
   cmp_andp:
     latency: 1
-    cycles_per_block: {1: 6.38, 2: 7.44, 3: 8.38, 4: 9.44, 5: 10.38, 6: 11.44, 7: 12.44, 8: 13.38, 9: 14.38, 10: 15.38}
+    cycles_per_block: {1: 6.38, 2: 7.44, 3: 8.44, 4: 9.38, 5: 10.44, 6: 11.38, 7: 12.44, 8: 13.44, 9: 14.44, 10: 15.44}
   andp_alu:
     latency: 2
-    cycles_per_block: {1: 8.38, 2: 7.38, 3: 8.44, 4: 9.38, 5: 10.44, 6: 11.38, 7: 12.44, 8: 13.44, 9: 14.38, 10: 15.44}
+    cycles_per_block: {1: 8.44, 2: 7.38, 3: 8.44, 4: 9.44, 5: 10.38, 6: 11.44, 7: 12.38, 8: 13.44, 9: 14.44, 10: 15.38}
   andp_ct:
     latency: 3
-    cycles_per_block: {1: 8.44, 2: 8.38, 3: 8.38, 4: 9.44, 5: 10.38, 6: 11.44, 7: 12.38, 8: 13.38, 9: 14.44, 10: 15.44}
+    cycles_per_block: {1: 8.38, 2: 8.44, 3: 8.38, 4: 9.38, 5: 10.44, 6: 11.38, 7: 12.44, 8: 13.38, 9: 14.38, 10: 15.38}
   andp_andp:
     latency: 1
-    cycles_per_block: {1: 10.38, 2: 11.44, 3: 12.44, 4: 13.44, 5: 14.44, 6: 15.38, 7: 16.44, 8: 17.38, 9: 18.44, 10: 19.38}
+    cycles_per_block: {1: 10.44, 2: 11.38, 3: 12.44, 4: 13.38, 5: 14.44, 6: 15.44, 7: 16.38, 8: 17.44, 9: 18.44, 10: 19.44}
   fcmp_alu:
     latency: 4
-    cycles_per_block: {1: 6.44, 2: 5.38, 3: 6.44, 4: 5.38, 5: 6.38, 6: 7.44, 7: 8.38, 8: 9.44, 9: 10.38, 10: 11.38}
+    cycles_per_block: {1: 6.38, 2: 5.44, 3: 6.38, 4: 5.44, 5: 6.38, 6: 7.38, 7: 8.44, 8: 9.38, 9: 10.44, 10: 11.44}
   fcmp_ct:
     latency: 5
-    cycles_per_block: {1: 6.38, 2: 6.44, 3: 6.38, 4: 6.38, 5: 6.44, 6: 7.38, 7: 8.44, 8: 9.38, 9: 10.44, 10: 11.44}
+    cycles_per_block: {1: 6.38, 2: 6.38, 3: 6.44, 4: 6.38, 5: 6.38, 6: 7.38, 7: 8.38, 8: 9.44, 9: 10.38, 10: 11.38}
   return:
     latency: 6
-    cycles_per_block: {1: 15.75, 2: 15.75, 3: 15.75, 4: 15.88, 5: 15.75, 6: 15.88, 7: 16.75, 8: 17.75, 9: 18.75, 10: 19.75}
+    cycles_per_block: {1: 15.75, 2: 15.88, 3: 15.75, 4: 15.75, 5: 15.88, 6: 15.75, 7: 16.88, 8: 17.75, 9: 18.88, 10: 19.75}
 hazards:
   cmp_pred_alu:
     what: 'compare -> ALU op predicated on its result'
@@ -536,7 +727,7 @@ hazards:
     by_distance: {1: 0x31, 2: 0x31, 3: 0x31, 4: 0x31, 5: 0x31, 6: 0x31, 7: 0x31, 8: 0x31}
   ldd_use:
     what: 'ldd -> use (interlock check)'
-    by_distance: {1: 0x114000, 2: 0x114000, 3: 0x114000, 4: 0x114000, 5: 0x114000, 6: 0x114000, 7: 0x114000, 8: 0x114000}
+    by_distance: {1: 0x1bf000, 2: 0x1bf000, 3: 0x1bf000, 4: 0x1bf000, 5: 0x1bf000, 6: 0x1bf000, 7: 0x1bf000, 8: 0x1bf000}
   fdivd_use:
     what: 'fdivd -> use (interlock check)'
     by_distance: {1: 0x3ff0000000000000, 2: 0x3ff0000000000000, 3: 0x3ff0000000000000, 4: 0x3ff0000000000000, 5: 0x3ff0000000000000, 6: 0x3ff0000000000000, 7: 0x3ff0000000000000, 8: 0x3ff0000000000000}

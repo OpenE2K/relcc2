@@ -78,7 +78,12 @@ the 2C3 (v6) is the v3 code above, without them. Read-modify-writes
 are the same on all three. v6 has MAS encodings for load-acquire and
 store-release (kernel `asm/mas.h`: `MAS_LOAD_ACQUIRE_V6`,
 `MAS_STORE_RELEASE_V6`, bit 4 set with `mod` 3) and a "watch for
-modification" load, but lcc 1.29.16 doesn't use them.
+modification" load, but lcc 1.29.16 doesn't use them. On the 2C3 a
+release store by MAS costs 3.5–4.8 cycles back to back against 15.8 for
+lcc's `wait` + store, and an acquire load 10.4 cycles in a dependent
+chain against 4.8 (speculation.md, "v6 encodings"); whether they order
+exactly as their names say isn't observable there, since the hardware
+already keeps every order but store → load.
 
 `wait` waits for the completion of earlier loads (`ld_c`) and stores
 (`st_c`). lcc 1.31 also has `__builtin_e2k_read_barrier`,

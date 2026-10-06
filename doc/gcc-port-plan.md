@@ -1727,6 +1727,12 @@ Measured on an Elbrus-2C3 (timing.md "Elbrus-2C3 (v6)", semantics.md
   iteration cost nothing extra.
 - **`%lsr` written too late** ends a v6 loop after one iteration (v3/v5:
   one extra); the 4-cycle rule covers both.
+- **Atomics**: lcc's v6 code is its v3 code (`wait` + plain accesses).
+  v6's load-acquire / store-release MAS forms (0x13) run, and a release
+  store that way costs about a quarter of `wait` + store on the 2C3,
+  but their ordering can't be checked there and lcc doesn't use them:
+  follow lcc, and keep them as a later option (speculation.md, "v6
+  encodings"). The new fully speculative MAS 0x12 is what v3's 0x3 was.
 
 The ABI is unchanged (the compat suite passes on the 2C3). What tuning
 buys there: lcc's 2C3-tuned code runs CoreMark 1.19× and Linpack 1.35×

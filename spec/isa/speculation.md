@@ -265,6 +265,25 @@ lock `mas=0x4` (always with `,sm`) and the check `mas=0x3` [lcc].
 | `ld` | 2, 3 or 6 in ALC0 (reserved) | ALC0 | SIGILL `ILL_ILLOPC` |
 | `ld`, `st` | 0 with `m1` (bit 4, 0x10) set | any | an ordinary access: `m1` is ignored |
 
+**v6 encodings** [hw: Elbrus-2C3, `mas6.c` (`gen_mas6.py`); source:
+kernel `asm/mas.h`, `trap_cellar.h`]. v6 gives bit 4 (`m1`) a meaning:
+with `mod` 3 it is the load-acquire / store-release form (bit 6 `mt`),
+otherwise bits 0–1 (`m2`) choose the kind:
+
+| MAS | Operation | Channels | Effect on the 2C3 |
+|---|---|---|---|
+| 0x13, 0x53 | `ld` (load-acquire, `MAS_LOAD_ACQUIRE_V6`) | ALC0, 2, 3, 5 | an ordinary load that faults normally; a dependent chain takes **10.4 cycles a load** (4.8 plain) |
+| 0x13, 0x53 | `st` (store-release, `MAS_STORE_RELEASE_V6`) | ALC2, 5 | stores; back to back 3.5–4.8 cycles a store (plain 1.0; lcc's release, `wait ld_c, st_c` + `st`, 15.8) |
+| 0x10 | `ld,sm` | ALC0 | semi-speculative, as `mas=0x0`: pages in an untouched page, diagnostic for a page it may not read |
+| 0x12 | `ld,sm` | ALC0, 2 | **fully speculative**, as `mas=0x3`: diagnostic also for an untouched valid page; without `,sm` SIGILL `ILL_ILLOPC` |
+| 0x11 | `ld` ("watch for modification", `MAS_WATCH_FOR_MODIFICATION_V6`) | ALC0 only (ALC2: SIGILL) | an ordinary load; a store by the same thread to the watched word doesn't trap |
+
+That the acquire and release forms order memory can't be told on
+hardware that already keeps every order but store → load (atomics.md);
+lcc 1.29.16 uses none of them. Not tried: `m1` with bit 2 (`ch1`), the
+v6 lock-check (`m2` 1 with `,sm`) and speculative lock-check (`m2` 3)
+forms, `mt` beyond what is above.
+
 Not tried, on purpose, on the shared machines: mod 1 (no address
 translation), mod 7 in ALC2/5 and stores with mod 7 (MMU, cache and TLB
 operations, kernel `asm/mas.h`), stores with mod 1 or 6 (MMIO), and the

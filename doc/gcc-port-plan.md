@@ -1694,8 +1694,13 @@ intrinsics, so x86 SIMD paths of portable programs build on E2K
 reserved", so the port writes its own: the operation builtins can be
 generated from spec/abi/lcc-builtins.yaml (with the corrections in
 lcc-builtins-check.yaml, where lcc differs from its manual) and
-binutils-ops.yaml; whether to predefine the x86 macros and provide an
-x86 intrinsics layer is a separate decision.
+binutils-ops.yaml. **Owner's decision (2026-10-06): the port provides
+these compatible builtins, and no x86 or NEON intrinsics and no
+predefined x86 feature macros**; programs with x86 SIMD paths take their
+generic ones. (Upstream GCC's precedent for an emulation layer, should
+one ever be wanted, is PowerPC's opt-in x86 intrinsic headers in
+`gcc/config/rs6000/`, which stop with `#error` unless built with
+`-DNO_WARN_X86_INTRINSICS` and come with no `__SSE__` macros.)
 
 ### What a v5 mode adds (lcc 1.29.16 for the 8C2, measured)
 

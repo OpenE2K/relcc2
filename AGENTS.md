@@ -612,7 +612,10 @@ decisions so far: follow lcc's conventions wherever there is a choice
 (`setwd dbl` per function; `.ignore strict_delay` with the compiler inserting
 every delay, `.accept strict_delay` around user asm); use MCST's
 unwinder and libgcc E2K files; default `-march=elbrus-v3`, forward
-compatible; `%g12` as static chain. Key facts behind it: MCST gas
+compatible; `%g12` as static chain; provide lcc-compatible
+`__builtin_e2k_*` builtins (`<e2kintrin.h>`, generated from
+spec/abi/lcc-builtins.yaml) but no x86 or NEON intrinsics and no
+predefined x86 feature macros (2026-10-06). Key facts behind it: MCST gas
 assigns channels to ops outside braces, so a first port can print one op
 per line, and the hardware interlocks everything but `%lsr`, so such code
 is correct without padding, only slow; GCC has no

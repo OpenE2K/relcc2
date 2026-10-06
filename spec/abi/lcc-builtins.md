@@ -139,13 +139,14 @@ wrapper headers are open.
 - **The MAS, CPU-detection and barrier builtins** are a small fixed set
   (source-compat.md has the `__LCC_MAS_*` values and the CPU model
   table).
-- **x86 and NEON intrinsics** are a separate decision (the owner's): lcc
+- **No x86 or NEON intrinsics and no x86 feature macros** (owner's
+  decision, 2026-10-06): the compatible E2K builtins are enough. lcc
   makes x86 SIMD code build unchanged by predefining the x86 macros and
-  emulating the intrinsics, which software built for Elbrus may rely on;
-  a port that doesn't will take those programs' generic paths instead.
-  The same structure as lcc's and Unipro's would be GCC's own x86
-  intrinsic headers (GPL with the runtime exception) over a new E2K
-  implementation of the `__builtin_ia32_*` builtins they use (written
-  from the x86 semantics and the E2K operation pages, not from
-  `e2kbuiltin.h`); many map to one operation each (the table above),
-  and GCC's generic vector extensions cover much of the rest.
+  emulating the intrinsics; with the GCC port such programs take their
+  generic paths instead, which is correct, only slower. Predefining
+  `__SSE2__` on a non-x86 target also misleads code that reads it as
+  "this is x86" (x86 inline asm, `cpuid`). If an emulation layer is ever
+  wanted, upstream GCC's model is PowerPC's opt-in x86 intrinsic headers
+  (`gcc/config/rs6000/xmmintrin.h` and others: `#error` unless built
+  with `-DNO_WARN_X86_INTRINSICS`, no `__SSE__` macros), written from the
+  x86 semantics and the E2K operation pages, not from `e2kbuiltin.h`.

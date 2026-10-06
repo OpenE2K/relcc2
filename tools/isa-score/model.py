@@ -96,6 +96,25 @@ BAP_TO_MOVA = 22    # apb.md, data in the caches
 # channel PORT_DISTANCE cycles after it.
 PORT_DISTANCE = 2
 INT_SIDE = {"int", "cint", "getsp", "load", "ldqp", "idiv"}
+
+# timing.md, "Memory": a load of an aligned doubleword stored in the
+# instruction just before returns its value about 7.6 cycles late (two
+# stall steps); one cycle between them removes it.
+STORE_RELOAD_DELAY = 8
+
+# timing.md, "Throughput": the divider in ALC5 (fdivs, fdivd, sdivs,
+# sdivd, fsqrts) stalls a divide issued 1 cycle after another by 4, and
+# an fsqrts 5 cycles after another by 2.  The fractional averages at
+# distance 2 (sdivd 3.4, fsqrts 2.8) are not modelled.
+DIVIDER_OPS = ("fdivs", "fdivd", "sdivs", "sdivd", "udivs", "udivd",
+               "fsqrts", "fsqrtid", "fsqrttd")
+DIVIDER_STALL = {1: 4}
+FSQRT_STALL = {5: 2}
+
+# timing.md, "Throughput": two stores in one instruction whose addresses
+# agree in bits 6-7 take 2 cycles.  Addresses are known only as base +
+# offset; the model assumes the base is 256-byte aligned (as measured).
+STORE_BANK_MASK = 0xc0
 STALL_QUANTUM = 4   # timing.md: an early consumer waits in 4-cycle steps
 
 
@@ -441,7 +460,9 @@ class Decoder:
                 s = line.strip()
                 if s.startswith("nop"):
                     m = re.match(r"nop\s*(\d*)", s)
-                    ins.nop = int(m.group(1) or 1)
+                    # objdump prints an instruction with no extra cycles
+                    # as a bare "nop" (gas encodes "nop" as "nop 0").
+                    ins.nop = int(m.group(1) or 0)
                 elif s == "loop_mode":
                     ins.loop_mode = True
                 op = parse_line(s, self)

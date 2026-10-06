@@ -68,9 +68,17 @@ after the previous one plus its `nop`, and waits when an operand isn't
 ready. A wait costs whole 4-cycle steps (`ceil(early / 4) × 4`), which
 matches every gap measured on the 4C (`selftest.py`). It also models the
 write-back conflict found while validating: an FP-side result going to
-an integer operation is a cycle late when an integer operation or load
-issues in the same channel 2 cycles after its producer
-(`spec/isa/timing.md`). A conditional transfer is assumed not taken
+an integer operation, or to an FP operation in the other cluster, is a
+cycle late when an integer operation or load issues in the same channel
+2 cycles after its producer (`spec/isa/timing.md`). Also from
+`timing.md`: a load of the aligned doubleword stored in the instruction
+just before gets its value 8 cycles late (same base register, offsets
+in one doubleword); a divide 1 cycle after another waits 4 and an
+`fsqrts` 5 cycles after another 2 (the fractional rates at distance 2
+are not modelled); two stores in one instruction with the same base
+whose offsets agree in bits 6–7 take a cycle more (the base is assumed
+256-byte aligned). The `stld.c` probe's 60 straight-line cases are
+reproduced to within 0.4 cycles a step. A conditional transfer is assumed not taken
 unless it is a back edge: not taken, it needs its `disp` only 2 cycles
 before it, not 5 (measured with the monitors; on lcc's CoreMark this
 assumption took the model from 10% too slow to within 1%). A taken
@@ -203,5 +211,7 @@ scheduler could do with the same operations.
   cycles; more in some of gcc-claude's call blocks, see above), which
   way a conditional transfer goes (static: exits not taken, back edges
   taken; `profile.py` measures it), the
-  store/load channel pairs gas forbids, and branch targets in the bad
-  page offsets of `CPU_HWBUG_CODE_PLACEMENT`.
+  store/load channel pairs gas forbids, branch targets in the bad
+  page offsets of `CPU_HWBUG_CODE_PLACEMENT`, store/load hazards and bank
+  conflicts between addresses with different base registers, and the
+  sharing of L1 bandwidth between a store and a load in one 32-byte block.

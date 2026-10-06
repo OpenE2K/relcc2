@@ -391,6 +391,9 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None):
     avail = {}                     # key -> (op, chan, issue)
     fpside, intside = [], []       # recent issues, for write-back conflicts
     late = set()                   # (op, issue) whose result arrives late
+    slow = {}                      # (op, issue) -> extra cycles (reload)
+    last_store = []                # (base, doubleword, issue) of stores
+    last_div = None                # (name, issue) of the last divide
     for k, v in seed.items():
         avail[k] = v
     starts = []
@@ -415,9 +418,15 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None):
                             and not taken \
                             and p.name in ("disp", "sdisp"):
                         lat = min(lat, model.CTP_LAT_NOT_TAKEN)
-                    r = pis + lat
-                    if (id(p), pis) in late and not model.is_fp_consumer(op.name) \
-                            and key not in op.data:
+                    r = pis + lat + slow.get((id(p), pis), 0)
+                    # A write-back conflict delays an FP-side result to an
+                    # integer consumer, and to an FP consumer in the other
+                    # cluster (timing.md; fmuld,0 -> faddd,3: 6 -> 7).
+                    if (id(p), pis) in late and key not in op.data and (
+                            not model.is_fp_consumer(op.name)
+                            or (cluster(pch) is not None
+                                and cluster(op.chan) is not None
+                                and cluster(pch) != cluster(op.chan))):
                         r += 1
                     if r > issue:
                         # A transfer waits exactly for its CTPR and its
@@ -440,10 +449,39 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None):
                          for b in area_bytes.values()] + [0])
             if extra > wait:
                 wait, why = extra, f"APB area bandwidth ({max(area_bytes.values())} bytes)"
+            # The divider (ALC5): a divide 1 cycle after another waits 4,
+            # an fsqrts 5 cycles after another fsqrts 2.
+            for op in ins.ops:
+                if op.name in model.DIVIDER_OPS and last_div is not None:
+                    dist = issue - last_div[1]
+                    w = model.DIVIDER_STALL.get(dist, 0)
+                    if op.name == "fsqrts" and last_div[0] == "fsqrts":
+                        w = max(w, model.FSQRT_STALL.get(dist, 0))
+                    if w > wait:
+                        wait, why = w, f"divider ({op.name} {dist} after {last_div[0]})"
+            # Two stores in one instruction to the same bank (address bits
+            # 6-7, base assumed 256-byte aligned) take a cycle more.
+            sts = [op.mem for op in ins.ops if op.mem and op.mem[0] == "st"
+                   and op.mem[1] is not None and op.mem[2] is not None]
+            bank = 1 if any(a[1] == b[1] and
+                            (a[2] & model.STORE_BANK_MASK)
+                            == (b[2] & model.STORE_BANK_MASK)
+                            for i, a in enumerate(sts) for b in sts[i + 1:]) \
+                else 0
+            if bank > wait:
+                wait, why = bank, "two stores to one L1 bank"
             if trace is not None:
                 trace.append((it, ins, issue, wait, why))
             issue += wait
             for op in ins.ops:
+                # A load of the doubleword stored in the previous cycle
+                # gets its value STORE_RELOAD_DELAY late (timing.md).
+                if op.mem and op.mem[0] == "ld" and op.mem[1] is not None \
+                        and op.mem[2] is not None:
+                    dw = op.mem[2] // 8
+                    if any(b == op.mem[1] and d == dw and si == issue - 1
+                           for b, d, si in last_store):
+                        slow[(id(op), issue)] = model.STORE_RELOAD_DELAY
                 for key in op.dsts:
                     if key[0] != "lp":
                         avail[key] = (op, op.chan, issue)
@@ -453,6 +491,13 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None):
                 if (op.cls in model.INT_SIDE and op.unit == "alc"
                         and not (op.mem and op.mem[0] == "st")):
                     intside.append((op.chan, issue))
+            last_store = [x for x in last_store if x[2] >= issue - 1]
+            for op in ins.ops:
+                if op.mem and op.mem[0] == "st" and op.mem[1] is not None \
+                        and op.mem[2] is not None:
+                    last_store.append((op.mem[1], op.mem[2] // 8, issue))
+                if op.name in model.DIVIDER_OPS:
+                    last_div = (op.name, issue)
             fpside[:] = [f for f in fpside if f[2] >= issue - 8]
             for (p, ch, pis) in fpside:
                 if (ch, pis + model.PORT_DISTANCE) in intside:

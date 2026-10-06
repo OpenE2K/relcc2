@@ -74,6 +74,7 @@ PROBES = {
     "semfx-v4.s": ("semfx.c", "8C2, 2C3"),
     "sem6.s": ("sem6.c", "2C3"),
     "ctl6.s": ("ctl6.c", "2C3"),
+    "mas6.s": ("mas6.c", "2C3"),
 }
 ABI_PROBES = "tools/abi/probes"
 

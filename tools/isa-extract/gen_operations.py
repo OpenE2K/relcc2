@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Write spec/isa/operations-v{3,5,6}.md: every E2K operation, what it
+"""Write spec/isa/operations-v{3,5,6,7}.md: every E2K operation, what it
 does, and what is known about it, one page per hardware level.
 
 Joins five sources:
 
   spec/isa/operations-v3.yaml  what each operation computes (hand-written
   spec/isa/operations-v5.yaml  rules): v3 has everything up to v3 (the 4C),
-  spec/isa/operations-v6.yaml  v5 what v4 and v5 add (the 8C2), v6 what
-                               v6 and v7 add; every operation must match
+  spec/isa/operations-v6.yaml  v5 what v4 and v5 add (the 8C2), v6 and v7
+  spec/isa/operations-v7.yaml  what those add; every operation must match
                                exactly one rule, in the file of the
                                version that introduced it
   spec/isa/binutils-ops.yaml ISA versions, channels, operand formats
@@ -108,7 +108,7 @@ def load_ops():
 
 
 # Rule files and the first ISA versions their operations may have.
-LEVELS = (("v3", 1, 3), ("v5", 4, 5), ("v6", 6, 8))
+LEVELS = (("v3", 1, 3), ("v5", 4, 5), ("v6", 6, 6), ("v7", 7, 8))
 
 
 def assign(docs, ops, v1=()):

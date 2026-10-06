@@ -1,22 +1,22 @@
 # SPDX-License-Identifier: CC-BY-SA-4.0
-# What v6 and v7 add to the E2K operations: hand-written rules, as in
+# What v6 adds to the E2K operations: hand-written rules, as in
 # operations-v3.yaml (which explains the fields). No machine here runs
 # them: the sources are the community qemu and binutils.
 
 header: |
-  # Operations added in v6 and v7
+  # Operations added in v6
 
-  What `elbrus-v6` (Elbrus-16C, -2C3) and `elbrus-v7` (in development)
-  add to [operations-v5.md](operations-v5.md). **Generated** by
+  What `elbrus-v6` (Elbrus-16C, -2C3) adds to
+  [operations-v5.md](operations-v5.md); v7 is in
+  [operations-v7.md](operations-v7.md). **Generated** by
   `tools/isa-extract/gen_operations.py` from `operations-v6.yaml`.
 
-  No v6 or v7 machine is available here: every row comes from the
-  community qemu (`OpenE2K/qemu-e2k-community`, which matches the
-  hardware on every v5 operation) or, where qemu doesn't implement an
-  operation, only from binutils (name, channels, operand formats). v6
-  results could come from targeted self-contained tests run by someone
-  with a v6 machine. The columns are those of
-  [operations-v3.md](operations-v3.md).
+  No v6 machine is available here: every row comes from the community
+  qemu (`OpenE2K/qemu-e2k-community`, which matches the hardware on
+  every v5 operation) or, where qemu doesn't implement an operation, only
+  from binutils (name, channels, operand formats). Results could come
+  from targeted self-contained tests run by someone with a v6 machine.
+  The columns are those of [operations-v3.md](operations-v3.md).
 
 groups:
 
@@ -33,51 +33,33 @@ groups:
     use: Indirect jumps and calls without a CTPR preparation.
   - ops: mkfsw modbgv vfbgv
     does: Operations on the global register rotation (`%bgr`) and FP state words; not implemented in qemu.
-    status: "v6+; no open source"
+    status: "v6; no open source"
 
 - title: Packed
   rules:
   - ops: pcmp{eq,gt}{b,h,w,d}{op,ap} qpcmp{eq,gt}{b,h,w,d}{op,ap}
     does: "Into a predicate: true if the compare holds in any lane (`op`) or in all lanes (`ap`) (community qemu)."
     use: Vector loop exits (`any`/`all`) without `qpsgn2mskb` and a scalar compare.
+  - ops: qpcheck{s,d,q}
+    does: "Packed checks; neither qemu nor any other open source implements them, so only the name and operand formats (binutils) are known."
+    status: "v6; no open source"
   - ops: pmrgp qpmrgp
     does: Packed merge by a predicate, as `merged` (community qemu).
   - ops: qpsrad
     does: Arithmetic right shift of 64-bit lanes by the count b (community qemu).
   - ops: qpcext_0x{00,7f,80,ff}
     does: 128 bits with b in the low half and the high half filled with the byte in the name (community qemu).
-  - ops: qpack{hb,wh}{ss,us}
-    does: "Narrowing packs; the community qemu implements them with the v5 `qpack*` helpers (a's lanes in the high 64 bits)."
   - ops: qpfma{s,d} qpfms{s,d} qpfnma{s,d} qpfnms{s,d} qpfmas{s,d} qpfmsa{s,d}
     does: "Fused multiply-add per lane (`mas`: add in even lanes, subtract in odd; `msa` the reverse) (community qemu)."
-  - match: 'qplog_0x[0-9a-f]{2}_lt3|qpins[sd]_lt3|qppermb_lt3'
-    does: "v7 encodings with the table or selector in a literal (binutils); not implemented in qemu."
-    status: "v7; no open source"
-  - ops: qpcheck{s,d,q} qpcm2{b,h,w,d} qps2cm{h,w,d} qps2m{b,h,w,d} qpidots{bw,hw}ss qpidotsbw{us,uu} qpidotshdss qpidotshduu qpbfdots qpfstobf qpaes{ltr,iltr,ebgn,dbgn} qpkuz{ltr,ebgn} qpsbgltr{lo,hi} qpmgme qptbl_{0,1,2,3,4,5,6,7} qpins{s,d}
-    does: "Operations no open source implements: dot products (`qpidot*`, `qpbfdots`), bfloat16 conversion (`qpfstobf`), AES (`qpaes*`) and Kuznyechik/Streebog (`qpkuz*`, `qpsbgltr*`, `qpmgme`) rounds, table lookups (`qptbl_*`), masks (`qpcm2*`, `qps2*`), checks. Only names and operand formats (binutils) are known."
-    status: "v6+; no open source"
-
-- title: Memory, protected mode and state
-  rules:
-  - ops: ldosrr{d,qp} stosrr{d,qp}
-    does: v7 accesses, no open implementation.
-    status: "v7; no open source"
-  - ops: apincr apincrc cudincr gdincr getind getmi getptr getptrc getspd subarr subarrc vfsid
-    does: v7 pointer and array operations of protected mode; no open implementation.
-    status: "v7; no open source"
-  - ops: rrshd rwshd
-    does: v7 state accesses (binutils); not implemented in qemu.
-    status: "v7; no open source"
-
 - title: Control
   rules:
   - ops: abgc rbgc
     does: Global-register rotation forms (binutils; gas doesn't accept them).
-    status: "v6+; source only"
+    status: "v6; source only"
   - ops: fillr fillc
     does: Fill the register window stack or the chain stack back from memory (the counterparts of `flushr`, `flushc`).
-  - ops: hcall icall ctp_call dtbp
-    does: "Hypercall, indirect call, call through a prepared CTPR, the v7 `dtbp` (binutils)."
-    status: "v6+; source only"
+  - ops: hcall icall
+    does: "Hypercall and indirect call (binutils)."
+    status: "v6; source only"
   - ops: iret hret glaunch
     does: Privileged returns from traps and the hypervisor, guest launch.

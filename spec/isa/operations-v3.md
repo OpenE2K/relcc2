@@ -4,8 +4,9 @@ Every operation that exists by `elbrus-v3` (the Elbrus 4C, the
 baseline the GCC port targets), what it computes, how a compiler uses
 it, and what is known about it. Operations only v1 (Elbrus-3M) had are
 left out: no working machine exists. What v4 and v5 add is in
-[operations-v5.md](operations-v5.md), v6 and v7 in
-[operations-v6.md](operations-v6.md). **Generated** by
+[operations-v5.md](operations-v5.md), v6 in
+[operations-v6.md](operations-v6.md) and v7 in
+[operations-v7.md](operations-v7.md). **Generated** by
 `tools/isa-extract/gen_operations.py` from `operations-v3.yaml` (the
 rules, hand-written), `binutils-ops.yaml`, the timing tables,
 `lcc-usage.yaml` and the probes' assembly; edit the sources, not this

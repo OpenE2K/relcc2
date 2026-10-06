@@ -144,7 +144,10 @@ spec/isa/      ISA spec: operations-v3.md, operations-v5.md (what v4/v5 add:
                lcc-usage.yaml (operation counts in lcc's system libraries)
 spec/abi/      ABI spec for e2k64: data layout, registers + DWARF, calling
                convention, stacks and unwinding, ELF/relocations/PIC/TLS,
-               atomics, source-level conventions (macros, asm, options)
+               atomics, source-level conventions (macros, asm, options),
+               lcc-builtins.md (lcc's MCST builtins and x86 intrinsics;
+               lcc-builtins.yaml from lcc's manual, lcc-builtins-check.yaml
+               from compiling each with lcc)
 spec/NOTICE.md attribution and licence of spec/
 doc/           plans for the owner: gcc-port-plan.md (how to write the GCC port)
 docs/          spec-poc-findings.md: spec problems found by toolchains/gcc-claude

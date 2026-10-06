@@ -12,6 +12,7 @@ macros from `lcc -dM -E -xc /dev/null`.
 |---|---|---|---|---|
 | `__e2k__` | 1 | 1 | glibc (177 files), Linux, gdb | define |
 | `__iset__` | ISA version: 3..7 | same | glibc (142 files: ISA-specific code) | define, from `-march` |
+| x86 feature macros: `__MMX__`, `__SSE__` … `__SSE4_2__`, `__SSSE3__`, `__AVX__`, `__AVX2__`, `__FMA__`, `__AES__`, `__SHA__`, `__BMI2__`, `__POPCNT__` and more (lcc-builtins.md) | 1 on every target, no option needed | ? | programs choosing an x86 SIMD path; lcc's `<immintrin.h>` emulates the intrinsics | owner's decision: define them only with an x86-intrinsics layer (lcc-builtins.md) |
 | `__elbrus_4c__`, `__elbrus_8c__`, `__elbrus_1cplus__`, `__elbrus_8c2__`, `__elbrus_12c__`, `__elbrus_16c__`, `__elbrus_2c3__`, `__elbrus_48c__`, `__elbrus_8v7__` | with `-mtune=<cpu>` (or a CPU-specific lcc such as `e2k-v3.4c`) | no | glibc (14 files) | define with `-mtune` |
 | `__ptr64__` (`__ptr32__`, `__ptr128__` in the other modes) | 1 | `__ptr64__` | glibc (`__ptr128__`: 137 files), Linux | define |
 | `_LP64`, `__LP64__` | 1 | 1 | everything | define |

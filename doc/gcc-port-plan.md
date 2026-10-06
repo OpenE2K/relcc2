@@ -1683,6 +1683,20 @@ Decided by the owner:
   (only qemu does), and v6 has longer load latencies (performance
   only).
 
+### lcc's builtins and intrinsics (source compatibility)
+
+Code written for Elbrus uses lcc's `__builtin_e2k_<op>` builtins
+(`<e2kintrin.h>`: 430, one machine operation each) and the MAS,
+CPU-detection and barrier builtins, and lcc predefines the x86 feature
+macros (`__SSE2__` … `__AVX2__`) on every target and emulates the x86
+intrinsics, so x86 SIMD paths of portable programs build on E2K
+(spec/abi/lcc-builtins.md). lcc's and Unipro's headers are "all rights
+reserved", so the port writes its own: the operation builtins can be
+generated from spec/abi/lcc-builtins.yaml (with the corrections in
+lcc-builtins-check.yaml, where lcc differs from its manual) and
+binutils-ops.yaml; whether to predefine the x86 macros and provide an
+x86 intrinsics layer is a separate decision.
+
 ### What a v5 mode adds (lcc 1.29.16 for the 8C2, measured)
 
 lcc's v5 code for CoreMark and Linpack differs from its v3 code in only

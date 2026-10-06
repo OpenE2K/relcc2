@@ -11,6 +11,11 @@
          tools/isa-probes/spec-v5.s -o spec-v5 -lm
      ./spec-v5 v5
 
+   On v6, also v6's encodings of the lock loads (MAS 0x11, 0x13 with ,sm):
+     $LCC6 -O1 -DSPEC_V5 -DSPEC_V6 tools/isa-probes/spec.c \
+         tools/isa-probes/spec.s tools/isa-probes/spec-v5.s \
+         tools/isa-probes/spec-v6.s -o spec-v6 -lm
+
    Each line: case, arguments, then the result (value and tag), whether
    an rbranch was taken (%MLOCK), the %pfpfr exception flags raised, and
    the cycles; or the signal with its si_code.  */
@@ -26,6 +31,9 @@
 
 #define CASE(n) long spec_##n (unsigned long *, long, long, long);
 #include "spec-cases.h"
+#ifdef SPEC_V6
+#include "spec-v6-cases.h"
+#endif
 #ifdef SPEC_V5
 #include "spec-v5-cases.h"
 #endif
@@ -219,6 +227,10 @@ main (int argc, char **argv)
   run (#n, spec_##n, "unmapped page", (long) unmapped, 0, 0);
   LOCKS (lk4) LOCKS (lk4_chk) LOCKS (lk7) LOCKS (lk7_chk)
   K (k4_match) K (k4_store) K (k7_match) K (k7_store)
+#ifdef SPEC_V6
+  LOCKS (lk11) LOCKS (lk11_chk) LOCKS (lk13) LOCKS (lk13_chk)
+  K (k11_match) K (k11_store) K (k13_match) K (k13_store)
+#endif
   K (k_chk2_twice) K (k_chk2_store) K (k_chk2_noentry)
   big[2] = 0;
   K (k_st5)

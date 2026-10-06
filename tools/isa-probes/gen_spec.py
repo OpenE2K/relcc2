@@ -367,8 +367,22 @@ def main():
                          "rbranch\t%%LOCKED"], nop]
         add(f"q_cap{n}", groups)
     v5 = list(CASES)
+    CASES.clear()
+    # v6's encodings of the lock loads (kernel asm/mas.h, trap_cellar.h:
+    # m1 = bit 4 with m2 1 is the lock, m2 3 the speculative lock),
+    # as lk4/lk7 and k4_*/k7_* above.  Not on v5, where 0x11 could mean
+    # mod 1.
+    for m in (0x11, 0x13):
+        lk = [[f"ldd,0,sm\t%dr1, 0x0, %dr8, mas={m:#x}"], nop, nop]
+        add(f"lk{m:x}", inv + lk)
+        add(f"lk{m:x}_chk", inv + lk + [["ldd,5\t%dr1, 0x0, %dr8, mas=0x3",
+                                         "rbranch\t%%LOCKED"], nop])
+        add(f"k{m:x}_match", inv + spld(8, mas=m) + check(8))
+        add(f"k{m:x}_store", inv + spld(8, mas=m) + st0 + check(8))
+    v6 = list(CASES)
     v5_header = HEADER[:HEADER.index("\n\t.global\tspec_nop")] + "\n"
-    for path, header, cs in (("spec", HEADER, v3), ("spec-v5", v5_header, v5)):
+    for path, header, cs in (("spec", HEADER, v3), ("spec-v5", v5_header, v5),
+                             ("spec-v6", v5_header, v6)):
         (HERE / f"{path}.s").write_text(header + "".join(t for _, t in cs))
         (HERE / f"{path}-cases.h").write_text(
             "/* SPDX-License-Identifier: GPL-3.0-or-later */\n"

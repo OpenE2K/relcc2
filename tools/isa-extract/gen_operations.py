@@ -64,6 +64,7 @@ PROBES = {
     "apb-stream.s": ("apb-stream.c", "4C, 8C2, 2C3"),
     "spec.s": ("spec.c", "4C, 8C2, 2C3"),
     "spec-v5.s": ("spec.c", "8C2, 2C3"),
+    "spec-v6.s": ("spec.c", "2C3"),
     "samewi.s": ("samewi.c", "4C, 8C2, 2C3"),
     "stld.s": ("stld.c", "4C, 8C2, 2C3"),
     "p28.s": ("p28.c", "4C, 8C2"),

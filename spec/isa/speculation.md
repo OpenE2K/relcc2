@@ -277,12 +277,14 @@ otherwise bits 0–1 (`m2`) choose the kind:
 | 0x10 | `ld,sm` | ALC0 | semi-speculative, as `mas=0x0`: pages in an untouched page, diagnostic for a page it may not read |
 | 0x12 | `ld,sm` | ALC0, 2 | **fully speculative**, as `mas=0x3`: diagnostic also for an untouched valid page; without `,sm` SIGILL `ILL_ILLOPC` |
 | 0x11 | `ld` ("watch for modification", `MAS_WATCH_FOR_MODIFICATION_V6`) | ALC0 only (ALC2: SIGILL) | an ordinary load; a store by the same thread to the watched word doesn't trap |
+| 0x11 | `ld,sm` | ALC0 | **the lock load**, exactly as `mas=0x4` (`spec.c` `lk11*`, `k11_*` against `lk4*`, `k4_*`: values, `%MLOCK`, faults and untouched pages alike) |
+| 0x13 | `ld,sm` | ALC0 | **the speculative lock**, exactly as `mas=0x7` (`lk13*`, `k13_*`) |
 
-That the acquire and release forms order memory can't be told on
-hardware that already keeps every order but store → load (atomics.md);
-lcc 1.29.16 uses none of them. Not tried: `m1` with bit 2 (`ch1`), the
-v6 lock-check (`m2` 1 with `,sm`) and speculative lock-check (`m2` 3)
-forms, `mt` beyond what is above.
+The old lock encodings (`mas=0x4`, `0x7`) keep working on v6. That the
+acquire and release forms order memory can't be told on hardware that
+already keeps every order but store → load (atomics.md); lcc 1.29.16
+uses none of the v6 forms. Not tried: `m1` with bit 2 (`ch1`), `mt`
+beyond what is above.
 
 Not tried, on purpose, on the shared machines: mod 1 (no address
 translation), mod 7 in ALC2/5 and stores with mod 7 (MMU, cache and TLB

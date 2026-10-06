@@ -1717,8 +1717,14 @@ Measured on an Elbrus-2C3 (timing.md "Elbrus-2C3 (v6)", semantics.md
 - **Fused multiply-add**: `fma`/`fms`/`fnma`/`fnms` scalar and `qp`
   patterns (`fma<mode>4`, `fms<mode>4`, `fnma<mode>4`, `fnms<mode>4`),
   rounded once, 5 cycles against `fmul_add`'s 8; contraction under
-  `-ffp-contract=fast` (GCC's default for GNU C) then uses them. lcc's
-  2C3 libraries use `fmad` 857 times.
+  `-ffp-contract=fast` (GCC's default for GNU C) then uses them. lcc
+  differs: at `-O3` for the 2C3 it keeps `a * b + c` as the twice-rounded
+  `fmul_addd` (the same result as separate operations) and calls libm
+  for `fma()`; only `-ffast-math` makes it emit `fmad`, for both (its
+  `-ffp-contract=fast` doesn't). lcc's 2C3 libraries use `fmad` 857
+  times. Decide whether the port follows GCC's default (fused, results
+  differ from lcc's in the last bit) or lcc's (`-ffp-contract=off`
+  unless `-ffast-math`); `__builtin_fma` should become `fmad` either way.
 - **Vector exits**: `qpcmpeqbop`/`qpcmpeqbap` (a compare straight into
   a predicate) for `cbranch` on vectors and the string functions,
   `qpmrgp` for a select by a predicate, `qpsrad` for 64-bit arithmetic

@@ -4,13 +4,17 @@ Latencies, control-transfer preparation delays and interlock behaviour,
 measured on hardware by `tools/isa-timing/bench.py`. The data is in
 [timing-e2s.yaml](timing-e2s.yaml) (generated; do not edit).
 
-Status: **[hw]** on an Elbrus 4C (E2S, elbrus-v3, 750 MHz) and an
+Status: **[hw]** on an Elbrus 4C (E2S, elbrus-v3, 750 MHz), an
 Elbrus-8C2 (E8C2, elbrus-v5, 1.26–1.5 GHz; data in
-[timing-e8c2.yaml](timing-e8c2.yaml), section "Elbrus-8C2 (v5)" below).
-Every latency, hazard and control-transfer delay measured on both is
-the same; v6 differs (load→use 5 instead of 3, binutils
-`bfd/elfxx-e2k.c` `build_plt_entry`; the owner recalls this as v6's only
-timing change, and isa-score uses it for v6+) and is not measured.
+[timing-e8c2.yaml](timing-e8c2.yaml), section "Elbrus-8C2 (v5)" below)
+and an Elbrus-2C3 (E2C3, elbrus-v6, 2 GHz; data in
+[timing-e2c3.yaml](timing-e2c3.yaml), section "Elbrus-2C3 (v6)").
+Every latency, hazard and control-transfer delay measured on the 4C and
+the 8C2 is the same. **v6 changes the timing**: an L1 load takes 5
+cycles instead of 3, an integer compare reaches a predicated operation
+in 1 cycle instead of 2, `ldqp` goes through L1, and a few conflicts
+are gone; everything else is as on v3 and v5. The sections below
+describe v3 and v5; "Elbrus-2C3 (v6)" lists what differs.
 
 ## Method
 
@@ -292,7 +296,7 @@ integer work per cycle, and twice the FP work.
 
 ## Memory
 
-Compilers schedule every load for an L1 hit (3 cycles); lcc does too.
+Compilers schedule every load for an L1 hit (3 cycles; 5 on v6); lcc does too.
 Longer latencies cannot be scheduled for and are left to the interlock,
 prefetching and APB, so `bench.py` measures them only with `--memory`
 (pinned with `--numa CPU:MEM`). For reference, on the 4C (64 KiB L1D and
@@ -377,7 +381,7 @@ issued earlier stalls a fixed 4 cycles, as above. The first `mova` after
 `bap` issues without a stall 22 cycles after it when the data is in the
 caches.
 
-**One area delivers 16 bytes a cycle.** lcc's `loop_mode` loops over
+**One area delivers 16 bytes a cycle** (32 on v6, Elbrus-2C3 below). lcc's `loop_mode` loops over
 arrays in L1 (`-O3 -faligned`, timed with `%clkr`), on the 4C and the
 8C2 alike: a sum of `long`s reading one area runs at 0.53–0.54 cycles
 per element, also when lcc's v5 code reads 32 bytes an iteration from
@@ -394,7 +398,7 @@ bytes (isa-score models this).
 |---|---|---|
 | ALU, multiply, divide, load → register use | yes | values correct at any distance ≥ 1, also integer ↔ FP and across clusters |
 | compare → predicated ALU op, `ct ? pred`, `ibranch ? pred` | yes | correct at distance ≥ 1 |
-| compare → predicated op or `merge` in the wide instruction of a **taken return** (`ct %ctpr3` after `return`) | **no** | at distance 1 the op reads the predicate as it was before the compare, with no stall; at distance 2 it reads the new value. A taken branch (`ct %ctpr1`, near or far), a `call`, a `ct` that is not taken and no transfer all wait (`tools/isa-probes/preds.c`, `i17_*`; 4C and Elbrus-8C2; the proof-of-concept back end's finding I17, where a `merge` in a return's instruction broke expat). Keep a compare 2 instructions before any predicate reader in a return's instruction. |
+| compare → predicated op or `merge` in the wide instruction of a **taken return** (`ct %ctpr3` after `return`) | **no** | at distance 1 the op reads the predicate as it was before the compare, with no stall; at distance 2 it reads the new value. A taken branch (`ct %ctpr1`, near or far), a `call`, a `ct` that is not taken and no transfer all wait (`tools/isa-probes/preds.c`, `i17_*`; 4C and Elbrus-8C2; the proof-of-concept back end's finding I17, where a `merge` in a return's instruction broke expat). Keep a compare 2 instructions before any predicate reader in a return's instruction. On v6 (the 2C3) distance 1 reads the new value. |
 | compare → `andp`, `andp` → predicated ALU op | yes | correct at distance ≥ 1 |
 | `andp` → `andp` in the same wide instruction (a CLP reading `@p4` written by an earlier CLP) | — | sees the new value: predicate logic chains inside one instruction |
 | compare → `andp` through `%spred0` in the same instruction | ? | read the old (false) value both on the 4C and under qemu; how `%spred` is meant to be used is not known yet |
@@ -504,7 +508,88 @@ v5, as lcc's documentation says for v1–v5. What v5 adds or changes:
   1.8–2 cycles in every run (the 4C sometimes runs them at 1); two
   stores agreeing in address bits 6–7 take 2, as on the 4C.
 
-## Differences between generations (lcc-doc, not measured)
+## Elbrus-2C3 (v6) [hw]
+
+`bench.py --target v6.2c3` on an Elbrus-2C3 (E2C3, 2 cores, 2000 MHz,
+`performance` governor; the kernels of the 4C and the 8C2 plus v6 ones,
+`add_v6`), and the probes in `tools/isa-probes` run on it and on the
+8C2 side by side. These stay as on v3 and v5: every integer, multiply,
+divide, FP, conversion, packed and 128-bit latency (the `v5op_*`
+chains: all 195 equal), the format penalties, the crossing costs
+between clusters and between the integer and FP sides, the stall rule
+(an early consumer waits in 4-cycle steps), write-back conflicts,
+branch costs (a taken `ibranch` 6, a prepared `ct` 0), CTPR delays (`disp` 5, `movtd` 9, `return` 6), the divider's own
+conflicts, the store bank rule (two stores agreeing in address bits
+6–7 take 2 cycles) and the store-to-load penalty. What v6 changes:
+
+- **An L1 load takes 5 cycles** (3 before), in every load channel
+  (ALC0, 2, 3, 5), for every size (`ldb` … `ldd`, `ldq`), to integer,
+  FP and 128-bit consumers, and **in either cluster** (v3 and v5 add 1
+  across). A consumer scheduled 3 cycles after a load, as for v3, stalls
+  a whole 4-cycle step: the load–use pair takes 7 cycles, not 5. A
+  dependent pointer chase costs 5 a step on all three machines (on v3
+  and v5 it is 3 + a stall). Loads still issue four per cycle.
+- **`ldqp` goes through L1**: latency 5, four per instruction (v5:
+  served by L2, 11, one per cycle). lcc's v6 code uses it for data
+  (with `movaqp` in APB loops).
+- **Integer predicates are faster**: an integer compare (`cmp*`,
+  `cctop*`) or predicate logic (`andp` …) reaches a predicated ALU
+  operation or a `merge` in **1** cycle (2 before); to a `ct` it is still
+  3, and FP compares are unchanged (4 to an operation, 5 to `ct`).
+  The v6 packed compares into a predicate (`pcmp*op`, `pcmp*ap`,
+  `qpcmp*op`, `qpcmp*ap`) behave like FP compares: 4 to a predicated
+  operation or `merge`, 5 to `ct`.
+- **Operations new in v6** (`bench.py`'s `v6op_*` chains and the
+  kernels below):
+
+  | Latency | Operations |
+  |---|---|
+  | 1 | `qpcext_*`, `qpsrad`, `pmrgp`, `qpmrgp` |
+  | 4 | `clmull`, `clmulh` (ALC0, 1, 3, 4; four per instruction) |
+  | 4 | packed compares into a predicate, to a predicated op or `merge` (5 to `ct`) |
+  | 5 | `fma*`, `fms*`, `fnma*`, `fnms*` (single and double) and every `qpfma*` form, through any source, the addend included; 7 to an integer consumer and to the other cluster (FP side, + 2); six per instruction |
+
+  A fused multiply-add (5) is thus cheaper than `fmul_addd` (8) and
+  rounds once (semantics.md).
+- **A compare before a taken return**: the predicate written by a
+  compare one instruction before a `ct %ctpr3` that returns now
+  reaches a predicated operation or `merge` in the return's
+  instruction (v3 and v5 read the old value; Hazards, below).
+- **`movtd` and `ct` through the same CTPR in one instruction**: the
+  `ct` does not transfer (falls through); v3 and v5 transfer to the old
+  target (`bench.py` hazard `movtd_ct`, distance 0).
+- **Conflicts that are gone**: an FP operation in ALC5 next to a divide
+  (`fdivd` every 2 cycles with `faddd,5` between: 1 cycle each, v5
+  1.38), and a store and a load in one 32-byte block in one
+  instruction (1 cycle, v5 1.8–2). The store bank rule stays.
+- **`fxsqrtu*`** takes 18 cycles (16).
+- **Store to load**: a reload of the same aligned doubleword in the next
+  instruction still costs 7.6 cycles (lcc 1.26's note that v6 removed
+  the store-to-load bypass shows no extra cost), but a load of *other*
+  bytes of that doubleword no longer pays (`stw` at +0 then `ldw` at +4,
+  `stb` at +0 then `ldb` at +1: 6.9, as for a load of another
+  doubleword; `stld.c`).
+- **Caches** (`--memory`, `/sys/devices/system/cpu`): 64 KiB L1D, 2 MiB
+  L2, no L3; L2 hit 13 cycles (6.5 ns), memory about 220 cycles (110 ns).
+- **Array prefetch** (apb.md): one area delivers **32 bytes a cycle**
+  (16 on v3 and v5), so lcc's v6 loop reading two `movaqp` from one
+  area runs an iteration per cycle (a sum of `long`s: 0.28 cycles per
+  element, against 0.53 on the 4C and the 8C2); a `mova` result is
+  ready after 5 cycles and an earlier consumer stalls 4; the first
+  `mova` may issue 2 cycles sooner after `bap`; from L1 an area
+  fetches a new 64-byte line every cycle (every 2 before), about one
+  line a cycle per half of the buffer; from memory a line every 2.7
+  cycles (3.2).
+
+isa-score uses these numbers for v6 (and v7); `validate.py --target
+v6.2c3 --cpu 0` puts every kernel within 1% of the 2C3 except two APB
+loops (0.85 and 1.19).
+
+The 2C3's `CLOCK_MONOTONIC` (clock source `sclkr`) advances in steps
+of about 330 ns between calls, so wall-clock timing of short loops
+there reads 0; use `%clkr`, which counts the 2 GHz core clock.
+
+## Differences between generations (lcc-doc)
 
 lcc's changelogs name scheduling changes it made for later CPUs, which
 `bench.py` should check when it runs there:
@@ -512,14 +597,15 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
 - v5: floating-point operations in channel 5 need special scheduling
   (lcc 1.26); measured above: one conflicting pattern with the divider.
 - v6: the bypass from a store to a following load was removed (lcc 1.26),
-  so a load that reads what a store just wrote waits longer.
+  so a load that reads what a store just wrote waits longer. Not seen
+  on the 2C3: the reload penalty is the 8C2's (Elbrus-2C3, above).
 - Elbrus-48C (v7): prepare-to-transfer delays differ;
   `-mset-prepare-ct-delays-e48c` applies them and is on with
   `-mtune=elbrus-48c` (lcc 1.31).
 
 ## Not measured yet
 
-- v4, v6, v7.
+- v4, v7; v6 on the Elbrus-16C (the 2C3 is the v6 machine measured).
 - Loop mode registers other than `%lsr` (`%ilcr`); APB throughput.
 - 128-bit operations (v5+), `%spred`.
 - Throughput of 128-bit and packed FP operations, `mova`, AAU stores,

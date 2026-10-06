@@ -59,7 +59,14 @@ loop around a **locked load** and an **unlocking store**. lcc's
   always ends the lock. Test-and-set stores 1 and returns the old byte.
 - These sequences are inline-asm templates in lcc's output (between
   `.accept strict_delay` and `.ignore strict_delay`, with `.ias_line`),
-  and they carry their own `nop`s.
+  and they carry their own `nop`s. The lone `nop 1` at the loop head is
+  a hardware workaround: glibc puts one before its own lock-wait loops
+  for `__iset__ <= 6`, citing MCSTBug #163716, and notes that no memory
+  access may come between the lock and the unlock (#33705; hwbugs.md).
+- MCST's kernel says that on the multi-node E4C (the 4C) atomics have
+  fully relaxed memory ordering (#89527) and puts `wait st_c, ma_c`
+  around its own; lcc doesn't, and `litmus_rmw.c` found no reordering
+  across the 4C's chips (hwbugs.md).
 
 ## Loads, stores and fences (lcc)
 

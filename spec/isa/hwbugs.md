@@ -3,12 +3,14 @@
 What is known about E2K hardware bugs, from two kinds of source that
 must not be confused:
 
-- **[source]**: errata MCST names in its GPL Linux kernel,
-  `arch/e2k/include/asm/cpu_features.h` (`CPU_HWBUG_*`, with MCST's bug
+- **[source]**: errata MCST names in its GPL code: the Linux kernel
+  (`arch/e2k/include/asm/cpu_features.h`, `CPU_HWBUG_*` with MCST's bug
   numbers, the CPU models and revisions affected and the kernel's
-  workaround). These are MCST's own statements, but each is one comment
-  line: the exact trigger is rarely given, and we have reproduced none
-  of them.
+  workaround; and comments elsewhere in `arch/e2k`), binutils (gas and
+  ld workarounds), glibc and gdb (`sysdeps/e2k`, `e2k-tdep.c`). These are
+  MCST's own statements and high confidence that the bug exists, but
+  each is a comment line or a workaround: the exact trigger is rarely
+  given, and we have reproduced none of them.
 - **[hw?]**: things our probes saw on our machines that look wrong or
   undocumented. **Low confidence.** Each could be a bug in our probe, an
   interaction with the kernel, a misreading of what the operation is
@@ -23,9 +25,9 @@ covers.
 
 ## Errata that matter to a compiler [source]
 
-| Erratum (MCST #) | CPUs | What (the kernel's words, condensed) | Kernel's workaround | Ours | For a compiler |
+| Erratum (MCST #) | CPUs | What (MCST's words, condensed) | MCST's workaround | Ours | For a compiler |
 |---|---|---|---|---|---|
-| `CODE_PLACEMENT` (146897, 140436, 77417) | E2S, E8C, E1C+, E8C2, E12C, E16C; E2C3 rev ≤ 1 | jumps to the end of a 4 KiB page, and the placement of asynchronous (APB) program code, can misbehave | keep jump targets and call return addresses out of page offsets 0xdc0–0xdf8 and 0xee0–0xff8 | all three | MCST gas does it by default for v2–v6 (`ENABLE_FIX_LCC_BUG_142105`, apb.md); a port that emits its own code layout must keep gas's fix on. The rule for APB programs is not published |
+| `CODE_PLACEMENT` (146897, 140436, 77417) | E2S, E8C, E1C+, E8C2, E12C, E16C; E2C3 rev ≤ 1 | jumps to the end of a 4 KiB page, and the placement of asynchronous (APB) program code, can misbehave | keep jump targets and call return addresses out of bad page offsets (gas: 0xdc0–0xdff; the BPF JIT also 0xee0–0xfff; next section) | all three | MCST gas does it by default for v2–v6 (`ENABLE_FIX_LCC_BUG_142105`, apb.md); a port that emits its own code layout must keep gas's fix on. The rule for APB programs is not published |
 | `INTERSECTING_L1_ACCESSES` (123567) | E8C2, E12C, E16C | a load after an intersecting store can read wrong data from L1 | at least one real wide instruction between them (not `nop N`) | 8C2 | **not reproduced**: `stldv.c` (a store and an overlapping load in the next instruction, 10 size/offset shapes × 6 channel pairs, 1,000,000 times each) read the right value every time on the 4C, the 8C2 and both 2C3 cores. Such a reload is slow anyway (timing.md, "Store to load"); keep one instruction between, as lcc's scheduling against that cost does |
 | `STORE_RELEASE`, `SOFT_WAIT`, `STORE_MAS` (130066, 134351, 133605, 159721) | E12C rev 0, E16C and E2C3 rev ≤ 2 (store-release, store MAS); E12C, E16C, E2C3 rev 0 (soft waits); E8C2 its own soft-wait variant | L1/L2 don't respect the `lal`/`las`/`sas`/`st_rel` barriers; a pair of stores with certain MAS doesn't work | don't use `las`/`sas`/store-release; `nop` before `lal`/`sal`; four instructions between such stores. The kernel's release store is `wait st_c, ld_c` + `st` on these, the MAS store-release (0x13) only where the bug is absent | 2C3 (store-release, store MAS), 8C2 (soft wait) | the v6 MAS release store that `mas6.c` timed (speculation.md, "v6 encodings") is **not to be used** on our 2C3 or any E2C3 up to rev 2; lcc doesn't, and its v6 atomics are `wait` + plain stores (atomics.md) |
 | `BRANCH_ACTIVATES_CTPR` (rm 27719) | E2C3, E12C, E16C (all) | `ibranchd`/`rbranch` can corrupt an inactive `%ctpr` | don't use them while any `%ctpr` is inactive | 2C3 | `rbranch` ends every DAM check and lcc's atomic read-modify-write loops (atomics.md); on v6 keep all CTPRs valid (prepared) around them, or avoid them, until the meaning of "inactive" is known |
@@ -35,8 +37,41 @@ covers.
 | `AAU_AALDV` (99302) | E2S, E8C, E1C+, E8C2 rev 0 | `%aaldv` is sometimes not restored properly | `wait ma_c` in the kernel's AAU restore | 4C | none in user code; the kernel covers APB across traps |
 | `UNALIGNED_LOADS` (160330) | E8V7 rev 0 (v7) | fully speculative loads crossing a page boundary lose tags | no speculative mode for unaligned loads | none | v7 only: semi-speculative (`mas=0x0`) for loads that may cross a page (speculation.md) |
 | `WRITE_MEMORY_BARRIER` (89495) | E8C rev ≤ 1 | the write barrier doesn't work, even for atomics | a special sequence after every read-acquire | none | v4 (E8C) only |
+| `E4C` multi-node atomics (89527; kernel `e2k_api.h`, `CONFIG_CPU_E2S && CONFIG_NUMA`) | E2S with several nodes | "atomic operations have fully relaxed memory ordering" | `{wait st_c=1, ma_c=1}` before and after every kernel atomic | 4C (four nodes) | lcc's atomics carry no such `wait`. **Not reproduced**: `litmus_rmw.c` (message passing and store buffering with lcc's seq_cst exchange and fetch-add, 1,000,000 times each) saw no forbidden outcome on two chips (CPUs 1, 9) or one; the earlier `litmus.c` runs across chips agree (atomics.md) |
+| Lock-wait loop head (163716, glibc `pthread_spin_lock.c`, `setjmp_tmpl.S`, for `__iset__ <= 6`) | v6 and older | the instruction before a lock-wait (`mas=0x7`) loop needs a `nop 1` | glibc adds `nop 1` there | all three | lcc's atomic loops start with a lone `nop 1` instruction at the `rbranch` target (atomics.md); copy it. glibc also notes "no memory accesses between lock and unlock" (33705) |
+| `flushr` after a call (102582; kernel `e2k_api.h`) | not said | `flushr` must not be in the first instruction after a `call` | `{nop} {flushr}` | ? | only code that flushes the register stack itself (unwinders, context switches in user space) |
+| Same CTPR prepared and used in one instruction (154538; gas) | v5 and older | a wide instruction may not prepare and transfer through the same `%ctpr` | gas refuses it ("not supported on elbrus-vN") | 4C, 8C2 | keep prepare and `ct` apart (control-transfer.md); on v6 gas allows it but the `ct` falls through (below) |
 | `RWD_LSR` (165225) | listed, enabled for no CPU in this kernel | some instructions are not allowed after `rwd %lsr`/`%lsr1` | `{nop}` after the `rwd` | — | lcc already leaves 4 cycles between `rwd %lsr` and the loop (loops.md, where a too-early loop also misbehaves, below) |
 | `GENERATIONS_L2_PREF` (rm 35505) | E16C rev 2, E8V7 rev 0 | load/store "generations" conflict with the L2 prefetcher | the kernel disables the prefetcher while the binary compiler runs | none | binary translation only |
+
+## How binutils works around `CODE_PLACEMENT` [source]
+
+MCSTBug #140436 (also #77417, #146897; `ENABLE_FIX_LCC_BUG_142105`
+in gas, on by default for v2–v6 and off for v7, which MCST believes free
+of it, #152233):
+
+- **gas** moves every label that can be a jump target, and the return
+  address after every `call`, out of page offsets **0xdc0–0xdff**, by
+  inserting NOPs (up to 128 bytes) before it. Since it can only rely on
+  the section's alignment, which it raises to 1 KiB by default
+  (`--fix-lcc-bug142105=1024`; 2048 and 4096 give 2 and 4 KiB), it also
+  avoids the same offset in every 1 or 2 KiB block: 0x1c0, 0x5c0 and
+  0x9c0 with 1 KiB, 0x5c0 with 2 KiB. Labels inside a wide instruction,
+  and labels marked `.non_target_label`, are left alone.
+  `--fix-lcc-bug142105=0` or `.fix_lcc_bug149113` turn it off.
+- **ld** fills the unsafe ranges of `.plt` with zero doublewords
+  (8-byte NOPs that are never executed) and keeps PLT entries out of
+  them; MCSTBug #144538 made objdump and ld skip such NOPs.
+- **The kernel's BPF JIT** avoids two ranges per page, 0xdc0–0xdff and
+  0xee0–0xfff, following "item 1 and 4.2 of comment 58 of bug 146897";
+  the rest of that comment covers APB programs and is not public.
+
+So a GCC port that emits assembly for MCST gas gets the label part for
+free; one that emits its own code bytes (a JIT, or an integrated
+assembler) must do the same. Related, not a bug: ld puts 4 `nop`s
+instead of 2 in a v6+ PLT entry because "the delay between a load and
+its consumer has been increased from 3 to 5 ticks starting from
+elbrus-v6" (MCSTBug #112004).
 
 ## Errata for debuggers, profilers and the OS [source]
 
@@ -58,6 +93,19 @@ These don't change generated code but explain what tools see:
   kernel turns pipeline freeze off while monitors run. Both bear on
   `profile.py` and `pmu.c` (monitors.md): cycle counts taken under
   monitoring are of a CPU with that feature off.
+- Kernel comments outside `cpu_features.h`: the E8C write barrier needs
+  a read of a special user-readable page after every acquire load
+  (89242, 89495); the E2S needs a memory barrier after write-combining
+  stores, so the kernel avoids WC stores there (`page.h`); a
+  semi-speculative load from an invalid address took a page miss instead
+  of returning a diagnostic value ("illegal page"), so the kernel
+  reserves physical page 0 (`boot_init.c`); a `ct` returning to user
+  mode can be interrupted with interrupts masked (59886); the trap entry
+  needs a minimum `wsz` (68012); no branch may follow the restore of a
+  `%ctpr` in the trap exit ("an old one that was not found", and
+  `BRANCH_ACTIVATES_CTPR`).
+- gdb keeps the patched instruction's `HS.lng` when it plants a
+  breakpoint (86419 for `BREAKPOINT_INSTR`, 90514).
 - `ITLB_LARGE_PAGES` (152622; up to v6): the ITLB for large pages is
   small, so the kernel maps less of itself with large pages.
 - OS-only, listed for completeness: `CLW`, `CLW_STALE_L1_ENTRY`,

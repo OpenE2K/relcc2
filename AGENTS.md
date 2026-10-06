@@ -486,6 +486,10 @@ except two APB loops, 0.85 and 1.19); v7 uses v6's.
 
 ### ABI (spec/abi) — written, checked by the compat suite under qemu-e2k and on the 4C (v3)
 
+(Also on the 8C2 and the 2C3: the compat suite passes on both, and the
+hardware probes `tagtrap`, `dbl`, `ldouble`, `ctpr`, `getsp`, `reenter`,
+`winsize` and `litmus` print the same on the 2C3 as on the 8C2.)
+
 Key facts: arguments in 8-byte slots, slots 0..7 in registers (callee
 `%dr0..7`, caller `%db[0..7]`), 9–16-byte values on even slots, stack area
 always reserved for all slots at the caller's `USD`; results ≤ 64 bytes in

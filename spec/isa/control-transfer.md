@@ -236,6 +236,10 @@ v6 adds transfers through a register without a CTPR, run by
 | `disp %ctprN, L` and `ct %ctprN` in one instruction (gas allows it from v6) | **no transfer**: execution falls through; so does `movtd` + `ct` (timing.md) | 1 cycle |
 | `fillr`, `fillc` | run in user mode (after a `flushr`) and return normally | |
 
+MCST's kernel lists an erratum for every E2C3, E12C and E16C:
+`ibranchd` and `rbranch` can corrupt an inactive CTPR (hwbugs.md,
+`BRANCH_ACTIVATES_CTPR`).
+
 So for indirect jumps and calls `movtd` 9 cycles ahead (or `disp` 5
 ahead) plus `ct`/`call` stays the fast way; `ibranchd`/`icalld` only
 save code where nothing else can fill the delay (MCST's binutils uses

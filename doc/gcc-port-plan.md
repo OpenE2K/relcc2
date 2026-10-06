@@ -1736,8 +1736,10 @@ Measured on an Elbrus-2C3 (timing.md "Elbrus-2C3 (v6)", semantics.md
 - **Atomics**: lcc's v6 code is its v3 code (`wait` + plain accesses).
   v6's load-acquire / store-release MAS forms (0x13) run, and a release
   store that way costs about a quarter of `wait` + store on the 2C3,
-  but their ordering can't be checked there and lcc doesn't use them:
-  follow lcc, and keep them as a later option (speculation.md, "v6
+  but their ordering can't be checked there, lcc doesn't use them, and
+  MCST's kernel lists the store-release as broken on the E2C3 up to
+  revision 2 and the E12C/E16C (spec/isa/hwbugs.md): follow lcc, and
+  keep them as a later option (speculation.md, "v6
   encodings"). The new fully speculative MAS 0x12 is what v3's 0x3 was.
 
 The ABI is unchanged (the compat suite passes on the 2C3). What tuning

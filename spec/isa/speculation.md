@@ -273,7 +273,7 @@ otherwise bits 0–1 (`m2`) choose the kind:
 | MAS | Operation | Channels | Effect on the 2C3 |
 |---|---|---|---|
 | 0x13, 0x53 | `ld` (load-acquire, `MAS_LOAD_ACQUIRE_V6`) | ALC0, 2, 3, 5 | an ordinary load that faults normally; a dependent chain takes **10.4 cycles a load** (4.8 plain) |
-| 0x13, 0x53 | `st` (store-release, `MAS_STORE_RELEASE_V6`) | ALC2, 5 | stores; back to back 3.5–4.8 cycles a store (plain 1.0; lcc's release, `wait ld_c, st_c` + `st`, 15.8) |
+| 0x13, 0x53 | `st` (store-release, `MAS_STORE_RELEASE_V6`) | ALC2, 5 | stores; back to back 3.5–4.8 cycles a store (plain 1.0; lcc's release, `wait ld_c, st_c` + `st`, 15.8). **Under an erratum on E2C3 up to rev 2, ours included**: MCST's kernel uses `wait` + store there instead (hwbugs.md, `STORE_RELEASE`) |
 | 0x10 | `ld,sm` | ALC0 | semi-speculative, as `mas=0x0`: pages in an untouched page, diagnostic for a page it may not read |
 | 0x12 | `ld,sm` | ALC0, 2 | **fully speculative**, as `mas=0x3`: diagnostic also for an untouched valid page; without `,sm` SIGILL `ILL_ILLOPC` |
 | 0x11 | `ld` ("watch for modification", `MAS_WATCH_FOR_MODIFICATION_V6`) | ALC0 only (ALC2: SIGILL) | an ordinary load; a store by the same thread to the watched word doesn't trap |

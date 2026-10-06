@@ -80,7 +80,9 @@ store-release (kernel `asm/mas.h`: `MAS_LOAD_ACQUIRE_V6`,
 `MAS_STORE_RELEASE_V6`, bit 4 set with `mod` 3) and a "watch for
 modification" load, but lcc 1.29.16 doesn't use them. On the 2C3 a
 release store by MAS costs 3.5–4.8 cycles back to back against 15.8 for
-lcc's `wait` + store, and an acquire load 10.4 cycles in a dependent
+lcc's `wait` + store (but MCST's kernel lists the MAS store-release as
+broken on E2C3 up to revision 2, ours included, and the E12C/E16C,
+and uses `wait` + store there: hwbugs.md), and an acquire load 10.4 cycles in a dependent
 chain against 4.8 (speculation.md, "v6 encodings"); whether they order
 exactly as their names say isn't observable there, since the hardware
 already keeps every order but store → load.

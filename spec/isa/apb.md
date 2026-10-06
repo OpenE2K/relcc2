@@ -478,7 +478,9 @@ targets and return addresses must avoid page offsets 0xdc0–0xdf8 and
 0xee0–0xff8 (kernel `cpu_features.h`). MCST gas works around it by
 default for v2–v6 (`ENABLE_FIX_LCC_BUG_142105`): it moves labels and
 call return addresses out of those ranges and aligns code sections to
-1 KiB. The rule for the APB program itself is not published.
+1 KiB. The rule for the APB program itself is not published. Other
+errata and our own unconfirmed observations (one on APB programs on the
+2C3) are in [hwbugs.md](hwbugs.md).
 
 ## Emulators
 

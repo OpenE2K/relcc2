@@ -136,6 +136,11 @@ the 8C2) and 23 more `BUB_B_IP_NRDY`. Its spills count as many
 `L1_ST_QUERY` as `L1_ST_HIT` there (360), where the 8C2 counts 520
 queries for the same 360 hits.
 
+MCST's kernel lists two errata that bear on measurements (hwbugs.md):
+data-monitor events can be lost on the E2S (`KERNEL_DATA_MONITOR`), and
+on the 8C2 and the 2C3 the kernel turns the pipeline-freeze feature off
+while monitors run (`PIPELINE_FREEZE_MONITORS`).
+
 ## Not checked yet
 
 - The other events (instruction buffer, MAU, L2, `BUB_E0_*`), the

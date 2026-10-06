@@ -510,6 +510,22 @@ produce slow code: correctness first, then the VLIW work.
   size** (`MEM_ALIGN`): a misaligned byte-swapped access is SIGBUS where
   a plain one works, which is why lcc folds only under `-ffast`
   (`spec/isa/semantics.md`, "Byte-swapped memory accesses").
+- Operations that map onto standard names (`spec/isa/semantics.md`,
+  "Other scalar operations" and "80-bit operations", all checked on the
+  4C and the 8C2): `smulx`/`umulx` for `mulsidi3`/`umulsidi3` (lcc uses
+  them for `(long) a * b`); `insfs`/`insfd` for `insv` (lcc stores a
+  bit-field with `insf` and a rotate back, `scl`); `fscales`/`fscaled`
+  for `ldexp<mode>3` on v4+ with `-fno-math-errno` (lcc: `scalbnf`
+  under `-ffast`). The 64 ÷ 32 `sdivx`/`udivx`/`smodx`/`umodx` trap on
+  quotients that don't fit, so they suit only proven ranges; lcc
+  computes `%` as divide, multiply, subtract. `__builtin_add_overflow`
+  could be `adds_fw` + `cctopo` (`addv<mode>4`; subtraction `cmpo*b`
+  alone) where lcc spends ten operations; their latencies are not
+  measured. The 80-bit operations with a narrower operand or result
+  (`fxadddd`, `fxmulxs`, ...) round as x87 code does (to 64 bits, then
+  to the result's format), so `(float_truncate:DF (plus:XF ...
+  (float_extend:XF ...)))` may be one `fxadddd` without fast-math, as
+  lcc does at `-O3`.
 - PIC/PIE and TLS exactly as `spec/abi/elf.md` (GOT base via `rrd %ip` +
   `_GLOBAL_OFFSET_TABLE_` literal in the same wide instruction). In PIC
   code reach ifunc symbols through `@GOT`: MCST ld cannot link a

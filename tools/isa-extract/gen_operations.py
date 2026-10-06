@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ISA = ROOT / "spec" / "isa"
 
 # Probe assembly -> (probe, machines it ran on).  "4C" is the Elbrus 4C
-# (v3), "8C2" the Elbrus-8C2 (v5).
+# (v3), "8C2" the Elbrus-8C2 (v5), "2C3" the Elbrus-2C3 (v6).
 PROBES = {
     "semantics.s": ("semantics.c", "4C"),
     "semp.s": ("semp.c", "4C, 8C2"),
@@ -70,6 +70,7 @@ PROBES = {
     "v2ops.s": ("v2ops.c", "4C, 8C2"),
     "ctlops.s": ("ctlops.c", "4C, 8C2"),
     "semfx-v4.s": ("semfx.c", "8C2"),
+    "sem6.s": ("sem6.c", "2C3"),
 }
 ABI_PROBES = "tools/abi/probes"
 

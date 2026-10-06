@@ -302,6 +302,24 @@ compensation block [lcc]. Options: `-fno-dam`, `-fno-swp-dam`,
 `-fno-dam` when a profile shows the compensation code running often
 [lcc-doc, guide].
 
+DAM works together with **rotating predicates** in such a loop
+[hw: `tools/isa-probes/p28.c`, 4C and Elbrus-8C2]: a hand-written
+pipelined loop locks `a[j]` and puts its parity in `%pred0` in one
+stage, checks it with `rbranch` one or two stages later (as `%b[2]`,
+`%pred1`; `setbp psz` 1 or 2 and `abp` with `abn` every iteration), and
+selects `±a[j]` on the rotated predicate; a store breaks every lock but
+the first, so the compensation code runs in nearly every iteration. It
+recomputes the predicate under the name it has at the check, branches
+back past the check, and the loop goes on: 0 wrong results up to 648
+iterations, with the consumer reading the predicate in the check's stage
+or one stage (one rotation) later; without the recomputation every
+compensated element is wrong. So `rbranch` out of the kernel and back
+keeps `%b[]` and predicate rotation, the loop counters and the DAM
+entries of later iterations consistent, and the compensation code only
+has to redo every instance that used the early value, under the names
+it has at the check (the proof-of-concept back end's P28, where GMP's
+`mpn_bdiv_dbm1c` went wrong, is therefore in its compensation code).
+
 ## Costs [hw, guide]
 
 | Situation | Cost |

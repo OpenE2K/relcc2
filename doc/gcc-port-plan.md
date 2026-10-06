@@ -1461,11 +1461,14 @@ check-free semi-speculative form works.
   that path, and a plain copy traps (xz's `index_tree_next`, SIGILL). In
   general, any operation a compiler adds that reads a register on a path
   where the program didn't must be speculative.
-- **Untested combination** (P28, open): a pipelined loop with both a
-  lock load + check and rotating predicates computed wrong results in
-  GMP's `mpn_bdiv_dbm1c` with overlapping operands (smaller loops were
-  right on the 4C); the PoC refuses it. The compensation code of a lock
-  load presumably must see the same predicates as the kernel would.
+- **DAM with rotating predicates** works on the hardware (P28;
+  `spec/isa/speculation.md`, checked with `p28.c` on the 4C and the 8C2:
+  a check and `rbranch` one or two stages after the lock, the
+  compensation recomputing the predicate under its name at the check,
+  the consumer reading it then or one rotation later). The PoC's wrong
+  results in GMP's `mpn_bdiv_dbm1c` with both (smaller loops were right)
+  must come from its compensation code missing an instance that used the
+  early value; it refuses the combination for now.
 - **DAM inside a pipelined loop** (a load that may read what an earlier
   iteration stored, `core_list_reverse`; P19, 4C and 8C2): the lock load
   runs stages ahead (ALC0, `,sm`, `mas=0x4`), the check (`mas=0x3`, ALC5,

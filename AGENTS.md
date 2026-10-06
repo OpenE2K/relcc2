@@ -170,7 +170,8 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     instruction (samewi.c, samewi.s) and every v5
                     operation (sem5.c; gen_sem5.py writes sem5.s)
                     and every v6 operation (sem6.c; gen_sem6.py
-                    writes sem6.s)
+                    writes sem6.s) and the v6 control operations
+                    (ctl6.c; gen_ctl6.py writes ctl6.s)
                     and global register rotation (abg.c, abg.s),
                     and combined FP and integer operations
                     (fcomb.c, icomb.c; gen_fcomb.py and
@@ -300,8 +301,7 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   assembler syntax notes, known objdump bugs. Each section is marked
   [checked] (byte-exact against gas), [decoded] (our decoder agrees with
   objdump on the corpus) or [source] (read only).
-- Still [source] only: SS type 1 (`abgc`/
-  `rbgc`), `vfbg`, `puttsd`, `%bgrpred` (gas doesn't accept them), v7 `dtbp`
+- Still [source] only: `vfbg`, `puttsd`, `%bgrpred` (gas doesn't accept them), v7 `dtbp`
   and ctcond type 11, `staa`/`ldaa`/`incr` decoding (hidden by an objdump
   bug; encoding is checked).
 - Timing measured on the 4C (v3) by `tools/isa-timing/bench.py`
@@ -430,7 +430,13 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   compares into a predicate (any/all lane, 4 / 5 to `ct`), `qpsrad`,
   `qpcext`, `pmrgp`, `qpcheck*` (SIGBUS unless equal), x87 helpers
   `mkfsw`/`modbgv`/`vfbgv`; the community qemu gets the packed FMAs
-  wrong. The compat suite passes there. v4 and v7 are not measured.
+  wrong. Control (`ctl6.c`): a taken `ibranchd` costs 12 cycles
+  however early its register is ready, `icalld` + return 23 (`disp` +
+  `call` 14), a `disp`/`movtd` and `ct` through one CTPR in one
+  instruction falls through, `abgc`/`rbgc` only move `%bgr.cur` (the
+  x87 stack checks are `vfbgv`). `pmu.c`, `profile.py` (CoreMark 1.03,
+  Linpack 0.99) and the compat suite run there. v4 and v7 are not
+  measured.
 
 ### Operation reference (spec/isa/operations-v3.md, -v5.md, -v6.md, -v7.md)
 

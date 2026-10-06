@@ -429,6 +429,8 @@ SCHED_STEPS = 32
 CHASE_SIZES = [16 << 10, 256 << 10, 2 << 20, 16 << 20, 128 << 20]
 
 CTL_DISTANCES = range(1, 11)
+CTL_KINDS = ["disp", "movtd", "cmp_ct", "cmp_alu", "cmp_andp", "andp_alu",
+             "andp_ct", "andp_andp", "fcmp_alu", "fcmp_ct"]
 
 
 # Throughput: name: (operations of one wide instruction, description).
@@ -753,6 +755,99 @@ def add_v5():
     TPN.update(TPN_V5)
 
 
+# v6 and later (added when --target is v6+): the operations v6 adds,
+# loads into other consumers and channels (an L1 load takes 5 cycles on
+# v6, 3 before), and the packed compares into predicates.
+SCHED_V6 = {
+    "ldd_to_faddd": ("%dr1", [("ldd,0 %dr2, 0x0, %dr2", None),
+                              ("faddd,0 %dr2, %dr5, %dr2", 12)], 8),
+    "ldd_to_faddd_x": ("%dr1", [("ldd,0 %dr2, 0x0, %dr2", None),
+                                ("faddd,3 %dr2, %dr5, %dr2", 12)], 8),
+    "ldd_c2": ("%dr1", [("ldd,2 %dr2, 0x0, %dr2", None)], 8),
+    "ldd_c3": ("%dr1", [("ldd,3 %dr2, 0x0, %dr2", None)], 8),
+    "ldd_c5": ("%dr1", [("ldd,5 %dr2, 0x0, %dr2", None)], 8),
+    "ldd_c0_to_ldd_c5": ("%dr1", [("ldd,0 %dr2, 0x0, %dr2", None),
+                                  ("ldd,5 %dr2, 0x0, %dr2", 12)], 8),
+    "addd_to_ldd": ("%dr1", [("addd,0 %dr2, %dr5, %dr2", None),
+                             ("ldd,0 %dr2, 0x0, %dr2", 12)], 6),
+    "ldw_to_adds": ("%dr1", [("ldw,0 %dr2, 0x0, %r2", None),
+                             ("adds,0 %r2, %r5, %r2", 12)], 8),
+    "ldqp_to_qpaddd_x": ("%dr1", [("ldqp,0 %dr2, 0x0, %qpr2", None),
+                                  ("qpaddd,3 %qpr2, %qpr7, %qpr2", 12)], 8),
+    "ldqp_c5": ("%dr1", [("ldqp,5 %dr2, 0x0, %qpr2", None)], 8),
+    "fmad_c": ("%dr4", [("fmad,0 %dr4, %dr5, %dr2, %dr2", None)], 10),
+    "fmad_c5": ("%dr4", [("fmad,5 %dr2, %dr4, %dr5, %dr2", None)], 10),
+    "fmad_to_addd": ("%dr4", [("fmad,0 %dr2, %dr4, %dr5, %dr2", None),
+                              ("addd,0 %dr2, %dr5, %dr2", 12)], 10),
+    "fmad_to_fmad_x": ("%dr4", [("fmad,0 %dr2, %dr4, %dr5, %dr2", None),
+                                ("fmad,3 %dr2, %dr4, %dr5, %dr2", 12)], 10),
+    "qpfmad_c": (QP_INIT, [("qpfmad,0 %qpr8, %qpr7, %qpr2, %qpr2", None)], 10),
+    "pcmpeqbop_to_merged": ("%dr3", [("pcmpeqbop,0 %dr2, %dr5, %pred1", None),
+                                     ("merged,0 %dr2, %dr5, %dr2, %pred1", 12)], 6),
+    "qpcmpeqbop_to_merged": (QP_INIT, [("qpcmpeqbop,0 %qpr2, %qpr7, %pred1", None),
+                                       ("merged,0 %dr2, %dr5, %dr2, %pred1", 12)], 6),
+    "merged_to_pcmpeqbop": ("%dr3", [("merged,0 %dr2, %dr5, %dr2, %pred1", None),
+                                     ("pcmpeqbop,0 %dr2, %dr5, %pred1", 12)], 6),
+    "pmrgp": ("%dr3", [("pmrgp,0 %dr2, %dr5, %dr2, %pred0", None)], 6),
+    "qpmrgp": (QP_INIT, [("qpmrgp,0 %qpr2, %qpr7, %qpr2, %pred0", None)], 6),
+}
+TP_V6 = {
+    "v6_fmad_6": (_ch("fmad,{c} %dr4, %dr4, %dr5, {d}", range(6)), "6 fmad"),
+    "v6_fmas_6": (_ch("fmas,{c} %r6, %r6, %r5, {d}", range(6)), "6 fmas"),
+    "v6_qpfmad_6": (_ch("qpfmad,{c} %qpr7, %qpr7, %qpr7, {d}", range(6)),
+                    "6 qpfmad"),
+    "v6_clmull_4": (_ch("clmull,{c} %dr3, %dr3, {d}", [0, 1, 3, 4]),
+                    "4 clmull"),
+    "v6_qpsrad_4": (_ch("qpsrad,{c} %qpr7, %dr5, {d}", [0, 1, 3, 4]),
+                    "4 qpsrad"),
+}
+
+
+def v6_op_chains():
+    """A dependent chain for every ALU operation new in v6, as
+    v5_op_chains; a compare into a predicate is followed by a merge that
+    reads it (the pair is one step), the merges by a predicate read
+    %pred0."""
+    import yaml
+    data = yaml.safe_load((ROOT / "spec/isa/binutils-ops.yaml").read_text())
+    first = {}
+    for e in data["alu_ops"]:
+        if e.get("isets"):
+            first.setdefault(e["name"], []).append(e)
+    reg = {"p": ("%qpr2", "%qpr7"), "d": ("%dr2", "%dr5"), "s": ("%r2", "%r5")}
+    out = {}
+    for name, es in sorted(first.items()):
+        if min(min(e["isets"]) for e in es) != 6:
+            continue
+        if name.startswith(("ibranchd", "icalld", "qpcheck", "vfbgv",
+                            "modbgv", "mkfsw")):
+            continue
+        e = next(e for e in es if 6 in e["isets"])
+        ch = e["channels"][0]
+        if e["alopf"] == "ALOPF17":
+            a = reg[e["args"][0]]
+            step = [(f"{name},{ch} {a[0]}, {a[1]}, %pred1", None),
+                    ("merged,0 %dr2, %dr5, %dr2, %pred1", 4)]
+            out[f"v6op_{name}"] = (QP_INIT, step, 6)
+            continue
+        srcs, dst = e["args"][:-1], e["args"][-1]
+        k = srcs.index(dst) if dst in srcs else 0
+        ops = [reg[a][0] if i == k else reg[a][1] for i, a in enumerate(srcs)]
+        ops.append(reg[dst][0])
+        tail = ", %pred0" if e["alopf"].endswith("_MERGE") else ""
+        out[f"v6op_{name}"] = (QP_INIT, [(f"{name},{ch} " + ", ".join(ops)
+                                          + tail, None)], 10)
+    return out
+
+
+def add_v6():
+    """Add the v6+ kernels (for --target v6 and later)."""
+    SCHED.update(SCHED_V6)
+    SCHED.update(v6_op_chains())
+    TP.update(TP_V6)
+    CTL_KINDS.extend(["pcmp_alu", "pcmp_ct"])
+
+
 def tp_kernel(name, k):
     if name in TP:
         groups, what = [TP[name][0]], TP[name][1]
@@ -977,6 +1072,14 @@ def ctl_kernel(kind, d):
             prep = "\t  cmpedb,0 %dr3, 0x0, %pred0\n"
             blocks.append(f"\t{{\n{prep}{nop_field(d)}"
                           f"\t{{\n\t  addd,0 %dr5, 0x1, %dr5 ? %pred0\n\t}}\n{nxt}:")
+            continue
+        elif kind in ("pcmp_alu", "pcmp_ct"):
+            # v6: a packed compare into a predicate (x > x in no lane:
+            # false), then a predicated ALU op or ct.
+            pc = "\t  pcmpgtbop,0 %dr3, %dr3, %pred2\n"
+            use = ("\t{\n\t  addd,0 %dr5, 0x1, %dr5 ? %pred2\n\t}\n"
+                   if kind == "pcmp_alu" else "\t{\n\t  ct\t%ctpr2 ? %pred2\n\t}\n")
+            blocks.append(f"\t{{\n{pc}{nop_field(d)}{use}{nxt}:")
             continue
         elif kind in ("cmp_andp", "andp_alu", "andp_ct", "andp_andp",
                       "fcmp_alu", "fcmp_ct"):
@@ -1437,8 +1540,7 @@ rdclk:
         decl.append(f"long br_{name}(long, void *);")
         br_rows.append(f'\t{{"{name}", br_{name}}},')
     for d in CTL_DISTANCES:
-        for kind in ("disp", "movtd", "cmp_ct", "cmp_alu", "cmp_andp",
-                     "andp_alu", "andp_ct", "andp_andp", "fcmp_alu", "fcmp_ct"):
+        for kind in CTL_KINDS:
             asm.append(ctl_kernel(kind, d))
             decl.append(f"long ctl_{kind}_{d}(long, void *);")
             ctl_rows.append(f'\t{{"{kind}", {d}, 16, ctl_{kind}_{d}}},')
@@ -1828,6 +1930,8 @@ def main():
     m = re.match(r"v(\d+)", args.target)
     if m and int(m.group(1)) >= 5:
         add_v5()
+    if m and int(m.group(1)) >= 6:
+        add_v6()
     if args.results:
         res = parse(args.results.read_text())
         report(res)

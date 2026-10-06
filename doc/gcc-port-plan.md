@@ -1024,7 +1024,10 @@ Written in `.md` with `define_automaton`, `define_cpu_unit`,
   crossing); model it with `define_bypass` or by tracking the cluster.
   These match guide 6.1. Where the guide is wrong or silent: packed
   integer ops take 1 cycle (multiply 2) to packed/FP consumers and 4 to
-  integer ones; conversions 5 (6 to integer); FP compare → predicated op
+  integer ones; conversions 4 (6 to integer), but an FP-side result
+  read in another format than it was produced in costs 5 or 6 (a
+  double read as a single, a single as a double: timing.md, "Formats";
+  a `define_bypass` per format pair); FP compare → predicated op
   4, → `ct` 5; `andp` chains inside one wide instruction (0) and costs 1
   through a `%pred`, 2 to a predicated op and 3 to `ct`. Schedule loads
   for an L1 hit, as lcc does. A stall

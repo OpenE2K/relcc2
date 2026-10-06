@@ -290,7 +290,8 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   it (write-back conflict); everything user code touches is interlocked except
   `rwd %lsr` → `rrd %lsr` (4 cycles). Also measured: packed integer ops
   (1 cycle, 4 to integer consumers; the guide says FP class), conversions
-  (5), FP compares (+2 over integer ones), predicate logic (as the guide;
+  (4; an FP-side result read in another format, e.g. a double as a
+  single, costs 5–6), FP compares (+2 over integer ones), predicate logic (as the guide;
   `andp` chains within one instruction). Control transfer
   (`spec/isa/control-transfer.md`, hw): a taken `ibranch` costs 6 cycles,
   a prepared `ct`/`call`/return issued in time costs nothing; every call

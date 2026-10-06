@@ -63,14 +63,22 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | packed multiply, `psadbw` (`pmullh`; ALC1/4) | 4 | 2 | — |
 | packed integer → integer op | 4 + 2 | 4 | — |
 | packed integer → FP add | 4 | 1 | — |
-| conversions `fdtoid`, `idtofd`, `fstofd` | — | 5 | — |
-| conversion `fdtofs` | — | 6 | — |
+| conversions (`fdtoid`, `idtofd`, `fstofd`, `fdtofs`, `fstoid`, `fstoidtr`, `fdtoidtr`, `fdtoistr`, `istofd`, `istofs`, `idtofs`) → an op reading the result in its format | — | 4 (5 or 6 in another format, see Formats) | — |
 | `fdtoid` → integer op | — | 6 | — |
 | integer op → `idtofd` | — | 1 | — |
 | FP compare into a register (`fcmpeqd`) | — | 2; 4 to an integer op | — |
 | `lzcnts`, `scls`, `getfs` | 1 | 1 | — |
 | `sxt`, `merged`, `popcntd`, `lzcntd`, `bitrevd` | 1 | 1 | — |
 | `umulhd` (high half of a 128-bit product) | 4 | 4 | — |
+| `smulx`, `umulx` (32 × 32 → 64) | — | 4; 6 to an integer op | — |
+| `insfs`, `insfd` (field insert) | — | 1; 2 across clusters | — |
+| `sdivx`, `udivx`; `smodx`, `umodx` (64 ÷ 32, ALC5) | — | 11; 10 | — |
+| `mpsadbh` | — | 2; 4 to an integer op | — |
+| `fsubs`, `fsubd`; `fmaxs` | — | 4; 2 | — |
+| round to integral `fdtoifd`, `fstoifs` | — | 4 | — |
+| `fscaled`, `fscales` (v4+, Elbrus-8C2) | — | 4 | — |
+| x86 flag forms (`adds_fw`, `addd_fd`, `incs_fw`, `shls_fw`); `smulx_fw` | — | 2, also to an integer op; 4 | — |
+| `cctopo` → predicated ALU op | — | 2 (as `cmpesb`) | — |
 | 80-bit `fxaddxx` / `fxmulxx` / `fxdivxx` | — | 5 / 4 / 16 | — |
 | `fxaddxx` → integer op | — | 7 | — |
 | `movfi` → `movif` (unpack and repack an 80-bit value) | — | 4 | — |
@@ -78,6 +86,9 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | `movif` → integer op, `movfi` → integer op (pmu.c) | — | 6 (a consumer 2 cycles after stalls 8, not 4) | — |
 | `getsp` → integer op (pmu.c) | — | 2 | — |
 | `fdtofx` → `fxtofd` | — | 5 | — |
+| 80-bit with a single or double result (`fxadddd`, `fxmuldd`, `fxmulxd`); `fxdivdd` | — | 5; 18 | — |
+| `fxtoid`, `idtofx`, `fstofx` | — | 5 | — |
+| 80-bit square root steps `fxsqrtixx`, `fxsqrtuxx`, `fxsqrttxx` (ALC5); lcc's chain of the three | — | 11, 16–17, 16 | 53 a chain (double `fsqrtid` + `fsqrttd`: 30) |
 | compare → `andp` (reading the `%pred`) | 1 | 1 | — |
 | `andp` → `andp` | 0.5 | 0 inside one wide instruction (`@p4` → next CLP), 1 through a `%pred` | — |
 | `andp` → predicated ALU op | 2 | 2 | — |
@@ -101,11 +112,35 @@ operations match the guide. Differences:
   operation. Their results reach integer operations at 4, like an FP
   compare into a register: the FP-side → integer penalty is +3 for the
   1-cycle ones and +2 otherwise.
-- Conversions take 5 (`fdtofs` 6), and their results reach integer
-  operations at 6.
+- Conversions take 4 to a consumer that reads their result in the
+  format they produce (and 6 to integer operations); the 5 (`fdtofs`
+  6) recorded earlier came from chaining a conversion into itself,
+  which reads its result in another format (Formats, below).
 - FP compares into predicates are two cycles slower than integer
   compares (4 to a predicated operation, 5 to `ct`).
 - Loads beyond L1 are not scheduled for (see Memory).
+
+## Formats
+
+An FP-side result read by an FP-side operation in another format than
+the one it was produced in arrives later (`bench.py` chains
+`<producer>_to_<consumer>`, the 4C and the Elbrus-8C2 alike):
+
+| Result read as | Scheduled latency | Examples |
+|---|---|---|
+| its own format | 4 | `faddd` → `fdtoid`, `fdtoid` → `idtofd`, `fdtofs` → `fadds`, `fadds` → `fadds`, `qpfdtoid` → `qpidtofd` or `qpaddd` |
+| a double or 64-bit integer read as a single (also packed singles) | 5 | `faddd` → `fadds`, `fstofd` → `fadds`, `fmuld` → `fmuls`, `fmuld` → `pfmuls` |
+| a 64-bit integer read as a double | 5 | `fdtoid` → `faddd`, `fdtoid` → `fdtoid` |
+| a single read as a double | 6 | `fadds` → `faddd`, `fadds` → `fdtoid`, `fdtofs` → `faddd`, `fdtofs` → `fdtofs` |
+
+C code meets the slow cases rarely (a conversion reads its own input
+format, and promotions are explicit `fstofd`), but self-chained
+measurements do: the v5 conversions' 5 and 6 in the table of v5
+latencies below are of this kind (with a consumer of their format,
+`qpfdtoid` and `qpidtofd` take 4). The 64-bit → 128-bit penalty of v5
+("Crossings with 128-bit values", below) may be the same effect.
+`tools/isa-score` uses 4 for every conversion and does not model the
+penalty.
 
 ## Clusters
 
@@ -436,8 +471,8 @@ v5, as lcc's documentation says for v1–v5. What v5 adds or changes:
   | 1 | packed integer add/sub (also saturating), logic, shifts (`qpsll*`, `qpsrl*`, `qpsra*`, `qpsrc*`), compares (`qpcmp*`), min/max, averages, signs, horizontal adds (`qphadd*`, `qphsub*`), packs (`qpack*`), shuffles and permutes (`qpshufb`, `qppermb`, `qpmerge`, `qpswitch*`), `qpmsk2sgnb`, `qppackdl`, `plog`/`qplog`, `addcd`/`subcd` (with carry), `getfz*`, `psrc*` |
   | 2 | packed integer multiplies (`qpmul*`, `qpmadd*`, `qpsadbw`, `qpmpsadbh`, `pmullw`), packed FP compares (`qpfcmp*`), `qpfmax*`/`qpfmin*` |
   | 4 | packed FP add, subtract, multiply, horizontal and add-subtract forms, round to integral (`qpfdtoifd`, `qpfstoifs`), `qphminposuh`, `qpsgn2mskb` (to an integer register and back) |
-  | 5 | packed conversions (`qpfdtoid`, `qpfstoid`, `qpfstofd`, `qpfstois`, `qpidtofd`, `qpistofd`, `qpistofs`, and the `tr` forms) |
-  | 6 | `qpfdtofs`, `qpfdtois`, `qpfdtoistr`, `qpidtofs` (narrowing, as scalar `fdtofs`) |
+  | 5 | packed conversions (`qpfdtoid`, `qpfstoid`, `qpfstofd`, `qpfstois`, `qpidtofd`, `qpistofd`, `qpistofs`, and the `tr` forms), chained into themselves; 4 to a consumer of their result's format (Formats) |
+  | 6 | `qpfdtofs`, `qpfdtois`, `qpfdtoistr`, `qpidtofs` (narrowing), chained into themselves, as scalar `fdtofs` |
   | 8 | combined packed FP (`qpfadd_*`, `qpfsub_*`, `qpfmul_*`, `qpfhadd_*`, `qpfhsub_*`, `qpfaddsub_*`) |
 
   So 128-bit operations take the latency of their 64-bit counterparts,

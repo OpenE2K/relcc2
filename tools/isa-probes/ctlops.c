@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* Control and system operations from user mode (spec/isa/operations.md):
+/* Control and system operations from user mode (spec/isa/operations-v3.md):
    each in its own process, printing "ok" or the signal and si_code.
    ctlops.s is hand-written.
 

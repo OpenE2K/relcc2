@@ -510,12 +510,12 @@ produce slow code: correctness first, then the VLIW work.
   size** (`MEM_ALIGN`): a misaligned byte-swapped access is SIGBUS where
   a plain one works, which is why lcc folds only under `-ffast`
   (`spec/isa/semantics.md`, "Byte-swapped memory accesses").
-- `spec/isa/operations.md` lists every operation with the standard name
-  or C idiom it serves ("Use"), its latency, how often lcc uses it and
-  whether it was checked on hardware: the place to look for an
-  instruction to match a pattern. `trap` can be `setsft` (SIGTRAP
-  `TRAP_BRKPT`, the kernel's `BUG()`); lcc's `__builtin_trap` stores to
-  address 0 (SIGSEGV).
+- `spec/isa/operations-v3.md` (and `operations-v5.md` for what v5 adds)
+  list every operation with the standard name or C idiom it serves
+  ("Use"), its latency, how often lcc uses it and whether it was checked
+  on hardware: the place to look for an instruction to match a pattern.
+  `trap` can be `setsft` (SIGTRAP `TRAP_BRKPT`, the kernel's `BUG()`);
+  lcc's `__builtin_trap` stores to address 0 (SIGSEGV).
 - Operations that map onto standard names (`spec/isa/semantics.md`,
   "Other scalar operations" and "80-bit operations", all checked on the
   4C and the 8C2): `smulx`/`umulx` for `mulsidi3`/`umulsidi3` (lcc uses

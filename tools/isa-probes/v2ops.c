@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Operations binutils lists for v1 and v2 only (protected-mode object
    descriptors), assembled for v2 and run on v3 and later
-   (spec/isa/operations.md): each in its own process, printing "ok" or
+   (spec/isa/operations-v3.md): each in its own process, printing "ok" or
    the signal and si_code.  addd is the control.  v2ops.s is
    hand-written.
 

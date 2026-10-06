@@ -5,7 +5,7 @@
 Disassembles every shared library in the sysroot of an lcc cross
 compiler (its fs/lib64 and fs/usr/lib64: glibc, libm, libstdc++, ...,
 all built by MCST with lcc) with MCST objdump and counts the mnemonics.
-spec/isa/operations.md shows the counts, so a compiler writer sees which
+spec/isa/operations-v*.md show the counts, so a compiler writer sees which
 operations lcc relies on.  lcc is used only as a black box: this reads
 the code it produced, nothing else.
 

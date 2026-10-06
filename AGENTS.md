@@ -117,8 +117,10 @@ differ from v6.
 ## Repository layout
 
 ```
-spec/isa/      ISA spec: operations.md (every operation: what it does, latency,
-               lcc's use, which probe ran it; generated from operations.yaml),
+spec/isa/      ISA spec: operations-v3.md, operations-v5.md (what v4/v5 add:
+               the 8C2), operations-v6.md (v6/v7): every operation, what it
+               does, latency, lcc's use, which probe ran it; generated from
+               operations-v{3,5,6}.yaml,
                bundle.md (wide instruction format), control-transfer.md
                (branches, calls, CTPRs), semantics.md (what operations
                compute), apb.md (array prefetch), speculation.md
@@ -138,7 +140,7 @@ docs/          spec-poc-findings.md: spec problems found by toolchains/gcc-claud
 tools/setup/   install reference toolchains into toolchains/
 tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas;
                     count_lcc_ops.py (lcc-usage.yaml), gen_operations.py
-                    (operations.md)
+                    (operations-v{3,5,6}.md)
 tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
 tools/isa-timing/   latency/hazard microbenchmarks run on hardware over SSH
 tools/isa-score/    scores a compiled program's use of E2K parallelism:
@@ -402,10 +404,15 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   traps only in ALC4/5 and non-speculatively (the same on the 4C). v4,
   v6, v7 are not measured.
 
-### Operation reference (spec/isa/operations.md)
+### Operation reference (spec/isa/operations-v3.md, -v5.md, -v6.md)
 
-Every operation from v2 on (2,149 after leaving out the v1-only ones:
-no working Elbrus-3M exists) has a rule in `operations.yaml`: what it
+Split by our hardware: `operations-v3.yaml` has everything up to v3
+(the 4C), `operations-v5.yaml` what v4 and v5 add (the 8C2; its header
+also covers v5's behaviour changes, lcc's v5 idioms and v3
+equivalents), `operations-v6.yaml` v6 and v7 (no hardware). Every
+operation from v2 on (2,149 after leaving out the v1-only ones: no
+working Elbrus-3M exists) has a rule in the file of the version that
+introduced it (the generator checks this): what it
 computes, how a compiler uses it, where the details are;
 `gen_operations.py` joins the rules with binutils' ISA versions and
 channels, the measured latencies, lcc's use (`count_lcc_ops.py` counts

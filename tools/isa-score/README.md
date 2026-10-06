@@ -197,7 +197,11 @@ within 1% except the two APB loops (`copy -O3` 0.85, `sum -O3` 1.19, a
 few hundred samples each), and on the benchmarks built by the 2C3-tuned
 lcc at `-O3`: CoreMark 27.5 G cycles, measured / achieved 1.03;
 Linpack at size 200 (320 KB, in the 2 MiB L2) 0.99, at size 1000 (8 MB,
-from memory) 1.58.
+from memory) 1.58. Unipro's clang (`-march=elbrus-v6 -O2`): CoreMark
+1.00, Linpack 1.08. On the 2C3 Unipro's CoreMark runs at 0.70× lcc's
+speed (3,592 against 5,167 iterations a second) and its Linpack 5× slower
+(16.9 s against 3.4 s for 4,096 repetitions), as operations per cycle
+rank them (0.91 and 0.62 against 2.31 and 4.31).
 
 The possible schedule cannot be measured; it is a bound on what a
 scheduler could do with the same operations.

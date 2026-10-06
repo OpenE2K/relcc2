@@ -49,6 +49,72 @@ low bits of the count register matter: `shls` ignores the count's upper
 32 bits (a count of `0xaaaaaaaa00000001` shifts by 1), `shld` by
 `0xffffffffffffffff` shifts by 63. For GCC: `SHIFT_COUNT_TRUNCATED` holds.
 
+## Field extract: `getf` [hw]
+
+`getfd src1, src2, dst` (`getfs` for 32 bits) **rotates src1 right by
+an offset and keeps the low *len* bits, zero- or sign-extended**, with
+the field described by src2, usually a literal. It runs in all six ALU
+channels with latency 1 (timing.md), so one operation does what takes
+a shift and an `and` (or two shifts) elsewhere:
+
+| src2 bits (`getfd`; `getfs`) | Field |
+|---|---|
+| 0–5; 0–4 | offset: src1 is rotated right by it |
+| 6–11; 6–10 | *len*, the bits kept (0–63; 0–31) |
+| 12 | 1: sign-extend from the field's top bit; 0: zero-extend |
+| 13–15; 13–14 | v1–v4: BYTE, which byte holds the sign bit (below); v5+: ignored by `getf`, the low-zero count of `getfz` |
+| 16 and up | ignored |
+
+`tools/isa-probes/getf.c` runs every offset, length, sign bit and BYTE
+value with five values of src1 (368,640 cases a machine) against the
+community qemu's two helpers, and the 4C follows its v1 rule, the
+Elbrus-8C2 its v5 rule, in every case:
+
+- **The sign bit.** v5 sign-extends from the field's top bit, bit
+  (offset + *len* − 1) mod width of src1. v1–v4 take it from bit
+  8 × BYTE + ((offset + *len* − 1) & 7) of src1, so the descriptor
+  must name the byte: **with BYTE = ((offset + *len* − 1) mod width) /
+  8 the two rules agree**, and that descriptor is right on every
+  version (lcc always builds it so: `(long) (x << 40) >> 50` is
+  `getfd x, 0x538a`, offset 10, *len* 14, BYTE 2). A wrong BYTE on v3
+  gives the sign of an unrelated bit.
+- ***len* 0** keeps no bits but still extends: 0 without bit 12, and
+  with it all ones or 0 by the bit just below the field (bit
+  offset − 1, on v1–v4 through BYTE as above).
+- Fields wrap: a field that runs past the top continues at bit 0 (it
+  is a rotate). `getfs` writes 32 bits (under `setwd dbl = 0` the upper
+  half is kept).
+- With a register descriptor, `getfd x, n << 6` is `x & ((1 << n) − 1)`
+  for every n from 0 to 63, and `getfd x, k | n << 6` is
+  `(x >> k) & ((1 << n) − 1)` for k + n ≤ 64.
+
+`getfzd`/`getfzs` (v5+) are `getf` that then clears the result's low
+BYTE bits (0–7) [community qemu `helper_int.c`; matches the 8C2 in
+`sem5.c`]: a contiguous mask that doesn't start at bit 0, such as
+`(x >> 8) & 0xff0` (offset 8, *len* 12, 4 zero bits), is one operation.
+`getf` is also the first stage of the combined `getf_and*` … `getf_xorn*`,
+`getf_add*`, `getf_sub*` (ALC1/4; "Combined operations", below).
+
+What lcc emits at `-O3` (v3 and v5 alike): `(x >> 20) & 0x7f` → `getfd
+x, 0x1d4`; `(x >> 37) & 1` → `getfd x, 0x65`; sign-extending shifts
+`(long) (x << 52) >> 52` → `getfd x, 0x3300`; bit-field reads
+(`s.b`, a signed 22-bit field at bit 13: `getfd w, 0x958d`, a 32-bit
+literal because BYTE 4 sets bit 15); `x >> k` and `x & 0xfff` stay
+`shrd` and `andd`. Where it doesn't use `getf` and could:
+
+- **Low masks wider than 32 bits**: `x & 0xffffffffff` is `andd` with a
+  64-bit literal (two literal syllables of the four an instruction
+  has); `getfd x, 0xa00` needs a 16-bit one (half a syllable), and
+  `x & 0xffffffff` is `sxt 6, x` with none.
+- **v5 masks with low zeros**: `(x >> 8) & 0xff0` is `shrd` + `andd`,
+  `x & 0xfff0` an `andd` with a 32-bit literal; `getfzd` does each in
+  one operation with a 16-bit descriptor. lcc for v5 never emits
+  `getfz`.
+- **Variable-length masks**: `x & ((1UL << n) − 1)` is four operations
+  (`sxt`, `shld`, `subd`, `andd`); `shld n, 6` + `getfd x, t` are two.
+- On v5 only, BYTE could be 0 and keep every descriptor in a 16-bit
+  literal; forward-compatible v3 code needs it.
+
 ## Division [hw]
 
 | Case | Result |

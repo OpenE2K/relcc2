@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Write spec/isa/operations.md: every E2K operation, what it does, and
-what is known about it.
+"""Write spec/isa/operations-v{3,5,6}.md: every E2K operation, what it
+does, and what is known about it, one page per hardware level.
 
 Joins five sources:
 
-  spec/isa/operations.yaml   what each operation computes (hand-written
-                             rules; every operation must match exactly
-                             one rule, or this tool fails)
+  spec/isa/operations-v3.yaml  what each operation computes (hand-written
+  spec/isa/operations-v5.yaml  rules): v3 has everything up to v3 (the 4C),
+  spec/isa/operations-v6.yaml  v5 what v4 and v5 add (the 8C2), v6 what
+                               v6 and v7 add; every operation must match
+                               exactly one rule, in the file of the
+                               version that introduced it
   spec/isa/binutils-ops.yaml ISA versions, channels, operand formats
   spec/isa/timing-e2s.yaml,  measured scheduled latencies (4C, 8C2)
   spec/isa/timing-e8c2.yaml
   spec/isa/lcc-usage.yaml    how often lcc's system libraries use it
   tools/**/probes .s files   which hardware probes execute it
 
-  python3 tools/isa-extract/gen_operations.py          # write the page
+  python3 tools/isa-extract/gen_operations.py          # write the pages
   python3 tools/isa-extract/gen_operations.py --check  # only check rules
 """
 
@@ -104,9 +107,22 @@ def load_ops():
     return {n: o for n, o in ops.items() if n not in v1}, v1
 
 
-def assign(rules_doc, ops, v1=()):
-    """Map every operation to its rule; report misses and doubles."""
+# Rule files and the first ISA versions their operations may have.
+LEVELS = (("v3", 1, 3), ("v5", 4, 5), ("v6", 6, 8))
+
+
+def assign(docs, ops, v1=()):
+    """Map every operation to its rule; report misses, doubles and
+    operations in the wrong level's file."""
     owner, errors = {}, []
+    for level, lo, hi in LEVELS:
+        if level in docs:
+            _assign(docs[level], ops, v1, owner, errors, level, lo, hi)
+    missing = sorted(n for n in ops if n not in owner)
+    return owner, errors, missing
+
+
+def _assign(rules_doc, ops, v1, owner, errors, level, lo, hi):
     for g in rules_doc["groups"]:
         for r in g["rules"]:
             names = []
@@ -123,9 +139,11 @@ def assign(rules_doc, ops, v1=()):
                 if n in owner:
                     errors.append(f"{n}: matched by '{owner[n]['does'][:40]}'"
                                   f" and '{r['does'][:40]}'")
+                first = min(ops[n]["isets"])
+                if not lo <= first <= hi:
+                    errors.append(f"{n} (from v{first}) is in "
+                                  f"operations-{level}.yaml")
                 owner.setdefault(n, r)
-    missing = sorted(n for n in ops if n not in owner)
-    return owner, errors, missing
 
 
 def probe_runs(ops):
@@ -261,23 +279,25 @@ def render(rules_doc, ops, owner):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--check", action="store_true")
-    ap.add_argument("--rules", type=Path, default=ISA / "operations.yaml")
-    ap.add_argument("--out", type=Path, default=ISA / "operations.md")
     args = ap.parse_args()
     ops, v1 = load_ops()
-    rules_doc = yaml.safe_load(args.rules.read_text())
-    owner, errors, missing = assign(rules_doc, ops, v1)
+    docs = {level: yaml.safe_load((ISA / f"operations-{level}.yaml")
+                                  .read_text())
+            for level, _, _ in LEVELS}
+    owner, errors, missing = assign(docs, ops, v1)
     for e in errors:
         print("error:", e)
     if missing:
         print(f"{len(missing)} operations without a rule:", " ".join(missing))
     if errors or missing:
         sys.exit(1)
-    print(f"{len(ops)} operations, all covered by "
-          f"{sum(len(g['rules']) for g in rules_doc['groups'])} rules")
+    nrules = sum(len(g["rules"]) for d in docs.values() for g in d["groups"])
+    print(f"{len(ops)} operations, all covered by {nrules} rules")
     if not args.check:
-        args.out.write_text(render(rules_doc, ops, owner))
-        print("written", args.out)
+        for level, doc in docs.items():
+            out = ISA / f"operations-{level}.md"
+            out.write_text(render(doc, ops, owner))
+            print("written", out)
 
 
 if __name__ == "__main__":

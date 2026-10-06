@@ -4,8 +4,9 @@ instructions, their registers, memory accesses and resources, and the
 latencies measured on the Elbrus 4C (spec/isa/timing.md, apb.md,
 control-transfer.md).
 
-Only the E2S (elbrus-v3) timing is measured; the guide says v1-v5 share
-it.  For v6 and v7 the same latencies are used and the report says so.
+v3 and v5 timing is measured on the 4C and the 8C2 (the guide says v1-v5
+share it), v6 on the Elbrus-2C3 (timing.md, "Elbrus-2C3"); v7 uses the
+v6 latencies and the report says so.
 """
 
 import math
@@ -34,11 +35,7 @@ def load_yaml(text):
 # The decoder reads the same tables; let it share the parsed copies.
 e2kdis.yaml = type("yaml", (), {"safe_load": staticmethod(load_yaml)})
 
-MEASURED_ISETS = {1, 2, 3, 4, 5}
-# v6 and later: loads take 5 cycles to a consumer instead of 3 (binutils
-# bfd/elfxx-e2k.c build_plt_entry; the owner's recollection is that this
-# is the only timing change).  Not measured.
-V6_LOAD_LAT = 5
+MEASURED_ISETS = {1, 2, 3, 4, 5, 6}
 
 # --- Latency classes (spec/isa/timing.md) ---------------------------------
 #
@@ -68,6 +65,7 @@ CLASSES = {
     "pslow":  dict(lat=4, to_int=6, fpside=True),    # qphminposuh, qpsgn2mskb
     "packed": dict(lat=1, to_int=4, fpside=True),
     "pmul":   dict(lat=2, to_int=4, fpside=True),
+    "fma":    dict(lat=5, to_int=7, fpside=True),    # v6 fused fma*, qpfma*
     "fx":     dict(lat=5, to_int=7, fpside=True),    # 80-bit add
     "fxmul":  dict(lat=4, to_int=6, fpside=True),
     "fxdiv":  dict(lat=16, to_int=18, fpside=True),
@@ -76,13 +74,24 @@ CLASSES = {
 }
 
 # Producers of predicates: (to a predicated ALU op, to ct, to PLS logic).
-PRED_LAT = {"icmpp": (2, 3, 1), "fcmpp": (4, 5, 3), "plog": (2, 3, 1)}
+# pcmpp: the v6 packed compares into a predicate (pcmp*op, qpcmp*ap, ...).
+PRED_LAT = {"icmpp": (2, 3, 1), "fcmpp": (4, 5, 3), "plog": (2, 3, 1),
+            "pcmpp": (4, 5, 3)}
+
+# v6 and later (the Elbrus-2C3, timing.md "Elbrus-2C3"): an L1 load takes
+# 5 cycles to any consumer in either cluster (3, +1 across, before), ldqp
+# goes through L1 (5; 11 on v5), and an integer compare or predicate
+# logic reaches a predicated ALU op in 1 cycle (2 before).
+V6_CLASSES = {"load": dict(lat=5, to_int=5, fpside=None),
+              "ldqp": dict(lat=5, to_int=5, fpside=None)}
+V6_PRED_LAT = {"icmpp": (1, 3, 1), "plog": (1, 3, 1)}
 
 # Prepare -> transfer through a CTPR.
 # One array-prefetch area delivers at most this many bytes a cycle (the
 # 8C2: two movaqp of one area in a loop_mode instruction take 2 cycles
-# an iteration; timing.md, "Array prefetch").
+# an iteration; timing.md, "Array prefetch"); 32 on v6 (the 2C3: 1 cycle).
 APB_AREA_BYTES = 16
+V6_APB_AREA_BYTES = 32
 MOVA_BYTES = {"movab": 1, "movah": 2, "movaw": 4, "movad": 8, "movaq": 16,
               "movaqp": 16}
 
@@ -133,11 +142,23 @@ FP_PREFIXES = ("fadd", "fsub", "fmul", "fmin", "fmax", "fscale", "frcp",
 
 
 def class_of(op):
-    """Latency class of OP, with the v6+ load latency."""
-    cl = CLASSES.get(op.cls)
-    if cl is not None and op.cls == "load" and getattr(op, "iset", 3) >= 6:
-        cl = dict(cl, lat=V6_LOAD_LAT, to_int=V6_LOAD_LAT)
-    return cl
+    """Latency class of OP on its ISA version."""
+    if getattr(op, "iset", 3) >= 6 and op.cls in V6_CLASSES:
+        return V6_CLASSES[op.cls]
+    return CLASSES.get(op.cls)
+
+
+def apb_area_bytes(iset):
+    """Bytes one array-prefetch area delivers a cycle on ISET."""
+    return V6_APB_AREA_BYTES if iset >= 6 else APB_AREA_BYTES
+
+
+def pred_lat(op):
+    """(to a predicated ALU op, to ct, to PLS logic) for a predicate
+    producer OP on its ISA version."""
+    if getattr(op, "iset", 3) >= 6 and op.cls in V6_PRED_LAT:
+        return V6_PRED_LAT[op.cls]
+    return PRED_LAT.get(op.cls, (1, 1, 1))
 
 
 def classify(name):
@@ -175,7 +196,9 @@ def classify(name):
         return "cfp" if (n.startswith(("f", "pf", "qpf"))) else "cint"
     if "_" in n:
         return "cint"
-    if re.match(r"(u|s)?mul|umulx|smulx|[us]mulhd", n):
+    if re.match(r"(qp)?fn?m(a|s|as|sa)[sd]$", n):
+        return "fma"
+    if re.match(r"(u|s)?mul|umulx|smulx|[us]mulhd|clmul", n):
         return "imul"
     if re.match(r"(p|qp)?f(max|min)", n):
         return "fminmax"
@@ -390,7 +413,10 @@ def parse_line(line, unknown):
         base = regs[0][0] if regs and regs[0] else None
         off = _lit(operands[1]) if len(operands) > 1 else None
         op.mem = ("ld", base, off, SIZE.get(sz.group(1), 8) if sz else 8)
-    if any(k[0] == "p" for k in op.dsts) and name.endswith("b"):
+    if any(k[0] == "p" for k in op.dsts) and re.match(
+            r"q?pcmp(eq|gt)[bhwd][ao]p$", name):
+        op.cls = "pcmpp"
+    elif any(k[0] == "p" for k in op.dsts) and name.endswith("b"):
         op.cls = "fcmpp" if name.startswith(("fcmp", "pfcmp", "fxcmp")) \
             else "icmpp"
     if any(k[0] == "c" for k in op.dsts):          # movtd

@@ -141,7 +141,7 @@ def latency(p, c, key, pch=None, cch=None):
     if kind == "lp":
         return 0
     if kind == "p":
-        lats = model.PRED_LAT.get(p.cls, (1, 1, 1))
+        lats = model.pred_lat(p)
         if c.unit == "ct":
             return lats[1]
         if c.unit == "pls":
@@ -436,16 +436,17 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None):
                             else model.stall(r - issue)
                         if w > wait:
                             wait, why = w, f"{key} from {p.name} ({r - issue} early)"
-            # An area delivers APB_AREA_BYTES a cycle: more from one area
+            # An area delivers apb_area_bytes() a cycle: more from one area
             # in one instruction holds it for the extra cycles.
-            area_bytes = {}
+            area_bytes, iset = {}, 3
             for op in ins.ops:
+                iset = getattr(op, "iset", iset)
                 if op.name in model.MOVA_BYTES:
                     area = next((k for k in op.srcs if k[0] == "aau"
                                  and k[1].startswith("area")), None)
                     area_bytes[area] = (area_bytes.get(area, 0)
                                         + model.MOVA_BYTES[op.name])
-            extra = max([math.ceil(b / model.APB_AREA_BYTES) - 1
+            extra = max([math.ceil(b / model.apb_area_bytes(iset)) - 1
                          for b in area_bytes.values()] + [0])
             if extra > wait:
                 wait, why = extra, f"APB area bandwidth ({max(area_bytes.values())} bytes)"

@@ -1441,7 +1441,11 @@ check-free semi-speculative form works.
   loop A). It does need, for correctness:
   - every area advanced exactly once per loop-mode iteration and `%lsr`
     written before `bap`, because after any interrupt the kernel
-    recomputes the stream position from `%ilcr − %lsr`;
+    recomputes the stream position from `%ilcr − %lsr` (v3–v5; v6 keeps
+    the positions, so there any loop shape and any number of advances
+    per iteration work, measured on the 2C3; a `mova` wider than the
+    area's format also reads unaligned data there, which allows strides
+    that aren't a multiple of the element);
   - no calls in the loop, and no use of `%ctpr2` (a call, a return or a
     write to `%ctpr2` stops the program, and a later `mova` is SIGILL);
   - on v3/v4, elements aligned to their size (otherwise the `mova`

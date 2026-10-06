@@ -381,6 +381,15 @@ def main():
     add("q7_movad", [({"fmt": 7, "mrng": 16}, None)], seq(2, fmt=4), base)
     add("q7_pair", [({"fmt": 7, "mrng": 0}, None)],
         [[mova(0, ind=0, am=0, fmt=7), mova(1, ind=16, am=1, fmt=7)]], base)
+    # Strides that are not a multiple of the read (lcc 1.31 uses APB for
+    # them from v6): a byte area read by movad with a 12-byte step, a
+    # half area read by movaw with a 6-byte step, movad at byte 4.
+    add("w12", [({"fmt": 1, "mrng": 8, "incr": 1}, None)], seq(4, fmt=4),
+        base + [("%aaincr1", 12)])
+    add("w6", [({"fmt": 2, "mrng": 4, "incr": 1}, None)], seq(4, fmt=3),
+        base + [("%aaincr1", 3)])
+    add("w_ind4", [({"fmt": 1, "mrng": 0, "incr": 1}, None)],
+        seq(3, fmt=4, ind=4), base + [("%aaincr1", 16)])
     v5 = list(CASES)
     v5_header = HEADER[:HEADER.index("\n\t.global\tapb_nop")] + "\n"
     for path, header, cs in (("apb", HEADER, v3), ("apb-v5", v5_header, v5)):

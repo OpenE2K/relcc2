@@ -15,8 +15,9 @@
             epilogue iterations
 
    After a trap the kernel rebuilds each area's position from the loop
-   counters (%ilcr - %lsr), so only loopA stays correct on hardware.
-   qemu-e2k does not model this, and all three pass there.
+   counters (%ilcr - %lsr), so only loopA stays correct on v3-v5
+   hardware.  v6 (the 2C3) keeps the positions, and qemu-e2k does not
+   model this: all three pass there.
 
      LCC=/opt/mcst/lcc-1.29.16.e2k-v3.linux-6.1/bin/lcc
      $LCC -O1 tools/isa-probes/apb-loop.c tools/isa-probes/apb-loop.s -o apb-loop
@@ -73,7 +74,7 @@ main (int argc, char **argv)
               bad, reps, ticks,
               k == 0 ? (bad ? "FAIL (expected none)" : "PASS")
                      : (bad ? "PASS (wrong, as expected on hardware)"
-                            : "no wrong sums (qemu, or no interrupt hit)"));
+                            : "no wrong sums (v6, qemu, or no interrupt hit)"));
     }
 
   /* loopC on a fresh page (the load faults) and on a touched one.  */
@@ -88,7 +89,7 @@ main (int argc, char **argv)
       printf ("loopC %s: stream shifted by %ld elements: %s\n",
               r < 2 ? "with a page fault" : "without a fault  ", shift,
               (r < 2 ? shift == 777 : shift == 0) ? "PASS"
-              : r < 2 && shift == 0 ? "no shift (qemu?)" : "FAIL");
+              : r < 2 && shift == 0 ? "no shift (v6 or qemu)" : "FAIL");
       munmap (p, pg);
     }
 

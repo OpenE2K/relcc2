@@ -254,7 +254,14 @@ on the 4C, 2,100 on the 8C2), so the kernel's recomputation also covers
 interrupts in the epilogue. With `ldmc` = 0 the movas stop and the sum
 counts the eighth element 32 times, as expected.
 
-Rules that follow:
+**v6 keeps the positions** [hw: Elbrus-2C3, `apb-loop.c`]: the ordinary
+branch loop is correct there in every run (0 of 200 wrong under 12,294
+signals; the 8C2: 200 of 200 wrong), and the stale-counter loop with a
+page fault is not shifted. So on v6 an area may advance any number of
+times per iteration, in any loop (lcc 1.31's `-floop-apb-packets`,
+"available from Elbrus V6"). The rules below are for v3–v5.
+
+Rules that follow (v3–v5):
 
 - Use APB only in a `loop_mode` loop counted by `%lsr`
   ([loops.md](loops.md); `ct %ctpr1 ? %NOT_LOOP_END`, `alc alcf=1,
@@ -457,7 +464,7 @@ result is the swapped high doubleword). An area with `fmt` 7 makes the
 |---|---|
 | v2–v4 | Only loads aligned to their size; lcc proves alignment statically or by versioning the loop at run time |
 | v5 | Unaligned loads; 64-bit `%aaind`; loads of different sizes from one array can share one prefetch area; `movaqp` |
-| v6 | Strides that are not a multiple of the load size; the head of a prefetch area can advance several times per iteration; the kernel saves `%aaldi` directly |
+| v6 | Strides that are not a multiple of the load size; the head of a prefetch area can advance several times per iteration; the kernel saves `%aaldi` directly (lcc 1.31; all three checked on the 2C3: "v6", below) |
 
 Loops on v5+ also have a 64-bit hardware loop counter (lcc 1.25), so lcc
 no longer splits loops whose trip count may not fit in 32 bits.
@@ -510,8 +517,9 @@ a return, `eap` or a `%ctpr2` write: all as on the 8C2. What differs:
 
 | | 8C2 (v5) | 2C3 (v6) |
 |---|---|---|
-| Trap (page fault, signal handler) between movas outside a loop | positions recomputed from the loop counters: the next element repeats | **positions kept**: the next `mova` continues where it was (the kernel saves `%aaldi`, above). Inside a `loop_mode` loop both are correct |
+| Trap (page fault, signal handler) between movas outside a loop | positions recomputed from the loop counters: the next element repeats | **positions kept**: the next `mova` continues where it was (the kernel saves `%aaldi`, above). Inside a `loop_mode` loop both are correct; an ordinary branch loop is correct only on v6 (Traps, above) |
 | `mova` wider than `fmt` (`movad` on `fmt = 3`) | diagnostic | **data** (the 8 bytes at the position) |
+| A byte area read by `movad` with a 12-byte step, a half area by `movaw` with a 6-byte step, `movad` at `ind` 4 of a byte area (`w12`, `w6`, `w_ind4`) | diagnostic | **the bytes at each position**, unaligned: a step need not be a multiple of the read (lcc 1.31's APB for such strides, "from Elbrus V6") |
 | Diagnostic value | `eaed0f70eaed0f70`, tag 1 | `4000000040000000`, tag 1 |
 | `aaurrd %aaldi0` after two `movad` | 0x40 | 0x10 (the position in bytes) |
 | Bytes one area delivers a cycle | 16 | **32**: lcc's two-`movaqp` loop runs an iteration a cycle (`apb-lcc.c` sum of `long`s: 0.14 ns, 0.28 cycles, per element) |

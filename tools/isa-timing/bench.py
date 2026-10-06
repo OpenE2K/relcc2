@@ -24,7 +24,7 @@ measurement:
          mean the dependency is not interlocked.
 
 Usage:
-  bench.py [--target T] [--remote [USER@]HOST] [--ssh-key FILE]
+  bench.py [--target T] [--remote [USER@]HOST] [--ssh-key FILE] [--ssh-port N]
            [--remote-dir DIR] [--out DIR] [--yaml FILE] [--memory]
            [--numa CPU:MEM] [--only KIND,...] [--results FILE]
 
@@ -1633,6 +1633,8 @@ def run(args, prog, sysroot):
         ssh = ["ssh", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=30"]
         if args.ssh_key:
             ssh += ["-i", str(args.ssh_key), "-o", "IdentitiesOnly=yes"]
+        if args.ssh_port:
+            ssh += ["-o", f"Port={args.ssh_port}"]
         rdir = args.remote_dir
         subprocess.run(ssh + [args.remote, f"mkdir -p {rdir}"], check=True)
         subprocess.run(["scp", "-q"] + ssh[1:] + [str(prog), f"{args.remote}:{rdir}/"],
@@ -1799,6 +1801,7 @@ def main():
     ap.add_argument("--remote", metavar="[USER@]HOST")
     ap.add_argument("--ssh-key", type=Path,
                     default=SSH_KEY if SSH_KEY.exists() else None)
+    ap.add_argument("--ssh-port", type=int, metavar="PORT")
     ap.add_argument("--out", type=Path, default=ROOT / "toolchains" / "isa-timing")
     ap.add_argument("--yaml", type=Path)
     ap.add_argument("--remote-dir", default="relcc2/isa-timing",

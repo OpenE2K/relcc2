@@ -14,7 +14,7 @@ Usage:
   run.py GENDIR [-o OUTDIR] [--target T] [--cc NAME=COMMAND]...
          [--cxx NAME=COMMAND]...
          [--runner COMMAND | --remote [USER@]HOST [--ssh-key FILE]
-          [--remote-dir DIR] [--remote-jobs N]]
+          [--ssh-port N] [--remote-dir DIR] [--remote-jobs N]]
          [--pairs CALLER:CALLEE,...] [--known FILE] [-j N]
 
 Failures listed in known.txt (known differences of the reference
@@ -144,7 +144,7 @@ class Remote:
     """Run programs on an Elbrus machine over SSH. One master connection
     is shared by all runs."""
 
-    def __init__(self, host, key, remote_dir, outdir):
+    def __init__(self, host, key, remote_dir, outdir, port=None):
         self.host, self.dir, self.outdir = host, remote_dir, outdir
         # A socket path must be short (about 100 bytes), so it can't live
         # in OUTDIR.
@@ -156,6 +156,8 @@ class Remote:
                     "-o", "ControlPersist=60"]
         if key:
             self.ssh += ["-i", str(key), "-o", "IdentitiesOnly=yes"]
+        if port:
+            self.ssh += ["-o", f"Port={port}"]
 
     def remote(self, command, timeout=None, stdin=None):
         rc, out = sh(self.ssh + [self.host, command], timeout, stdin)
@@ -263,6 +265,7 @@ def main():
     where.add_argument("--remote", metavar="[USER@]HOST")
     ap.add_argument("--ssh-key", type=Path,
                     default=SSH_KEY if SSH_KEY.exists() else None)
+    ap.add_argument("--ssh-port", type=int)
     ap.add_argument("--remote-dir", default="relcc2/compat")
     ap.add_argument("--remote-jobs", type=int, default=4)
     ap.add_argument("--pairs", help="CALLER:CALLEE,... (default: all)")
@@ -293,7 +296,8 @@ def main():
     out = args.outdir.resolve()
     out.mkdir(parents=True, exist_ok=True)
     if args.remote:
-        host = Remote(args.remote, args.ssh_key, args.remote_dir, out)
+        host = Remote(args.remote, args.ssh_key, args.remote_dir, out,
+                      args.ssh_port)
         run_jobs = args.remote_jobs
     else:
         host = Local(args.runner or default_runner(args.target))

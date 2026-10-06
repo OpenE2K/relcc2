@@ -3,7 +3,7 @@
 """Compare isa-score's "achieved" cycles with cycles measured on hardware.
 
   validate.py --remote USER@HOST [--remote-dir DIR] [--key FILE] [-o DIR]
-              [--target T]
+              [--target T] [--ssh-port N] [--cpu N]
 
 Builds kernels.c with lcc at -O0, -O2 and -O3 and main.c, then on
 the E2K machine: runs every kernel REPEAT times under perf, sampling the
@@ -15,7 +15,8 @@ measurement should agree as far as the model is right.
 
 --target picks the lcc build by its /opt/mcst directory suffix (default
 v3; use the CPU-tuned one for the machine: v3.4c for the 4C, v5.8c2
-for the 8C2); the model uses that ISA version.
+for the 8C2, v6.2c3 for the 2C3 with --cpu 0 and --period 40009);
+the model uses that ISA version.
 """
 
 import argparse
@@ -46,6 +47,7 @@ def main():
     ap.add_argument("--remote", required=True)
     ap.add_argument("--remote-dir", default="relcc2/isa-score")
     ap.add_argument("--key", default=str(ROOT / "secrets" / "id_ed25519"))
+    ap.add_argument("--ssh-port", type=int)
     ap.add_argument("--cpu", type=int, default=2)
     ap.add_argument("-o", default=str(ROOT / "toolchains" / "isa-score" / "validate"))
     ap.add_argument("--target", default="v3")
@@ -68,10 +70,10 @@ def main():
        "-o", str(prog))
 
     pa = SimpleNamespace(remote=a.remote, remote_dir=a.remote_dir, key=a.key,
-                         cpu=a.cpu, period=a.period, args=[str(REPEAT)],
+                         ssh_port=a.ssh_port, cpu=a.cpu, period=a.period, args=[str(REPEAT)],
                          o=str(out), stdin="")
     spath, tpath, _ = prof.run_remote(pa, str(prog))
-    ssh = ["ssh", "-i", a.key, "-o", "IdentitiesOnly=yes", a.remote]
+    ssh = ["ssh", *prof.ssh_opts(pa), a.remote]
     res = subprocess.run(ssh + [f"cd {a.remote_dir} && taskset -c {a.cpu}"
                                 " ./validate"],
                          check=True, capture_output=True, text=True).stdout

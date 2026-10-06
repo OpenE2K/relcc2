@@ -46,9 +46,17 @@ STAT = [("TICKS", 0x572), ("EXEC", 0x513), ("BUB_E2", 0x511),
         ("BUB_B_RF_SPILLFILL", 0x567)]
 
 
+def ssh_opts(a):
+    """ssh/scp options for A.key and A.ssh_port."""
+    o = ["-i", a.key, "-o", "IdentitiesOnly=yes"]
+    if getattr(a, "ssh_port", None):
+        o += ["-o", f"Port={a.ssh_port}"]
+    return o
+
+
 def run_remote(a, prog):
-    ssh = ["ssh", "-i", a.key, "-o", "IdentitiesOnly=yes", a.remote]
-    scp = ["scp", "-q", "-i", a.key, "-o", "IdentitiesOnly=yes"]
+    ssh = ["ssh", *ssh_opts(a), a.remote]
+    scp = ["scp", "-q", *ssh_opts(a)]
     d = a.remote_dir
     name = Path(prog).name
     args = " ".join(shlex.quote(x) for x in a.args)
@@ -265,6 +273,7 @@ def main():
     ap.add_argument("--stdin", help="text for the program's standard input"
                     " (default: none)")
     ap.add_argument("--key", default=str(ROOT / "secrets" / "id_ed25519"))
+    ap.add_argument("--ssh-port", type=int)
     ap.add_argument("--cpu", type=int, default=2)
     ap.add_argument("--period", type=int, default=100003,
                     help="events per sample (a prime avoids aliasing with"

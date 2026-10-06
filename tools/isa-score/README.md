@@ -191,19 +191,26 @@ that take about 14 cycles more per call than modelled; in Unipro's
 Linpack, loops that run faster than modelled. Weighted by the run,
 operations per cycle rank the compilers as their measured speed does.
 
+On the Elbrus-2C3 (v6; `--target v6.2c3 --cpu 0 --period 40009
+--ssh-port ...`) the model with the 2C3's latencies puts every kernel
+within 1% except the two APB loops (`copy -O3` 0.85, `sum -O3` 1.19, a
+few hundred samples each), and on the benchmarks built by the 2C3-tuned
+lcc at `-O3`: CoreMark 27.5 G cycles, measured / achieved 1.03;
+Linpack at size 200 (320 KB, in the 2 MiB L2) 0.99, at size 1000 (8 MB,
+from memory) 1.58.
+
 The possible schedule cannot be measured; it is a bound on what a
 scheduler could do with the same operations.
 
 ## Limits
 
-- Timing is measured on v3 (E2S) and v5 (8C2), which share it apart
-  from v5's additions (spec/isa/timing.md). For v6 and v7 they are
-  used with one change, loads at 5 cycles instead of 3 (binutils'
-  `build_plt_entry`; the owner recalls this as v6's only timing
-  change), not measured, and the report says so; the channel tables
-  are those of the chosen version. So `--iset 6` scores a program as
-  if for a CPU with slower loads, e.g. to see how much a schedule
-  tuned for v3 loses there.
+- Timing is measured on v3 (E2S), v5 (8C2) and v6 (2C3)
+  (spec/isa/timing.md). v6 differs in loads (5 cycles in either
+  cluster, `ldqp` 5), integer predicates (1 to a predicated operation),
+  APB bandwidth (32 bytes a cycle per area) and the new operations; v7
+  uses v6's numbers, unmeasured, and the report says so. The channel
+  tables are those of the chosen version. So `--iset 6` on a v3 binary
+  shows how much a schedule tuned for v3 loses on v6.
 - Loop analysis covers loops whose body is one basic block (lcc's
   `loop_mode` loops and other loops compiled into one block). Other
   loops are scored block by block.

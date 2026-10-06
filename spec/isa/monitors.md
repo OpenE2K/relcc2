@@ -119,6 +119,23 @@ unit) and L3 events. They showed that `ldqp` bypasses L1 (timing.md,
 "Elbrus-8C2"). With more events than counters `perf stat` multiplexes
 and scales the counts; ask for at most four at a time for exact ones.
 
+## v6 (Elbrus-2C3) [hw]
+
+The same event numbers work on the 2C3 (kernel 6.1.0-1.17-e2c3,
+`perf_event_paranoid` 2, user-mode counting allowed), so `profile.py`
+and `validate.py` run there unchanged (`--cpu 0`: two cores). `pmu.c`
+built by the 2C3-tuned lcc gives the 8C2's `TICKS` in 134 of its 166
+kernels. Every other one is a load consumed 3 or 4 cycles after it
+(`ld_use3_*`, `ld2_*`, `ldstall_*`, `stallnop_*`, `mm_*`, the speculative
+`dt_al*`): 4 cycles more, with one more `BUB_E2_MEM` stall step, since a
+load takes 5 cycles on v6 (timing.md, "Elbrus-2C3"); besides those, a
+`disp` with a false `ct` in its own instruction takes 2 cycles (3), and
+64-deep recursion 20 more (1,717), counted as 10 `BUB_B_CHAIN_RET_NRDY`
+(returns waiting for the chain stack to be refilled from memory, 0 on
+the 8C2) and 23 more `BUB_B_IP_NRDY`. Its spills count as many
+`L1_ST_QUERY` as `L1_ST_HIT` there (360), where the 8C2 counts 520
+queries for the same 360 hits.
+
 ## Not checked yet
 
 - The other events (instruction buffer, MAU, L2, `BUB_E0_*`), the

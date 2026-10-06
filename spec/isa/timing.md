@@ -583,7 +583,20 @@ conflicts, the store bank rule (two stores agreeing in address bits
 
 isa-score uses these numbers for v6 (and v7); `validate.py --target
 v6.2c3 --cpu 0` puts every kernel within 1% of the 2C3 except two APB
-loops (0.85 and 1.19).
+loops (0.85 and 1.19), and `profile.py` CoreMark within 3% and Linpack
+(size 200) within 1% (lcc `-O3` for the 2C3).
+
+`pmu.c` on the 2C3 (monitors.md) agrees: of its 166 kernels, the 32
+whose cycles differ from the 8C2's are the ones that use a load 3–4
+cycles after it (+4 each), a `disp` and a false `ct` in one instruction
+(2 cycles, 3 before) and 64-deep recursion (+20, chain-stack refill).
+
+**v6 control transfers** (`ctl6.c`; control-transfer.md): a taken
+`ibranchd` costs 12 cycles beyond its instruction however early its
+target register is ready (13 a block, against 7 for `ibranch` and for a
+`ct` prepared 5 cycles ahead); with the target loaded, a load-to-use
+stall on top. `icalld` + return costs 23 cycles a call against 14 for
+`disp` + `call`. `movtd` → `ct` still needs 9.
 
 The 2C3's `CLOCK_MONOTONIC` (clock source `sclkr`) advances in steps
 of about 330 ns between calls, so wall-clock timing of short loops

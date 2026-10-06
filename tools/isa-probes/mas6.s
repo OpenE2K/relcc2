@@ -700,6 +700,211 @@ m6_ld_11_c2:
 	}
 	.size	m6_ld_11_c2, .-m6_ld_11_c2
 
+	.global	m6_ld_14_c0
+	.type	m6_ld_14_c0, #function
+	.align	8
+m6_ld_14_c0:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr4
+	}
+	{
+	  ldd,0	%dr1, 0x0, %dr4, mas=0x14
+	}
+	{
+	  nop 7
+	}
+	{
+	  gettagd,2	%dr4, %r5
+	}
+	{
+	  nop 2
+	}
+	{
+	  puttagd,5	%dr4, 0x0, %dr6
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x0, %dr6
+	  std,5	%dr0, 0x8, %dr5
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	m6_ld_14_c0, .-m6_ld_14_c0
+
+	.global	m6_ld_14_c2
+	.type	m6_ld_14_c2, #function
+	.align	8
+m6_ld_14_c2:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr4
+	}
+	{
+	  ldd,2	%dr1, 0x0, %dr4, mas=0x14
+	}
+	{
+	  nop 7
+	}
+	{
+	  gettagd,2	%dr4, %r5
+	}
+	{
+	  nop 2
+	}
+	{
+	  puttagd,5	%dr4, 0x0, %dr6
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x0, %dr6
+	  std,5	%dr0, 0x8, %dr5
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	m6_ld_14_c2, .-m6_ld_14_c2
+
+	.global	m6_ld_15sm_c0
+	.type	m6_ld_15sm_c0, #function
+	.align	8
+m6_ld_15sm_c0:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr4
+	}
+	{
+	  ldd,0,sm	%dr1, 0x0, %dr4, mas=0x15
+	}
+	{
+	  nop 7
+	}
+	{
+	  gettagd,2	%dr4, %r5
+	}
+	{
+	  nop 2
+	}
+	{
+	  puttagd,5	%dr4, 0x0, %dr6
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x0, %dr6
+	  std,5	%dr0, 0x8, %dr5
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	m6_ld_15sm_c0, .-m6_ld_15sm_c0
+
+	.global	m6_ld_16sm_c0
+	.type	m6_ld_16sm_c0, #function
+	.align	8
+m6_ld_16sm_c0:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr4
+	}
+	{
+	  ldd,0,sm	%dr1, 0x0, %dr4, mas=0x16
+	}
+	{
+	  nop 7
+	}
+	{
+	  gettagd,2	%dr4, %r5
+	}
+	{
+	  nop 2
+	}
+	{
+	  puttagd,5	%dr4, 0x0, %dr6
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x0, %dr6
+	  std,5	%dr0, 0x8, %dr5
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	m6_ld_16sm_c0, .-m6_ld_16sm_c0
+
+	.global	m6_ld_16sm_c2
+	.type	m6_ld_16sm_c2, #function
+	.align	8
+m6_ld_16sm_c2:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr4
+	}
+	{
+	  ldd,2,sm	%dr1, 0x0, %dr4, mas=0x16
+	}
+	{
+	  nop 7
+	}
+	{
+	  gettagd,2	%dr4, %r5
+	}
+	{
+	  nop 2
+	}
+	{
+	  puttagd,5	%dr4, 0x0, %dr6
+	}
+	{
+	  nop 2
+	}
+	{
+	  std,2	%dr0, 0x0, %dr6
+	  std,5	%dr0, 0x8, %dr5
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	m6_ld_16sm_c2, .-m6_ld_16sm_c2
+
 	.global	m6_st_13_c2
 	.type	m6_st_13_c2, #function
 	.align	8
@@ -787,6 +992,28 @@ m6_st_53_c5:
 	  ct	%ctpr3
 	}
 	.size	m6_st_53_c5, .-m6_st_53_c5
+
+	.global	m6_st_14_c2
+	.type	m6_st_14_c2, #function
+	.align	8
+m6_st_14_c2:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  std,2	%dr1, 0x8, %dr2, mas=0x14
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	m6_st_14_c2, .-m6_st_14_c2
 
 	.global	m6_watch_store
 	.type	m6_watch_store, #function
@@ -1490,6 +1717,139 @@ m6_t_chase_10:
 	  ct	%ctpr3
 	}
 	.size	m6_t_chase_10, .-m6_t_chase_10
+
+	.global	m6_t_chase_14
+	.type	m6_t_chase_14, #function
+	.align	8
+m6_t_chase_14:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	%dr1, 0x0, %dr4
+	}
+	{
+	  nop 7
+	}
+	{
+	  rrd,0	%clkr, %dr10
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  ldd,0	%dr4, 0x0, %dr4, mas=0x14
+	}
+	{
+	  addd,0	%dr4, 0x0, %dr5
+	}
+	{
+	  rrd,0	%clkr, %dr11
+	}
+	{
+	  nop 2
+	}
+	{
+	  subd,0	%dr11, %dr10, %dr0
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	m6_t_chase_14, .-m6_t_chase_14
 
 	.global	m6_t_st_wait
 	.type	m6_t_st_wait, #function

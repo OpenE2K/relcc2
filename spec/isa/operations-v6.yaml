@@ -106,7 +106,8 @@ groups:
   - ops: fillr fillc
     does: Fill the register window stack or the chain stack back from memory (the counterparts of `flushr`, `flushc`); they run in user mode and return normally.
   - ops: hcall icall
-    does: "Hypercall and indirect call (binutils)."
-    status: "v6; source only"
+    does: "Hypercall and its kernel-entry sibling (binutils `parse_hicall_args`: a trap number and `wbs`; the kernel enables user hypercall numbers through `%hcem`)."
+    status: "v6; not run (enters the hypervisor)"
   - ops: iret hret glaunch
     does: Privileged returns from traps and the hypervisor, guest launch.
+    status: "v6; not run (privileged)"

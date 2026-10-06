@@ -13,7 +13,8 @@ loads put the value and its tag in out[0], out[1]; stores write v to
 buf[1].  Timing cases (t_*) return the %clkr cycles of 32 dependent
 loads (a pointer chase through buf[0] = buf) or 32 stores, so mas6.c
 prints cycles per operation.  Only kinds that stay inside the program's
-own memory are tried: no ch1 (bit 2 with m1), no mod 1/7 forms.
+own memory are tried: ch1 (bit 2) only where the kernel's trap cellar
+treats the access by m2 alone, no mod 1/7 forms.
 """
 
 from pathlib import Path
@@ -67,9 +68,16 @@ load("ld_00sm_c0", 0x0, 0, True)
 load("ld_03sm_c0", 0x3, 0, True)
 load("ld_11_c0", 0x11, 0)
 load("ld_11_c2", 0x11, 2)
+# ch1 (bit 2) with m1: the kernel classifies these by m2 alone.
+load("ld_14_c0", 0x14, 0)
+load("ld_14_c2", 0x14, 2)
+load("ld_15sm_c0", 0x15, 0, True)
+load("ld_16sm_c0", 0x16, 0, True)
+load("ld_16sm_c2", 0x16, 2, True)
 for mas in (0x13, 0x53):
     for ch in (2, 5):
         store(f"st_{mas:02x}_c{ch}", mas, ch)
+store("st_14_c2", 0x14, 2)
 # A "watch for modification" load, then a store to the same address by
 # the same thread, then a plain load of it.
 func("watch_store", wi("ldd,0\t%dr1, 0x8, %dr4, mas=0x11") + wi("nop 7")
@@ -105,6 +113,7 @@ chase("t_chase_13", 0x13)
 chase("t_chase_53", 0x53)
 chase("t_chase_12sm", 0x12, True)
 chase("t_chase_10", 0x10)
+chase("t_chase_14", 0x14)
 def wait_stores(name):
     """lcc's release store: wait ld_c, st_c, then a plain std."""
     body = wi("rrd,0\t%clkr, %dr10")

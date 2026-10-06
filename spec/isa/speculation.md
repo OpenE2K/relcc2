@@ -280,11 +280,13 @@ otherwise bits 0–1 (`m2`) choose the kind:
 | 0x11 | `ld,sm` | ALC0 | **the lock load**, exactly as `mas=0x4` (`spec.c` `lk11*`, `k11_*` against `lk4*`, `k4_*`: values, `%MLOCK`, faults and untouched pages alike) |
 | 0x13 | `ld,sm` | ALC0 | **the speculative lock**, exactly as `mas=0x7` (`lk13*`, `k13_*`) |
 
+| 0x14, 0x15, 0x16 | `ld`, `st`, `ld,sm` with bit 2 (`ch1`) | ALC0, 2 | as 0x10, 0x11, 0x12 without it (ordinary, lock-style semi-speculative, fully speculative), same timing; no visible effect from user mode on L1-resident data |
+
 The old lock encodings (`mas=0x4`, `0x7`) keep working on v6. That the
 acquire and release forms order memory can't be told on hardware that
 already keeps every order but store → load (atomics.md); lcc 1.29.16
-uses none of the v6 forms. Not tried: `m1` with bit 2 (`ch1`), `mt`
-beyond what is above.
+uses none of the v6 forms. Not tried, on purpose (a contact's machine):
+0x17 (`m1` with `mod` 7) and `mt` beyond the acquire/release forms.
 
 Not tried, on purpose, on the shared machines: mod 1 (no address
 translation), mod 7 in ALC2/5 and stores with mod 7 (MMU, cache and TLB

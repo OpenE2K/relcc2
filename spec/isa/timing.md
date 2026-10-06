@@ -42,6 +42,8 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | `fdivs` | 11 | 11 | 13 |
 | `fdivd` | 14 | 14 | 17 |
 | `fsqrts` | — | 12 | 13 |
+| `fsqrtid`; `fsqrtid` → `fsqrttd` → use (one double `sqrt`) | — | 12; 29 (so `fsqrttd` about 17) | — |
+| `frcps`, `frsqrts` (12-bit estimates, semantics.md) | — | 8 | — |
 | `sdivs`, `sdivd` | — | 11 | 13 |
 | `ldd`, L1 hit, any of ALC0/2/3/5 → next load's address | 3 | 3 | 5 |
 | `ldd` → integer op | 3 | 3 | — |

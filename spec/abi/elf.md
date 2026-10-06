@@ -344,7 +344,9 @@ our probes. Behaviour of MCST ld 2.41, checked by
 `tools/abi/probes/elfops/run.sh` on the 4C, and with the same results
 built for v5 (`run.sh v5.8c2 --remote claude@geofront.lan`) on the
 Elbrus-8C2 under Elbrus Linux 9.5 (glibc 2.35), where the DSO probe
-(`dso/run.sh`) also passes, lazily and with `LD_BIND_NOW=1`:
+(`dso/run.sh`) also passes, lazily and with `LD_BIND_NOW=1`, and the
+same again built for the Elbrus-2C3 (v6, `run.sh v6.2c3 --ssh-port
+...`; the output is the 8C2's line for line):
 
 - **`R_E2K_ISLOCAL` cannot be linked.** Its howto declares a 1-bit field
   while `relocate_section` computes `0xc0 | local`, so every use fails with

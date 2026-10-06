@@ -11,7 +11,7 @@
 # PIE and static links of ifunc are expected to fail with MCST ld 2.41.
 #
 # Usage: tools/abi/probes/elfops/run.sh [TARGET] [--remote [USER@]HOST]
-#            [--remote-dir DIR]
+#            [--remote-dir DIR] [--ssh-port N]
 # DIR (default relcc2/elfops-probe, relative to $HOME) is the working
 # directory on the remote host.
 set -e
@@ -20,11 +20,13 @@ root=$(cd "$(dirname "$0")/../../../.." && pwd)
 src=$root/tools/abi/probes/elfops
 target=v3
 remote=
+port=
 rdir=relcc2/elfops-probe
 while [ $# -gt 0 ]; do
 	case $1 in
 	--remote) remote=$2; shift 2 ;;
 	--remote-dir) rdir=$2; shift 2 ;;
+	--ssh-port) port=$2; shift 2 ;;
 	*) target=$1; shift ;;
 	esac
 done
@@ -62,6 +64,7 @@ if [ -n "$remote" ]; then
 	key=$root/secrets/id_ed25519
 	ssh_opts="-o BatchMode=yes"
 	[ -f "$key" ] && ssh_opts="$ssh_opts -i $key -o IdentitiesOnly=yes"
+	[ -n "$port" ] && ssh_opts="$ssh_opts -o Port=$port"
 	ssh $ssh_opts "$remote" "mkdir -p $rdir"
 	scp -q $ssh_opts $libs $progs "$remote:$rdir/"
 	ssh $ssh_opts "$remote" "$script"

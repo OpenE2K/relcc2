@@ -800,6 +800,11 @@ TP_V6 = {
                     "4 clmull"),
     "v6_qpsrad_4": (_ch("qpsrad,{c} %qpr7, %dr5, {d}", [0, 1, 3, 4]),
                     "4 qpsrad"),
+    # Equal operands: qpcheckd does nothing (it traps when they differ).
+    "v6_qpcheckd_2": (_ch("qpcheckd,{c} %dr5, %dr5, {d}", [0, 3]),
+                      "2 qpcheckd"),
+    "v6_qpcheckd_1": (_ch("qpcheckd,{c} %dr5, %dr5, {d}", [0]),
+                      "1 qpcheckd"),
 }
 
 
@@ -819,8 +824,8 @@ def v6_op_chains():
     for name, es in sorted(first.items()):
         if min(min(e["isets"]) for e in es) != 6:
             continue
-        if name.startswith(("ibranchd", "icalld", "qpcheck", "vfbgv",
-                            "modbgv", "mkfsw")):
+        # (vfbgv's b is %r5 = 0, so it never traps; modbgv's mask is 0.)
+        if name.startswith(("ibranchd", "icalld", "qpcheck")):
             continue
         e = next(e for e in es if 6 in e["isets"])
         ch = e["channels"][0]

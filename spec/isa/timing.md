@@ -545,6 +545,7 @@ conflicts, the store bank rule (two stores agreeing in address bits
   | Latency | Operations |
   |---|---|
   | 1 | `qpcext_*`, `qpsrad`, `pmrgp`, `qpmrgp` |
+  | 2 | `mkfsw`, `modbgv`, `vfbgv` (the x87-stack helpers) |
   | 4 | `clmull`, `clmulh` (ALC0, 1, 3, 4; four per instruction) |
   | 4 | packed compares into a predicate, to a predicated op or `merge` (5 to `ct`) |
   | 5 | `fma*`, `fms*`, `fnma*`, `fnms*` (single and double) and every `qpfma*` form, through any source, the addend included; 7 to an integer consumer and to the other cluster (FP side, + 2); six per instruction |
@@ -561,7 +562,10 @@ conflicts, the store bank rule (two stores agreeing in address bits
 - **Conflicts that are gone**: an FP operation in ALC5 next to a divide
   (`fdivd` every 2 cycles with `faddd,5` between: 1 cycle each, v5
   1.38), and a store and a load in one 32-byte block in one
-  instruction (1 cycle, v5 1.8–2). The store bank rule stays.
+  instruction (1 cycle, v5 1.8–2; one store with two loads in one
+  instruction took 1 cycle in one run and 2 in another, the 8C2 always
+  2). The store bank rule stays. `qpcheckd` with equal operands issues
+  two a cycle (ALC0 and ALC3).
 - **`fxsqrtu*`** takes 18 cycles (16).
 - **Store to load**: a reload of the same aligned doubleword in the next
   instruction still costs 7.6 cycles (lcc 1.26's note that v6 removed

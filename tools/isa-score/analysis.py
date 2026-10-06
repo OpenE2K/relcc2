@@ -153,7 +153,7 @@ def latency(p, c, key, pch=None, cch=None):
         return model.CTP_LAT.get(p.name, 1)
     if kind == "aau":
         if p.name == "bap" and c.unit == "aas":
-            return model.BAP_TO_MOVA
+            return model.bap_to_mova(p)
         return 1
     if kind not in REGKINDS:
         return 1
@@ -516,7 +516,7 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None):
 def _own_latency(op):
     """How long OP's result takes, for scheduling priority."""
     if op.name == "bap":
-        return model.BAP_TO_MOVA
+        return model.bap_to_mova(op)
     if op.unit == "cs0":
         return model.CTP_LAT.get(op.name, 1)
     cl = model.class_of(op)

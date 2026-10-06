@@ -101,6 +101,12 @@ CTP_LAT = {"disp": 5, "sdisp": 5, "return": 6, "movtd": 9, "ldisp": 3}
 CTP_LAT_NOT_TAKEN = 2
 
 BAP_TO_MOVA = 22    # apb.md, data in the caches
+V6_BAP_TO_MOVA = 20  # the 2C3: the first mova may issue 2 cycles sooner
+
+
+def bap_to_mova(op):
+    """Cycles from a bap (OP) to the first mova that doesn't stall."""
+    return V6_BAP_TO_MOVA if getattr(op, "iset", 3) >= 6 else BAP_TO_MOVA
 
 # timing.md, "Write-back conflicts": an FP-side result (muld, faddd, ...)
 # bound for an integer operation arrives one cycle late when an

@@ -435,8 +435,15 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   `call` 14), a `disp`/`movtd` and `ct` through one CTPR in one
   instruction falls through, `abgc`/`rbgc` only move `%bgr.cur` (the
   x87 stack checks are `vfbgv`). `pmu.c`, `profile.py` (CoreMark 1.03,
-  Linpack 0.99) and the compat suite run there. v4 and v7 are not
-  measured.
+  Linpack 0.99) and the compat suite run there. APB (apb.md, "v6"):
+  positions survive traps in any loop shape, so the v3–v5 one-advance
+  rule is gone, and a `mova` wider than its area's format reads
+  unaligned data (odd strides). MAS (speculation.md, "v6 encodings",
+  `mas6.c`): acquire/release forms 0x13/0x53 run (acquire load 10.4
+  cycles in a chain, release store ~4 against 15.8 for `wait` + store),
+  0x12 `,sm` is the fully speculative load, 0x11/0x13 `,sm` the lock
+  loads. lcc's v6 code uses `fmad` only under `-ffast-math`. v4 and v7
+  are not measured.
 
 ### Operation reference (spec/isa/operations-v3.md, -v5.md, -v6.md, -v7.md)
 
@@ -609,7 +616,7 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
    generations with `tools/isa-timing/bench.py`; loop-mode and
    speculation leftovers (`spec/isa/loops.md`, `speculation.md`, "Not
    checked yet").
-3. APB leftovers: v6+ only (`spec/isa/apb.md`). Protected
+3. APB leftovers: v7 only (`spec/isa/apb.md`). Protected
    (`e2k128`) and 32-bit modes.
 4. ELF leftovers: `@PREF` (`pref %iprN, sym`; source only so far).
 

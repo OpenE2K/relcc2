@@ -201,10 +201,12 @@ Bits 0–9, 30 and 31 are common to both types. `type` is bit 20.
 Without an SS, `ipd` takes a default value other than 0 (binutils MCSTBug
 #163454).
 
-**Type 1 (SF2) [source]:** used from v6 for `abgc`/`rbgc`, which replace
+**Type 1 (SF2) [source; run]:** used from v6 for `abgc`/`rbgc`, which replace
 `abg`. `abgc NUM` (1–7) puts NUM in bits 13–15 (the `aa1`–`aa3` positions of
 type 0) together with a condition. objdump prints no type-1 fields, so this
-can't be checked by decoding.
+can't be checked by decoding, but gas's encoding does what it should on
+the Elbrus-2C3 (`ctl6.c`: `abgc N` adds N to `%bgr.cur`, also under a
+predicate; loops.md, "v6").
 
 ### ctcond [decoded for types 0–9, 14, 15; type 11 source]
 

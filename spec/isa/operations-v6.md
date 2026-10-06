@@ -7,10 +7,11 @@ What `elbrus-v6` (Elbrus-16C, -2C3) adds to
 columns are those of [operations-v3.md](operations-v3.md) (the "lcc
 v3 / v5" column is empty here: those sysroots predate v6).
 
-Every v6 ALU operation except the register branches and calls was run
-on an Elbrus-2C3 by `sem6.c` (46 sets of 128-bit inputs) and timed by
-`bench.py` (`v6op_*`): semantics.md, "v6 operations", and timing.md,
-"Elbrus-2C3 (v6)". The community qemu matches the hardware on all of
+Every v6 ALU operation was run on an Elbrus-2C3, by `sem6.c` (46 sets
+of 128-bit inputs) and timed by `bench.py` (`v6op_*`), the register
+branch and call and the user-mode control operations by `ctl6.c`:
+semantics.md, "v6 operations", timing.md, "Elbrus-2C3 (v6)", and
+control-transfer.md, "v6". The community qemu matches the hardware on all of
 them except the packed fused multiply-adds, which it gets wrong, and
 six it doesn't implement.
 
@@ -49,9 +50,9 @@ six it doesn't implement.
 |---|---|---|---|---|---|---|
 | `clmull`, `clmulh` | 6–8 | 0,1,3,4 | Carry-less 64 × 64 product, low or high 64 bits (x86 `pclmulqdq`; checked against the community qemu on the 2C3). 4 cycles, ALC0/1/3/4, four a cycle. **Use:** CRC and GCM (`clmul`). | 4 (v6) |  | sem6 (2C3) |
 | `fmas`, `fmad`, `fmss`, `fmsd`, `fnmas`, `fnmad`, `fnmss`, `fnmsd` | 6–8 | 0–5 | Fused a × b + c, a × b − c, −(a × b) + c, −(a × b) − c, rounded once (matches C `fma()` on every input). 5 cycles through any operand, 7 to an integer consumer or the other cluster; six a cycle. **Use:** `fma`, `fms`, `fnma`, `fnms<mode>4`; `fma()`; contraction (the combined `fmul_add*` round twice). | 5 (v6) |  | sem6 (2C3) |
-| `ibranchd`, `icalld` | 6–8 | 0 | Branch or call to the address in a register (community qemu; not run). **Use:** Indirect jumps and calls without a CTPR preparation. |  |  | — |
+| `ibranchd`, `icalld` | 6–8 | 0 | Branch (`ibranchd,0 %drN, %empty [? cond]`) or call (`icalld,0 wbs = N, %drN, %empty`) to the address in a register, without a CTPR. A taken `ibranchd` costs 12 cycles beyond its instruction however early the address is ready; `icalld` + return 23 a call (`disp` + `call` 14). **Use:** Code size only: `movtd` 9 cycles ahead + `ct`/`call` is faster for indirect jumps and calls (control-transfer.md, "v6"). binutils uses `ibranchd` in v7 PLT entries. | 12 (taken) |  | ctl6 (2C3) |
 | `mkfsw` | 6–8 | 1,4 | An x87 status word from a and b: C0, C2, C3 = bits 0, 2, 6 (CF, PF, ZF) of a, TOP = b mod 8, other bits 0 (what `fnstsw` returns after an `fcmpud*f`-style compare). **Use:** x87 code on the `%bgr` stack (binary translation); none in C. |  |  | sem6 (2C3) |
-| `modbgv`, `vfbgv` | 6–8 | 1,4 | `%bgr` (x87 register stack) helpers: `modbgv` returned 0 for every input; `vfbgv` a, b writes 0 when b's low byte is 0 and raises SIGFPE otherwise (with `%bgr` at its initial 0x0ff). **Use:** Binary translation only. |  |  | sem6 (2C3) |
+| `modbgv`, `vfbgv` | 6–8 | 1,4 | `%bgr` (x87 register stack) helpers, masks rotated by the stack top: `modbgv a` sets `val` = (`val` & ~a[7:0]) \| a[15:8] (marks registers empty or full); `vfbgv a, b` raises SIGFPE `FPE_FLTINV` if a register in b[7:0] is full or one in b[15:8] is empty. Both write 0. **Use:** Binary translation only (loops.md, "v6"). |  |  | ctl6, sem6 (2C3) |
 
 ## Packed
 
@@ -68,8 +69,8 @@ six it doesn't implement.
 
 | Operations | ISA | ALC | Does | Lat | lcc v3 / v5 | Run on hardware |
 |---|---|---|---|---|---|---|
-| `abgc`, `rbgc` | 6–7 |  | Global-register rotation forms that replace `abg` (gas rejects `abg` for v6; binutils; not run). |  |  | v6; source only |
-| `fillr`, `fillc` | 6–7 |  | Fill the register window stack or the chain stack back from memory (the counterparts of `flushr`, `flushc`; not run). |  |  | — |
+| `abgc`, `rbgc` | 6–7 |  | Replace `abg` (gas rejects it for v6): `abgc N [? %predN]` adds N (1-7) to `%bgr.cur`, `rbgc` sets it to 0; neither checks or changes `val`, neither traps. **Use:** Binary translation only (loops.md, "v6"). |  |  | ctl6 (2C3) |
+| `fillr`, `fillc` | 6–7 |  | Fill the register window stack or the chain stack back from memory (the counterparts of `flushr`, `flushc`); they run in user mode and return normally. |  |  | ctl6 (2C3) |
 | `hcall`, `icall` | 6–7 |  | Hypercall and indirect call (binutils). |  |  | v6; source only |
 | `iret`, `hret`, `glaunch` | 6–7 |  | Privileged returns from traps and the hypervisor, guest launch. |  |  | — |
 

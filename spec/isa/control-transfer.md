@@ -220,9 +220,28 @@ least its delay ahead, `movtd` 9 cycles ahead, and keep `ibranch` for
 transfers that are rarely taken.
 
 Not measured: targets that are not in the instruction cache (the effect
-of `ipd` and `pref` there), other generations, the v6+ same-CTPR case,
-the 48C's different delays (lcc's `-mset-prepare-ct-delays-e48c`,
-timing.md).
+of `ipd` and `pref` there), v4 and v7, the 48C's different delays (lcc's
+`-mset-prepare-ct-delays-e48c`, timing.md).
+
+## v6 [hw: Elbrus-2C3]
+
+Every cost above is the same on the 2C3 (timing.md, "Elbrus-2C3 (v6)").
+v6 adds transfers through a register without a CTPR, run by
+`tools/isa-probes/ctl6.c` (`gen_ctl6.py` writes `ctl6.s`):
+
+| Operation | What it does | Cost |
+|---|---|---|
+| `ibranchd,0 %drN, %empty [? cond]` | jump to the address in `%drN` (ALC0; the condition is a ctcond, as for `ct`, not an ALU predicate) | 13 cycles for a one-instruction block: 12 beyond the instruction, however early the address is ready (`ibranch` 6, a `ct` prepared 5 ahead 0); a loaded address adds the load-to-use stall |
+| `icalld,0 wbs = N, %drN, %empty` | call the address in `%drN`, `wbs` as for `call`; the callee returns normally and the caller's registers below `wbs` survive | 23 cycles a call with a trivial leaf, against 14 for `disp` + `call` |
+| `disp %ctprN, L` and `ct %ctprN` in one instruction (gas allows it from v6) | **no transfer**: execution falls through; so does `movtd` + `ct` (timing.md) | 1 cycle |
+| `fillr`, `fillc` | run in user mode (after a `flushr`) and return normally | |
+
+So for indirect jumps and calls `movtd` 9 cycles ahead (or `disp` 5
+ahead) plus `ct`/`call` stays the fast way; `ibranchd`/`icalld` only
+save code where nothing else can fill the delay (MCST's binutils uses
+`ibranchd` in v7 PLT entries). Remember the window rule: a callee's
+`setwd` must not be smaller than what `wbs` passes it (SIGILL
+`ILL_ILLOPC` at the callee's first instruction).
 
 ## How lcc uses it [lcc]
 

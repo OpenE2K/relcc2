@@ -689,8 +689,8 @@ On the 2C3 and under the community qemu (`-cpu elbrus-v6`, the
 | `qpcext_0x00`, `_0x7f`, `_0x80`, `_0xff` a | 128 bits: a in the low half, the high half filled with the byte in the name |
 | `qpchecks`, `qpcheckd`, `qpcheckq` a, b | nothing when a = b (32, 64 or 128 bits); SIGBUS `BUS_OBJERR` at the operation when they differ. The destination keeps its old value: an equality assertion in one operation |
 | `mkfsw` a, b | an x87 status word: C0 = bit 0 (CF), C2 = bit 2 (PF), C3 = bit 6 (ZF) of a, TOP = b mod 8, every other bit 0. So a is an `fcmpud*f`-style flag result and the operation builds what `fnstsw` returns |
-| `modbgv` a | 0 (the 32-bit destination) for every input |
-| `vfbgv` a, b | 0 when b's low byte is 0, else SIGFPE |
+| `modbgv` a | 0; marks `%bgr` registers empty (a[7:0]) or full (a[15:8]) (loops.md, "v6") |
+| `vfbgv` a, b | 0, or SIGFPE `FPE_FLTINV` when a register b[7:0] wants empty is full or one b[15:8] wants full is empty (with the initial `%bgr`, any b[7:0]) |
 
 `mkfsw`, `modbgv` and `vfbgv` serve x87 code on the `%bgr` register
 stack (loops.md); a C compiler has no use for them. Neither does it

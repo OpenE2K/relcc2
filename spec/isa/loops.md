@@ -357,12 +357,27 @@ qemu gives SIGILL.
 `loops.c` (with the v5 cases) gives the 8C2's results on the 2C3 except
 the late `%lsr` write above: counts, `%pcnt`/`%lcntex`, store
 suppression, rotation, `%lsr1`, quad stores and the behaviour across
-signals and page faults are the same. gas rejects `abg` for v6
-("not supported on elbrus-v6"), so `abg.c` doesn't build there.
+signals and page faults are the same.
+
+gas rejects `abg` for v6 ("not supported on elbrus-v6"), so `abg.c`
+doesn't build there. v6 splits the x87-style stack into plain moves and
+separate checks (`ctl6.c`, from user mode; `cur` is `%bgr` bits 8–10,
+`val` bits 0–7, and a mask is rotated left by `cur`, so bit 0 means the
+current top):
+
+| Operation | Effect |
+|---|---|
+| `abgc N [? %predN]` (N 1–7, SS) | `cur` += N (mod 8); `val` unchanged, never traps (v5's `abgd`/`abgi` check `val` and trap) |
+| `rbgc [? %predN]` | `cur` = 0; `val` unchanged |
+| `modbgv a, dst` (ALC1/4) | `val` = (`val` & ~rot(a[7:0])) \| rot(a[15:8]): marks registers empty or full; writes 0 |
+| `vfbgv a, b, dst` | SIGFPE `FPE_FLTINV` (an x87 stack fault) if a register in rot(b[7:0]) is full (overflow) or one in rot(b[15:8]) is empty (underflow); else writes 0 |
+| `mkfsw a, b, dst` | the x87 status word with TOP = b mod 8 (semantics.md, "v6 operations") |
+
+A C compiler still has no use for them.
 
 ## Not checked yet
 
 - The delays of `abg` and `rws %bgr` (the probe waits `wait all_e`
   and 5 cycles after each).
 - What `ldovl` does.
-- v6's `abgc`/`rbgc`; v7.
+- v7.

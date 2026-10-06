@@ -131,6 +131,8 @@ spec/isa/      ISA spec: operations-v3.md, operations-v5.md (what v4/v5 add:
                the 8C2), operations-v6.md (v6: the 2C3),
                operations-v7.md: every operation, what it does, latency, lcc's use,
                which probe ran it; generated from operations-v*.yaml,
+               hwbugs.md (MCST's errata from the kernel source and our
+               own low-confidence observations),
                bundle.md (wide instruction format), control-transfer.md
                (branches, calls, CTPRs), semantics.md (what operations
                compute), apb.md (array prefetch), speculation.md
@@ -171,7 +173,9 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     operation (sem5.c; gen_sem5.py writes sem5.s)
                     and every v6 operation (sem6.c; gen_sem6.py
                     writes sem6.s) and the v6 control operations
-                    (ctl6.c; gen_ctl6.py writes ctl6.s)
+                    (ctl6.c; gen_ctl6.py writes ctl6.s) and store/load
+                    values against erratum #123567 (stldv.c;
+                    gen_stldv.py writes stldv.s)
                     and global register rotation (abg.c, abg.s),
                     and combined FP and integer operations
                     (fcomb.c, icomb.c; gen_fcomb.py and
@@ -444,6 +448,17 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   0x12 `,sm` is the fully speculative load, 0x11/0x13 `,sm` the lock
   loads. lcc's v6 code uses `fmad` only under `-ffast-math`. v4 and v7
   are not measured.
+
+### Hardware errata (spec/isa/hwbugs.md)
+
+MCST's errata as its kernel lists them (`cpu_features.h`), with which of
+our machines each covers (4C = E2S rev 2, 8C2 = E8C2 rev 3, 2C3 = E2C3
+rev 1), and our own anomalies, marked low confidence (they may be our
+bugs). The ones that matter for code: `CODE_PLACEMENT` (all three; gas
+works around it), the v6 MAS store-release being broken on E2C3 ≤ rev 2
+(use `wait` + store, as lcc and the kernel do), `ibranchd`/`rbranch`
+corrupting an inactive CTPR on all v6 CPUs, and #123567 (a load right
+after an intersecting store, 8C2), which `stldv.c` did not reproduce.
 
 ### Operation reference (spec/isa/operations-v3.md, -v5.md, -v6.md, -v7.md)
 

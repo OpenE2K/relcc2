@@ -68,7 +68,12 @@ What happens to a diagnostic operand ([hw] unless marked):
 | 32-bit operation reading only a clean half | no trap (calling-convention.md) | |
 
 The store rows come from `spec.c`'s `st_*` cases (4C, 8C2 and 2C3
-alike).
+alike). In a register the tag is what makes a value diagnostic and its
+bits don't matter; after a `,sm` store, an ordinary load of the word
+returns those bits with tag 0, so through memory a diagnostic value
+becomes an ordinary number (whether memory keeps the tag for some other
+access, as kernel `tags.h` suggests, wasn't tested). A store under a
+diagnostic predicate changes memory whatever its data.
 
 Kernel exception → signal (kernel `traps.c`): `exc_diag_operand`,
 `exc_diag_cond`, `exc_diag_ct_cond` → SIGILL `ILL_ILLOPN`;

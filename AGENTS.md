@@ -203,6 +203,11 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     field extract (getf.c, getf.s), v1-v2 operations on
                     v3+ (v2ops.c, v2ops.s), control operations from user
                     mode (ctlops.c, ctlops.s),
+                    and rechecks of the PoC's findings (pocchk.c;
+                    gen_pocchk.py writes pocchk.s and pocchk-cases.h:
+                    divide latency by quotient, two writes of one
+                    register, false-predicate interlocks, dbl and
+                    combined ops, misaligned costs, %g across signals),
                     run on hardware; -DSPEC_V5, -DLOOPS_V5, -DAPB_V5
                     builds add v5 cases
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
@@ -393,7 +398,8 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   `--memory` measures beyond-L1 latency for reference only.
   Throughput (`bench.py` `tp`): every channel takes an operation every
   cycle at full width (6 integer, 4 FP, 4 loads, 2 stores), except the
-  divider in ALC5 shared by all divides (1 cycle apart stalls 4,
+  divider in ALC5 shared by all divides (latency 11–18 by the
+  quotient's size; 1 cycle apart stalls 4,
   `sdivd` wants 3, `fsqrts` also conflicts at 5) and L1 banks (two
   stores agreeing in address bits 6–7, or a store and a load in one
   32-byte block, can take 2 cycles). The Elbrus-8C2 (v5,
@@ -541,7 +547,8 @@ linked, an ifunc referenced with `@GOTOFF` in a PIE fails silently, a
 static link with an ifunc crashes ld; gold (not shipped) breaks dynamic
 links. A `getsp` amount must be a window register or `%g16`+ (the
 kernel can't read `%g0`–`%g15` when the stack grows: SIGSEGV for large
-allocations); a `jmp_buf`'s IP (byte 8) can be replaced by a label to
+allocations); after a signal handler the kernel restores only
+`%g16`–`%g31` (the guide says all globals; registers.md); a `jmp_buf`'s IP (byte 8) can be replaced by a label to
 re-enter a frame (nonlocal goto); lcc's `&&label` is an index, not an
 address. No stack protector is needed (return addresses live in the
 chain stack); lcc 1.31's `-fstack-protector` uses a constant canary
@@ -627,7 +634,7 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 
 0. `docs/spec-poc-findings.md` (the PoC agent's file, untracked): all
    entries so far are folded into `spec/` and `doc/` and removed from it;
-   new ones continue as I22, A19, P29.
+   new ones continue as I28, A21, P39.
 1. Extend the compat suite (see Current state). It runs on the 4C with
    `run.py --target v3 --remote ...`; all pairs match qemu except the
    tag-trap tests, which pass on the 4C and on the 8C2 (v5, `--target

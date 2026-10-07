@@ -1,7 +1,7 @@
 # relcc2: agent guide
 
 This file is the shared context for AI agents working on this repository.
-`CLAUDE.md` is a symlink to it. Read it fully before starting work.
+Read it fully before starting work.
 
 ## Goal
 

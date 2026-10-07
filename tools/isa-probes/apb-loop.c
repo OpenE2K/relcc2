@@ -5,6 +5,7 @@
 
      loopA  loop_mode loop counted by %lsr, %lsr written before bap
      loopB  ordinary branch loop, no %lsr
+     loopD  as loopA without the loop_mode bit
      loopC  as loopA, but %lsr is written after bap, a page fault comes
             in between, and a 777-iteration loop before it left the
             loop counters stale
@@ -33,6 +34,7 @@
 
 long loopA (const long *, long, long *);
 long loopB (const long *, long, long *);
+long loopD (const long *, long, long *);
 long loopC (const long *, long, long *, char *);
 long loopE (const long *, unsigned long, long *);
 long loopF (const long *, unsigned long, long *);
@@ -76,6 +78,20 @@ main (int argc, char **argv)
                      : (bad ? "PASS (wrong, as expected on hardware)"
                             : "no wrong sums (v6, qemu, or no interrupt hit)"));
     }
+
+  /* loopD: loopA without loop_mode.  */
+  {
+    long bad = 0;
+    ticks = 0;
+    for (long r = 0; r < reps; r++)
+      {
+        long m = n - r, iters = -1, s = loopD (a, m, &iters);
+        if (iters != m || s != m * (m + 1) / 2)
+          bad++;
+      }
+    printf ("loopD (no loop_mode): %ld wrong sums of %ld, %ld signals: %s\n",
+            bad, reps, ticks, bad ? "FAIL" : "PASS");
+  }
 
   /* loopC on a fresh page (the load faults) and on a touched one.  */
   for (int r = 0; r < 4; r++)

@@ -67,6 +67,67 @@ loopA:
 	}
 	.size	loopA, .-loopA
 
+! long loopD(const long *a, long n, long *iters): loopA without the
+! loop_mode bit (the loop still counts with alc and %lsr)
+	.global	loopD
+	.type	loopD, #function
+	.align	8
+loopD:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  ldisp	%ctpr2, .LDprog
+	  aaurwd,2	%dr0, %aad0
+	  addd,0	0x0, _f64,_lts0 0xff2000000000, %dr3
+	  addd,1	0x0, 0x0, %dr8
+	  addd,3	0x0, 0x0, %dr9
+	  addd,4	0x0, 0x0, %dr10
+	}
+	{
+	  insfd,0	%dr3, _f32s,_lts0 0x8800, %dr1, %dr3
+	}
+	{
+	  disp	%ctpr1, .LDloop
+	  rwd,0	%dr3, %lsr
+	}
+	{
+	  nop 7
+	  bap
+	}
+	{
+	  nop 7
+	}
+	{
+	  nop 7
+	}
+.LDloop:
+	{
+	  alc	alcf=1, alct=1
+	  ct	%ctpr1 ? %NOT_LOOP_END
+	  movad,0	area=0, ind=0, am=1, be=0, %dr8
+	  addd,0	%dr9, %dr8, %dr9
+	  addd,1	%dr10, 0x1, %dr10
+	}
+	{
+	  nop 7
+	  disp	%ctpr2, disp=0x0
+	}
+	{
+	  addd,0	%dr9, %dr8, %dr0
+	  std,2	%dr2, 0x0, %dr10
+	}
+	{
+	  ct	%ctpr3
+	}
+	.align	8
+.LDprog:
+	{
+	  fapb	ct=1, dcd=0, fmt=4, mrng=8, d=0, incr=0, ind=0, asz=5, abs=0, disp=0
+	}
+	.size	loopD, .-loopD
+
 ! long loopB(const long *a, long n, long *iters): ordinary branch loop
 ! counted in %dr10
 	.global	loopB

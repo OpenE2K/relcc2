@@ -69,6 +69,7 @@ PROBES = {
     "stld.s": ("stld.c", "4C, 8C2, 2C3"),
     "stldv.s": ("stldv.c", "4C, 8C2, 2C3"),
     "p28.s": ("p28.c", "4C, 8C2, 2C3"),
+    "pocchk.s": ("pocchk.c", "4C, 8C2, 2C3"),
     "abg.s": ("abg.c", "4C, 8C2"),
     "pmu.s": ("pmu.c", "4C, 8C2, 2C3"),
     "v2ops.s": ("v2ops.c", "4C, 8C2, 2C3"),

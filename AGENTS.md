@@ -187,6 +187,8 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     gen_icomb.py write their .s files),
                     and byte-swapped accesses (mas_be.c,
                     mas_be.s, mas_be-v5.s, mas_be_loops.c),
+                    and what lcc's speculative FP code does after
+                    feclearexcept (specfp.c, specfp-kern.c)
                     and predicate timing and logic (preds.c,
                     gen_preds.py)
                     and every v3 packed operation (semp.c;
@@ -366,7 +368,13 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   %dt_alN`, taken when the `,sm` operation in ALC N of that instruction
   has a diagnostic operand (lcc's `-fno-semi-spec-ld`); with an
   exception unmasked a speculative FP op always gives a diagnostic
-  (SIGILL at the use instead of SIGFPE). Performance monitors
+  (SIGILL at the use instead of SIGFPE); a `,sm` store under a
+  diagnostic predicate is still done, with bit 30 of each data word set,
+  and a diagnostic store address traps even with `,sm`; lcc marks most
+  FP operations `,sm` (all of them in pipelined loops, divisions too)
+  and stores whose data or predicate are speculative, so lcc `-O3` code
+  dies with SIGILL after `feclearexcept` unless built with
+  `-fno-spec-fp` (`specfp.c`). Performance monitors
   (`spec/isa/monitors.md`, hw): perf's raw `cpu` events (`0xMMEE`,
   event lists in the kernel's `tools/perf/pmu-events/arch/e2k`), two
   instruction and two data monitors on v3, user-mode counting allowed

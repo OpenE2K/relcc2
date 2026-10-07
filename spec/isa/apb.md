@@ -263,10 +263,13 @@ times per iteration, in any loop (lcc 1.31's `-floop-apb-packets`,
 
 Rules that follow (v3–v5):
 
-- Use APB only in a `loop_mode` loop counted by `%lsr`
-  ([loops.md](loops.md); `ct %ctpr1 ? %NOT_LOOP_END`, `alc alcf=1,
-  alct=1`), with every area advanced (`am = 1`) exactly once per
-  iteration.
+- Use APB only in a loop counted by `%lsr` ([loops.md](loops.md);
+  `ct %ctpr1 ? %NOT_LOOP_END`, `alc alcf=1, alct=1`), with every area
+  advanced (`am = 1`) exactly once per iteration. The `loop_mode` bit
+  itself is not needed: `apb-loop.c`'s `loopD`, `loopA` without it, is
+  right in every run under about 20,700 signals on the 4C and 8,700 on
+  the 8C2 (the PoC's pipelined kernels, which use no `loop_mode`, also
+  pass).
 - Write `%lsr` (which also sets `%ilcr`) before `bap`, and issue no
   `mova` outside the loop.
 - In the prologue between `bap` and the loop, no area may advance.

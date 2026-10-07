@@ -53,7 +53,14 @@ A wide instruction holds at most one prepare (in CS0) and one transfer
 | `pref %iprN, label` | `%ipr0–7` | code to prefetch | none | prefetch into the instruction cache; lcc does not emit it |
 
 `disp`, `movtd`, `return` and `pref` take an optional `; ipd N` (prefetch
-depth in instruction-cache lines: 0, 1, 2; lcc always writes `ipd 2`).
+depth in instruction-cache lines: 0, 1, 2). lcc writes `ipd 2` on
+every prepare for v3 targets (`e2k-v3`, `e2k-v3.4c`, or
+`-march=elbrus-v3` with any lcc) and none for v4 and later (`v4.8c`,
+`v5.8c2`, `v6.*`, or `-march`/`-mtune` for a later CPU); gas then
+encodes no SS for a prepare alone (default depth) and `ipd 3` in an SS
+it makes for a `ct`. With the code in the instruction cache it makes no
+measurable difference (zlib on the 8C2, the PoC; docs/spec-poc-findings
+I25) [lcc, hw].
 `gettsd`, `puttsd`, `done`, `iret`, `hret`, `glaunch` are for protected
 mode or the kernel.
 
@@ -252,7 +259,7 @@ save code where nothing else can fill the delay (MCST's binutils uses
 From `-O2` code for an if/else with calls, a counted loop, a loop with a
 call, a `switch`, an early exit and an indirect call:
 
-- Every prepare carries `; ipd 2`.
+- Every prepare carries `; ipd 2` in v3 code (none from v4 on, above).
 - Functions prepare their return in the first wide instructions
   (`return %ctpr3`) and return with `ct %ctpr3`, often under a condition
   for early exits (`ct %ctpr3 ? %pred0`). `%ctpr3` is also used for other

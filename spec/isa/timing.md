@@ -48,7 +48,7 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | `fsqrts` | — | 12 | 13 |
 | `fsqrtid`; `fsqrtid` → `fsqrttd` → use (one double `sqrt`) | — | 12; 29 (so `fsqrttd` about 17) | — |
 | `frcps`, `frsqrts` (12-bit estimates, semantics.md) | — | 8 | — |
-| `sdivs`, `sdivd` | — | 11 | 13 |
+| `sdivs`, `sdivd`, `udivs`, `udivd` | — | **11 to 18, by the quotient's size** (below) | 13 |
 | `ldd`, L1 hit, any of ALC0/2/3/5 → next load's address | 3 | 3 | 5 |
 | `ldd` → integer op | 3 | 3 | — |
 | `ldb`, `ldh`, `ldw` → integer op | 3 | 3 | — |
@@ -58,6 +58,15 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | integer op → FP add | 1 + 1 | 1 in the same cluster, 2 across (see Clusters) | — |
 | FP add → FP multiply | 4 | 4 | — |
 | compare → predicated ALU op | 2 | 2 | — |
+
+**Integer divides take longer for larger quotients** (`pocchk.c`, the
+smallest gap from a divide to its use that costs no stall; 4C, 8C2 and
+2C3 alike, signed and unsigned alike): 11 cycles for quotients below
+2^8, then about one more per 8–10 bits: 12 (2^10–2^17), 13 (2^20), 14
+(2^27), 15 (2^37), 16 (2^47), 17 (2^57), 18 (2^63); `sdivs` 11–14 up to
+2^31. `bench.py`'s 11 is the small-quotient case (its chain divides 1
+by 1). A scheduler can't know the quotient; 13–15 covers quotients up
+to 2^37. FP divides don't vary (`fdivd` 14 whatever the operands).
 | compare → `ct ? pred` | 3 | 3 | — |
 | `disp` → `ct` | 5 | 5 | — |
 | `return` → `ct` | 6 | 6 | — |
@@ -362,6 +371,21 @@ loads at the same speed (1.4 ns a line), `0x40` and `0x60` keep the hot
 set for loads and stores alike, and they make streamed stores faster
 (3.4 and 2.9 against 4.3 ns): there either is free.
 
+**Misaligned loads and stores** (`pocchk.c`, cycles per wide
+instruction; any misaligned offset costs the same):
+
+| | 4C (v3) | 8C2 (v5) | 2C3 (v6) |
+|---|---|---|---|
+| 4 `ldd` in one instruction, aligned / misaligned | 1.0 / 5.7 | 1.0 / 6.0–6.8 | 1.0 / 1.0 |
+| 2 `std`, aligned / misaligned | 1.0 / 8.0 | 1.0 / 8.0 | 1.0 / 1.0 |
+| load → address of the next load, aligned / misaligned / crossing a 64-byte line | 4.7 / 8.3 / 11.9 | 4.7 / 11.9 / 15.5 | 4.7 / 4.7 / 4.7 |
+
+So on v3 and v5 a misaligned access costs several cycles (a misaligned
+load about 4 more latency, 7–11 across a line), and peeling or
+versioning for alignment pays; v6 handles misaligned accesses at full
+speed. (lcc keeps `-mstrict-align` up to v4, source-compat.md; the
+8C2's misaligned accesses work but are no faster than the 4C's.)
+
 **Store to load** (`tools/isa-probes/stld.c`, 4C and 8C2 alike): a load
 of a doubleword just stored, issued in the **very next** instruction,
 returns its value about 7.6 cycles late (two 4-cycle stall steps: a
@@ -400,6 +424,7 @@ bytes (isa-score models this).
 | Producer → consumer | Interlocked? | Detail |
 |---|---|---|
 | ALU, multiply, divide, load → register use | yes | values correct at any distance ≥ 1, also integer ↔ FP and across clusters |
+| an operation **under a false predicate** → a reader of its destination | **no wait** | a reader one cycle after an `ldd` or `muld` whose predicate is false runs as if that operation wrote another register (2.0 cycles a step, against 5.9 and 9.8 when it executes; `pocchk.c`, 4C, 8C2, 2C3): the interlock follows the predicate, so the other arm of an if-converted if-else costs nothing |
 | compare → predicated ALU op, `ct ? pred`, `ibranch ? pred` | yes | correct at distance ≥ 1 |
 | compare → predicated op or `merge` in the wide instruction of a **taken return** (`ct %ctpr3` after `return`) | **no** | at distance 1 the op reads the predicate as it was before the compare, with no stall; at distance 2 it reads the new value. A taken branch (`ct %ctpr1`, near or far), a `call`, a `ct` that is not taken and no transfer all wait (`tools/isa-probes/preds.c`, `i17_*`; 4C and Elbrus-8C2; the proof-of-concept back end's finding I17, where a `merge` in a return's instruction broke expat). Keep a compare 2 instructions before any predicate reader in a return's instruction. On v6 (the 2C3) distance 1 reads the new value. |
 | compare → `andp`, `andp` → predicated ALU op | yes | correct at distance ≥ 1 |

@@ -300,6 +300,15 @@ or lose entries in the same way. A check of an address the program
 cannot read faults like a normal load (SIGSEGV), so it must stay under
 the guard.
 
+When a check fails, the compensation code its `rbranch` reaches runs
+after the whole wide instruction of the check, that instruction's own
+writes included: a register the check's instruction writes holds the
+new value there (`tools/isa-probes/pocchk.c` `dam_comp_same_wi`; 4C, 8C2,
+2C3). So any value the compensation reads must survive the check's
+instruction itself, not just reach it (the proof-of-concept back end's
+P30: a redone add's operand overwritten in the check's instruction gave
+wrong bytes).
+
 What keeps or loses an entry:
 
 | Between lock load and check | Entry | Measured |

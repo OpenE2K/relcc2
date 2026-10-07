@@ -349,7 +349,23 @@ gas rejects these combinations within one wide instruction:
 - a store in ALC2 together with a load in ALC3;
 - a store in ALC5 together with a load in ALC0;
 - `disp` and `ldisp` together (both need CS0);
-- two operations in the same channel.
+- two operations in the same channel;
+- a load or store with a MAS together with `setwd`, `wait` or a `call`
+  ("cannot encode MAS: CS1 syllable is busy"): the MAS goes in CS1,
+  which those also use [checked].
+
+### Two writes of one register [hw]
+
+Two operations of one wide instruction may write the same register when
+predicates enable at most one of them, as lcc does in if-converted code
+(`addd,3 … %dr0 ? ~%pred0` with `addd,4 … %dr0 ? %pred0`); the enabled
+one's value lands, for two ALU operations in one cluster or across
+clusters and for a load against an ALU operation. With both enabled the
+higher channel's result is left: ALC1 over ALC0 in either source order,
+ALC3 over ALC0, an ALC1 `addd` over an ALC0 `ldd` although the load
+completes later (`tools/isa-probes/pocchk.c`; 4C, 8C2 and 2C3 alike).
+gas accepts all of these without a warning; don't rely on the
+both-enabled order.
 
 ### Memory accesses in one wide instruction [hw]
 

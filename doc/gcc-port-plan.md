@@ -1265,14 +1265,25 @@ load needs no `BEGIN_CONTROL` check. The exceptions, all measured:
   exceptions masked (the kernel's start state) but turns into SIGILL
   after `feclearexcept` or `feenableexcept` (instead of SIGFPE in the
   second case). Speculate FP only under `-fno-trapping-math`, and then
-  only if we accept that hazard (to be decided; lcc's `-fspec-fp` is on
-  by default and lcc speculates FP multiplications in Linpack, but kept
-  FP divisions under their branch in our probes). A checked form is
+  only if we accept that hazard (to be decided). lcc accepts it: its
+  `-fspec-fp` is on by default, and at `-O3` it makes every FP operation
+  of a pipelined loop `,sm`, divisions under a condition included, and
+  if-converts some straight-line FP code; a program that clears the
+  flags with `feclearexcept` then dies with SIGILL in lcc's loops
+  (spec/isa/speculation.md, "What lcc speculates", 4C/8C2/2C3), and
+  lcc users build such code with `-fno-spec-fp`. A checked form is
   possible (item 5): a speculative operation reading the result, with
   `rbranch ? %dt_alN`, catches the diagnostic.
 - Integer division: `sdivd,sm` by zero gives a diagnostic; safe to
-  speculate as such, but lcc doesn't, and it is rarely worth it (11+
-  cycles).
+  speculate as such (lcc does in loops: 64–72% of its integer divisions
+  are `,sm`), but outside loops rarely worth it (11+ cycles).
+- Stores: never moved above their guard, but a store whose data or
+  predicate comes from speculative operations must be `,sm` (a
+  diagnostic operand otherwise traps). A `,sm` store under a diagnostic
+  predicate is still done, with corrupted data, so a store may take a
+  speculative predicate only where that predicate cannot be diagnostic
+  on a path the program really runs (lcc does this in pipelined loops
+  and before data-speculation checks; speculation.md).
 - The signal changes: a program that faults in speculated code gets
   SIGILL at the first non-speculative use instead of SIGSEGV/SIGBUS/
   SIGFPE. Tests that catch those signals must be built without

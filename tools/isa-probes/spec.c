@@ -168,6 +168,22 @@ main (int argc, char **argv)
   USES (use_cmpsm_ct)
   USES (use_cmp)
 
+#define STU(n) \
+  cell[3] = 7; \
+  run (#n, spec_##n, "diagnostic", 0, (long) &cell[3], 42); \
+  cell[3] = 7; \
+  run (#n, spec_##n, "valid (0)", (long) &cell[2], (long) &cell[3], 42); \
+  cell[3] = 7; \
+  run (#n, spec_##n, "diagnostic, c 0x9abcdef0", 0, (long) &cell[3], \
+       (long) 0x123456789abcdef0UL);
+  STU (st_sm_data)
+  STU (st_nosm_data)
+  STU (st_sm_pred)
+  STU (st_nosm_pred)
+  STU (st_sm_npred)
+  STU (st_sm_addr)
+  STU (st_nosm_addr)
+
 #define DAM(n) \
   cell[0] = 7; \
   run (#n, spec_##n, "cell 7, store 42", 0, (long) cell, 42);

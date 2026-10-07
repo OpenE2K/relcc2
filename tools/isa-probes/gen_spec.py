@@ -121,6 +121,21 @@ def main():
                                "disp\t%ctpr1, %%LOCKED"], nop,
                               ["ct\t%ctpr1 ? %pred0"], nop])
     add("use_cmp", ld + [["cmpedb,0\t%dr3, 0x0, %pred0"], nop])
+    # A store whose data, predicate or address comes from a speculative
+    # load from a (diagnostic or the valid 0); b is the target (preset
+    # 7), c = 42. %dr8 reads the target back (speculatively, so a tagged
+    # value shows its tag).
+    ldv = [["ldd,0,sm\t%dr1, 0x0, %dr5"], nop, nop]
+    rb = [["ldd,0,sm\t%dr2, 0x0, %dr8"], nop, nop]
+    for sm in (",sm", ""):
+        nm = "sm" if sm else "nosm"
+        add(f"st_{nm}_data", ldv + [[f"std,2{sm}\t%dr2, 0x0, %dr5"], nop] + rb)
+        add(f"st_{nm}_pred", ldv + [["cmpedb,0,sm\t%dr5, 0x0, %pred0"], nop,
+                                    [f"std,2{sm}\t%dr2, 0x0, %dr3 ? %pred0"], nop]
+            + rb)
+        add(f"st_{nm}_addr", ldv + [[f"std,2{sm}\t%dr2, %dr5, %dr3"], nop] + rb)
+    add("st_sm_npred", ldv + [["cmpedb,0,sm\t%dr5, 0x0, %pred0"], nop,
+                              ["std,2,sm\t%dr2, 0x0, %dr3 ? ~%pred0"], nop] + rb)
     # Data speculation: a load with MAS 0x4, a store (to c), then a check
     # load with MAS 0x3 and rbranch.
     for st, what in (("none", None), ("same", "std,2\t%dr2, 0x0, %dr3"),

@@ -1784,16 +1784,24 @@ Decided by the owner:
 
 ### lcc's builtins and intrinsics (source compatibility)
 
-Code written for Elbrus uses lcc's `__builtin_e2k_<op>` builtins
-(`<e2kintrin.h>`: 430, one machine operation each) and the MAS,
-CPU-detection and barrier builtins, and lcc predefines the x86 feature
-macros (`__SSE2__` … `__AVX2__`) on every target and emulates the x86
-intrinsics, so x86 SIMD paths of portable programs build on E2K
-(spec/abi/lcc-builtins.md). lcc's and Unipro's headers are "all rights
-reserved", so the port writes its own: the operation builtins can be
-generated from spec/abi/lcc-builtins.yaml (with the corrections in
-lcc-builtins-check.yaml, where lcc differs from its manual) and
-binutils-ops.yaml. **Owner's decision (2026-10-06): the port provides
+Code written for Elbrus uses lcc's `__builtin_e2k_<op>` builtins (448,
+one machine operation each with a few exceptions), the MAS, barrier,
+CPU-detection and system-register builtins and `<e2kintrin.h>`'s short
+forms and helpers; and lcc predefines the x86 feature macros
+(`__SSE2__` … `__AVX2__`) on every target and emulates the x86
+intrinsics, so x86 SIMD paths of portable programs build on E2K.
+spec/abi/lcc-builtins.md specifies all of it for lcc 1.31.05: every
+name lcc knows (checked against about 60,000 candidate names), what each compiles
+to, and the behaviour of everything that is not one operation, verified
+on the 4C, 8C2 and 2C3. lcc's and Unipro's headers are "all rights
+reserved", so the port writes its own: 357 operation builtins are the
+operation with the arguments in order and can be generated from
+spec/abi/lcc-builtins.yaml (with lcc's corrected signatures from
+lcc-builtins-check.yaml) and binutils-ops.yaml; the page lists the rest.
+The port also needs x86's six `__float128` builtins (`__builtin_fabsq`,
+…), which lcc supports. `tools/abi/builtins/run.py --cc gcc=…` is the
+acceptance test: it compares every builtin's results with lcc's on
+hardware. **Owner's decision (2026-10-06): the port provides
 these compatible builtins, and no x86 or NEON intrinsics and no
 predefined x86 feature macros**; programs with x86 SIMD paths take their
 generic ones. (Upstream GCC's precedent for an emulation layer, should

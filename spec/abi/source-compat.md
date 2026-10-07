@@ -41,11 +41,13 @@ below.
 
 ## CPU detection at run time (lcc, lcc-doc)
 
-lcc's builtins (`builtin_mcst.html`): `__builtin_cpu_init ()`,
+lcc's builtins (`builtin_mcst.html`; [lcc-builtins.md](lcc-builtins.md)
+has what each compiles to): `__builtin_cpu_init ()`,
 `__builtin_cpu_is ("elbrus-8c2")`, `__builtin_cpu_name ()`,
-`__builtin_cpu_arch ()` (deprecated) and `__builtin_e2k_cpu_iset ()`
-(the ISA version, 0 if unknown). `__builtin_cpu_supports` is not
-supported ("unknown built-in function").
+`__builtin_cpu_arch ()` (deprecated) and `__builtin_e2k_get_cpu_iset ()`
+(the ISA version, 0 if unknown; the manual misspells it
+`__builtin_e2k_cpu_iset`, which lcc doesn't know). `__builtin_cpu_supports`
+is not supported ("unknown built-in function").
 
 `__builtin_cpu_is` compiles to a load from a 64-byte object
 **`__cpu_info`** (hidden visibility) and a compare [lcc]:

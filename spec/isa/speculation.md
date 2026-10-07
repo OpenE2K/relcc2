@@ -60,10 +60,15 @@ What happens to a diagnostic operand ([hw] unless marked):
 | Diagnostic predicate in `merge` | SIGILL, `ILL_ILLOPN` | diagnostic result [source] |
 | Diagnostic predicate in `ct ? %pred0` | SIGILL, `ILL_ILLOPN` | — |
 | `merge` choosing the diagnostic operand / the other one | trap / no trap [source] | diagnostic / no effect |
-| Store data | SIGILL (calling-convention.md) | stored with its tags (`std,sm`); `,sm` applies to the data only |
-| Store or load address | trap [source] | trap for a store, diagnostic result for a load [source] |
+| Store data | SIGILL (calling-convention.md) | the store is done with the register's bits (a wholly diagnostic register stores `4afafafa4afafafa`); read back by an ordinary load the value has tag 0 |
+| Store under a diagnostic predicate (`std ? %pred0`) | SIGILL | **the store is done whatever the condition's polarity** (`? %pred0` and `? ~%pred0` alike), with bit 30 of each 32-bit half of the data set (42 → `400000004000002a`, `123456789abcdef0` → `52345678dabcdef0`) |
+| Store address | SIGILL `ILL_ILLOPN` | SIGILL `ILL_ILLOPN`: `,sm` does not help |
+| Load address | trap [source] | diagnostic result [source] |
 | `movtd` into a CTPR | no trap; taking the `ct` traps (SIGILL; control-transfer.md) | |
 | 32-bit operation reading only a clean half | no trap (calling-convention.md) | |
+
+The store rows come from `spec.c`'s `st_*` cases (4C, 8C2 and 2C3
+alike).
 
 Kernel exception → signal (kernel `traps.c`): `exc_diag_operand`,
 `exc_diag_cond`, `exc_diag_ct_cond` → SIGILL `ILL_ILLOPN`;
@@ -101,9 +106,9 @@ AGENTS.md), so in practice speculative FP operations give normal
 results. But after `feclearexcept`, almost every speculative FP result
 is diagnostic (inexact is common) and the program gets SIGILL at the
 first non-speculative use. lcc's `-fspec-fp` (its default) "may hide
-some exceptional situations" [lcc-doc]; in our probes lcc did not
-speculate FP or integer divisions at all [lcc] (`b != 0 ? a / b : 0`
-keeps the division under the branch).
+some exceptional situations" [lcc-doc]; in fact lcc speculates FP
+operations, divisions included, in most loops, and its code then dies
+this way ("What lcc speculates" below).
 
 ## Speculative loads [hw, source]
 
@@ -374,6 +379,66 @@ it has at the check (the proof-of-concept back end's P28, where GMP's
 The guide's example (6.4.3, `if (a) *a++`): 10 cycles with a branch,
 6 with the load and add hoisted as `,sm`, 5 with a predicated store as
 well.
+
+## What lcc speculates [lcc, hw]
+
+lcc marks a large share of every kind of operation `,sm`, FP and
+stores included (`count_lcc_ops.py`, `speculative:` in
+[lcc-usage.yaml](lcc-usage.yaml); lcc 1.29.16):
+
+| Operations | lcc's v3 sysroot libraries | NPB W, PolyBench, Lua, SQLite, LAME at `-O3` (v3.4c; v6.2c3 alike) |
+|---|---|---|
+| Loads | 64% | 69% |
+| FP arithmetic and conversions (`fmuld`, `faddd`, `fmul_addd`, …) | 74% | 62% |
+| FP compares | 79% | 74% |
+| FP divisions and square roots | 68% (`fdivd` 327 of 458) | 69% |
+| Integer divisions | 64% | 72% |
+| Integer compares | 66% | 68% |
+| Other integer operations | 20% | 21% |
+| Stores | 6.5% (`std` 7,785 of 93,779) | 7% |
+
+A `,sm` operation is either speculated itself or only reads a value that
+may be diagnostic (anything computed from a speculative operation must
+stay `,sm` until the guard is known, above), so the counts mix both.
+Compiling small patterns at `-O3` (v3.4c, v6.2c3) separates them:
+
+- **FP in loops is speculated itself.** In a software-pipelined loop
+  every FP operation is `,sm`, also with operands only in registers and
+  no loads: `s = s * x + 0.5` gives `fmuld,sm`, `faddd,sm`; `if (i % 3 == 0) s += x / y; else s
+  += x * y` and `if (y != 0.0 && (i & 1)) s += x / y` execute `fdivd,sm`
+  on every iteration, by zero too, and select the result by predicate.
+  The loop's result (a `faddd,sm` accumulator) is then copied with a
+  plain `addd`: there is no `%dt_al` recovery.
+- **In straight-line code lcc sometimes speculates FP:** `if (c > 0) r =
+  (x * y) / (x - y)` is if-converted with `fmuld,sm`, `fsubd,sm`,
+  `fdivd,sm`; `c ? x * y : x + y` and `p ? *p * y + 1.0 : 0.0` keep
+  their branches.
+- **Stores are never moved above their guard**, but a store whose data or
+  predicate comes from speculative operations is `,sm`: predicated
+  `std,sm` in pipelined loops (data from `fmuld,sm`, predicate from
+  `fcmpltdb,sm`) and in data-speculation regions before the check
+  (Lua's `lua_tolstring`). If that predicate is diagnostic, the store is
+  still done, with corrupted data (above): a fault the program would
+  have taken becomes a silent bad store.
+
+**Consequence for FP exceptions** (hw, 4C, 8C2 and 2C3 alike;
+`tools/isa-probes/specfp.c` with `specfp-kern.c`): a
+program that clears the sticky flags (`feclearexcept (FE_ALL_EXCEPT)`,
+or only `FE_INEXACT`) and then runs lcc `-O3` loop code with an inexact
+result dies with SIGILL `ILL_ILLOPN` at the first non-speculative use: a
+dot product, and a loop storing `b[i] / 3.0` under a condition, both
+did. The same code built with `-fno-spec-fp` has no `,sm` FP operation,
+runs correctly and sets `FE_INEXACT`. While the flags stay set, as the
+kernel starts processes, speculation is invisible, and speculative
+operations never set a flag, so `fetestexcept` reports only what
+non-speculative operations raised. lcc users know `-fno-spec-fp` as the
+fix for FP code that expects exceptions (owner).
+
+A compiler can speculate FP as lcc does (fast, but code that clears or
+unmasks FP exceptions breaks) or keep FP operations non-speculative
+unless an option allows it; either way it needs an `-fno-spec-fp`
+equivalent. A `,sm` store must not rely on a diagnostic predicate to
+suppress it.
 
 ## Emulators
 

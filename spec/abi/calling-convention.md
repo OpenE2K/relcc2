@@ -64,6 +64,14 @@ Placement depends on the size only, not on the type's alignment: a
   forms); lcc callees use only bits 0–15 (hw: garbage above them is
   ignored).
 - `float` is passed in the low 32 bits of its slot; `double` in the whole slot.
+- GNU vector types (`__attribute__ ((vector_size (N)))`) are passed like
+  an integer or aggregate of their size: an 8-byte vector takes one slot
+  (`f (int, v4hi, double, v4hi)` gets `%r0`…`%r3`), a 16-byte one an
+  even pair (`g (int, v4si)` passes it in `%r2`/`%r3`); results come
+  back in `%r0` or `%r0`/`%r1`, and a struct holding a vector follows the
+  aggregate rules [lcc: 1.29.16 `-O2`; the proof-of-concept back end
+  agrees]. `va_arg` of a vector and v5's 16-byte vectors are not in the
+  compat suite yet.
 
 ### Unused parts of a slot (lcc, qemu, compat, hw)
 

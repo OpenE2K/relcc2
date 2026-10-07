@@ -76,6 +76,7 @@ proof-of-concept backend's probe, `docs/spec-poc-findings.md` A2):
   | Operation | `dbl = 0` | `dbl = 1` |
   |---|---|---|
   | the whole 32-bit integer ALU group: `adds`, `ands`, `andns`, `shls`, `sars`, `scls`, `muls`, `sdivs`, `udivs`, `getfs`, `merges` (either predicate value), `popcnts`, `lzcnts`; also predicated (`? %pred`, when it writes) and speculative (`,sm`) | upper half kept | zero-extended |
+  | the 32-bit combined integer operations (`add_adds`, `shr_ands`, `and_ors`, `xor_xors`, …) | upper half kept | zero-extended (`tools/isa-probes/pocchk.c`; 4C, 8C2, 2C3) |
   | `ldw` | zero-extended | zero-extended |
   | `sxt` | 64-bit result | 64-bit result |
   | FP-unit operations with a 32-bit result: `fadds`, `fstois`, `fdtois`, `fstoistr`, `movts` | upper half kept | upper half kept |
@@ -99,17 +100,28 @@ proof-of-concept backend's probe, `docs/spec-poc-findings.md` A2):
 | Window registers | Saved automatically by the call mechanism, except the parameter area, which a call may change | guide 9.3.1.2 |
 | `%g13` | Thread pointer (TLS) | guide 9.3.1.4 |
 | `%g12` | Reserved by the guide; used as the **static chain** by MCST's libffi (its closure trampolines load the closure address into `%g12` and jump; Go closures receive it there; its testsuite defines `STATIC_CHAIN_REG "%g12"`). In protected mode it is the thread pointer | guide 9.3.1.4, libffi |
-| Other globals | Scratch: not preserved across calls | guide 9.3.1.4 |
+| `%g0`–`%g11`, `%g14`, `%g15` | Scratch across calls, but **not for temporaries**: a signal handler's writes to them reach the interrupted code (below) | kernel, hw |
+| `%g16`–`%g31` | Scratch: not preserved across calls; saved and restored around signal handlers, so usable for temporaries (lcc's code uses these and never `%g0`–`%g15`) | kernel, hw, lcc |
 | Predicates `%pred0`–`%pred31` | Saved and restored automatically; each call gets a fresh predicate file | guide 9.3.2, 9.5.3 |
 | `%ctpr1`–`%ctpr3` | Scratch: not preserved across calls. Returns go through `%ctpr3` | guide 9.3.3 |
 | `%lsr`, `%ilcr` (loop status, counter) | Scratch | guide 9.3.4 |
 | `%fpfr`, `%pfpfr`, `%upsr` | Special: a function that changes them must restore them | guide 9.3.4 |
 | `WD`, `BR`, `USD`, `CUD`, `GD`, `CUIR`, `TSD`, `IP` | Saved and restored automatically | guide 9.3.4 |
 
-The kernel saves `%g12` and `%g13` only on context switch. All other
-globals are additionally saved around user signal handlers (guide 9.3.1.4).
-Keeping global variables in global registers is only safe in
-single-threaded programs without signal handlers.
+The kernel saves all globals on context switch, but around a user signal
+handler it saves and restores only `%g16`–`%g31`, which it calls "local"
+(`arch/e2k/include/asm/glob_regs.h`, `kernel/signal.c`:
+`sig_save_local_gregs`, `sig_restore_local_gregs`); `%g0`–`%g15` are
+"global for user applications according to ABI" and keep whatever the
+handler leaves in them. The guide (9.3.1.4) says all other globals are
+saved around handlers, which is wrong for the 6.1 kernel: on the 4C,
+the 8C2 and the 2C3 a handler that writes `%g1` and `%g16` changes the
+interrupted code's `%g1` and not its `%g16` (`tools/isa-probes/pocchk.c`;
+the proof-of-concept back end, which kept temporaries in `%g0`–`%g11`,
+crashed under signals until it moved them). So compiler temporaries
+belong in `%g16`–`%g31`, as lcc does, and `%g0`–`%g15` are for values
+meant to be global (as `%g12`, `%g13`; the kernel also decodes a
+`getsp` amount only from `%g16` on, elf.md).
 
 ## Floating-point control and status (kernel, glibc)
 

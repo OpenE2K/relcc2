@@ -120,9 +120,14 @@ Register names for `-ffixed-<reg>` and `-fcall-used-<reg>` (as in GCC):
   optimisation) is the default up to v4, which has no efficient unaligned
   access; from v5 the default is `-mno-strict-align`.
 - **Data model** (`-mdmodel=`): `medium` (default) assumes no object,
-  static or allocated, exceeds 4 GiB, so 32-bit index arithmetic is
-  allowed; `large` allows huge dynamic objects; `huge` (experimental)
-  allows both. It changes code, not the binary interface.
+  static or allocated, exceeds 4 GiB, so lcc may compute indices in 32
+  bits; `large` allows huge dynamic objects; `huge` (experimental)
+  allows both. It changes code, not the binary interface. It does not
+  let lcc assume an unsigned 32-bit index doesn't wrap: `p[i + off]`
+  with `off = 0xffffffff` reads the wrapped element at `-O1` and `-O3`,
+  lcc computing the index with a 32-bit `adds` (zero-extended by
+  `dbl = 1`) every iteration [lcc; the proof-of-concept back end's P32,
+  on the 4C].
 - **Rotating globals**: lcc assumes by default that the rotation base of
   `%g24`–`%g31` may change (`abg`, `abgc`, `modbgv`), and limits
   optimisation of those registers; `-mfixed-gregs-base` (1.31) lifts

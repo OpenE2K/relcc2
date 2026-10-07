@@ -145,9 +145,11 @@ spec/isa/      ISA spec: operations-v3.md, operations-v5.md (what v4/v5 add:
 spec/abi/      ABI spec for e2k64: data layout, registers + DWARF, calling
                convention, stacks and unwinding, ELF/relocations/PIC/TLS,
                atomics, source-level conventions (macros, asm, options),
-               lcc-builtins.md (lcc's MCST builtins and x86 intrinsics;
-               lcc-builtins.yaml from lcc's manual, lcc-builtins-check.yaml
-               from compiling each with lcc)
+               lcc-builtins.md (lcc 1.31's builtins and <e2kintrin.h>:
+               the spec for lcc-compatible builtins; lcc-builtins.yaml
+               from lcc's manual, -names.yaml every name lcc knows,
+               -check.yaml what each operation builtin compiles to,
+               -misc.yaml the MAS/barrier/CPU/sysreg/header cases)
 spec/NOTICE.md attribution and licence of spec/
 doc/           plans for the owner: gcc-port-plan.md (how to write the GCC port)
 docs/          spec-poc-findings.md: spec problems found by toolchains/gcc-claude
@@ -215,7 +217,13 @@ tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     asmops.c and stackprot.c; tagtrap.c, dbl.c,
                     ldouble.c, ctpr.c, dso/run.sh and elfops/run.sh run
                     on hardware, as do litmus.c, getsp.c and
-                    reenter.c with their .s files, and litmus_rmw.c)
+                    reenter.c with their .s files, and litmus_rmw.c);
+                    find_builtins.py, gen_builtins.py and
+                    gen_builtins_misc.py ask lcc 1.31.05 about its builtins
+tools/abi/builtins/ lcc-compatible builtins test: gen.py writes ops.c
+                    (a result hash per operation builtin), models.c checks
+                    the rest against reference models, run.py compares a
+                    compiler with lcc on hardware
 tools/abi/compat/   ABI compatibility suite: gen.py writes caller/callee
                     pairs, run.py builds every compiler pair and runs them
                     under qemu-e2k or, with --remote, on hardware over SSH;
@@ -622,7 +630,13 @@ unwinder and libgcc E2K files; default `-march=elbrus-v3`, forward
 compatible; `%g12` as static chain; provide lcc-compatible
 `__builtin_e2k_*` builtins (`<e2kintrin.h>`, generated from
 spec/abi/lcc-builtins.yaml) but no x86 or NEON intrinsics and no
-predefined x86 feature macros (2026-10-06). Key facts behind it: MCST gas
+predefined x86 feature macros (2026-10-06). spec/abi/lcc-builtins.md
+specifies them for lcc 1.31.05 (2026-10-07): 497 names (a sweep of about
+60,000 candidates found only `__builtin_e2k_get_cpu_iset` missing from
+the manual, which misspells it), 357 of 448 operation builtins are the
+operation with the arguments in order, the rest and every header helper
+were checked against models on the 4C, 8C2 and 2C3
+(`tools/abi/builtins/run.py` is the port's acceptance test). Key facts behind it: MCST gas
 assigns channels to ops outside braces, so a first port can print one op
 per line, and the hardware interlocks everything but `%lsr`, so such code
 is correct without padding, only slow; GCC has no

@@ -936,10 +936,42 @@ each one cost it a debugging session:
 - **PIC jump tables:** GCC emits them as offsets from the table
   (`ADDR_DIFF_VEC`) and leaves adding the table address to the port's
   `tablejump` expander.
+- **Packed shifts read the whole 64-bit count** (a count of the lane
+  width or more gives 0 or the sign, semantics.md), but under
+  `SHIFT_COUNT_TRUNCATED` GCC's `expand_shift_1` hands a shift the wider
+  register of a lowpart subreg: a `V2SI` holding the count in both lanes
+  made `psllw` read `c | c << 32` (`gcc.dg/vect/pr88903-1.c`, P29). Mask
+  the count to the lane in the vector shift expanders and keep the
+  packed shifts as unspecs, so combine can't drop the mask again;
+  `SHIFT_COUNT_TRUNCATED` is right only for the scalar shifts.
+- **Byte-swapped accesses** (MAS 0x8, semantics.md) need proven
+  alignment: fold `bswap` into a load or store only where
+  `get_object_alignment_2 (MEM_EXPR, …, addr_p = true)` proves it, not by
+  `MEM_ALIGN`, which under `STRICT_ALIGNMENT` is the pointer type's, so
+  `*(uint32_t *) (buf + 1)` would pass and SIGBUS (P34; lcc folds only
+  under `-ffast`, and then also traps there). A MAS needs CS1, which
+  `setwd`, `wait` and `call` also use (bundle.md), so the DFA must
+  reserve CS1 for MAS accesses.
+- **Costs** (P37): price a division by a constant as `expand_divmod`'s
+  sequence (a high-part multiply and shifts, about 6; a remainder 11;
+  powers of two 1–4), not as a divide: doloop rejects a loop whose
+  iteration count costs more than `max-iterations-computation-cost` (10
+  instructions, `loop-doloop.cc`), so `while (len > 2) { …; len -= 3; }`
+  (zlib's `inflate_fast`) otherwise stays a branch loop. `expand_divmod`
+  itself prices a division by a register, so this doesn't change how
+  divisions expand. Integer divides take 11–18 cycles by the quotient's
+  size (timing.md).
+- **Combined integer operations** (`shr_andd`, `xor_xors`, … in ALC1/4,
+  latency 2) only where a loop is bound by the six ALU channels and the
+  pair is off its recurrence; formed by default they made the PoC's
+  LZMA and gunzip benchmarks 0.7–1.3% slower on the 8C2 (P38). Under
+  `dbl = 1` the 32-bit ones zero-extend their result like the plain
+  32-bit operations (registers.md).
 - Facts from `spec/isa/semantics.md` that are GCC settings:
-  `SHIFT_COUNT_TRUNCATED` 1; `fmul_add*` are not fused (only with
-  `-ffp-contract=fast`, never `fma`; v6's `fma*` are fused, "What a v6
-  mode adds"); `fmax`/`fmin` are x86-style, not C's;
+  `SHIFT_COUNT_TRUNCATED` 1 (scalar shifts only, above); `fmul_add*`
+  are not fused (only with `-ffp-contract=fast`, never `fma`; v6's
+  `fma*` are fused, "What a v6 mode adds"); `fmax`/`fmin` are
+  x86-style, not C's;
   FP `lt`/`le` signal on quiet NaNs and `eq`/`uod` don't; integer compares
   have no `ne`/`gt`/`ge` forms.
 - GCC 17 defaults to C23, where `int f();` takes no arguments: run the
@@ -1152,6 +1184,12 @@ should check distances and add `nop`s. ia64's write tracker (`rws_sum`,
 `group_barrier_needed`, ia64.cc:6255–7096) and C6x's `reorg_emit_nops`
 (which pads to `earliest_bb_end`) are models for that pass.
 
+**Waits longer than 7 cycles**: the HS `nop` field holds 7 at most, so
+print the rest of a longer wait as empty wide instructions (`{ nop K }`;
+gas accepts `nop 0`). Never shorten a wait: an operand early by e
+cycles stalls 4 × ceil(e/4), so the PoC, which capped waits at `nop 7`,
+ran `x = x / d + k` at 21 cycles an iteration instead of 16 (P35).
+
 For correctness, the only non-interlocked hazard measured on the 4C is
 `rwd %lsr` → `rrd %lsr` (4 cycles); loop-mode code (7.7) must respect it.
 Privileged state registers (which gas pads) don't appear in user code.
@@ -1179,6 +1217,16 @@ each issue which `alc` units became reserved (`c6x_variable_issue`,
 c6x.cc:4350, using `cpu_unit_reservation_p`), then assign the most
 constrained instructions first (`assign_reservations`, c6x.cc:3029) and
 print `,N` with a punctuation code in the output templates.
+
+Some crossings can't be avoided by any channel assignment: with four
+loads in ALC0/2/3/5 an instruction's two ALU operations sit in ALC1 and
+ALC4, and an operation reading both in the next cycle crosses one way or
+the other; one result with four readers in the next cycle needs four
+channels of one cluster. Since an operand early by 1–3 cycles stalls a
+whole 4-cycle step, **pad 1–3 empty cycles after channel assignment**
+where an operand would still be early (after a wide instruction that
+falls through, with no label between): zlib's crc32 braid block 46 → 26
+cycles, CoreMark +3.4% on the 4C (P36).
 
 ### 7.6 Speculation
 
@@ -1521,7 +1569,58 @@ check-free semi-speculative form works.
   loads through it, the exit compares), then branches back past the
   check; the ring must keep their operands alive until the check, and
   the check's `rbranch` and the loop's `ct` can't share an instruction.
-  CoreMark +9% (reverse 8 → 3 cycles a node).
+  CoreMark +9% (reverse 8 → 3 cycles a node). Values the compensation
+  reads must survive the check's instruction itself: the compensation
+  runs after that whole instruction, its writes included
+  (speculation.md; P30, `vect-alias-check-18.c` gave wrong bytes when a
+  redone add's operand was overwritten there; possibly also P28's GMP
+  failure).
+- **Alias queries after register allocation** (P31): `may_alias_p` in
+  machine reorg reads `reg_base_value`, which only `init_alias_analysis`
+  computes; `end_alias_analysis` keeps the old vector, so a pass there
+  sees values from before later copies and renaming. Call
+  `init_alias_analysis` around a reorg pass that asks.
+- **Auto-vectorization with 64-bit vectors** (P32): V8QI, V4HI, V2SI and
+  V2SF in the ordinary registers (moves and logic as 64-bit integer
+  operations; `padd`/`psub`, saturating, min/max, compares and `pmerge`
+  selects, `psign` abs, shifts (above), `pmullh`/`pmulhh`/`pmulhuh`,
+  `pmaddh` dot products, `psadbw` sums, `phadd` reductions, `punpck`
+  widening, `pshufb` permutes and narrowing (its bits 4–6 only on v5,
+  semantics.md), `pfadds`/`pfmuls`). On the 4C the PoC's vectorized
+  kernels run 1.7–69 times faster than its scalar code and 1.9–9.4 times
+  faster than lcc where lcc doesn't vectorize (widening, narrowing, dot
+  products, sums of differences), but lcc is 1.5–3 times faster on plain
+  loops, which it runs at two vectors a cycle through APB (`movad`,
+  `staad`, `pshufb` to realign) where `ldd`/`std` allow one (four loads
+  and two stores don't fit one instruction's channels). GCC's `-O2` cost
+  model vectorizes nothing that needs versioning for alignment (on v3/v5
+  misaligned accesses cost several cycles, timing.md; v6 none), so the
+  gains come at `-O3` or `-fvect-cost-model=dynamic`. CoreMark's
+  `A[i*N+j]` with unsigned 32-bit indices isn't vectorized because the
+  index may wrap; lcc keeps the wrap too (`-mdmodel=medium` lets it
+  compute indices in 32 bits, source-compat.md, not drop the wrap).
+- **Array prefetch in a modulo scheduler** (P33, the PoC on the 4C and
+  the 8C2): a load stepping one aligned element an iteration, through an
+  address the loop steps and that no store of the loop writes before
+  it is read, becomes a `mova` node before scheduling (latency 5, an AAS
+  channel, no ALU or load channel, no memory dependences), up to four;
+  its peeled prologue instances stay loads, and each area starts at the
+  element its first kernel instance reads (stage U reads iteration
+  S − 1 − U), so every area advances once per kernel iteration, which
+  is all apb.md requires (`loop_mode` is not needed). Channels and areas
+  are given per kernel row after scheduling (0/1 the left half, 2/3 the
+  right; area = program instruction). The setup (`aaurwd` of each
+  start, `ldisp %ctpr2`, `bap`) goes on each way in after `rwd %lsr`, in
+  a block of its own; the exit gets `disp %ctpr2, disp=0x0` and a write
+  of a zeroed register to `%aabf0` (gas rejects a literal there); a
+  `mova` pattern uses `%ctpr2`, which keeps branch preparation off it.
+  Cost: about 20 cycles a run (the setup and `bap`'s 20–22 cycles to the
+  first `mova`, which the prologue partly covers): 2–9% slower on short
+  loops in L1, 5–12 times faster from memory (as fast as lcc's), and
+  shorter kernels where the load channels bound them (II 2 → 1). Use it
+  when it shortens the kernel or the loop runs 256 times or more; a
+  run-time test on the count, as lcc does, would get the memory gains for
+  loops of unknown length.
 - **Branchy loops** are where lcc's lead on integer code comes from
   (zlib `-9`: lcc 1.18 s, the proof-of-concept back end 2.24 s on the
   8C2; P22): lcc turns a chain of tests (zlib's `longest_match`) into one

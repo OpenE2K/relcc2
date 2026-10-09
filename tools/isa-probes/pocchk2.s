@@ -20573,6 +20573,124 @@ p2_t_stdata_k6:
 	}
 	.size	p2_t_stdata_k6, .-p2_t_stdata_k6
 
+	.global	p2_staad_mis
+	.type	p2_staad_mis, #function
+	.align	8
+p2_staad_mis:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr24
+	  addd,1	0x0, _f64,_lts0 0x1111111111111111, %dr20
+	}
+	{
+	  aaurwd,2	%dr1, %aad0
+	  aaurwd,5	%dr24, %aasti1
+	  addd,0	%dr20, %dr20, %dr21
+	  addd,1	%dr20, 0x0, %dr25
+	}
+	{
+	  addd,0	%dr21, %dr20, %dr22
+	}
+	{
+	  addd,0	%dr22, %dr20, %dr23
+	}
+	{
+	  nop 3
+	}
+	{
+	  staad,5	%dr25, %aad0[ %aasti1 ]
+	  incr,5	%aaincr0
+	}
+	{
+	  staad,5	%dr21, %aad0[ %aasti1 ]
+	  incr,5	%aaincr0
+	}
+	{
+	  staad,5	%dr22, %aad0[ %aasti1 ]
+	  incr,5	%aaincr0
+	}
+	{
+	  staad,5	%dr23, %aad0[ %aasti1 ]
+	  incr,5	%aaincr0
+	}
+	{
+	  nop 1
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  return	%ctpr3
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	p2_staad_mis, .-p2_staad_mis
+
+	.global	p2_staaw_mis
+	.type	p2_staaw_mis, #function
+	.align	8
+p2_staaw_mis:
+	{
+	  setwd	wsz = 0x10, nfx = 0x1, dbl = 0x0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr24
+	  addd,1	0x0, _f64,_lts0 0x11111111, %dr20
+	}
+	{
+	  aaurwd,2	%dr1, %aad0
+	  aaurwd,5	%dr24, %aasti1
+	  addd,0	%dr20, %dr20, %dr21
+	  addd,1	%dr20, 0x0, %dr25
+	}
+	{
+	  addd,0	%dr21, %dr20, %dr22
+	}
+	{
+	  addd,0	%dr22, %dr20, %dr23
+	}
+	{
+	  nop 3
+	}
+	{
+	  staaw,5	%r25, %aad0[ %aasti1 ]
+	  incr,5	%aaincr0
+	}
+	{
+	  staaw,5	%r21, %aad0[ %aasti1 ]
+	  incr,5	%aaincr0
+	}
+	{
+	  staaw,5	%r22, %aad0[ %aasti1 ]
+	  incr,5	%aaincr0
+	}
+	{
+	  staaw,5	%r23, %aad0[ %aasti1 ]
+	  incr,5	%aaincr0
+	}
+	{
+	  nop 1
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  return	%ctpr3
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	p2_staaw_mis, .-p2_staaw_mis
+
 	.global	p2_apb_disp
 	.type	p2_apb_disp, #function
 	.align	8

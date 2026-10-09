@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Write pocchk2.s and pocchk2-cases.h: checks of the proof-of-concept
-back end's findings I28, I31, I32, I34, I37, I41 and A21
+back end's findings I28, I31, I32, I34, I37, I41, I43 and A21
 (docs/spec-poc-findings.md) for pocchk2.c.
 
   python3 tools/isa-probes/gen_pocchk2.py
@@ -227,6 +227,22 @@ for k in range(1, 7):
     timed(f"t_stdata_k{k}", setup,
           lambda i, k=k: wi(f"std,2\t%dr0, {8 * i:#x}, %dr{8 + i % k}",
                             f"addd,0\t%dr{8 + i % k}, {8 * k:#x}, %dr{8 + i % k}"))
+
+# I43: AAU stores from a misaligned base (a, any offset): four staad of
+# 0x1111111111111111 × (1..4), or four staaw of 0x11111111 × (1..4),
+# with incr %aaincr0 after each; the caller checks the bytes.
+for kind, size, val in (("staad", 8, "0x1111111111111111"),
+                        ("staaw", 4, "0x11111111")):
+    body = (wi("addd,0\t0x0, 0x0, %dr24", f"addd,1\t0x0, {lit(val)}, %dr20")
+            + wi("aaurwd,2\t%dr1, %aad0", "aaurwd,5\t%dr24, %aasti1",
+                 "addd,0\t%dr20, %dr20, %dr21", "addd,1\t%dr20, 0x0, %dr25")
+            + wi("addd,0\t%dr21, %dr20, %dr22") + wi("addd,0\t%dr22, %dr20, %dr23")
+            + nops(4))
+    for i, r in enumerate(("%dr25", "%dr21", "%dr22", "%dr23")):
+        src = r if kind == "staad" else r.replace("%dr", "%r")
+        body += wi(f"{kind},5\t{src}, %aad0[ %aasti1 ]", "incr,5\t%aaincr0")
+    body += nops(2) + wi("addd,0\t0x0, 0x0, %dr0")
+    func(f"{kind}_mis", body)
 
 # I41: an APB loop as apb-loop.s's loopA, summing the first n elements
 # of an area: (disp) base a, disp -64, n = b; (back_w, back_d) base a,

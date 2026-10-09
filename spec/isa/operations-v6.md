@@ -28,9 +28,13 @@ six it doesn't implement.
   `qp` forms round once, take 5 cycles through any operand (the
   combined `fmul_add*` round twice and take 8) and issue six a cycle.
   They are GCC's `fma<mode>4` family and what `-ffp-contract=fast`
-  wants. lcc's 2C3 libraries use `fmad` 857 times and `fmul_addd` 27;
-  lcc itself emits `fmad` only under `-ffast-math` (at `-O3` it keeps
-  `fmul_addd` and calls libm for `fma()`).
+  wants. lcc's 2C3 libraries use `fmad` 857 times and `fmul_addd` 27.
+  lcc itself emits `fmad` for `__builtin_fma` always; under
+  `-ffp-contract=fast` also in recurrences (Horner) and `restrict`
+  loops (`fmsd`, `fnmad`), dropping `fmul_addd` there and in other
+  loops; under `-ffast-math` also for `fma()` and in loops without
+  `restrict`; never for a returned `a * b + c` or in reductions. At
+  `-O3` it keeps `fmul_addd` and calls libm for `fma()`.
 - **lcc's v6 code** otherwise differs little from its v5 code: in
   CoreMark 4% fewer wide instructions (fewer `ibranch`es and
   predicate operations), in Linpack 6% fewer (fewer `nop`s), with the

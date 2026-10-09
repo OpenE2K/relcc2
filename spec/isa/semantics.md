@@ -678,7 +678,7 @@ On the 2C3 and under the community qemu (`-cpu elbrus-v6`, the
 
 | Operations | Result on the 2C3 |
 |---|---|
-| `fmas`, `fmad` a, b, c | a × b + c **rounded once**, as C `fma()` (`(1 + 2⁻⁵²)(1 − 2⁻⁵³) − 1` gives −2⁻¹⁰⁵, not 0); `fmss`/`fmsd` a × b − c, `fnmas`/`fnmad` −(a × b) + c, `fnmss`/`fnmsd` −(a × b) − c; the single forms work on the low 32 bits. Every result matches Python's `math.fma` on all 176 double cases and the community qemu |
+| `fmas`, `fmad` a, b, c | a × b + c **rounded once**, as C `fma()` (`(1 + 2⁻⁵²)(1 − 2⁻⁵³) − 1` gives 2⁻⁵³ − 2⁻¹⁰⁵, not 0); `fmss`/`fmsd` a × b − c, `fnmas`/`fnmad` −(a × b) + c, `fnmss`/`fnmsd` −(a × b) − c; the single forms work on the low 32 bits. Every result matches Python's `math.fma` on all 176 double cases and the community qemu |
 | `qpfmas`, `qpfmad`, `qpfmss`, `qpfmsd`, `qpfnma*`, `qpfnms*` | the same in every lane (`s`: four floats, `d`: two doubles), fused |
 | `qpfmass`, `qpfmasd` | fused, adding c in even lanes (lane 0 is the low one) and subtracting it in odd ones; `qpfmsas`, `qpfmsad` the reverse. x86's `vfmaddsub` subtracts in even lanes, so it is `qpfmsa*` and `vfmsubadd` is `qpfmas*` |
 | `clmull`, `clmulh` | the low and high 64 bits of the carry-less 128-bit product (x86 `pclmulqdq`) |

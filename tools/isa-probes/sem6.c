@@ -45,9 +45,9 @@ static const unsigned long pat[] = {
   0x0000000580000000UL /* 5, -0.0f */, 0x00000001000000ffUL,
   0x0000000000000004UL, 0x000000000000003fUL, 0x8080808080808080UL,
   0x0f0e0d0c0b0a0908UL, 0x4142434445464748UL, 0x0000ffff0000ffffUL,
-  /* 1 + 2^-52, 1 - 2^-53, -1.0: (1 + 2^-52)(1 - 2^-53) - 1 is -2^-105
-     fused, 0 rounded twice; the same in single: 1 + 2^-23, 1 - 2^-24,
-     -1.0f in both halves.  */
+  /* 1 + 2^-52, 1 - 2^-53, -1.0: (1 + 2^-52)(1 - 2^-53) - 1 is
+     2^-53 - 2^-105 fused, 0 rounded twice; the same in single:
+     1 + 2^-23, 1 - 2^-24, -1.0f in both halves (2^-24 - 2^-47).  */
   0x3ff0000000000001UL, 0x3fefffffffffffffUL, 0xbff0000000000000UL,
   0x3f8000013f800001UL, 0x3f7fffff3f7fffffUL, 0xbf800000bf800000UL,
 };

@@ -138,6 +138,10 @@ spec/isa/      ISA spec: operations-v3.md, operations-v5.md (what v4/v5 add:
                compute), apb.md (array prefetch), speculation.md
                (speculative operations, diagnostic values, DAM),
                loops.md (loop mode, %lsr, rotation),
+               predicates.md (everything about predicates: state,
+               every operation that writes or reads one, encoding,
+               limits per wide instruction, timing, lcc's use, how to
+               use them),
                monitors.md (performance counters through perf),
                binutils-ops.yaml
                (every operation), registers.yaml (state and AAU registers),
@@ -157,7 +161,9 @@ docs/          spec-poc-findings.md: spec problems found by toolchains/gcc-claud
 tools/setup/   install reference toolchains into toolchains/
 tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas;
                     count_lcc_ops.py (lcc-usage.yaml), gen_operations.py
-                    (operations-v{3,5,6,7}.md)
+                    (operations-v{3,5,6,7}.md), count_lcc_preds.py
+                    (how lcc's libraries use predicates), list_pred_ops.py
+                    (the operations that write or read predicates)
 tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
 tools/isa-timing/   latency/hazard microbenchmarks run on hardware over SSH
 tools/isa-score/    scores a compiled program's use of E2K parallelism:
@@ -189,8 +195,12 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     mas_be.s, mas_be-v5.s, mas_be_loops.c),
                     and what lcc's speculative FP code does after
                     feclearexcept (specfp.c, specfp-kern.c)
-                    and predicate timing and logic (preds.c,
-                    gen_preds.py)
+                    and predicates (preds.c, gen_preds.py: timing,
+                    logic, movep, calls, two writers in one
+                    instruction, %spred, %pcnt, loop exits, false and
+                    diagnostic conditions) and the random predicates
+                    (rndpred.c, gen_rndpred.py; check_rndpred.py on the
+                    host)
                     and every v3 packed operation (semp.c;
                     gen_semp.py writes semp.s)
                     and square roots and reciprocals (sqrt.c,
@@ -478,6 +488,31 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   0x12 `,sm` is the fully speculative load, 0x11/0x13 `,sm` the lock
   loads. lcc's v6 code uses `fmad` only under `-ffast-math`. v4 and v7
   are not measured.
+
+  Predicates (`spec/isa/predicates.md`; `preds.c`, `rndpred.c` on all
+  three machines, identical except the v6 return fix): at most 4
+  compares (ALC0, 1, 3, 4), 4 ELPs and 3 CLP/MLPs (two levels) and 6
+  RLP/MRGC entries (one per cluster and predicate, negation per
+  channel) per wide instruction; a callee starts with a copy of the
+  caller's predicates and the caller gets its own back, so they are
+  callee-saved for free; an operation under a false predicate does
+  nothing (no memory access, no fault, no operand check, no
+  interlock); readers in the writer's own instruction see the old
+  value; two compares writing one predicate leave the higher channel's,
+  a CLP beats a compare and the higher CLP another; `movep c, v` writes v only when c (the guide
+  has the operands reversed); `%pcnt` and `%pred` on one operation are
+  anded; ctcond 6/7/14/15 ignore the predicate while `pcnt` ≠ 0 unless
+  `semc`; a diagnostic predicate traps non-`,sm` operations and makes
+  `,sm` results diagnostic, either polarity. `%spredK` makes the
+  instruction issue without waiting for ALC K's operands (the
+  operation then sees a diagnostic operand, and `%spred` is true):
+  6 against 10 cycles a load-use step. `%rndpred1`–`15` read two LFSRs
+  in the user-writable `%rndpr` (x¹⁷+x¹⁴+1, x¹⁸+x¹¹+1), stepped once
+  per instruction that reads them, true 2⁻² … 2⁻²⁴ of the time; the
+  model in `check_rndpred.py` reproduces every read. lcc uses
+  predicates in 47% of its wide instructions (`landp` trees, opposite
+  predicates for both arms, a conditional `ct` per path) and relies on
+  the higher channel winning when two enabled writes hit one register.
 
 ### Hardware errata (spec/isa/hwbugs.md)
 

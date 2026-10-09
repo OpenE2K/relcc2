@@ -639,7 +639,9 @@ checked on the 4C; the proof of concept implements both this way).
 **Call-clobbered**: globals (except `%g13`, fixed; `%g12` as the static chain), the outgoing
 registers, `%ctpr1–3`, `%lsr`. Window registers `%r*` are preserved by
 hardware: mark them call-saved, and the prologue never saves them.
-Predicates are also preserved (each call gets a fresh predicate file).
+Predicates are also preserved: the caller's come back whatever the
+callee writes, and the callee starts with a copy of the caller's,
+which it must not read before writing (spec/isa/predicates.md).
 
 **Register allocation order**: prefer low window registers so the window
 stays small (`REG_ALLOC_ORDER`; ia64.h:446 for the same idea).

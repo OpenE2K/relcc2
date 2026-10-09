@@ -1690,7 +1690,9 @@ check-free semi-speculative form works.
   goes into the descriptor's base or `%aaind`; on v3 an area may not go
   below its base (diagnostic values, SIGILL in gcc.dg/vect tests), on
   v5+ it may; write a negative increment with `aaurwd` on v5+
-  (apb.md). Two AAU stores with literal offsets in one instruction need
+  (apb.md). AAU stores (`staa*`) need no alignment on any version, only
+  APB's loads do on v3 and v4 (I43; lcc's v3 PolyBench fdtd-2d uses 19
+  `staad`). Two AAU stores with literal offsets in one instruction need
   explicit literal slots (`_f32s,_ltsN`) or gas rejects them
   (bundle.md).
 - **Array prefetch in a modulo scheduler** (P33, the PoC on the 4C and

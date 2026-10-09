@@ -57,6 +57,33 @@ loop around a **locked load** and an **unlocking store**. lcc's
 - Compare-exchange stores in both outcomes: on a mismatch it writes the
   old value back (`merges` chooses the value to store), so the store
   always ends the lock. Test-and-set stores 1 and returns the old byte.
+- **The empty cycles in the templates depend on the version** (lcc
+  1.29.16 `-O3`, `long`; the proof-of-concept back end's A21, rechecked):
+
+  | Sequence | v3 | v5 (8C2 build) | v6 (2C3 and 16C builds) |
+  |---|---|---|---|
+  | `nop 1` at the loop head | yes | **no** | yes |
+  | fetch-op: load, `nop`, operation, store | 4 | 4 | 4 |
+  | exchange: load, `nop`, store | 1 | 1 | 1 |
+  | compare-exchange: load, `nop`, `cmpedb`, `nop`, `merge`, store | 2, 1 | 2, 1 | **7, 0** |
+
+  The hardware interlocks, so the counts are a performance choice. An
+  uncontended read-modify-write costs, by the empty cycles after the
+  lock-wait load (`tools/isa-probes/pocchk2.c` `t_atom_*`: 16 on 16
+  cache lines, `%clkr`), cycles each:
+
+  | Sequence | 4C | 8C2 | 2C3 |
+  |---|---|---|---|
+  | fetch-add, 0 / 1 / 2 / 3 / 4 / 5 | 17.6 / 19.1 / 20.1 / 21.1 / 18.4 / 19.4 | the same | 21.4 / 19.1 / 20.1 / 21.1 / 22.1 / 19.4 |
+  | exchange, 0 / 1 / 2 / 3 | 19.6 / 17.6 / 19.1 / 20.1 | the same | 19.6 / 21.4 / 19.1 / 20.1 |
+  | compare-exchange 2,1 / 3,1 / 7,0 | 18.4 / 19.4 / 20.7 | the same | 22.4 / 19.6 / 22.4 |
+
+  The cost repeats every 4 cycles of spacing (whole stall steps). On v3
+  and v5 lcc's counts are at or next to the cheapest; on the 2C3 the
+  lock-wait load's value arrives a cycle later, so the cheapest counts
+  are v3's plus one (fetch-add 1 or 5, exchange 2, compare-exchange 3,
+  1), and lcc's v6 build pays about 3 cycles over the best on each
+  sequence, its new compare-exchange included.
 - These sequences are inline-asm templates in lcc's output (between
   `.accept strict_delay` and `.ignore strict_delay`, with `.ias_line`),
   and they carry their own `nop`s. The lone `nop 1` at the loop head is
@@ -82,7 +109,7 @@ loop around a **locked load** and an **unlocking store**. lcc's
 lcc's code for the 8C2 (v5) adds `sal = 1, sas = 1` (the v5+ `wait`
 bits, bundle.md) to the release and seq_cst stores' `wait`; its code for
 the 2C3 (v6) is the v3 code above, without them. Read-modify-writes
-are the same on all three. v6 has MAS encodings for load-acquire and
+are the same on all three except for their empty cycles (above). v6 has MAS encodings for load-acquire and
 store-release (kernel `asm/mas.h`: `MAS_LOAD_ACQUIRE_V6`,
 `MAS_STORE_RELEASE_V6`, bit 4 set with `mod` 3) and a "watch for
 modification" load, but lcc 1.29.16 doesn't use them. On the 2C3 a

@@ -45,11 +45,47 @@ proof-of-concept backend's probe, `docs/spec-poc-findings.md` A2):
 - The largest window is **112 pairs** (224 registers, the whole stack part
   of the register file), also after spills; 113 traps. Registers above
   `%r63` are reachable only through `%b[]`.
+- **A function may not call with a `wbs` smaller than what it
+  inherited**: one that inherited P pairs from its caller must call with
+  `wbs ≥ P`, or its callee's window would start inside the caller's
+  caller's window. In a recursion with one window size W and one `wbs`,
+  `wbs ≥ W / 2` works and every smaller `wbs` gets SIGSEGV
+  (`si_code` 3) at the second nested call (W 16: `wbs` 8 works, 7 dies;
+  W 32: 16 works, 15 and 12 die; depth 1 always works; 4C, 8C2, 2C3,
+  `tools/isa-probes/pocchk2.c` `rec*`; the proof-of-concept back end's
+  I32). The convention (hand over 4 pairs, call with `wbs ≥ 4`) never
+  breaks it.
 - gas accepts `rbs` 0–63 only.
 - Operations in the wide instruction with `setwd` may already use the new
   window: `{ setwd wsz = 8; addd %r0, 5, %r12 }` works (lcc puts `getsp
   ..., %r3` there), but `%b[]` in the instruction with `setbn` still uses
   the old rotating base.
+
+What windows cost (`pocchk2.c`, `%clkr`; 4C, 8C2 and 2C3 alike; the
+proof-of-concept back end's I31):
+
+| Case | Cycles |
+|---|---|
+| `disp` + `call` + `return`/`ct` of an empty leaf, caller window 16 pairs, callee 4, 8, 16, 32 or 64 pairs | 14.1 |
+| the same, callee 112 pairs (caller and callee no longer fit the register file) | 32.4 |
+| recursion, a level (call and return), handing over 4 pairs (`wbs` = W − 4), depth 8 / 32: W 8 | 17.6 / 18.1 |
+| W 16, 32, 48, 64, 112 | 20.4 / 30.2, 47 / 55, 74 / 80, 101 / 104, 182 / 192–208 |
+| W 48 or 40 with `wbs` 28 (keeping 28 pairs below the callee, as W 32) | 48.5–50 / 55.5 |
+| `setwd` to the same size twice in a function | free |
+| `setwd` 16 → 32 pairs and back | about 3 cycles for the pair |
+
+Window size is free while the windows of the active calls fit the
+register file; once they don't, a call and its return cost about
+15 + 1.6 × `wbs` cycles, the part of the caller's window below the
+callee being spilled and filled; the callee's own size doesn't matter.
+So in deep call chains what costs is the pairs each frame keeps below
+its callee; a function that calls should keep its window small at its
+calls, but each grow and shrink costs about what the spills do (lcc
+grows the window with a second `setwd` only around a pipelined loop).
+In real programs the spills are small: the proof-of-concept back end
+measured 0.54% of xz -6's cycles in `BUB_B_RF_SPILLFILL` on the 8C2
+(windows of 48–55 pairs on its hot chain; lcc's 17–27 never spill) and
+0.30% of 7-Zip's benchmark for lcc.
 
 `setwd` also sets two window flags (qemu, kernel):
 

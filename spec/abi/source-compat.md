@@ -17,6 +17,7 @@ macros from `lcc -dM -E -xc /dev/null`.
 | `__ptr64__` (`__ptr32__`, `__ptr128__` in the other modes) | 1 | `__ptr64__` | glibc (`__ptr128__`: 137 files), Linux | define |
 | `_LP64`, `__LP64__` | 1 | 1 | everything | define |
 | `__LCC__` (version: 129, 131), `__LCC_MINOR__`, `__MCST__` | yes | no | glibc's installed headers: see below | **do not define** |
+| `_REENTRANT` 1 with `-pthread` (the only macro `-pthread` adds) | yes | ? | configure scripts: autoconf's `AX_PTHREAD` rejects `-pthread` without it (xz) | define with `-pthread` (`CPP_SPEC "%{pthread:-D_REENTRANT}"`, as GCC's aarch64 and riscv Linux targets) |
 | `__LCC_MAS_NO` 0, `__LCC_MAS_SPEC` `0x10000000`, `__LCC_MAS_VOLATILE` `0x20000000`, `__LCC_MAS_CLEARTAG` `0x40000000`, `__LCC_CHAN_ANY` −1 | yes | yes | arguments of the `__builtin_loadmas_*`/`storemas_*` builtins; glibc (2 files) | define if those builtins are supported |
 | `__SIZEOF_LONG_DOUBLE__` 16, `__SIZEOF_FLOAT80__` 16, `__SIZEOF_FLOAT128__` 16, `__LDBL_MANT_DIG__` 64 | yes | `__SIZEOF_LONG_DOUBLE__`, `__FLOAT128__` | glibc (`bits/floatn.h`) | define (GCC does from the modes) |
 | `__LONG_DOUBLE__` 80 | yes (1.31.05 expands it to the undefined name `TARGET_LONG_DOUBLE_BITSIZE`, a bug) | no | nothing found | not needed |

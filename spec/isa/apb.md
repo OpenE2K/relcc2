@@ -435,6 +435,15 @@ its data ready it costs what a `staad` does; with the data written by
 integer ops two cycles before, the loop took 4 more cycles per
 iteration (one stall step; not analysed further) [hw].
 
+**AAU stores need no alignment**, unlike the movas of array prefetch on
+v3: `staad` from a base 1, 2 or 4 bytes off a doubleword and `staaw` 2
+bytes off a word, four elements with `incr %aaincr0`, write exactly the
+right bytes at the misaligned addresses and nothing else, with no signal,
+on the 4C, 8C2 and 2C3 (`tools/isa-probes/pocchk2.c` `staad_mis`,
+`staaw_mis`; the proof-of-concept back end's I43). So a compiler may use
+AAU stores for arrays of unknown alignment on every version; only the
+loads through APB need aligned elements on v3 and v4 (above).
+
 A warning from the 8C2: an area whose increment carried a `mova` 32 GiB
 past its array (into unmapped memory) did not give a diagnostic value
 as nearer unmapped addresses do; the process spun in the kernel

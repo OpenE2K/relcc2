@@ -253,7 +253,7 @@ read with `git show`:
 | `e2k-modes.def` | Extra modes if needed (e.g. condition modes) | `loongarch-modes.def` |
 | `e2k.opt` | `-m` options (`-march=elbrus-vN`, `-mtune=`, ...) | `or1k.opt` |
 | `elbrus-v3.md` … | Pipeline (DFA) descriptions per CPU generation (section 7) | `ia64/itanium2.md`, `c6x/c6x.md` |
-| `linux.h` | `GLIBC_DYNAMIC_LINKER "/lib64/ld-linux.so.2"`, link spec, OS macros | `or1k/linux.h` |
+| `linux.h` | `GLIBC_DYNAMIC_LINKER "/lib64/ld-linux.so.2"`, link spec, OS macros; `CPP_SPEC "%{pthread:-D_REENTRANT}"` (lcc's `-pthread` defines it, and autoconf's `AX_PTHREAD` rejects `-pthread` without it; `riscv/linux.h:40`, `aarch64/aarch64-linux.h:39`; the PoC's P39) | `or1k/linux.h` |
 | `t-e2k` | Makefile fragment (multilibs, generated `.md`) | `or1k/t-or1k`, `c6x/t-c6x` |
 | `gcc/common/config/e2k/e2k-common.cc` | Option defaults per `-O` level (e.g. enable scheduling at `-O1`) | `common/config/tilegx/`, `common/config/c6x/` |
 
@@ -668,6 +668,18 @@ Leaf functions without calls need no outgoing area. Varargs functions
 need their incoming registers (the callee stores them, or reads the
 caller's memory copy: see `calling-convention.md`, variadic section, for
 which arguments are in memory).
+
+What a window costs (registers.md, "What windows cost"): nothing while
+the active calls' windows fit the register file; beyond that a call and
+return cost about 15 + 1.6 × `wbs` cycles. So window size is free in
+shallow call trees, and in deep ones what costs is the pairs each frame
+keeps below its callee; but a `setwd` grow and shrink around a region
+costs about 3 cycles, about what the spills cost. The proof of concept
+tried lcc's way (grow only around pipelined loops) and limiting
+register renaming to keep windows small: xz's spill stalls went from
+60 M cycles to 0 and its run time stayed the same, and bzip2 -9 got 2.6%
+slower, so renaming freedom is worth more than window size (P31's
+companion finding I31). A `getsp` in the `setwd` instruction is free.
 
 ### D3. Predicates
 
@@ -1248,8 +1260,21 @@ original operation would have run and faulted anyway. So the port can
 treat a speculative load as **not trapping**: in GCC's terms, a moved
 load needs no `BEGIN_CONTROL` check. The exceptions, all measured:
 
+- Consumers of a speculative value need `,sm` only where they run
+  unconditionally: a non-speculative operation predicated on the guard
+  doesn't trap on a diagnostic operand when its predicate is false
+  (speculation.md; lcc's `if (c) r = *q + 7` is `ldw,sm` + a predicated
+  plain `adds`).
+- Stores have no speculative form for their address: a `,sm` store to
+  NULL or an unmapped page faults like any store (speculation.md), so a
+  store can never run before its guard; a predicated store removes the
+  branch.
 - Loads: use the semi-speculative form (`ld,sm`, MAS mod 0, lcc's
-  default). It returns real data from valid pages the process hasn't
+  default). On v3 a speculative load that misses the caches is not free
+  even when its value turns out dead (about 8 cycles a miss on the 4C,
+  22 with a TLB miss; nearly free on the 8C2 and 2C3: timing.md, "Loads
+  whose value is never read"), so on v3 don't hoist loads likely to miss
+  into paths that mostly don't use them. It returns real data from valid pages the process hasn't
   touched (the kernel pages them in), so its result is always usable
   when the guard holds. The fully speculative form (mod 3) can return a
   diagnostic for such a page and then needs recovery code (item 5);
@@ -1368,6 +1393,14 @@ ia64's advanced load + check (`ld.a` + `ld.c`/`chk.a`):
 | `ld.c.nc r` (check, entry kept) | `ldd,5 ..., mas=0x2` |
 | `invala.e r` (drop one entry) | `std,2 ..., %rN, mas=0x5` (drops the entry of its data register, writes nothing) |
 | ALAT invalidation by stores | DAM entry removed by any overlapping store (exact bytes, no false conflicts); a `mas=0x4` store skips the DAM |
+
+A load moved above both its guard and a store gets its check **under the
+guard's predicate**: a check under a false predicate neither accesses
+memory nor faults nor sets `%MLOCK`, while a check with `,sm` is no
+check at all (it always reloads; speculation.md, the PoC's I29). A
+check may follow its lock load in the next instruction and needs no
+latency of its own; users of the register go at the lock load's
+latency.
 
 GCC's Haifa scheduler already does `BEGIN_DATA` speculation for ia64
 with these hooks: `TARGET_SCHED_NEEDS_BLOCK_P` (does a check need a
@@ -1546,6 +1579,17 @@ check-free semi-speculative form works.
   it reads in the same cycle, dataflow sees the jump read that write
   (the hardware reads before writing) and deletes the prologue's
   definition: keep that name free in the loop end's cycle.
+- **Copies in the latch lose the count** (P43): out-of-SSA leaves a
+  rotation of loop state (`ym2 = ym1; ym1 = y`, PolyBench's deriche) as
+  register copies in the latch after the exit test, and
+  `doloop_optimize` passes `entered_at_top` false unless the latch has
+  no active insn (`loop-doloop.cc:724`), so the loop isn't counted and
+  isn't pipelined. Move such copies in front of the exit jump first (each
+  copied-to register dead at the exit and not read by the jump): deriche
+  went from 0.52 of lcc to just ahead of it on the 8C2 and the 2C3. Then
+  don't unroll a one-block counted loop the modulo scheduler will take,
+  but do unroll one whose recurrence leaves it nothing to overlap
+  (seidel-2d: a divide and six adds, 38 of 49 cycles an iteration).
 - **Let doloop count only loops that can use `%lsr`** (P25): GCC's RTL
   doloop converts any loop with a computable count, also one with a
   second exit (`while (len < limit && a[len] == b[len]) len++`), which on
@@ -1610,6 +1654,45 @@ check-free semi-speculative form works.
   `A[i*N+j]` with unsigned 32-bit indices isn't vectorized because the
   index may wrap; lcc keeps the wrap too (`-mdmodel=medium` lets it
   compute indices in 32 bits, source-compat.md, not drop the wrap).
+- **Rotating registers only for values that need them** (P41): a value
+  whose last use issues no later than the next iteration's definition
+  (lifetime at most II, not carried, not read after the loop) can stay
+  in an ordinary register, since operands are read at issue. Large FP
+  loops need this: NPB SP's flux loops have about 135 values against at
+  most 62 rotating names, and pipelined only once short-lived values
+  shared window registers and `%g16`–`%g31` (SP 26.9 → 25.6 s, LU 16.5 →
+  14.2 s). Not where code after the kernel reads older iterations'
+  instances (while loops, DAM).
+- **Stores in stream loops cost nothing extra** (I28): the two-stores
+  bank rule and the store–load block rule of timing.md apply only to
+  instructions that store to the same addresses again; with addresses
+  moving every instruction, two stores (`std` or AAU `staad`) or a store
+  and a load share an instruction at no cost. Modelling the rule there
+  made the PoC's Linpack 6.5% slower on the 8C2.
+- **Combined FP operations read the addend at issue** (I34): through
+  any operand `fmul_addd` takes 8 cycles, so combining takes away the
+  four cycles a separate `faddd` gives a load into the addend; where
+  such a load may miss L1, schedule it earlier or keep the operations
+  apart (the PoC's L2-sized daxpy: 1.19 cycles an element combined, 1.06
+  apart, 1.11 with the load 4 cycles earlier).
+- **Keep `%ctpr2` free across a loop that may use array prefetch**
+  (P42): only `%ctpr2` can hold the APB program, so a branch prepared in
+  `%ctpr2` and live through an inner counted loop costs that loop its
+  prefetch (an outer latch jumping straight back to the inner header,
+  which GCC's loop tree makes one loop with two latches: 4 loops in NPB
+  SP). lcc ends its hardware loops through `%ctpr1` (1,442 of 1,450 in
+  our benchmark builds) and loads APB programs into `%ctpr2`, though it
+  uses `%ctpr2` for other branches too. Prepare such a branch after the
+  loop only for a loop that will use APB (re-preparing one already
+  placed cost the PoC's CoreMark 0.64%).
+- **APB areas: `disp` at 0 or more, backward areas based at their
+  lowest element** (I41): `disp` is zero-extended, so a negative offset
+  goes into the descriptor's base or `%aaind`; on v3 an area may not go
+  below its base (diagnostic values, SIGILL in gcc.dg/vect tests), on
+  v5+ it may; write a negative increment with `aaurwd` on v5+
+  (apb.md). Two AAU stores with literal offsets in one instruction need
+  explicit literal slots (`_f32s,_ltsN`) or gas rejects them
+  (bundle.md).
 - **Array prefetch in a modulo scheduler** (P33, the PoC on the 4C and
   the 8C2): a load stepping one aligned element an iteration, through an
   address the loop steps and that no store of the loop writes before
@@ -1856,12 +1939,18 @@ Measured on an Elbrus-2C3 (timing.md "Elbrus-2C3 (v6)", semantics.md
   rounded once, 5 cycles against `fmul_add`'s 8; contraction under
   `-ffp-contract=fast` (GCC's default for GNU C) then uses them. lcc
   differs: at `-O3` for the 2C3 it keeps `a * b + c` as the twice-rounded
-  `fmul_addd` (the same result as separate operations) and calls libm
-  for `fma()`; only `-ffast-math` makes it emit `fmad`, for both (its
-  `-ffp-contract=fast` doesn't). lcc's 2C3 libraries use `fmad` 857
-  times. Decide whether the port follows GCC's default (fused, results
-  differ from lcc's in the last bit) or lcc's (`-ffp-contract=off`
-  unless `-ffast-math`); `__builtin_fma` should become `fmad` either way.
+  `fmul_addd` (the same result as separate operations), calls libm for
+  `fma()` and emits `fmad` only for `__builtin_fma`; its
+  `-ffp-contract=fast` fuses recurrences (Horner) and `restrict` loops
+  (`fmsd`, `fnmad`) and drops `fmul_addd` in other loops; `-ffast-math`
+  also fuses `fma()` and loops without `restrict`; neither fuses a
+  returned `a * b + c` or a reduction (operations-v6.yaml; the
+  proof-of-concept back end's P40, rechecked). lcc's 2C3 libraries use
+  `fmad` 857 times. Decide whether the port follows GCC's default
+  (fused, results differ from lcc's in the last bit) or lcc's (no
+  contraction unless `-ffp-contract=fast` or `-ffast-math`, reductions
+  unfused, as the proof-of-concept back end now does);
+  `__builtin_fma` should become `fmad` either way.
 - **Vector exits**: `qpcmpeqbop`/`qpcmpeqbap` (a compare straight into
   a predicate) for `cbranch` on vectors and the string functions,
   `qpmrgp` for a select by a predicate, `qpsrad` for 64-bit arithmetic

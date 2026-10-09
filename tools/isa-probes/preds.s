@@ -2387,6 +2387,54 @@ pr_lp_landp_diagfirst_p00:
 	}
 	.size	pr_lp_landp_diagfirst_p00, .-pr_lp_landp_diagfirst_p00
 
+	.global	pr_lp_andp_diagfirst_p00
+	.type	pr_lp_andp_diagfirst_p00, #function
+	.align	8
+pr_lp_andp_diagfirst_p00:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x10, %dr3
+	  addd,1	0x0, 0x0, %dr0
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	  disp	%ctpr1, .Llp_andp_diagfirst_p00_t
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	  cmpesb,1	0x0, 0x1, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred1, @p0
+	  pass	%pred0, @p1
+	  andp	@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? %pred2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Llp_andp_diagfirst_p00_t:
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_lp_andp_diagfirst_p00, .-pr_lp_andp_diagfirst_p00
+
 	.global	pr_lp_landp_p01
 	.type	pr_lp_landp_p01, #function
 	.align	8
@@ -2530,6 +2578,54 @@ pr_lp_landp_diagfirst_p01:
 	  ct	%ctpr3
 	}
 	.size	pr_lp_landp_diagfirst_p01, .-pr_lp_landp_diagfirst_p01
+
+	.global	pr_lp_andp_diagfirst_p01
+	.type	pr_lp_andp_diagfirst_p01, #function
+	.align	8
+pr_lp_andp_diagfirst_p01:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x10, %dr3
+	  addd,1	0x0, 0x0, %dr0
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	  disp	%ctpr1, .Llp_andp_diagfirst_p01_t
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	  cmpesb,1	0x0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred1, @p0
+	  pass	%pred0, @p1
+	  andp	@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr1 ? %pred2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Llp_andp_diagfirst_p01_t:
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_lp_andp_diagfirst_p01, .-pr_lp_andp_diagfirst_p01
 
 	.global	pr_tree_0
 	.type	pr_tree_0, #function
@@ -3282,3 +3378,15763 @@ pr_tree_15:
 	  ct	%ctpr3
 	}
 	.size	pr_tree_15, .-pr_tree_15
+
+	.global	pr_leaf_mask
+	.type	pr_leaf_mask, #function
+	.align	8
+pr_leaf_mask:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	  addd,1	0x0, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred0
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred1
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred2
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred3
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred4
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred5
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred6
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred7
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred8
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred9
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred10
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred11
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred12
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred13
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred14
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred15
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred16
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred17
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred18
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred19
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred20
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred21
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred22
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred23
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred24
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred25
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred26
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred27
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred28
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred29
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred30
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred31
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_leaf_mask, .-pr_leaf_mask
+
+	.global	pr_leaf_set0
+	.type	pr_leaf_set0, #function
+	.align	8
+pr_leaf_set0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	  cmpesb,1	0x0, 0x1, %pred1
+	  cmpesb,3	0x0, 0x1, %pred2
+	  cmpesb,4	0x0, 0x1, %pred3
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred4
+	  cmpesb,1	0x0, 0x1, %pred5
+	  cmpesb,3	0x0, 0x1, %pred6
+	  cmpesb,4	0x0, 0x1, %pred7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred8
+	  cmpesb,1	0x0, 0x1, %pred9
+	  cmpesb,3	0x0, 0x1, %pred10
+	  cmpesb,4	0x0, 0x1, %pred11
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred12
+	  cmpesb,1	0x0, 0x1, %pred13
+	  cmpesb,3	0x0, 0x1, %pred14
+	  cmpesb,4	0x0, 0x1, %pred15
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred16
+	  cmpesb,1	0x0, 0x1, %pred17
+	  cmpesb,3	0x0, 0x1, %pred18
+	  cmpesb,4	0x0, 0x1, %pred19
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred20
+	  cmpesb,1	0x0, 0x1, %pred21
+	  cmpesb,3	0x0, 0x1, %pred22
+	  cmpesb,4	0x0, 0x1, %pred23
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred24
+	  cmpesb,1	0x0, 0x1, %pred25
+	  cmpesb,3	0x0, 0x1, %pred26
+	  cmpesb,4	0x0, 0x1, %pred27
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred28
+	  cmpesb,1	0x0, 0x1, %pred29
+	  cmpesb,3	0x0, 0x1, %pred30
+	  cmpesb,4	0x0, 0x1, %pred31
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_leaf_set0, .-pr_leaf_set0
+
+	.global	pr_leaf_set1
+	.type	pr_leaf_set1, #function
+	.align	8
+pr_leaf_set1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	  cmpesb,1	0x0, 0x0, %pred1
+	  cmpesb,3	0x0, 0x0, %pred2
+	  cmpesb,4	0x0, 0x0, %pred3
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred4
+	  cmpesb,1	0x0, 0x0, %pred5
+	  cmpesb,3	0x0, 0x0, %pred6
+	  cmpesb,4	0x0, 0x0, %pred7
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred8
+	  cmpesb,1	0x0, 0x0, %pred9
+	  cmpesb,3	0x0, 0x0, %pred10
+	  cmpesb,4	0x0, 0x0, %pred11
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred12
+	  cmpesb,1	0x0, 0x0, %pred13
+	  cmpesb,3	0x0, 0x0, %pred14
+	  cmpesb,4	0x0, 0x0, %pred15
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred16
+	  cmpesb,1	0x0, 0x0, %pred17
+	  cmpesb,3	0x0, 0x0, %pred18
+	  cmpesb,4	0x0, 0x0, %pred19
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred20
+	  cmpesb,1	0x0, 0x0, %pred21
+	  cmpesb,3	0x0, 0x0, %pred22
+	  cmpesb,4	0x0, 0x0, %pred23
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred24
+	  cmpesb,1	0x0, 0x0, %pred25
+	  cmpesb,3	0x0, 0x0, %pred26
+	  cmpesb,4	0x0, 0x0, %pred27
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred28
+	  cmpesb,1	0x0, 0x0, %pred29
+	  cmpesb,3	0x0, 0x0, %pred30
+	  cmpesb,4	0x0, 0x0, %pred31
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_leaf_set1, .-pr_leaf_set1
+
+	.global	pr_mv_c0_v0_d0
+	.type	pr_mv_c0_v0_d0, #function
+	.align	8
+pr_mv_c0_v0_d0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_c0_v0_d0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	  cmpesb,1	0x0, 0x1, %pred2
+	  cmpesb,3	0x0, 0x1, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_c0_v0_d0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_c0_v0_d0, .-pr_mv_c0_v0_d0
+
+	.global	pr_mv_c0_v0_d1
+	.type	pr_mv_c0_v0_d1, #function
+	.align	8
+pr_mv_c0_v0_d1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_c0_v0_d1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	  cmpesb,1	0x0, 0x0, %pred2
+	  cmpesb,3	0x0, 0x1, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_c0_v0_d1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_c0_v0_d1, .-pr_mv_c0_v0_d1
+
+	.global	pr_mv_c0_v1_d0
+	.type	pr_mv_c0_v1_d0, #function
+	.align	8
+pr_mv_c0_v1_d0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_c0_v1_d0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	  cmpesb,1	0x0, 0x1, %pred2
+	  cmpesb,3	0x0, 0x1, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_c0_v1_d0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_c0_v1_d0, .-pr_mv_c0_v1_d0
+
+	.global	pr_mv_c0_v1_d1
+	.type	pr_mv_c0_v1_d1, #function
+	.align	8
+pr_mv_c0_v1_d1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_c0_v1_d1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	  cmpesb,1	0x0, 0x0, %pred2
+	  cmpesb,3	0x0, 0x1, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_c0_v1_d1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_c0_v1_d1, .-pr_mv_c0_v1_d1
+
+	.global	pr_mv_c1_v0_d0
+	.type	pr_mv_c1_v0_d0, #function
+	.align	8
+pr_mv_c1_v0_d0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_c1_v0_d0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	  cmpesb,1	0x0, 0x1, %pred2
+	  cmpesb,3	0x0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_c1_v0_d0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_c1_v0_d0, .-pr_mv_c1_v0_d0
+
+	.global	pr_mv_c1_v0_d1
+	.type	pr_mv_c1_v0_d1, #function
+	.align	8
+pr_mv_c1_v0_d1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_c1_v0_d1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	  cmpesb,1	0x0, 0x0, %pred2
+	  cmpesb,3	0x0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_c1_v0_d1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_c1_v0_d1, .-pr_mv_c1_v0_d1
+
+	.global	pr_mv_c1_v1_d0
+	.type	pr_mv_c1_v1_d0, #function
+	.align	8
+pr_mv_c1_v1_d0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_c1_v1_d0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	  cmpesb,1	0x0, 0x1, %pred2
+	  cmpesb,3	0x0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_c1_v1_d0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_c1_v1_d0, .-pr_mv_c1_v1_d0
+
+	.global	pr_mv_c1_v1_d1
+	.type	pr_mv_c1_v1_d1, #function
+	.align	8
+pr_mv_c1_v1_d1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_c1_v1_d1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	  cmpesb,1	0x0, 0x0, %pred2
+	  cmpesb,3	0x0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_c1_v1_d1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_c1_v1_d1, .-pr_mv_c1_v1_d1
+
+	.global	pr_mv_cx_v0_d0
+	.type	pr_mv_cx_v0_d0, #function
+	.align	8
+pr_mv_cx_v0_d0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_cx_v0_d0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	  cmpesb,1	0x0, 0x1, %pred2
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_cx_v0_d0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_cx_v0_d0, .-pr_mv_cx_v0_d0
+
+	.global	pr_mv_cx_v0_d1
+	.type	pr_mv_cx_v0_d1, #function
+	.align	8
+pr_mv_cx_v0_d1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_cx_v0_d1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	  cmpesb,1	0x0, 0x0, %pred2
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_cx_v0_d1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_cx_v0_d1, .-pr_mv_cx_v0_d1
+
+	.global	pr_mv_cx_v1_d0
+	.type	pr_mv_cx_v1_d0, #function
+	.align	8
+pr_mv_cx_v1_d0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_cx_v1_d0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	  cmpesb,1	0x0, 0x1, %pred2
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_cx_v1_d0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_cx_v1_d0, .-pr_mv_cx_v1_d0
+
+	.global	pr_mv_cx_v1_d1
+	.type	pr_mv_cx_v1_d1, #function
+	.align	8
+pr_mv_cx_v1_d1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_cx_v1_d1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	  cmpesb,1	0x0, 0x0, %pred2
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_cx_v1_d1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_cx_v1_d1, .-pr_mv_cx_v1_d1
+
+	.global	pr_mv_cn0_v0_d0
+	.type	pr_mv_cn0_v0_d0, #function
+	.align	8
+pr_mv_cn0_v0_d0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_cn0_v0_d0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	  cmpesb,1	0x0, 0x1, %pred2
+	  cmpesb,3	0x0, 0x1, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	~@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_cn0_v0_d0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_cn0_v0_d0, .-pr_mv_cn0_v0_d0
+
+	.global	pr_mv_cn0_v0_d1
+	.type	pr_mv_cn0_v0_d1, #function
+	.align	8
+pr_mv_cn0_v0_d1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_cn0_v0_d1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	  cmpesb,1	0x0, 0x0, %pred2
+	  cmpesb,3	0x0, 0x1, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	~@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_cn0_v0_d1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_cn0_v0_d1, .-pr_mv_cn0_v0_d1
+
+	.global	pr_mv_cn0_v1_d0
+	.type	pr_mv_cn0_v1_d0, #function
+	.align	8
+pr_mv_cn0_v1_d0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_cn0_v1_d0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	  cmpesb,1	0x0, 0x1, %pred2
+	  cmpesb,3	0x0, 0x1, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	~@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_cn0_v1_d0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_cn0_v1_d0, .-pr_mv_cn0_v1_d0
+
+	.global	pr_mv_cn0_v1_d1
+	.type	pr_mv_cn0_v1_d1, #function
+	.align	8
+pr_mv_cn0_v1_d1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_cn0_v1_d1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	  cmpesb,1	0x0, 0x0, %pred2
+	  cmpesb,3	0x0, 0x1, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	~@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_cn0_v1_d1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_cn0_v1_d1, .-pr_mv_cn0_v1_d1
+
+	.global	pr_mv_cn1_v0_d0
+	.type	pr_mv_cn1_v0_d0, #function
+	.align	8
+pr_mv_cn1_v0_d0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_cn1_v0_d0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	  cmpesb,1	0x0, 0x1, %pred2
+	  cmpesb,3	0x0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	~@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_cn1_v0_d0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_cn1_v0_d0, .-pr_mv_cn1_v0_d0
+
+	.global	pr_mv_cn1_v0_d1
+	.type	pr_mv_cn1_v0_d1, #function
+	.align	8
+pr_mv_cn1_v0_d1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_cn1_v0_d1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	  cmpesb,1	0x0, 0x0, %pred2
+	  cmpesb,3	0x0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	~@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_cn1_v0_d1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_cn1_v0_d1, .-pr_mv_cn1_v0_d1
+
+	.global	pr_mv_cn1_v1_d0
+	.type	pr_mv_cn1_v1_d0, #function
+	.align	8
+pr_mv_cn1_v1_d0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_cn1_v1_d0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	  cmpesb,1	0x0, 0x1, %pred2
+	  cmpesb,3	0x0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	~@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_cn1_v1_d0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_cn1_v1_d0, .-pr_mv_cn1_v1_d0
+
+	.global	pr_mv_cn1_v1_d1
+	.type	pr_mv_cn1_v1_d1, #function
+	.align	8
+pr_mv_cn1_v1_d1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_cn1_v1_d1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	  cmpesb,1	0x0, 0x0, %pred2
+	  cmpesb,3	0x0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	~@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_cn1_v1_d1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_cn1_v1_d1, .-pr_mv_cn1_v1_d1
+
+	.global	pr_mv_cx_v0_nouse
+	.type	pr_mv_cx_v0_nouse, #function
+	.align	8
+pr_mv_cx_v0_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_cx_v0_nouse_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	  cmpesb,1	0x0, 0x1, %pred2
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_cx_v0_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_cx_v0_nouse, .-pr_mv_cx_v0_nouse
+
+	.global	pr_mv_cx_v1_nouse
+	.type	pr_mv_cx_v1_nouse, #function
+	.align	8
+pr_mv_cx_v1_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmv_cx_v1_nouse_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	  cmpesb,1	0x0, 0x1, %pred2
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred0, @p0
+	  pass	%pred1, @p1
+	  movep	@p0, @p1, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lmv_cx_v1_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_mv_cx_v1_nouse, .-pr_mv_cx_v1_nouse
+
+	.global	pr_call_seen_5a5a5a5a
+	.type	pr_call_seen_5a5a5a5a, #function
+	.align	8
+pr_call_seen_5a5a5a5a:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lcall_seen_5a5a5a5a_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	  cmpesb,1	0x0, 0x0, %pred1
+	  cmpesb,3	0x0, 0x1, %pred2
+	  cmpesb,4	0x0, 0x0, %pred3
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred4
+	  cmpesb,1	0x0, 0x1, %pred5
+	  cmpesb,3	0x0, 0x0, %pred6
+	  cmpesb,4	0x0, 0x1, %pred7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred8
+	  cmpesb,1	0x0, 0x0, %pred9
+	  cmpesb,3	0x0, 0x1, %pred10
+	  cmpesb,4	0x0, 0x0, %pred11
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred12
+	  cmpesb,1	0x0, 0x1, %pred13
+	  cmpesb,3	0x0, 0x0, %pred14
+	  cmpesb,4	0x0, 0x1, %pred15
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred16
+	  cmpesb,1	0x0, 0x0, %pred17
+	  cmpesb,3	0x0, 0x1, %pred18
+	  cmpesb,4	0x0, 0x0, %pred19
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred20
+	  cmpesb,1	0x0, 0x1, %pred21
+	  cmpesb,3	0x0, 0x0, %pred22
+	  cmpesb,4	0x0, 0x1, %pred23
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred24
+	  cmpesb,1	0x0, 0x0, %pred25
+	  cmpesb,3	0x0, 0x1, %pred26
+	  cmpesb,4	0x0, 0x0, %pred27
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred28
+	  cmpesb,1	0x0, 0x1, %pred29
+	  cmpesb,3	0x0, 0x0, %pred30
+	  cmpesb,4	0x0, 0x1, %pred31
+	}
+	{
+	  nop 2
+	}
+	{
+	  disp	%ctpr1, pr_leaf_mask
+	}
+	{
+	  nop 4
+	}
+	{
+	  call	%ctpr1, wbs = 0x4
+	}
+	{
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, %dr8, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lcall_seen_5a5a5a5a_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_call_seen_5a5a5a5a, .-pr_call_seen_5a5a5a5a
+
+	.global	pr_call_kept_5a5a5a5a_0
+	.type	pr_call_kept_5a5a5a5a_0, #function
+	.align	8
+pr_call_kept_5a5a5a5a_0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lcall_kept_5a5a5a5a_0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	  cmpesb,1	0x0, 0x0, %pred1
+	  cmpesb,3	0x0, 0x1, %pred2
+	  cmpesb,4	0x0, 0x0, %pred3
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred4
+	  cmpesb,1	0x0, 0x1, %pred5
+	  cmpesb,3	0x0, 0x0, %pred6
+	  cmpesb,4	0x0, 0x1, %pred7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred8
+	  cmpesb,1	0x0, 0x0, %pred9
+	  cmpesb,3	0x0, 0x1, %pred10
+	  cmpesb,4	0x0, 0x0, %pred11
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred12
+	  cmpesb,1	0x0, 0x1, %pred13
+	  cmpesb,3	0x0, 0x0, %pred14
+	  cmpesb,4	0x0, 0x1, %pred15
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred16
+	  cmpesb,1	0x0, 0x0, %pred17
+	  cmpesb,3	0x0, 0x1, %pred18
+	  cmpesb,4	0x0, 0x0, %pred19
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred20
+	  cmpesb,1	0x0, 0x1, %pred21
+	  cmpesb,3	0x0, 0x0, %pred22
+	  cmpesb,4	0x0, 0x1, %pred23
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred24
+	  cmpesb,1	0x0, 0x0, %pred25
+	  cmpesb,3	0x0, 0x1, %pred26
+	  cmpesb,4	0x0, 0x0, %pred27
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred28
+	  cmpesb,1	0x0, 0x1, %pred29
+	  cmpesb,3	0x0, 0x0, %pred30
+	  cmpesb,4	0x0, 0x1, %pred31
+	}
+	{
+	  disp	%ctpr1, pr_leaf_set0
+	}
+	{
+	  nop 4
+	}
+	{
+	  call	%ctpr1, wbs = 0x4
+	}
+	{
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	  addd,1	0x0, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred0
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred1
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred2
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred3
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred4
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred5
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred6
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred7
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred8
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred9
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred10
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred11
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred12
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred13
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred14
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred15
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred16
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred17
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred18
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred19
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred20
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred21
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred22
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred23
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred24
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred25
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred26
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred27
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred28
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred29
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred30
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred31
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lcall_kept_5a5a5a5a_0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_call_kept_5a5a5a5a_0, .-pr_call_kept_5a5a5a5a_0
+
+	.global	pr_call_kept_5a5a5a5a_1
+	.type	pr_call_kept_5a5a5a5a_1, #function
+	.align	8
+pr_call_kept_5a5a5a5a_1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lcall_kept_5a5a5a5a_1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	  cmpesb,1	0x0, 0x0, %pred1
+	  cmpesb,3	0x0, 0x1, %pred2
+	  cmpesb,4	0x0, 0x0, %pred3
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred4
+	  cmpesb,1	0x0, 0x1, %pred5
+	  cmpesb,3	0x0, 0x0, %pred6
+	  cmpesb,4	0x0, 0x1, %pred7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred8
+	  cmpesb,1	0x0, 0x0, %pred9
+	  cmpesb,3	0x0, 0x1, %pred10
+	  cmpesb,4	0x0, 0x0, %pred11
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred12
+	  cmpesb,1	0x0, 0x1, %pred13
+	  cmpesb,3	0x0, 0x0, %pred14
+	  cmpesb,4	0x0, 0x1, %pred15
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred16
+	  cmpesb,1	0x0, 0x0, %pred17
+	  cmpesb,3	0x0, 0x1, %pred18
+	  cmpesb,4	0x0, 0x0, %pred19
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred20
+	  cmpesb,1	0x0, 0x1, %pred21
+	  cmpesb,3	0x0, 0x0, %pred22
+	  cmpesb,4	0x0, 0x1, %pred23
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred24
+	  cmpesb,1	0x0, 0x0, %pred25
+	  cmpesb,3	0x0, 0x1, %pred26
+	  cmpesb,4	0x0, 0x0, %pred27
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred28
+	  cmpesb,1	0x0, 0x1, %pred29
+	  cmpesb,3	0x0, 0x0, %pred30
+	  cmpesb,4	0x0, 0x1, %pred31
+	}
+	{
+	  disp	%ctpr1, pr_leaf_set1
+	}
+	{
+	  nop 4
+	}
+	{
+	  call	%ctpr1, wbs = 0x4
+	}
+	{
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	  addd,1	0x0, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred0
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred1
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred2
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred3
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred4
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred5
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred6
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred7
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred8
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred9
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred10
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred11
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred12
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred13
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred14
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred15
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred16
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred17
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred18
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred19
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred20
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred21
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred22
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred23
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred24
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred25
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred26
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred27
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred28
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred29
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred30
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred31
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lcall_kept_5a5a5a5a_1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_call_kept_5a5a5a5a_1, .-pr_call_kept_5a5a5a5a_1
+
+	.global	pr_call_seen_a5a5a5a5
+	.type	pr_call_seen_a5a5a5a5, #function
+	.align	8
+pr_call_seen_a5a5a5a5:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lcall_seen_a5a5a5a5_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	  cmpesb,1	0x0, 0x1, %pred1
+	  cmpesb,3	0x0, 0x0, %pred2
+	  cmpesb,4	0x0, 0x1, %pred3
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred4
+	  cmpesb,1	0x0, 0x0, %pred5
+	  cmpesb,3	0x0, 0x1, %pred6
+	  cmpesb,4	0x0, 0x0, %pred7
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred8
+	  cmpesb,1	0x0, 0x1, %pred9
+	  cmpesb,3	0x0, 0x0, %pred10
+	  cmpesb,4	0x0, 0x1, %pred11
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred12
+	  cmpesb,1	0x0, 0x0, %pred13
+	  cmpesb,3	0x0, 0x1, %pred14
+	  cmpesb,4	0x0, 0x0, %pred15
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred16
+	  cmpesb,1	0x0, 0x1, %pred17
+	  cmpesb,3	0x0, 0x0, %pred18
+	  cmpesb,4	0x0, 0x1, %pred19
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred20
+	  cmpesb,1	0x0, 0x0, %pred21
+	  cmpesb,3	0x0, 0x1, %pred22
+	  cmpesb,4	0x0, 0x0, %pred23
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred24
+	  cmpesb,1	0x0, 0x1, %pred25
+	  cmpesb,3	0x0, 0x0, %pred26
+	  cmpesb,4	0x0, 0x1, %pred27
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred28
+	  cmpesb,1	0x0, 0x0, %pred29
+	  cmpesb,3	0x0, 0x1, %pred30
+	  cmpesb,4	0x0, 0x0, %pred31
+	}
+	{
+	  nop 2
+	}
+	{
+	  disp	%ctpr1, pr_leaf_mask
+	}
+	{
+	  nop 4
+	}
+	{
+	  call	%ctpr1, wbs = 0x4
+	}
+	{
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, %dr8, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lcall_seen_a5a5a5a5_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_call_seen_a5a5a5a5, .-pr_call_seen_a5a5a5a5
+
+	.global	pr_call_kept_a5a5a5a5_0
+	.type	pr_call_kept_a5a5a5a5_0, #function
+	.align	8
+pr_call_kept_a5a5a5a5_0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lcall_kept_a5a5a5a5_0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	  cmpesb,1	0x0, 0x1, %pred1
+	  cmpesb,3	0x0, 0x0, %pred2
+	  cmpesb,4	0x0, 0x1, %pred3
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred4
+	  cmpesb,1	0x0, 0x0, %pred5
+	  cmpesb,3	0x0, 0x1, %pred6
+	  cmpesb,4	0x0, 0x0, %pred7
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred8
+	  cmpesb,1	0x0, 0x1, %pred9
+	  cmpesb,3	0x0, 0x0, %pred10
+	  cmpesb,4	0x0, 0x1, %pred11
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred12
+	  cmpesb,1	0x0, 0x0, %pred13
+	  cmpesb,3	0x0, 0x1, %pred14
+	  cmpesb,4	0x0, 0x0, %pred15
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred16
+	  cmpesb,1	0x0, 0x1, %pred17
+	  cmpesb,3	0x0, 0x0, %pred18
+	  cmpesb,4	0x0, 0x1, %pred19
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred20
+	  cmpesb,1	0x0, 0x0, %pred21
+	  cmpesb,3	0x0, 0x1, %pred22
+	  cmpesb,4	0x0, 0x0, %pred23
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred24
+	  cmpesb,1	0x0, 0x1, %pred25
+	  cmpesb,3	0x0, 0x0, %pred26
+	  cmpesb,4	0x0, 0x1, %pred27
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred28
+	  cmpesb,1	0x0, 0x0, %pred29
+	  cmpesb,3	0x0, 0x1, %pred30
+	  cmpesb,4	0x0, 0x0, %pred31
+	}
+	{
+	  disp	%ctpr1, pr_leaf_set0
+	}
+	{
+	  nop 4
+	}
+	{
+	  call	%ctpr1, wbs = 0x4
+	}
+	{
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	  addd,1	0x0, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred0
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred1
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred2
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred3
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred4
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred5
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred6
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred7
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred8
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred9
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred10
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred11
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred12
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred13
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred14
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred15
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred16
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred17
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred18
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred19
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred20
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred21
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred22
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred23
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred24
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred25
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred26
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred27
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred28
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred29
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred30
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred31
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lcall_kept_a5a5a5a5_0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_call_kept_a5a5a5a5_0, .-pr_call_kept_a5a5a5a5_0
+
+	.global	pr_call_kept_a5a5a5a5_1
+	.type	pr_call_kept_a5a5a5a5_1, #function
+	.align	8
+pr_call_kept_a5a5a5a5_1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lcall_kept_a5a5a5a5_1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	  cmpesb,1	0x0, 0x1, %pred1
+	  cmpesb,3	0x0, 0x0, %pred2
+	  cmpesb,4	0x0, 0x1, %pred3
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred4
+	  cmpesb,1	0x0, 0x0, %pred5
+	  cmpesb,3	0x0, 0x1, %pred6
+	  cmpesb,4	0x0, 0x0, %pred7
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred8
+	  cmpesb,1	0x0, 0x1, %pred9
+	  cmpesb,3	0x0, 0x0, %pred10
+	  cmpesb,4	0x0, 0x1, %pred11
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred12
+	  cmpesb,1	0x0, 0x0, %pred13
+	  cmpesb,3	0x0, 0x1, %pred14
+	  cmpesb,4	0x0, 0x0, %pred15
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred16
+	  cmpesb,1	0x0, 0x1, %pred17
+	  cmpesb,3	0x0, 0x0, %pred18
+	  cmpesb,4	0x0, 0x1, %pred19
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred20
+	  cmpesb,1	0x0, 0x0, %pred21
+	  cmpesb,3	0x0, 0x1, %pred22
+	  cmpesb,4	0x0, 0x0, %pred23
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred24
+	  cmpesb,1	0x0, 0x1, %pred25
+	  cmpesb,3	0x0, 0x0, %pred26
+	  cmpesb,4	0x0, 0x1, %pred27
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred28
+	  cmpesb,1	0x0, 0x0, %pred29
+	  cmpesb,3	0x0, 0x1, %pred30
+	  cmpesb,4	0x0, 0x0, %pred31
+	}
+	{
+	  disp	%ctpr1, pr_leaf_set1
+	}
+	{
+	  nop 4
+	}
+	{
+	  call	%ctpr1, wbs = 0x4
+	}
+	{
+	  return	%ctpr3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	  addd,1	0x0, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred0
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred1
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred2
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred3
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred4
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred5
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred6
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred7
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred8
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred9
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred10
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred11
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred12
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred13
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred14
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred15
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred16
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred17
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred18
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred19
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred20
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred21
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred22
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred23
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred24
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred25
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred26
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred27
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred28
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred29
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred30
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  ord,0	%dr0, %dr7, %dr0 ? %pred31
+	  shld,1	%dr7, 0x1, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lcall_kept_a5a5a5a5_1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_call_kept_a5a5a5a5_1, .-pr_call_kept_a5a5a5a5_1
+
+	.global	pr_w2_c0_c1_01
+	.type	pr_w2_c0_c1_01, #function
+	.align	8
+pr_w2_c0_c1_01:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_c0_c1_01_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	  cmpesb,1	0x0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_c0_c1_01_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_c0_c1_01, .-pr_w2_c0_c1_01
+
+	.global	pr_w2_c0_c1_10
+	.type	pr_w2_c0_c1_10, #function
+	.align	8
+pr_w2_c0_c1_10:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_c0_c1_10_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	  cmpesb,1	0x0, 0x1, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_c0_c1_10_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_c0_c1_10, .-pr_w2_c0_c1_10
+
+	.global	pr_w2_c0_c3_01
+	.type	pr_w2_c0_c3_01, #function
+	.align	8
+pr_w2_c0_c3_01:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_c0_c3_01_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	  cmpesb,3	0x0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_c0_c3_01_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_c0_c3_01, .-pr_w2_c0_c3_01
+
+	.global	pr_w2_c0_c3_10
+	.type	pr_w2_c0_c3_10, #function
+	.align	8
+pr_w2_c0_c3_10:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_c0_c3_10_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	  cmpesb,3	0x0, 0x1, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_c0_c3_10_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_c0_c3_10, .-pr_w2_c0_c3_10
+
+	.global	pr_w2_c3_c4_01
+	.type	pr_w2_c3_c4_01, #function
+	.align	8
+pr_w2_c3_c4_01:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_c3_c4_01_t
+	}
+	{
+	  cmpesb,3	0x0, 0x1, %pred0
+	  cmpesb,4	0x0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_c3_c4_01_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_c3_c4_01, .-pr_w2_c3_c4_01
+
+	.global	pr_w2_c3_c4_10
+	.type	pr_w2_c3_c4_10, #function
+	.align	8
+pr_w2_c3_c4_10:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_c3_c4_10_t
+	}
+	{
+	  cmpesb,3	0x0, 0x0, %pred0
+	  cmpesb,4	0x0, 0x1, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_c3_c4_10_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_c3_c4_10, .-pr_w2_c3_c4_10
+
+	.global	pr_w2_c1_c3_01
+	.type	pr_w2_c1_c3_01, #function
+	.align	8
+pr_w2_c1_c3_01:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_c1_c3_01_t
+	}
+	{
+	  cmpesb,1	0x0, 0x1, %pred0
+	  cmpesb,3	0x0, 0x0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_c1_c3_01_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_c1_c3_01, .-pr_w2_c1_c3_01
+
+	.global	pr_w2_c1_c3_10
+	.type	pr_w2_c1_c3_10, #function
+	.align	8
+pr_w2_c1_c3_10:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_c1_c3_10_t
+	}
+	{
+	  cmpesb,1	0x0, 0x0, %pred0
+	  cmpesb,3	0x0, 0x1, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_c1_c3_10_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_c1_c3_10, .-pr_w2_c1_c3_10
+
+	.global	pr_w2_cmp_clp_01
+	.type	pr_w2_cmp_clp_01, #function
+	.align	8
+pr_w2_cmp_clp_01:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_cmp_clp_01_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	  pass	%pred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_cmp_clp_01_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_cmp_clp_01, .-pr_w2_cmp_clp_01
+
+	.global	pr_w2_cmp_clp_10
+	.type	pr_w2_cmp_clp_10, #function
+	.align	8
+pr_w2_cmp_clp_10:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_cmp_clp_10_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	  pass	%pred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_cmp_clp_10_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_cmp_clp_10, .-pr_w2_cmp_clp_10
+
+	.global	pr_w2_cmp1_clp_01
+	.type	pr_w2_cmp1_clp_01, #function
+	.align	8
+pr_w2_cmp1_clp_01:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_cmp1_clp_01_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,1	0x0, 0x1, %pred0
+	  pass	%pred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_cmp1_clp_01_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_cmp1_clp_01, .-pr_w2_cmp1_clp_01
+
+	.global	pr_w2_cmp1_clp_10
+	.type	pr_w2_cmp1_clp_10, #function
+	.align	8
+pr_w2_cmp1_clp_10:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_cmp1_clp_10_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,1	0x0, 0x0, %pred0
+	  pass	%pred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_cmp1_clp_10_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_cmp1_clp_10, .-pr_w2_cmp1_clp_10
+
+	.global	pr_w2_cmp3_clp_01
+	.type	pr_w2_cmp3_clp_01, #function
+	.align	8
+pr_w2_cmp3_clp_01:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_cmp3_clp_01_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,3	0x0, 0x1, %pred0
+	  pass	%pred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_cmp3_clp_01_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_cmp3_clp_01, .-pr_w2_cmp3_clp_01
+
+	.global	pr_w2_cmp3_clp_10
+	.type	pr_w2_cmp3_clp_10, #function
+	.align	8
+pr_w2_cmp3_clp_10:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_cmp3_clp_10_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,3	0x0, 0x0, %pred0
+	  pass	%pred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_cmp3_clp_10_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_cmp3_clp_10, .-pr_w2_cmp3_clp_10
+
+	.global	pr_w2_cmp4_clp_01
+	.type	pr_w2_cmp4_clp_01, #function
+	.align	8
+pr_w2_cmp4_clp_01:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_cmp4_clp_01_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,4	0x0, 0x1, %pred0
+	  pass	%pred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_cmp4_clp_01_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_cmp4_clp_01, .-pr_w2_cmp4_clp_01
+
+	.global	pr_w2_cmp4_clp_10
+	.type	pr_w2_cmp4_clp_10, #function
+	.align	8
+pr_w2_cmp4_clp_10:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_cmp4_clp_10_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,4	0x0, 0x0, %pred0
+	  pass	%pred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_cmp4_clp_10_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_cmp4_clp_10, .-pr_w2_cmp4_clp_10
+
+	.global	pr_w2_clp0_clp1_01
+	.type	pr_w2_clp0_clp1_01, #function
+	.align	8
+pr_w2_clp0_clp1_01:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_clp0_clp1_01_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	  cmpesb,1	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred1, @p0
+	  pass	%pred2, @p2
+	  pass	%pred3, @p3
+	  andp	@p0, @p0, @p4
+	  andp	@p2, @p2, @p5
+	  pass	@p4, %pred0
+	  pass	@p5, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_clp0_clp1_01_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_clp0_clp1_01, .-pr_w2_clp0_clp1_01
+
+	.global	pr_w2_clp0_clp1_10
+	.type	pr_w2_clp0_clp1_10, #function
+	.align	8
+pr_w2_clp0_clp1_10:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_clp0_clp1_10_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	  cmpesb,1	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred1, @p0
+	  pass	%pred2, @p2
+	  pass	%pred3, @p3
+	  andp	@p0, @p0, @p4
+	  andp	@p2, @p2, @p5
+	  pass	@p4, %pred0
+	  pass	@p5, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_clp0_clp1_10_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_clp0_clp1_10, .-pr_w2_clp0_clp1_10
+
+	.global	pr_w2_clp0_clp2_01
+	.type	pr_w2_clp0_clp2_01, #function
+	.align	8
+pr_w2_clp0_clp2_01:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_clp0_clp2_01_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred1
+	  cmpesb,1	0x0, 0x0, %pred3
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred1, @p0
+	  pass	%pred2, @p2
+	  pass	%pred3, @p3
+	  andp	@p0, @p0, @p4
+	  andp	@p3, @p3, @p6
+	  pass	@p4, %pred0
+	  pass	@p6, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_clp0_clp2_01_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_clp0_clp2_01, .-pr_w2_clp0_clp2_01
+
+	.global	pr_w2_clp0_clp2_10
+	.type	pr_w2_clp0_clp2_10, #function
+	.align	8
+pr_w2_clp0_clp2_10:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_clp0_clp2_10_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	  cmpesb,1	0x0, 0x1, %pred3
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred1, @p0
+	  pass	%pred2, @p2
+	  pass	%pred3, @p3
+	  andp	@p0, @p0, @p4
+	  andp	@p3, @p3, @p6
+	  pass	@p4, %pred0
+	  pass	@p6, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_clp0_clp2_10_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_clp0_clp2_10, .-pr_w2_clp0_clp2_10
+
+	.global	pr_w2_clp1_clp2_01
+	.type	pr_w2_clp1_clp2_01, #function
+	.align	8
+pr_w2_clp1_clp2_01:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_clp1_clp2_01_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	  cmpesb,1	0x0, 0x0, %pred3
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred1, @p0
+	  pass	%pred2, @p2
+	  pass	%pred3, @p3
+	  andp	@p2, @p2, @p5
+	  andp	@p3, @p3, @p6
+	  pass	@p5, %pred0
+	  pass	@p6, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_clp1_clp2_01_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_clp1_clp2_01, .-pr_w2_clp1_clp2_01
+
+	.global	pr_w2_clp1_clp2_10
+	.type	pr_w2_clp1_clp2_10, #function
+	.align	8
+pr_w2_clp1_clp2_10:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lw2_clp1_clp2_10_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	  cmpesb,1	0x0, 0x1, %pred3
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred1, @p0
+	  pass	%pred2, @p2
+	  pass	%pred3, @p3
+	  andp	@p2, @p2, @p5
+	  andp	@p3, @p3, @p6
+	  pass	@p5, %pred0
+	  pass	@p6, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lw2_clp1_clp2_10_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_w2_clp1_clp2_10, .-pr_w2_clp1_clp2_10
+
+	.global	pr_same_elp
+	.type	pr_same_elp, #function
+	.align	8
+pr_same_elp:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lsame_elp_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	  cmpesb,1	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	  pass	%pred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lsame_elp_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_same_elp, .-pr_same_elp
+
+	.global	pr_same_rlp
+	.type	pr_same_rlp, #function
+	.align	8
+pr_same_rlp:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lsame_rlp_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	  cmpesb,1	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	  addd,1	0x0, 0x1, %dr0 ? %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lsame_rlp_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_same_rlp, .-pr_same_rlp
+
+	.global	pr_same_mrgc
+	.type	pr_same_mrgc, #function
+	.align	8
+pr_same_mrgc:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lsame_mrgc_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	  cmpesb,1	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	  merged,1	%dr4, %dr5, %dr0, %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lsame_mrgc_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_same_mrgc, .-pr_same_mrgc
+
+	.global	pr_same_ct
+	.type	pr_same_ct, #function
+	.align	8
+pr_same_ct:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lsame_ct_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	  cmpesb,1	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  nop 5
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	  ct	%ctpr1 ? %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lsame_ct_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_same_ct, .-pr_same_ct
+
+	.global	pr_same_clp_rlp
+	.type	pr_same_clp_rlp, #function
+	.align	8
+pr_same_clp_rlp:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lsame_clp_rlp_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred1
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	  cmpesb,1	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  pass	%pred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	  addd,1	0x0, 0x1, %dr0 ? %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lsame_clp_rlp_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_same_clp_rlp, .-pr_same_clp_rlp
+
+	.global	pr_spred0_same_0
+	.type	pr_spred0_same_0, #function
+	.align	8
+pr_spred0_same_0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred0_same_0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred5
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred0_same_0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred0_same_0, .-pr_spred0_same_0
+
+	.global	pr_spred0_next_0
+	.type	pr_spred0_next_0, #function
+	.align	8
+pr_spred0_next_0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred0_next_0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred5
+	}
+	{
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred0_next_0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred0_next_0, .-pr_spred0_next_0
+
+	.global	pr_spred0_same_1
+	.type	pr_spred0_same_1, #function
+	.align	8
+pr_spred0_same_1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred0_same_1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred5
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred0_same_1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred0_same_1, .-pr_spred0_same_1
+
+	.global	pr_spred0_next_1
+	.type	pr_spred0_next_1, #function
+	.align	8
+pr_spred0_next_1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred0_next_1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred5
+	}
+	{
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred0_next_1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred0_next_1, .-pr_spred0_next_1
+
+	.global	pr_spred1_same_0
+	.type	pr_spred1_same_0, #function
+	.align	8
+pr_spred1_same_0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred1_same_0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,1	0x0, 0x1, %pred5
+	  pass	%spred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred1_same_0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred1_same_0, .-pr_spred1_same_0
+
+	.global	pr_spred1_next_0
+	.type	pr_spred1_next_0, #function
+	.align	8
+pr_spred1_next_0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred1_next_0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,1	0x0, 0x1, %pred5
+	}
+	{
+	  pass	%spred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred1_next_0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred1_next_0, .-pr_spred1_next_0
+
+	.global	pr_spred1_same_1
+	.type	pr_spred1_same_1, #function
+	.align	8
+pr_spred1_same_1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred1_same_1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,1	0x0, 0x0, %pred5
+	  pass	%spred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred1_same_1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred1_same_1, .-pr_spred1_same_1
+
+	.global	pr_spred1_next_1
+	.type	pr_spred1_next_1, #function
+	.align	8
+pr_spred1_next_1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred1_next_1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,1	0x0, 0x0, %pred5
+	}
+	{
+	  pass	%spred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred1_next_1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred1_next_1, .-pr_spred1_next_1
+
+	.global	pr_spred3_same_0
+	.type	pr_spred3_same_0, #function
+	.align	8
+pr_spred3_same_0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred3_same_0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,3	0x0, 0x1, %pred5
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred3_same_0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred3_same_0, .-pr_spred3_same_0
+
+	.global	pr_spred3_next_0
+	.type	pr_spred3_next_0, #function
+	.align	8
+pr_spred3_next_0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred3_next_0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,3	0x0, 0x1, %pred5
+	}
+	{
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred3_next_0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred3_next_0, .-pr_spred3_next_0
+
+	.global	pr_spred3_same_1
+	.type	pr_spred3_same_1, #function
+	.align	8
+pr_spred3_same_1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred3_same_1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,3	0x0, 0x0, %pred5
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred3_same_1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred3_same_1, .-pr_spred3_same_1
+
+	.global	pr_spred3_next_1
+	.type	pr_spred3_next_1, #function
+	.align	8
+pr_spred3_next_1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred3_next_1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,3	0x0, 0x0, %pred5
+	}
+	{
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred3_next_1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred3_next_1, .-pr_spred3_next_1
+
+	.global	pr_spred4_same_0
+	.type	pr_spred4_same_0, #function
+	.align	8
+pr_spred4_same_0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred4_same_0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,4	0x0, 0x1, %pred5
+	  pass	%spred4, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred4_same_0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred4_same_0, .-pr_spred4_same_0
+
+	.global	pr_spred4_next_0
+	.type	pr_spred4_next_0, #function
+	.align	8
+pr_spred4_next_0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred4_next_0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,4	0x0, 0x1, %pred5
+	}
+	{
+	  pass	%spred4, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred4_next_0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred4_next_0, .-pr_spred4_next_0
+
+	.global	pr_spred4_same_1
+	.type	pr_spred4_same_1, #function
+	.align	8
+pr_spred4_same_1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred4_same_1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,4	0x0, 0x0, %pred5
+	  pass	%spred4, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred4_same_1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred4_same_1, .-pr_spred4_same_1
+
+	.global	pr_spred4_next_1
+	.type	pr_spred4_next_1, #function
+	.align	8
+pr_spred4_next_1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred4_next_1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,4	0x0, 0x0, %pred5
+	}
+	{
+	  pass	%spred4, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred4_next_1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred4_next_1, .-pr_spred4_next_1
+
+	.global	pr_spred01_same_11
+	.type	pr_spred01_same_11, #function
+	.align	8
+pr_spred01_same_11:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred01_same_11_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred5
+	  cmpesb,1	0x0, 0x0, %pred6
+	  pass	%spred01, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred01_same_11_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred01_same_11, .-pr_spred01_same_11
+
+	.global	pr_spd_add0_d_same
+	.type	pr_spd_add0_d_same, #function
+	.align	8
+pr_spd_add0_d_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add0_d_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0,sm	%dr2, 0x0, %dr6
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add0_d_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add0_d_same, .-pr_spd_add0_d_same
+
+	.global	pr_spd_add0_d_next
+	.type	pr_spd_add0_d_next, #function
+	.align	8
+pr_spd_add0_d_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add0_d_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0,sm	%dr2, 0x0, %dr6
+	}
+	{
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add0_d_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add0_d_next, .-pr_spd_add0_d_next
+
+	.global	pr_spd_add0_c_same
+	.type	pr_spd_add0_c_same, #function
+	.align	8
+pr_spd_add0_c_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add0_c_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0,sm	%dr4, 0x0, %dr6
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add0_c_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add0_c_same, .-pr_spd_add0_c_same
+
+	.global	pr_spd_add0_c_next
+	.type	pr_spd_add0_c_next, #function
+	.align	8
+pr_spd_add0_c_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add0_c_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0,sm	%dr4, 0x0, %dr6
+	}
+	{
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add0_c_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add0_c_next, .-pr_spd_add0_c_next
+
+	.global	pr_spd_ld0_d_same
+	.type	pr_spd_ld0_d_same, #function
+	.align	8
+pr_spd_ld0_d_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_ld0_d_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr6
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_ld0_d_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_ld0_d_same, .-pr_spd_ld0_d_same
+
+	.global	pr_spd_ld0_d_next
+	.type	pr_spd_ld0_d_next, #function
+	.align	8
+pr_spd_ld0_d_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_ld0_d_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr6
+	}
+	{
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_ld0_d_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_ld0_d_next, .-pr_spd_ld0_d_next
+
+	.global	pr_spd_ld0_c_same
+	.type	pr_spd_ld0_c_same, #function
+	.align	8
+pr_spd_ld0_c_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_ld0_c_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,0,sm	%dr9, 0x0, %dr6
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_ld0_c_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_ld0_c_same, .-pr_spd_ld0_c_same
+
+	.global	pr_spd_ld0_c_next
+	.type	pr_spd_ld0_c_next, #function
+	.align	8
+pr_spd_ld0_c_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_ld0_c_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,0,sm	%dr9, 0x0, %dr6
+	}
+	{
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_ld0_c_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_ld0_c_next, .-pr_spd_ld0_c_next
+
+	.global	pr_spd_add1_d_same
+	.type	pr_spd_add1_d_same, #function
+	.align	8
+pr_spd_add1_d_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add1_d_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,1,sm	%dr2, 0x0, %dr6
+	  pass	%spred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add1_d_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add1_d_same, .-pr_spd_add1_d_same
+
+	.global	pr_spd_add1_d_next
+	.type	pr_spd_add1_d_next, #function
+	.align	8
+pr_spd_add1_d_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add1_d_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,1,sm	%dr2, 0x0, %dr6
+	}
+	{
+	  pass	%spred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add1_d_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add1_d_next, .-pr_spd_add1_d_next
+
+	.global	pr_spd_add1_c_same
+	.type	pr_spd_add1_c_same, #function
+	.align	8
+pr_spd_add1_c_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add1_c_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,1,sm	%dr4, 0x0, %dr6
+	  pass	%spred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add1_c_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add1_c_same, .-pr_spd_add1_c_same
+
+	.global	pr_spd_add1_c_next
+	.type	pr_spd_add1_c_next, #function
+	.align	8
+pr_spd_add1_c_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add1_c_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,1,sm	%dr4, 0x0, %dr6
+	}
+	{
+	  pass	%spred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add1_c_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add1_c_next, .-pr_spd_add1_c_next
+
+	.global	pr_spd_add2_d_same
+	.type	pr_spd_add2_d_same, #function
+	.align	8
+pr_spd_add2_d_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add2_d_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,2,sm	%dr2, 0x0, %dr6
+	  pass	%spred2, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add2_d_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add2_d_same, .-pr_spd_add2_d_same
+
+	.global	pr_spd_add2_d_next
+	.type	pr_spd_add2_d_next, #function
+	.align	8
+pr_spd_add2_d_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add2_d_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,2,sm	%dr2, 0x0, %dr6
+	}
+	{
+	  pass	%spred2, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add2_d_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add2_d_next, .-pr_spd_add2_d_next
+
+	.global	pr_spd_add2_c_same
+	.type	pr_spd_add2_c_same, #function
+	.align	8
+pr_spd_add2_c_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add2_c_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,2,sm	%dr4, 0x0, %dr6
+	  pass	%spred2, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add2_c_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add2_c_same, .-pr_spd_add2_c_same
+
+	.global	pr_spd_add2_c_next
+	.type	pr_spd_add2_c_next, #function
+	.align	8
+pr_spd_add2_c_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add2_c_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,2,sm	%dr4, 0x0, %dr6
+	}
+	{
+	  pass	%spred2, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add2_c_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add2_c_next, .-pr_spd_add2_c_next
+
+	.global	pr_spd_ld2_d_same
+	.type	pr_spd_ld2_d_same, #function
+	.align	8
+pr_spd_ld2_d_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_ld2_d_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,2,sm	%dr3, 0x0, %dr6
+	  pass	%spred2, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_ld2_d_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_ld2_d_same, .-pr_spd_ld2_d_same
+
+	.global	pr_spd_ld2_d_next
+	.type	pr_spd_ld2_d_next, #function
+	.align	8
+pr_spd_ld2_d_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_ld2_d_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,2,sm	%dr3, 0x0, %dr6
+	}
+	{
+	  pass	%spred2, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_ld2_d_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_ld2_d_next, .-pr_spd_ld2_d_next
+
+	.global	pr_spd_ld2_c_same
+	.type	pr_spd_ld2_c_same, #function
+	.align	8
+pr_spd_ld2_c_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_ld2_c_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,2,sm	%dr9, 0x0, %dr6
+	  pass	%spred2, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_ld2_c_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_ld2_c_same, .-pr_spd_ld2_c_same
+
+	.global	pr_spd_ld2_c_next
+	.type	pr_spd_ld2_c_next, #function
+	.align	8
+pr_spd_ld2_c_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_ld2_c_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,2,sm	%dr9, 0x0, %dr6
+	}
+	{
+	  pass	%spred2, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_ld2_c_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_ld2_c_next, .-pr_spd_ld2_c_next
+
+	.global	pr_spd_add3_d_same
+	.type	pr_spd_add3_d_same, #function
+	.align	8
+pr_spd_add3_d_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add3_d_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,3,sm	%dr2, 0x0, %dr6
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add3_d_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add3_d_same, .-pr_spd_add3_d_same
+
+	.global	pr_spd_add3_d_next
+	.type	pr_spd_add3_d_next, #function
+	.align	8
+pr_spd_add3_d_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add3_d_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,3,sm	%dr2, 0x0, %dr6
+	}
+	{
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add3_d_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add3_d_next, .-pr_spd_add3_d_next
+
+	.global	pr_spd_add3_c_same
+	.type	pr_spd_add3_c_same, #function
+	.align	8
+pr_spd_add3_c_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add3_c_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,3,sm	%dr4, 0x0, %dr6
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add3_c_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add3_c_same, .-pr_spd_add3_c_same
+
+	.global	pr_spd_add3_c_next
+	.type	pr_spd_add3_c_next, #function
+	.align	8
+pr_spd_add3_c_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add3_c_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,3,sm	%dr4, 0x0, %dr6
+	}
+	{
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add3_c_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add3_c_next, .-pr_spd_add3_c_next
+
+	.global	pr_spd_ld3_d_same
+	.type	pr_spd_ld3_d_same, #function
+	.align	8
+pr_spd_ld3_d_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_ld3_d_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,3,sm	%dr3, 0x0, %dr6
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_ld3_d_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_ld3_d_same, .-pr_spd_ld3_d_same
+
+	.global	pr_spd_ld3_d_next
+	.type	pr_spd_ld3_d_next, #function
+	.align	8
+pr_spd_ld3_d_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_ld3_d_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,3,sm	%dr3, 0x0, %dr6
+	}
+	{
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_ld3_d_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_ld3_d_next, .-pr_spd_ld3_d_next
+
+	.global	pr_spd_ld3_c_same
+	.type	pr_spd_ld3_c_same, #function
+	.align	8
+pr_spd_ld3_c_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_ld3_c_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,3,sm	%dr9, 0x0, %dr6
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_ld3_c_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_ld3_c_same, .-pr_spd_ld3_c_same
+
+	.global	pr_spd_ld3_c_next
+	.type	pr_spd_ld3_c_next, #function
+	.align	8
+pr_spd_ld3_c_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_ld3_c_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,3,sm	%dr9, 0x0, %dr6
+	}
+	{
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_ld3_c_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_ld3_c_next, .-pr_spd_ld3_c_next
+
+	.global	pr_spd_add4_d_same
+	.type	pr_spd_add4_d_same, #function
+	.align	8
+pr_spd_add4_d_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add4_d_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,4,sm	%dr2, 0x0, %dr6
+	  pass	%spred4, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add4_d_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add4_d_same, .-pr_spd_add4_d_same
+
+	.global	pr_spd_add4_d_next
+	.type	pr_spd_add4_d_next, #function
+	.align	8
+pr_spd_add4_d_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add4_d_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,4,sm	%dr2, 0x0, %dr6
+	}
+	{
+	  pass	%spred4, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add4_d_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add4_d_next, .-pr_spd_add4_d_next
+
+	.global	pr_spd_add4_c_same
+	.type	pr_spd_add4_c_same, #function
+	.align	8
+pr_spd_add4_c_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add4_c_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,4,sm	%dr4, 0x0, %dr6
+	  pass	%spred4, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add4_c_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add4_c_same, .-pr_spd_add4_c_same
+
+	.global	pr_spd_add4_c_next
+	.type	pr_spd_add4_c_next, #function
+	.align	8
+pr_spd_add4_c_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add4_c_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,4,sm	%dr4, 0x0, %dr6
+	}
+	{
+	  pass	%spred4, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add4_c_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add4_c_next, .-pr_spd_add4_c_next
+
+	.global	pr_spd_add5_d_same
+	.type	pr_spd_add5_d_same, #function
+	.align	8
+pr_spd_add5_d_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add5_d_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,5,sm	%dr2, 0x0, %dr6
+	  pass	%spred5, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add5_d_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add5_d_same, .-pr_spd_add5_d_same
+
+	.global	pr_spd_add5_d_next
+	.type	pr_spd_add5_d_next, #function
+	.align	8
+pr_spd_add5_d_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add5_d_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,5,sm	%dr2, 0x0, %dr6
+	}
+	{
+	  pass	%spred5, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add5_d_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add5_d_next, .-pr_spd_add5_d_next
+
+	.global	pr_spd_add5_c_same
+	.type	pr_spd_add5_c_same, #function
+	.align	8
+pr_spd_add5_c_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add5_c_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,5,sm	%dr4, 0x0, %dr6
+	  pass	%spred5, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add5_c_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add5_c_same, .-pr_spd_add5_c_same
+
+	.global	pr_spd_add5_c_next
+	.type	pr_spd_add5_c_next, #function
+	.align	8
+pr_spd_add5_c_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_add5_c_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,5,sm	%dr4, 0x0, %dr6
+	}
+	{
+	  pass	%spred5, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_add5_c_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_add5_c_next, .-pr_spd_add5_c_next
+
+	.global	pr_spd_ld5_d_same
+	.type	pr_spd_ld5_d_same, #function
+	.align	8
+pr_spd_ld5_d_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_ld5_d_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,5,sm	%dr3, 0x0, %dr6
+	  pass	%spred5, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_ld5_d_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_ld5_d_same, .-pr_spd_ld5_d_same
+
+	.global	pr_spd_ld5_d_next
+	.type	pr_spd_ld5_d_next, #function
+	.align	8
+pr_spd_ld5_d_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_ld5_d_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,5,sm	%dr3, 0x0, %dr6
+	}
+	{
+	  pass	%spred5, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_ld5_d_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_ld5_d_next, .-pr_spd_ld5_d_next
+
+	.global	pr_spd_ld5_c_same
+	.type	pr_spd_ld5_c_same, #function
+	.align	8
+pr_spd_ld5_c_same:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_ld5_c_same_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,5,sm	%dr9, 0x0, %dr6
+	  pass	%spred5, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_ld5_c_same_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_ld5_c_same, .-pr_spd_ld5_c_same
+
+	.global	pr_spd_ld5_c_next
+	.type	pr_spd_ld5_c_next, #function
+	.align	8
+pr_spd_ld5_c_next:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspd_ld5_c_next_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,5,sm	%dr9, 0x0, %dr6
+	}
+	{
+	  pass	%spred5, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspd_ld5_c_next_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spd_ld5_c_next, .-pr_spd_ld5_c_next
+
+	.global	pr_spr_ld0
+	.type	pr_spr_ld0, #function
+	.align	8
+pr_spr_ld0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld0_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,0	%dr6, 0x1, %dr7
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld0, .-pr_spr_ld0
+
+	.global	pr_spr_fmul0
+	.type	pr_spr_fmul0, #function
+	.align	8
+pr_spr_fmul0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_fmul0_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  fmuld,1	%dr4, %dr4, %dr6
+	}
+	{
+	  addd,0	%dr6, 0x1, %dr7
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_fmul0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_fmul0, .-pr_spr_fmul0
+
+	.global	pr_spr_ready0
+	.type	pr_spr_ready0, #function
+	.align	8
+pr_spr_ready0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ready0_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  nop
+	}
+	{
+	  addd,0	%dr6, 0x1, %dr7
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ready0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ready0, .-pr_spr_ready0
+
+	.global	pr_spr_ld1
+	.type	pr_spr_ld1, #function
+	.align	8
+pr_spr_ld1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld1_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,1	%dr6, 0x1, %dr7
+	  pass	%spred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld1, .-pr_spr_ld1
+
+	.global	pr_spr_fmul1
+	.type	pr_spr_fmul1, #function
+	.align	8
+pr_spr_fmul1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_fmul1_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  fmuld,1	%dr4, %dr4, %dr6
+	}
+	{
+	  addd,1	%dr6, 0x1, %dr7
+	  pass	%spred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_fmul1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_fmul1, .-pr_spr_fmul1
+
+	.global	pr_spr_ready1
+	.type	pr_spr_ready1, #function
+	.align	8
+pr_spr_ready1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ready1_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  nop
+	}
+	{
+	  addd,1	%dr6, 0x1, %dr7
+	  pass	%spred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ready1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ready1, .-pr_spr_ready1
+
+	.global	pr_spr_ld3
+	.type	pr_spr_ld3, #function
+	.align	8
+pr_spr_ld3:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld3_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,3	%dr6, 0x1, %dr7
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld3_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld3, .-pr_spr_ld3
+
+	.global	pr_spr_fmul3
+	.type	pr_spr_fmul3, #function
+	.align	8
+pr_spr_fmul3:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_fmul3_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  fmuld,1	%dr4, %dr4, %dr6
+	}
+	{
+	  addd,3	%dr6, 0x1, %dr7
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_fmul3_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_fmul3, .-pr_spr_fmul3
+
+	.global	pr_spr_ready3
+	.type	pr_spr_ready3, #function
+	.align	8
+pr_spr_ready3:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ready3_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  nop
+	}
+	{
+	  addd,3	%dr6, 0x1, %dr7
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ready3_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ready3, .-pr_spr_ready3
+
+	.global	pr_spr_ld4
+	.type	pr_spr_ld4, #function
+	.align	8
+pr_spr_ld4:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld4_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,4	%dr6, 0x1, %dr7
+	  pass	%spred4, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld4_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld4, .-pr_spr_ld4
+
+	.global	pr_spr_fmul4
+	.type	pr_spr_fmul4, #function
+	.align	8
+pr_spr_fmul4:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_fmul4_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  fmuld,1	%dr4, %dr4, %dr6
+	}
+	{
+	  addd,4	%dr6, 0x1, %dr7
+	  pass	%spred4, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_fmul4_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_fmul4, .-pr_spr_fmul4
+
+	.global	pr_spr_ready4
+	.type	pr_spr_ready4, #function
+	.align	8
+pr_spr_ready4:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ready4_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  nop
+	}
+	{
+	  addd,4	%dr6, 0x1, %dr7
+	  pass	%spred4, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ready4_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ready4, .-pr_spr_ready4
+
+	.global	pr_spr_addd2_ld_pred
+	.type	pr_spr_addd2_ld_pred, #function
+	.align	8
+pr_spr_addd2_ld_pred:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_addd2_ld_pred_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,0	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,2,sm	%dr6, 0x1, %dr7
+	  pass	%spred2, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_addd2_ld_pred_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_addd2_ld_pred, .-pr_spr_addd2_ld_pred
+
+	.global	pr_spr_addd2_ld_use
+	.type	pr_spr_addd2_ld_use, #function
+	.align	8
+pr_spr_addd2_ld_use:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_addd2_ld_use_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,0	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,2,sm	%dr6, 0x1, %dr7
+	  pass	%spred2, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr7, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_addd2_ld_use_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_addd2_ld_use, .-pr_spr_addd2_ld_use
+
+	.global	pr_spr_addd2_fmul_pred
+	.type	pr_spr_addd2_fmul_pred, #function
+	.align	8
+pr_spr_addd2_fmul_pred:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_addd2_fmul_pred_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  fmuld,1	%dr5, %dr5, %dr6
+	}
+	{
+	  addd,2,sm	%dr6, 0x1, %dr7
+	  pass	%spred2, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_addd2_fmul_pred_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_addd2_fmul_pred, .-pr_spr_addd2_fmul_pred
+
+	.global	pr_spr_addd2_fmul_use
+	.type	pr_spr_addd2_fmul_use, #function
+	.align	8
+pr_spr_addd2_fmul_use:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_addd2_fmul_use_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  fmuld,1	%dr5, %dr5, %dr6
+	}
+	{
+	  addd,2,sm	%dr6, 0x1, %dr7
+	  pass	%spred2, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr7, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_addd2_fmul_use_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_addd2_fmul_use, .-pr_spr_addd2_fmul_use
+
+	.global	pr_spr_addd5_ld_pred
+	.type	pr_spr_addd5_ld_pred, #function
+	.align	8
+pr_spr_addd5_ld_pred:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_addd5_ld_pred_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,0	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,5,sm	%dr6, 0x1, %dr7
+	  pass	%spred5, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_addd5_ld_pred_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_addd5_ld_pred, .-pr_spr_addd5_ld_pred
+
+	.global	pr_spr_addd5_ld_use
+	.type	pr_spr_addd5_ld_use, #function
+	.align	8
+pr_spr_addd5_ld_use:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_addd5_ld_use_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,0	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,5,sm	%dr6, 0x1, %dr7
+	  pass	%spred5, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr7, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_addd5_ld_use_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_addd5_ld_use, .-pr_spr_addd5_ld_use
+
+	.global	pr_spr_addd5_fmul_pred
+	.type	pr_spr_addd5_fmul_pred, #function
+	.align	8
+pr_spr_addd5_fmul_pred:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_addd5_fmul_pred_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  fmuld,1	%dr5, %dr5, %dr6
+	}
+	{
+	  addd,5,sm	%dr6, 0x1, %dr7
+	  pass	%spred5, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_addd5_fmul_pred_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_addd5_fmul_pred, .-pr_spr_addd5_fmul_pred
+
+	.global	pr_spr_addd5_fmul_use
+	.type	pr_spr_addd5_fmul_use, #function
+	.align	8
+pr_spr_addd5_fmul_use:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_addd5_fmul_use_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  fmuld,1	%dr5, %dr5, %dr6
+	}
+	{
+	  addd,5,sm	%dr6, 0x1, %dr7
+	  pass	%spred5, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr7, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_addd5_fmul_use_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_addd5_fmul_use, .-pr_spr_addd5_fmul_use
+
+	.global	pr_spr_faddd0_ld_pred
+	.type	pr_spr_faddd0_ld_pred, #function
+	.align	8
+pr_spr_faddd0_ld_pred:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_faddd0_ld_pred_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,0	%dr9, 0x0, %dr6
+	}
+	{
+	  faddd,0,sm	%dr6, %dr6, %dr7
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_faddd0_ld_pred_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_faddd0_ld_pred, .-pr_spr_faddd0_ld_pred
+
+	.global	pr_spr_faddd0_ld_use
+	.type	pr_spr_faddd0_ld_use, #function
+	.align	8
+pr_spr_faddd0_ld_use:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_faddd0_ld_use_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,0	%dr9, 0x0, %dr6
+	}
+	{
+	  faddd,0,sm	%dr6, %dr6, %dr7
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr7, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_faddd0_ld_use_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_faddd0_ld_use, .-pr_spr_faddd0_ld_use
+
+	.global	pr_spr_faddd0_fmul_pred
+	.type	pr_spr_faddd0_fmul_pred, #function
+	.align	8
+pr_spr_faddd0_fmul_pred:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_faddd0_fmul_pred_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  fmuld,1	%dr5, %dr5, %dr6
+	}
+	{
+	  faddd,0,sm	%dr6, %dr6, %dr7
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_faddd0_fmul_pred_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_faddd0_fmul_pred, .-pr_spr_faddd0_fmul_pred
+
+	.global	pr_spr_faddd0_fmul_use
+	.type	pr_spr_faddd0_fmul_use, #function
+	.align	8
+pr_spr_faddd0_fmul_use:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_faddd0_fmul_use_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  fmuld,1	%dr5, %dr5, %dr6
+	}
+	{
+	  faddd,0,sm	%dr6, %dr6, %dr7
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr7, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_faddd0_fmul_use_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_faddd0_fmul_use, .-pr_spr_faddd0_fmul_use
+
+	.global	pr_spr_fmuld3_ld_pred
+	.type	pr_spr_fmuld3_ld_pred, #function
+	.align	8
+pr_spr_fmuld3_ld_pred:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_fmuld3_ld_pred_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,0	%dr9, 0x0, %dr6
+	}
+	{
+	  fmuld,3,sm	%dr6, %dr6, %dr7
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_fmuld3_ld_pred_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_fmuld3_ld_pred, .-pr_spr_fmuld3_ld_pred
+
+	.global	pr_spr_fmuld3_ld_use
+	.type	pr_spr_fmuld3_ld_use, #function
+	.align	8
+pr_spr_fmuld3_ld_use:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_fmuld3_ld_use_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,0	%dr9, 0x0, %dr6
+	}
+	{
+	  fmuld,3,sm	%dr6, %dr6, %dr7
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr7, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_fmuld3_ld_use_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_fmuld3_ld_use, .-pr_spr_fmuld3_ld_use
+
+	.global	pr_spr_fmuld3_fmul_pred
+	.type	pr_spr_fmuld3_fmul_pred, #function
+	.align	8
+pr_spr_fmuld3_fmul_pred:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_fmuld3_fmul_pred_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  fmuld,1	%dr5, %dr5, %dr6
+	}
+	{
+	  fmuld,3,sm	%dr6, %dr6, %dr7
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_fmuld3_fmul_pred_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_fmuld3_fmul_pred, .-pr_spr_fmuld3_fmul_pred
+
+	.global	pr_spr_fmuld3_fmul_use
+	.type	pr_spr_fmuld3_fmul_use, #function
+	.align	8
+pr_spr_fmuld3_fmul_use:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_fmuld3_fmul_use_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  fmuld,1	%dr5, %dr5, %dr6
+	}
+	{
+	  fmuld,3,sm	%dr6, %dr6, %dr7
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr7, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_fmuld3_fmul_use_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_fmuld3_fmul_use, .-pr_spr_fmuld3_fmul_use
+
+	.global	pr_spr_st2_pred
+	.type	pr_spr_st2_pred, #function
+	.align	8
+pr_spr_st2_pred:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_st2_pred_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,0	%dr9, 0x0, %dr6
+	}
+	{
+	  std,2	%dr9, 0x10, %dr6
+	  pass	%spred2, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_st2_pred_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_st2_pred, .-pr_spr_st2_pred
+
+	.global	pr_spr_st2_mem
+	.type	pr_spr_st2_mem, #function
+	.align	8
+pr_spr_st2_mem:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_st2_mem_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,0	%dr9, 0x0, %dr6
+	}
+	{
+	  std,2	%dr9, 0x10, %dr6
+	  pass	%spred2, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  ldd,0	%dr9, 0x10, %dr0
+	}
+	{
+	  nop 3
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_st2_mem_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_st2_mem, .-pr_spr_st2_mem
+
+	.global	pr_spr_st5_pred
+	.type	pr_spr_st5_pred, #function
+	.align	8
+pr_spr_st5_pred:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_st5_pred_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,0	%dr9, 0x0, %dr6
+	}
+	{
+	  std,5	%dr9, 0x10, %dr6
+	  pass	%spred5, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_st5_pred_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_st5_pred, .-pr_spr_st5_pred
+
+	.global	pr_spr_st5_mem
+	.type	pr_spr_st5_mem, #function
+	.align	8
+pr_spr_st5_mem:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_st5_mem_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,0	%dr9, 0x0, %dr6
+	}
+	{
+	  std,5	%dr9, 0x10, %dr6
+	  pass	%spred5, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  ldd,0	%dr9, 0x10, %dr0
+	}
+	{
+	  nop 3
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_st5_mem_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_st5_mem, .-pr_spr_st5_mem
+
+	.global	pr_spr_ld0_nouse
+	.type	pr_spr_ld0_nouse, #function
+	.align	8
+pr_spr_ld0_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld0_nouse_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,0	%dr6, 0x1, %dr7
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld0_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld0_nouse, .-pr_spr_ld0_nouse
+
+	.global	pr_spr_ld0_noelp
+	.type	pr_spr_ld0_noelp, #function
+	.align	8
+pr_spr_ld0_noelp:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld0_noelp_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,0	%dr6, 0x1, %dr7
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr7, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld0_noelp_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld0_noelp, .-pr_spr_ld0_noelp
+
+	.global	pr_spr_ld0_sm_pred
+	.type	pr_spr_ld0_sm_pred, #function
+	.align	8
+pr_spr_ld0_sm_pred:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld0_sm_pred_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,0,sm	%dr6, 0x1, %dr7
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld0_sm_pred_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld0_sm_pred, .-pr_spr_ld0_sm_pred
+
+	.global	pr_spr_ld0_sm_use
+	.type	pr_spr_ld0_sm_use, #function
+	.align	8
+pr_spr_ld0_sm_use:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld0_sm_use_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,0,sm	%dr6, 0x1, %dr7
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr7, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld0_sm_use_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld0_sm_use, .-pr_spr_ld0_sm_use
+
+	.global	pr_spr_ld0_other
+	.type	pr_spr_ld0_other, #function
+	.align	8
+pr_spr_ld0_other:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld0_other_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,0	%dr6, 0x1, %dr7
+	  pass	%spred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr7, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld0_other_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld0_other, .-pr_spr_ld0_other
+
+	.global	pr_spr_ld0_other_pred
+	.type	pr_spr_ld0_other_pred, #function
+	.align	8
+pr_spr_ld0_other_pred:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld0_other_pred_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,0	%dr6, 0x1, %dr7
+	  pass	%spred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld0_other_pred_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld0_other_pred, .-pr_spr_ld0_other_pred
+
+	.global	pr_spr_ld0_none
+	.type	pr_spr_ld0_none, #function
+	.align	8
+pr_spr_ld0_none:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld0_none_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld0_none_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld0_none, .-pr_spr_ld0_none
+
+	.global	pr_spr_ld3_nouse
+	.type	pr_spr_ld3_nouse, #function
+	.align	8
+pr_spr_ld3_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld3_nouse_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,3	%dr6, 0x1, %dr7
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld3_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld3_nouse, .-pr_spr_ld3_nouse
+
+	.global	pr_spr_ld3_noelp
+	.type	pr_spr_ld3_noelp, #function
+	.align	8
+pr_spr_ld3_noelp:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld3_noelp_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,3	%dr6, 0x1, %dr7
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr7, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld3_noelp_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld3_noelp, .-pr_spr_ld3_noelp
+
+	.global	pr_spr_ld3_sm_pred
+	.type	pr_spr_ld3_sm_pred, #function
+	.align	8
+pr_spr_ld3_sm_pred:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld3_sm_pred_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,3,sm	%dr6, 0x1, %dr7
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld3_sm_pred_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld3_sm_pred, .-pr_spr_ld3_sm_pred
+
+	.global	pr_spr_ld3_sm_use
+	.type	pr_spr_ld3_sm_use, #function
+	.align	8
+pr_spr_ld3_sm_use:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld3_sm_use_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,3,sm	%dr6, 0x1, %dr7
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr7, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld3_sm_use_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld3_sm_use, .-pr_spr_ld3_sm_use
+
+	.global	pr_spr_ld3_other
+	.type	pr_spr_ld3_other, #function
+	.align	8
+pr_spr_ld3_other:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld3_other_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,3	%dr6, 0x1, %dr7
+	  pass	%spred4, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr7, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld3_other_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld3_other, .-pr_spr_ld3_other
+
+	.global	pr_spr_ld3_other_pred
+	.type	pr_spr_ld3_other_pred, #function
+	.align	8
+pr_spr_ld3_other_pred:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld3_other_pred_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,3	%dr6, 0x1, %dr7
+	  pass	%spred4, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld3_other_pred_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld3_other_pred, .-pr_spr_ld3_other_pred
+
+	.global	pr_spr_ld3_none
+	.type	pr_spr_ld3_none, #function
+	.align	8
+pr_spr_ld3_none:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_ld3_none_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr7
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  pass	%spred3, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_ld3_none_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_ld3_none, .-pr_spr_ld3_none
+
+	.global	pr_spr_two_ww
+	.type	pr_spr_two_ww, #function
+	.align	8
+pr_spr_two_ww:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_two_ww_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr8
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,0,sm	%dr6, 0x1, %dr7
+	  addd,1,sm	%dr6, 0x1, %dr10
+	  pass	%spred01, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_two_ww_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_two_ww, .-pr_spr_two_ww
+
+	.global	pr_spr_two_wr
+	.type	pr_spr_two_wr, #function
+	.align	8
+pr_spr_two_wr:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_two_wr_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr8
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,0,sm	%dr6, 0x1, %dr7
+	  addd,1,sm	%dr8, 0x1, %dr10
+	  pass	%spred01, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_two_wr_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_two_wr, .-pr_spr_two_wr
+
+	.global	pr_spr_two_rw
+	.type	pr_spr_two_rw, #function
+	.align	8
+pr_spr_two_rw:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_two_rw_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr8
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,0,sm	%dr8, 0x1, %dr7
+	  addd,1,sm	%dr6, 0x1, %dr10
+	  pass	%spred01, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_two_rw_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_two_rw, .-pr_spr_two_rw
+
+	.global	pr_spr_two_rr
+	.type	pr_spr_two_rr, #function
+	.align	8
+pr_spr_two_rr:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspr_two_rr_t
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	  addd,1	0x0, 0x0, %dr8
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred2
+	}
+	{
+	  nop 4
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	}
+	{
+	  addd,0,sm	%dr8, 0x1, %dr7
+	  addd,1,sm	%dr8, 0x1, %dr10
+	  pass	%spred01, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspr_two_rr_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spr_two_rr, .-pr_spr_two_rr
+
+	.global	pr_spt_spred
+	.type	pr_spt_spred, #function
+	.align	8
+pr_spt_spred:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspt_spred_t
+	}
+	{
+	  addd,0	0x0, 0x3e8, %dr12
+	  disp	%ctpr2, .Lspt_spred
+	}
+	{
+	  nop 5
+	}
+	{
+	  rrd	%clkr, %dr10
+	}
+.Lspt_spred:
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	  subd,1	%dr12, 0x1, %dr12
+	}
+	{
+	  addd,0,sm	%dr6, 0x1, %dr7
+	  cmpledb,1	%dr12, 0x0, %pred3
+	  pass	%spred0, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr2 ? ~%pred3
+	}
+	{
+	  rrd	%clkr, %dr11
+	}
+	{
+	  nop 4
+	}
+	{
+	  subd,0	%dr11, %dr10, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspt_spred_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spt_spred, .-pr_spt_spred
+
+	.global	pr_spt_plain
+	.type	pr_spt_plain, #function
+	.align	8
+pr_spt_plain:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspt_plain_t
+	}
+	{
+	  addd,0	0x0, 0x3e8, %dr12
+	  disp	%ctpr2, .Lspt_plain
+	}
+	{
+	  nop 5
+	}
+	{
+	  rrd	%clkr, %dr10
+	}
+.Lspt_plain:
+	{
+	  ldd,2	%dr9, 0x0, %dr6
+	  subd,1	%dr12, 0x1, %dr12
+	}
+	{
+	  addd,0,sm	%dr6, 0x1, %dr7
+	  cmpledb,1	%dr12, 0x0, %pred3
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr2 ? ~%pred3
+	}
+	{
+	  rrd	%clkr, %dr11
+	}
+	{
+	  nop 4
+	}
+	{
+	  subd,0	%dr11, %dr10, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspt_plain_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spt_plain, .-pr_spt_plain
+
+	.global	pr_spred2_none
+	.type	pr_spred2_none, #function
+	.align	8
+pr_spred2_none:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lspred2_none_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%spred2, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lspred2_none_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_spred2_none, .-pr_spred2_none
+
+	.global	pr_pc_pcnt2_p0
+	.type	pr_pc_pcnt2_p0, #function
+	.align	8
+pr_pc_pcnt2_p0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lpc_pcnt2_p0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0 ? %pcnt2, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lpc_pcnt2_p0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_pc_pcnt2_p0, .-pr_pc_pcnt2_p0
+
+	.global	pr_pc_pcnt2_np0
+	.type	pr_pc_pcnt2_np0, #function
+	.align	8
+pr_pc_pcnt2_np0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lpc_pcnt2_np0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0 ? %pcnt2, ~%pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lpc_pcnt2_np0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_pc_pcnt2_np0, .-pr_pc_pcnt2_np0
+
+	.global	pr_pc_pcnt2_p1
+	.type	pr_pc_pcnt2_p1, #function
+	.align	8
+pr_pc_pcnt2_p1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lpc_pcnt2_p1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0 ? %pcnt2, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lpc_pcnt2_p1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_pc_pcnt2_p1, .-pr_pc_pcnt2_p1
+
+	.global	pr_pc_pcnt2_np1
+	.type	pr_pc_pcnt2_np1, #function
+	.align	8
+pr_pc_pcnt2_np1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lpc_pcnt2_np1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0 ? %pcnt2, ~%pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lpc_pcnt2_np1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_pc_pcnt2_np1, .-pr_pc_pcnt2_np1
+
+	.global	pr_pc_pcnt3_p0
+	.type	pr_pc_pcnt3_p0, #function
+	.align	8
+pr_pc_pcnt3_p0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lpc_pcnt3_p0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0 ? %pcnt3, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lpc_pcnt3_p0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_pc_pcnt3_p0, .-pr_pc_pcnt3_p0
+
+	.global	pr_pc_pcnt3_np0
+	.type	pr_pc_pcnt3_np0, #function
+	.align	8
+pr_pc_pcnt3_np0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lpc_pcnt3_np0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0 ? %pcnt3, ~%pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lpc_pcnt3_np0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_pc_pcnt3_np0, .-pr_pc_pcnt3_np0
+
+	.global	pr_pc_pcnt3_p1
+	.type	pr_pc_pcnt3_p1, #function
+	.align	8
+pr_pc_pcnt3_p1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lpc_pcnt3_p1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0 ? %pcnt3, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lpc_pcnt3_p1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_pc_pcnt3_p1, .-pr_pc_pcnt3_p1
+
+	.global	pr_pc_pcnt3_np1
+	.type	pr_pc_pcnt3_np1, #function
+	.align	8
+pr_pc_pcnt3_np1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lpc_pcnt3_np1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0 ? %pcnt3, ~%pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lpc_pcnt3_np1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_pc_pcnt3_np1, .-pr_pc_pcnt3_np1
+
+	.global	pr_pc_pcnt5_p0
+	.type	pr_pc_pcnt5_p0, #function
+	.align	8
+pr_pc_pcnt5_p0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lpc_pcnt5_p0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0 ? %pcnt5, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lpc_pcnt5_p0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_pc_pcnt5_p0, .-pr_pc_pcnt5_p0
+
+	.global	pr_pc_pcnt5_np0
+	.type	pr_pc_pcnt5_np0, #function
+	.align	8
+pr_pc_pcnt5_np0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lpc_pcnt5_np0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0 ? %pcnt5, ~%pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lpc_pcnt5_np0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_pc_pcnt5_np0, .-pr_pc_pcnt5_np0
+
+	.global	pr_pc_pcnt5_p1
+	.type	pr_pc_pcnt5_p1, #function
+	.align	8
+pr_pc_pcnt5_p1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lpc_pcnt5_p1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0 ? %pcnt5, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lpc_pcnt5_p1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_pc_pcnt5_p1, .-pr_pc_pcnt5_p1
+
+	.global	pr_pc_pcnt5_np1
+	.type	pr_pc_pcnt5_np1, #function
+	.align	8
+pr_pc_pcnt5_np1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lpc_pcnt5_np1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0 ? %pcnt5, ~%pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lpc_pcnt5_np1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_pc_pcnt5_np1, .-pr_pc_pcnt5_np1
+
+	.global	pr_pc_mrgc_pcnt2
+	.type	pr_pc_mrgc_pcnt2, #function
+	.align	8
+pr_pc_mrgc_pcnt2:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lpc_mrgc_pcnt2_t
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pcnt2
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lpc_mrgc_pcnt2_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_pc_mrgc_pcnt2, .-pr_pc_mrgc_pcnt2
+
+	.global	pr_pc_mrgc_pcnt3
+	.type	pr_pc_mrgc_pcnt3, #function
+	.align	8
+pr_pc_mrgc_pcnt3:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lpc_mrgc_pcnt3_t
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pcnt3
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lpc_mrgc_pcnt3_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_pc_mrgc_pcnt3, .-pr_pc_mrgc_pcnt3
+
+	.global	pr_le_t6_p0_pcnt0
+	.type	pr_le_t6_p0_pcnt0, #function
+	.align	8
+pr_le_t6_p0_pcnt0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t6_p0_pcnt0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 || %LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t6_p0_pcnt0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t6_p0_pcnt0, .-pr_le_t6_p0_pcnt0
+
+	.global	pr_le_t6_p0_pcnt1
+	.type	pr_le_t6_p0_pcnt1, #function
+	.align	8
+pr_le_t6_p0_pcnt1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t6_p0_pcnt1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x1000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 || %LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t6_p0_pcnt1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t6_p0_pcnt1, .-pr_le_t6_p0_pcnt1
+
+	.global	pr_le_t6_p0_pcnt3
+	.type	pr_le_t6_p0_pcnt3, #function
+	.align	8
+pr_le_t6_p0_pcnt3:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t6_p0_pcnt3_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 || %LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t6_p0_pcnt3_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t6_p0_pcnt3, .-pr_le_t6_p0_pcnt3
+
+	.global	pr_le_t6_p0_pcnt3_semc
+	.type	pr_le_t6_p0_pcnt3_semc, #function
+	.align	8
+pr_le_t6_p0_pcnt3_semc:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t6_p0_pcnt3_semc_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x1003000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 || %LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t6_p0_pcnt3_semc_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t6_p0_pcnt3_semc, .-pr_le_t6_p0_pcnt3_semc
+
+	.global	pr_le_t6_p0_pcnt3_nolm
+	.type	pr_le_t6_p0_pcnt3_nolm, #function
+	.align	8
+pr_le_t6_p0_pcnt3_nolm:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t6_p0_pcnt3_nolm_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 || %LOOP_END
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t6_p0_pcnt3_nolm_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t6_p0_pcnt3_nolm, .-pr_le_t6_p0_pcnt3_nolm
+
+	.global	pr_le_t6_p1_pcnt0
+	.type	pr_le_t6_p1_pcnt0, #function
+	.align	8
+pr_le_t6_p1_pcnt0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t6_p1_pcnt0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 || %LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t6_p1_pcnt0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t6_p1_pcnt0, .-pr_le_t6_p1_pcnt0
+
+	.global	pr_le_t6_p1_pcnt1
+	.type	pr_le_t6_p1_pcnt1, #function
+	.align	8
+pr_le_t6_p1_pcnt1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t6_p1_pcnt1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x1000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 || %LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t6_p1_pcnt1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t6_p1_pcnt1, .-pr_le_t6_p1_pcnt1
+
+	.global	pr_le_t6_p1_pcnt3
+	.type	pr_le_t6_p1_pcnt3, #function
+	.align	8
+pr_le_t6_p1_pcnt3:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t6_p1_pcnt3_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 || %LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t6_p1_pcnt3_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t6_p1_pcnt3, .-pr_le_t6_p1_pcnt3
+
+	.global	pr_le_t6_p1_pcnt3_semc
+	.type	pr_le_t6_p1_pcnt3_semc, #function
+	.align	8
+pr_le_t6_p1_pcnt3_semc:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t6_p1_pcnt3_semc_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x1003000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 || %LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t6_p1_pcnt3_semc_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t6_p1_pcnt3_semc, .-pr_le_t6_p1_pcnt3_semc
+
+	.global	pr_le_t6_p1_pcnt3_nolm
+	.type	pr_le_t6_p1_pcnt3_nolm, #function
+	.align	8
+pr_le_t6_p1_pcnt3_nolm:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t6_p1_pcnt3_nolm_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 || %LOOP_END
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t6_p1_pcnt3_nolm_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t6_p1_pcnt3_nolm, .-pr_le_t6_p1_pcnt3_nolm
+
+	.global	pr_le_t7_p0_pcnt0
+	.type	pr_le_t7_p0_pcnt0, #function
+	.align	8
+pr_le_t7_p0_pcnt0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t7_p0_pcnt0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 && %NOT_LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t7_p0_pcnt0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t7_p0_pcnt0, .-pr_le_t7_p0_pcnt0
+
+	.global	pr_le_t7_p0_pcnt1
+	.type	pr_le_t7_p0_pcnt1, #function
+	.align	8
+pr_le_t7_p0_pcnt1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t7_p0_pcnt1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x1000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 && %NOT_LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t7_p0_pcnt1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t7_p0_pcnt1, .-pr_le_t7_p0_pcnt1
+
+	.global	pr_le_t7_p0_pcnt3
+	.type	pr_le_t7_p0_pcnt3, #function
+	.align	8
+pr_le_t7_p0_pcnt3:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t7_p0_pcnt3_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 && %NOT_LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t7_p0_pcnt3_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t7_p0_pcnt3, .-pr_le_t7_p0_pcnt3
+
+	.global	pr_le_t7_p0_pcnt3_semc
+	.type	pr_le_t7_p0_pcnt3_semc, #function
+	.align	8
+pr_le_t7_p0_pcnt3_semc:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t7_p0_pcnt3_semc_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x1003000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 && %NOT_LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t7_p0_pcnt3_semc_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t7_p0_pcnt3_semc, .-pr_le_t7_p0_pcnt3_semc
+
+	.global	pr_le_t7_p0_pcnt3_nolm
+	.type	pr_le_t7_p0_pcnt3_nolm, #function
+	.align	8
+pr_le_t7_p0_pcnt3_nolm:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t7_p0_pcnt3_nolm_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 && %NOT_LOOP_END
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t7_p0_pcnt3_nolm_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t7_p0_pcnt3_nolm, .-pr_le_t7_p0_pcnt3_nolm
+
+	.global	pr_le_t7_p1_pcnt0
+	.type	pr_le_t7_p1_pcnt0, #function
+	.align	8
+pr_le_t7_p1_pcnt0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t7_p1_pcnt0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 && %NOT_LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t7_p1_pcnt0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t7_p1_pcnt0, .-pr_le_t7_p1_pcnt0
+
+	.global	pr_le_t7_p1_pcnt1
+	.type	pr_le_t7_p1_pcnt1, #function
+	.align	8
+pr_le_t7_p1_pcnt1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t7_p1_pcnt1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x1000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 && %NOT_LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t7_p1_pcnt1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t7_p1_pcnt1, .-pr_le_t7_p1_pcnt1
+
+	.global	pr_le_t7_p1_pcnt3
+	.type	pr_le_t7_p1_pcnt3, #function
+	.align	8
+pr_le_t7_p1_pcnt3:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t7_p1_pcnt3_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 && %NOT_LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t7_p1_pcnt3_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t7_p1_pcnt3, .-pr_le_t7_p1_pcnt3
+
+	.global	pr_le_t7_p1_pcnt3_semc
+	.type	pr_le_t7_p1_pcnt3_semc, #function
+	.align	8
+pr_le_t7_p1_pcnt3_semc:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t7_p1_pcnt3_semc_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x1003000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 && %NOT_LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t7_p1_pcnt3_semc_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t7_p1_pcnt3_semc, .-pr_le_t7_p1_pcnt3_semc
+
+	.global	pr_le_t7_p1_pcnt3_nolm
+	.type	pr_le_t7_p1_pcnt3_nolm, #function
+	.align	8
+pr_le_t7_p1_pcnt3_nolm:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t7_p1_pcnt3_nolm_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 && %NOT_LOOP_END
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t7_p1_pcnt3_nolm_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t7_p1_pcnt3_nolm, .-pr_le_t7_p1_pcnt3_nolm
+
+	.global	pr_le_t14_p0_pcnt0
+	.type	pr_le_t14_p0_pcnt0, #function
+	.align	8
+pr_le_t14_p0_pcnt0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t14_p0_pcnt0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 || %LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t14_p0_pcnt0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t14_p0_pcnt0, .-pr_le_t14_p0_pcnt0
+
+	.global	pr_le_t14_p0_pcnt1
+	.type	pr_le_t14_p0_pcnt1, #function
+	.align	8
+pr_le_t14_p0_pcnt1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t14_p0_pcnt1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x1000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 || %LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t14_p0_pcnt1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t14_p0_pcnt1, .-pr_le_t14_p0_pcnt1
+
+	.global	pr_le_t14_p0_pcnt3
+	.type	pr_le_t14_p0_pcnt3, #function
+	.align	8
+pr_le_t14_p0_pcnt3:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t14_p0_pcnt3_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 || %LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t14_p0_pcnt3_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t14_p0_pcnt3, .-pr_le_t14_p0_pcnt3
+
+	.global	pr_le_t14_p0_pcnt3_semc
+	.type	pr_le_t14_p0_pcnt3_semc, #function
+	.align	8
+pr_le_t14_p0_pcnt3_semc:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t14_p0_pcnt3_semc_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x1003000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 || %LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t14_p0_pcnt3_semc_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t14_p0_pcnt3_semc, .-pr_le_t14_p0_pcnt3_semc
+
+	.global	pr_le_t14_p0_pcnt3_nolm
+	.type	pr_le_t14_p0_pcnt3_nolm, #function
+	.align	8
+pr_le_t14_p0_pcnt3_nolm:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t14_p0_pcnt3_nolm_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 || %LOOP_END
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t14_p0_pcnt3_nolm_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t14_p0_pcnt3_nolm, .-pr_le_t14_p0_pcnt3_nolm
+
+	.global	pr_le_t14_p1_pcnt0
+	.type	pr_le_t14_p1_pcnt0, #function
+	.align	8
+pr_le_t14_p1_pcnt0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t14_p1_pcnt0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 || %LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t14_p1_pcnt0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t14_p1_pcnt0, .-pr_le_t14_p1_pcnt0
+
+	.global	pr_le_t14_p1_pcnt1
+	.type	pr_le_t14_p1_pcnt1, #function
+	.align	8
+pr_le_t14_p1_pcnt1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t14_p1_pcnt1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x1000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 || %LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t14_p1_pcnt1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t14_p1_pcnt1, .-pr_le_t14_p1_pcnt1
+
+	.global	pr_le_t14_p1_pcnt3
+	.type	pr_le_t14_p1_pcnt3, #function
+	.align	8
+pr_le_t14_p1_pcnt3:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t14_p1_pcnt3_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 || %LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t14_p1_pcnt3_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t14_p1_pcnt3, .-pr_le_t14_p1_pcnt3
+
+	.global	pr_le_t14_p1_pcnt3_semc
+	.type	pr_le_t14_p1_pcnt3_semc, #function
+	.align	8
+pr_le_t14_p1_pcnt3_semc:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t14_p1_pcnt3_semc_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x1003000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 || %LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t14_p1_pcnt3_semc_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t14_p1_pcnt3_semc, .-pr_le_t14_p1_pcnt3_semc
+
+	.global	pr_le_t14_p1_pcnt3_nolm
+	.type	pr_le_t14_p1_pcnt3_nolm, #function
+	.align	8
+pr_le_t14_p1_pcnt3_nolm:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t14_p1_pcnt3_nolm_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? ~%pred0 || %LOOP_END
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t14_p1_pcnt3_nolm_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t14_p1_pcnt3_nolm, .-pr_le_t14_p1_pcnt3_nolm
+
+	.global	pr_le_t15_p0_pcnt0
+	.type	pr_le_t15_p0_pcnt0, #function
+	.align	8
+pr_le_t15_p0_pcnt0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t15_p0_pcnt0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 && %NOT_LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t15_p0_pcnt0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t15_p0_pcnt0, .-pr_le_t15_p0_pcnt0
+
+	.global	pr_le_t15_p0_pcnt1
+	.type	pr_le_t15_p0_pcnt1, #function
+	.align	8
+pr_le_t15_p0_pcnt1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t15_p0_pcnt1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x1000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 && %NOT_LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t15_p0_pcnt1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t15_p0_pcnt1, .-pr_le_t15_p0_pcnt1
+
+	.global	pr_le_t15_p0_pcnt3
+	.type	pr_le_t15_p0_pcnt3, #function
+	.align	8
+pr_le_t15_p0_pcnt3:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t15_p0_pcnt3_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 && %NOT_LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t15_p0_pcnt3_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t15_p0_pcnt3, .-pr_le_t15_p0_pcnt3
+
+	.global	pr_le_t15_p0_pcnt3_semc
+	.type	pr_le_t15_p0_pcnt3_semc, #function
+	.align	8
+pr_le_t15_p0_pcnt3_semc:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t15_p0_pcnt3_semc_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x1003000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 && %NOT_LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t15_p0_pcnt3_semc_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t15_p0_pcnt3_semc, .-pr_le_t15_p0_pcnt3_semc
+
+	.global	pr_le_t15_p0_pcnt3_nolm
+	.type	pr_le_t15_p0_pcnt3_nolm, #function
+	.align	8
+pr_le_t15_p0_pcnt3_nolm:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t15_p0_pcnt3_nolm_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 && %NOT_LOOP_END
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t15_p0_pcnt3_nolm_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t15_p0_pcnt3_nolm, .-pr_le_t15_p0_pcnt3_nolm
+
+	.global	pr_le_t15_p1_pcnt0
+	.type	pr_le_t15_p1_pcnt0, #function
+	.align	8
+pr_le_t15_p1_pcnt0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t15_p1_pcnt0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 && %NOT_LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t15_p1_pcnt0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t15_p1_pcnt0, .-pr_le_t15_p1_pcnt0
+
+	.global	pr_le_t15_p1_pcnt1
+	.type	pr_le_t15_p1_pcnt1, #function
+	.align	8
+pr_le_t15_p1_pcnt1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t15_p1_pcnt1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x1000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 && %NOT_LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t15_p1_pcnt1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t15_p1_pcnt1, .-pr_le_t15_p1_pcnt1
+
+	.global	pr_le_t15_p1_pcnt3
+	.type	pr_le_t15_p1_pcnt3, #function
+	.align	8
+pr_le_t15_p1_pcnt3:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t15_p1_pcnt3_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 && %NOT_LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t15_p1_pcnt3_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t15_p1_pcnt3, .-pr_le_t15_p1_pcnt3
+
+	.global	pr_le_t15_p1_pcnt3_semc
+	.type	pr_le_t15_p1_pcnt3_semc, #function
+	.align	8
+pr_le_t15_p1_pcnt3_semc:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t15_p1_pcnt3_semc_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x1003000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 && %NOT_LOOP_END
+	  loop_mode
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t15_p1_pcnt3_semc_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t15_p1_pcnt3_semc, .-pr_le_t15_p1_pcnt3_semc
+
+	.global	pr_le_t15_p1_pcnt3_nolm
+	.type	pr_le_t15_p1_pcnt3_nolm, #function
+	.align	8
+pr_le_t15_p1_pcnt3_nolm:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lle_t15_p1_pcnt3_nolm_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  addd,0	0x0, 0x3000000000000, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr1 ? %pred0 && %NOT_LOOP_END
+	}
+	{
+	  addd,0	0x0, 0x0, %dr6
+	}
+	{
+	  rwd,0	%dr6, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lle_t15_p1_pcnt3_nolm_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_le_t15_p1_pcnt3_nolm, .-pr_le_t15_p1_pcnt3_nolm
+
+	.global	pr_fm_ld_p0
+	.type	pr_fm_ld_p0, #function
+	.align	8
+pr_fm_ld_p0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lfm_ld_p0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x7, %dr0
+	}
+	{
+	  ldd,0	0x0, 0x0, %dr0 ? %pred0
+	}
+	{
+	  nop 3
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lfm_ld_p0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_fm_ld_p0, .-pr_fm_ld_p0
+
+	.global	pr_fm_st_p0
+	.type	pr_fm_st_p0, #function
+	.align	8
+pr_fm_st_p0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lfm_st_p0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	}
+	{
+	  addd,0	0x0, 0x7, %dr0
+	}
+	{
+	  std,2	0x0, 0x0, %dr5 ? %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lfm_st_p0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_fm_st_p0, .-pr_fm_st_p0
+
+	.global	pr_fm_ld_np1
+	.type	pr_fm_ld_np1, #function
+	.align	8
+pr_fm_ld_np1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lfm_ld_np1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x7, %dr0
+	}
+	{
+	  ldd,0	0x0, 0x0, %dr0 ? ~%pred0
+	}
+	{
+	  nop 3
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lfm_ld_np1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_fm_ld_np1, .-pr_fm_ld_np1
+
+	.global	pr_fm_st_np1
+	.type	pr_fm_st_np1, #function
+	.align	8
+pr_fm_st_np1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lfm_st_np1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x7, %dr0
+	}
+	{
+	  std,2	0x0, 0x0, %dr5 ? ~%pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lfm_st_np1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_fm_st_np1, .-pr_fm_st_np1
+
+	.global	pr_fm_ld_p1
+	.type	pr_fm_ld_p1, #function
+	.align	8
+pr_fm_ld_p1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lfm_ld_p1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x7, %dr0
+	}
+	{
+	  ldd,0	0x0, 0x0, %dr0 ? %pred0
+	}
+	{
+	  nop 3
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lfm_ld_p1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_fm_ld_p1, .-pr_fm_ld_p1
+
+	.global	pr_fm_st_p1
+	.type	pr_fm_st_p1, #function
+	.align	8
+pr_fm_st_p1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lfm_st_p1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	}
+	{
+	  addd,0	0x0, 0x7, %dr0
+	}
+	{
+	  std,2	0x0, 0x0, %dr5 ? %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lfm_st_p1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_fm_st_p1, .-pr_fm_st_p1
+
+	.global	pr_dg_addsm_p
+	.type	pr_dg_addsm_p, #function
+	.align	8
+pr_dg_addsm_p:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_addsm_p_t
+	}
+	{
+	  addd,0	0x0, 0x5, %dr6
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0,sm	0x0, 0x7, %dr6 ? %pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr6, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_addsm_p_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_addsm_p, .-pr_dg_addsm_p
+
+	.global	pr_dg_add_p
+	.type	pr_dg_add_p, #function
+	.align	8
+pr_dg_add_p:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_add_p_t
+	}
+	{
+	  addd,0	0x0, 0x5, %dr6
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0	0x0, 0x7, %dr6 ? %pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr6, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_add_p_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_add_p, .-pr_dg_add_p
+
+	.global	pr_dg_ldsm_p
+	.type	pr_dg_ldsm_p, #function
+	.align	8
+pr_dg_ldsm_p:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_ldsm_p_t
+	}
+	{
+	  addd,0	0x0, 0x5, %dr6
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,0,sm	%dr9, 0x0, %dr6 ? %pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr6, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_ldsm_p_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_ldsm_p, .-pr_dg_ldsm_p
+
+	.global	pr_dg_cmpsm_p
+	.type	pr_dg_cmpsm_p, #function
+	.align	8
+pr_dg_cmpsm_p:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_cmpsm_p_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred3
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,0,sm	0x0, 0x0, %pred3 ? %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred3
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_cmpsm_p_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_cmpsm_p, .-pr_dg_cmpsm_p
+
+	.global	pr_dg_addsm_n
+	.type	pr_dg_addsm_n, #function
+	.align	8
+pr_dg_addsm_n:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_addsm_n_t
+	}
+	{
+	  addd,0	0x0, 0x5, %dr6
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0,sm	0x0, 0x7, %dr6 ? ~%pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr6, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_addsm_n_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_addsm_n, .-pr_dg_addsm_n
+
+	.global	pr_dg_add_n
+	.type	pr_dg_add_n, #function
+	.align	8
+pr_dg_add_n:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_add_n_t
+	}
+	{
+	  addd,0	0x0, 0x5, %dr6
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0	0x0, 0x7, %dr6 ? ~%pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr6, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_add_n_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_add_n, .-pr_dg_add_n
+
+	.global	pr_dg_ldsm_n
+	.type	pr_dg_ldsm_n, #function
+	.align	8
+pr_dg_ldsm_n:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_ldsm_n_t
+	}
+	{
+	  addd,0	0x0, 0x5, %dr6
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,0,sm	%dr9, 0x0, %dr6 ? ~%pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr6, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_ldsm_n_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_ldsm_n, .-pr_dg_ldsm_n
+
+	.global	pr_dg_cmpsm_n
+	.type	pr_dg_cmpsm_n, #function
+	.align	8
+pr_dg_cmpsm_n:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_cmpsm_n_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred3
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,0,sm	0x0, 0x0, %pred3 ? ~%pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred3
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_cmpsm_n_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_cmpsm_n, .-pr_dg_cmpsm_n
+
+	.global	pr_dg_adddsm_p_nouse
+	.type	pr_dg_adddsm_p_nouse, #function
+	.align	8
+pr_dg_adddsm_p_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_adddsm_p_nouse_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0,sm	0x0, 0x7, %dr6 ? %pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_adddsm_p_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_adddsm_p_nouse, .-pr_dg_adddsm_p_nouse
+
+	.global	pr_dg_addd_p_nouse
+	.type	pr_dg_addd_p_nouse, #function
+	.align	8
+pr_dg_addd_p_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_addd_p_nouse_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0	0x0, 0x7, %dr6 ? %pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_addd_p_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_addd_p_nouse, .-pr_dg_addd_p_nouse
+
+	.global	pr_dg_lddsm_p_nouse
+	.type	pr_dg_lddsm_p_nouse, #function
+	.align	8
+pr_dg_lddsm_p_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_lddsm_p_nouse_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,0,sm	%dr9, 0x0, %dr6 ? %pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_lddsm_p_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_lddsm_p_nouse, .-pr_dg_lddsm_p_nouse
+
+	.global	pr_dg_cmpesbsm_p_nouse
+	.type	pr_dg_cmpesbsm_p_nouse, #function
+	.align	8
+pr_dg_cmpesbsm_p_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_cmpesbsm_p_nouse_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,0,sm	0x0, 0x0, %pred3 ? %pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_cmpesbsm_p_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_cmpesbsm_p_nouse, .-pr_dg_cmpesbsm_p_nouse
+
+	.global	pr_dg_adddsm_n_nouse
+	.type	pr_dg_adddsm_n_nouse, #function
+	.align	8
+pr_dg_adddsm_n_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_adddsm_n_nouse_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0,sm	0x0, 0x7, %dr6 ? ~%pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_adddsm_n_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_adddsm_n_nouse, .-pr_dg_adddsm_n_nouse
+
+	.global	pr_dg_addd_n_nouse
+	.type	pr_dg_addd_n_nouse, #function
+	.align	8
+pr_dg_addd_n_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_addd_n_nouse_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  addd,0	0x0, 0x7, %dr6 ? ~%pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_addd_n_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_addd_n_nouse, .-pr_dg_addd_n_nouse
+
+	.global	pr_dg_lddsm_n_nouse
+	.type	pr_dg_lddsm_n_nouse, #function
+	.align	8
+pr_dg_lddsm_n_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_lddsm_n_nouse_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  ldd,0,sm	%dr9, 0x0, %dr6 ? ~%pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_lddsm_n_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_lddsm_n_nouse, .-pr_dg_lddsm_n_nouse
+
+	.global	pr_dg_cmpesbsm_n_nouse
+	.type	pr_dg_cmpesbsm_n_nouse, #function
+	.align	8
+pr_dg_cmpesbsm_n_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_cmpesbsm_n_nouse_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,0,sm	0x0, 0x0, %pred3 ? ~%pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_cmpesbsm_n_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_cmpesbsm_n_nouse, .-pr_dg_cmpesbsm_n_nouse
+
+	.global	pr_dg_mrgsm_p_nouse
+	.type	pr_dg_mrgsm_p_nouse, #function
+	.align	8
+pr_dg_mrgsm_p_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_mrgsm_p_nouse_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0,sm	%dr4, %dr5, %dr6, %pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_mrgsm_p_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_mrgsm_p_nouse, .-pr_dg_mrgsm_p_nouse
+
+	.global	pr_dg_mrgsm_p_use
+	.type	pr_dg_mrgsm_p_use, #function
+	.align	8
+pr_dg_mrgsm_p_use:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_mrgsm_p_use_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0,sm	%dr4, %dr5, %dr6, %pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr6, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_mrgsm_p_use_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_mrgsm_p_use, .-pr_dg_mrgsm_p_use
+
+	.global	pr_dg_mrg_p_nouse
+	.type	pr_dg_mrg_p_nouse, #function
+	.align	8
+pr_dg_mrg_p_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_mrg_p_nouse_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr6, %pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_mrg_p_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_mrg_p_nouse, .-pr_dg_mrg_p_nouse
+
+	.global	pr_dg_ct_p
+	.type	pr_dg_ct_p, #function
+	.align	8
+pr_dg_ct_p:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_ct_p_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  nop 5
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  ct	%ctpr1 ? %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_ct_p_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_ct_p, .-pr_dg_ct_p
+
+	.global	pr_dg_mrgsm_n_nouse
+	.type	pr_dg_mrgsm_n_nouse, #function
+	.align	8
+pr_dg_mrgsm_n_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_mrgsm_n_nouse_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0,sm	%dr4, %dr5, %dr6, ~%pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_mrgsm_n_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_mrgsm_n_nouse, .-pr_dg_mrgsm_n_nouse
+
+	.global	pr_dg_mrgsm_n_use
+	.type	pr_dg_mrgsm_n_use, #function
+	.align	8
+pr_dg_mrgsm_n_use:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_mrgsm_n_use_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0,sm	%dr4, %dr5, %dr6, ~%pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr6, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_mrgsm_n_use_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_mrgsm_n_use, .-pr_dg_mrgsm_n_use
+
+	.global	pr_dg_mrg_n_nouse
+	.type	pr_dg_mrg_n_nouse, #function
+	.align	8
+pr_dg_mrg_n_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_mrg_n_nouse_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr6, ~%pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_mrg_n_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_mrg_n_nouse, .-pr_dg_mrg_n_nouse
+
+	.global	pr_dg_ct_n
+	.type	pr_dg_ct_n, #function
+	.align	8
+pr_dg_ct_n:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_ct_n_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  nop 5
+	}
+	{
+	  addd,0	0x0, 0x0, %dr0
+	}
+	{
+	  ct	%ctpr1 ? ~%pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_ct_n_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_ct_n, .-pr_dg_ct_n
+
+	.global	pr_dg_mrg_nouse
+	.type	pr_dg_mrg_nouse, #function
+	.align	8
+pr_dg_mrg_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_mrg_nouse_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr6, %pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_mrg_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_mrg_nouse, .-pr_dg_mrg_nouse
+
+	.global	pr_dg_mrgsm_nouse
+	.type	pr_dg_mrgsm_nouse, #function
+	.align	8
+pr_dg_mrgsm_nouse:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_mrgsm_nouse_t
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0,sm	%dr4, %dr5, %dr6, %pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	0x0, 0x1, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_mrgsm_nouse_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_mrgsm_nouse, .-pr_dg_mrgsm_nouse
+
+	.global	pr_dg_mrgsm
+	.type	pr_dg_mrgsm, #function
+	.align	8
+pr_dg_mrgsm:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Ldg_mrgsm_t
+	}
+	{
+	  addd,0	0x0, 0x5, %dr6
+	}
+	{
+	  ldd,0,sm	%dr3, 0x0, %dr2
+	}
+	{
+	  nop 7
+	}
+	{
+	  cmpedb,0,sm	%dr2, 0x0, %pred1
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0,sm	%dr4, %dr5, %dr6, %pred1
+	}
+	{
+	  nop 7
+	}
+	{
+	  addd,0	%dr6, 0x0, %dr0
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Ldg_mrgsm_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_dg_mrgsm, .-pr_dg_mrgsm
+
+	.global	pr_cr_p0
+	.type	pr_cr_p0, #function
+	.align	8
+pr_cr_p0:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lcr_p0_t
+	}
+	{
+	  cmpesb,0	0x0, 0x1, %pred0
+	  cmpesb,1	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,1	0x0, 0x0, %pred2 ? %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lcr_p0_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_cr_p0, .-pr_cr_p0
+
+	.global	pr_cr_p1
+	.type	pr_cr_p1, #function
+	.align	8
+pr_cr_p1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lcr_p1_t
+	}
+	{
+	  cmpesb,0	0x0, 0x0, %pred0
+	  cmpesb,1	0x0, 0x1, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  cmpesb,1	0x0, 0x0, %pred2 ? %pred0
+	}
+	{
+	  nop 2
+	}
+	{
+	  merged,0	%dr4, %dr5, %dr0, %pred2
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lcr_p1_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_cr_p1, .-pr_cr_p1
+
+	.global	pr_ww_alu0_ld2
+	.type	pr_ww_alu0_ld2, #function
+	.align	8
+pr_ww_alu0_ld2:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lww_alu0_ld2_t
+	}
+	{
+	  addd,0	0x0, 0x7, %dr0
+	  ldd,2	%dr9, 0x0, %dr0
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lww_alu0_ld2_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_ww_alu0_ld2, .-pr_ww_alu0_ld2
+
+	.global	pr_ww_ld2_alu3
+	.type	pr_ww_ld2_alu3, #function
+	.align	8
+pr_ww_ld2_alu3:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lww_ld2_alu3_t
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr0
+	  addd,3	0x0, 0x7, %dr0
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lww_ld2_alu3_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_ww_ld2_alu3, .-pr_ww_ld2_alu3
+
+	.global	pr_ww_alu3_ld5
+	.type	pr_ww_alu3_ld5, #function
+	.align	8
+pr_ww_alu3_ld5:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lww_alu3_ld5_t
+	}
+	{
+	  addd,3	0x0, 0x7, %dr0
+	  ldd,5	%dr9, 0x0, %dr0
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lww_alu3_ld5_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_ww_alu3_ld5, .-pr_ww_alu3_ld5
+
+	.global	pr_ww_ld0_ld2
+	.type	pr_ww_ld0_ld2, #function
+	.align	8
+pr_ww_ld0_ld2:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lww_ld0_ld2_t
+	}
+	{
+	  ldd,0	%dr9, 0x0, %dr0
+	  ldd,2	%dr9, 0x8, %dr0
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lww_ld0_ld2_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_ww_ld0_ld2, .-pr_ww_ld0_ld2
+
+	.global	pr_ww_ld2_ld3
+	.type	pr_ww_ld2_ld3, #function
+	.align	8
+pr_ww_ld2_ld3:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, %dr0, %dr9
+	  addd,1	0x0, 0x10, %dr3
+	  addd,3	0x0, 0x0, %dr4
+	  addd,4	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lww_ld2_ld3_t
+	}
+	{
+	  ldd,2	%dr9, 0x0, %dr0
+	  ldd,3	%dr9, 0x8, %dr0
+	}
+	{
+	  nop 5
+	}
+	{
+	  nop 2
+	}
+	{
+	  ct	%ctpr3
+	}
+.Lww_ld2_ld3_t:
+	{
+	  addd,1	0x0, 0x1, %dr0
+	  rwd,0	0x0, %lsr
+	}
+	{
+	  nop 5
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	pr_ww_ld2_ld3, .-pr_ww_ld2_ld3

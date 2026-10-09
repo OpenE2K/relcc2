@@ -14,10 +14,11 @@
 #include <stdio.h>
 #include <string.h>
 
-#define CASE(n) long pr_##n (void);
+#define CASE(n) long pr_##n (long *);
 #include "preds-cases.h"
 #undef CASE
 
+static long mem[3] = { 9, 11, 0 };
 static sigjmp_buf env;
 static int code;
 
@@ -39,13 +40,13 @@ main (void)
   sigaction (SIGILL, &sa, NULL);
   sigaction (SIGSEGV, &sa, NULL);
 #define CASE(n) \
-  if (strcmp (#n, "leaf") != 0) \
+  if (strncmp (#n, "leaf", 4) != 0) \
   { \
     int sig = sigsetjmp (env, 1); \
     if (sig) \
       printf ("%-26s signal %d code %d\n", #n, sig, code); \
     else \
-      printf ("%-26s %ld\n", #n, pr_##n ()); \
+      printf ("%-26s %ld\n", #n, pr_##n (mem)); \
   }
 #include "preds-cases.h"
 #undef CASE

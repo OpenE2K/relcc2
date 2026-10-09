@@ -5,7 +5,8 @@
 
   python3 tools/isa-probes/gen_preds.py
 
-i17_*: %pred0 starts false; a compare makes it true; a reader D
+i17_*: %pred0 starts false; a compare makes it true (i17l_*: predicate
+logic, pass/landp/pass of two true predicates); a reader D
 instructions later writes the return value: a predicated addd (1 if it
 saw the new value, else 0) or a merged (9 new, 7 old).  The reader's
 instruction also has a taken return (ret), a taken ct to the next label
@@ -34,16 +35,22 @@ def fn(name, body):
             f".-pr_{name}\n")
 
 
-def i17(kind, d, reader):
-    name = f"i17_{kind}_{reader}_d{d}"
+def i17(kind, d, reader, writer="cmp"):
+    name = f"i17{'l' if writer == 'landp' else ''}_{kind}_{reader}_d{d}"
     b = wi("setwd\twsz = 0x8, nfx = 0x1, dbl = 0x0", "return\t%ctpr3",
            "addd,0\t0x0, 0x0, %dr0", "addd,1\t0x0, 0x7, %dr4",
            "addd,2\t0x0, 0x9, %dr5", "addd,3\t0x0, 0x0, %dr3")
     b += wi("cmpesb,0\t0x0, 0x1, %pred0", "cmpesb,1\t0x0, 0x1, %pred1",
+            "cmpesb,3\t0x0, 0x0, %pred2", "cmpesb,4\t0x0, 0x0, %pred3",
             "disp\t%ctpr1, pr_leaf" if kind == "call"
             else f"disp\t%ctpr1, .L{name}_t")
     b += wi("nop 7") + wi("nop 7")
-    b += wi("cmpedb,0\t%dr3, 0x0, %pred0")
+    if writer == "landp":
+        # %pred0 = %pred2 and %pred3, both true, by predicate logic.
+        b += wi("pass\t%pred2, @p0", "pass\t%pred3, @p1",
+                "landp\t@p0, @p1, @p4", "pass\t@p4, %pred0")
+    else:
+        b += wi("cmpedb,0\t%dr3, 0x0, %pred0")
     if d == 2:
         b += wi("nop")
     op = ("addd,0\t0x0, 0x1, %dr0 ? %pred0" if reader == "add"
@@ -110,6 +117,7 @@ def main():
         for kind in ("ret", "branch", "far", "call", "ctfalse", "none"):
             for reader in ("add", "merge"):
                 cases.append(i17(kind, d, reader))
+                cases.append(i17(kind, d, reader, "landp"))
     for p0 in (0, 1):
         cases.append(logic(f"lp_landp_p0{p0}", False, "landp", p0))
         cases.append(logic(f"lp_andp_p0{p0}", False, "andp", p0))

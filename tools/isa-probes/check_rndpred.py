@@ -6,9 +6,11 @@ in spec/isa/predicates.md ("Random predicates").
   python3 tools/isa-probes/check_rndpred.py DIR
 
 DIR holds what ./rndpred printed (stdout.txt) and the files it wrote
-(seqN.txt, trN.txt, twoN.txt, tri.txt, cond.txt).  Prints the number of
-reads that disagree with the model in each file; 0 everywhere means the
-model is exact.
+(seqN.txt, trN.txt, mix1.txt, zero.txt, zeroa.txt, twoN.txt, tri.txt,
+cond.txt).  Prints the number of reads (or lines) that disagree with
+the model; 0 everywhere means the model is exact.  For %rndpred1-5 the
+million-read runs are checked by their count and first 64 reads (the
+probe records each read only for N >= 6).
 
 The model: %rndpr holds two Fibonacci LFSRs, a = bits 0-16 (x^17 + x^14
 + 1) and b = bits 32-49 (x^18 + x^11 + 1); every wide instruction with
@@ -65,12 +67,46 @@ def main():
             a, b = step(a, b)
         bad += (f"{cnt / 1e6:.6f}" != m[1]) + (first != m[2])
         print(f"%rndpred{n:<2}: {cnt / 1e6:.6f} true, {bad} disagree")
-    files = sorted(d.glob("tr*.txt")) + sorted(d.glob("two*.txt"))
-    files += [d / "tri.txt"]
+    # The state lines: idle, unused ELPs, getpid.
+    for what, steps in (("idle 1e6 iterations", 0), ("1 unused ELP", 1),
+                        ("2 unused ELPs", 2), ("getpid", 0)):
+        m = re.search(rf"{what}: ([0-9a-f]+) -> ([0-9a-f]+)", out)
+        a, b = split(int(m[1], 16))
+        for _ in range(steps):
+            a, b = step(a, b)
+        bad = int((a, b) != split(int(m[2], 16)))
+        print(f"{what}: {bad} disagree")
+    # The same state twice: 64 reads of %rndpred8.
+    for what, s0 in (("from -1:", -1), ("from -1 again:", -1),
+                     ("getpid at 32:", -1),
+                     ("from 1234500006789:", 0x0001234500006789)):
+        m = re.search(rf"{re.escape(what)} +([01]+)", out)
+        a, b = split(s0)
+        got = ""
+        for _ in range(64):
+            got += "01"[rnd(a, b, 8)]
+            a, b = step(a, b)
+        print(f"{what} {int(got != m[1])} disagree")
+    # Single-bit flips of all ones and all zeros: the bits whose flip
+    # makes one read false.
+    bad = 0
+    for m in re.finditer(r"%rndpred(\d+) +from (ones|zeros): (\d); flips:"
+                         r"([ \d]*)", out):
+        n, base = int(m[1]), (0x0003ffff0001ffff if m[2] == "ones" else 0)
+        a, b = split(base)
+        want = [k for k in list(range(17)) + list(range(32, 50))
+                if not rnd(*split(base ^ (1 << k)), n)]
+        bad += ((str(int(rnd(a, b, n))) != m[3])
+                + (want != [int(x) for x in m[4].split()]))
+    print(f"flips: {bad} disagree")
+    files = sorted(d.glob("tr[0-9]*.txt")) + sorted(d.glob("two*.txt"))
+    files += [d / f for f in ("tri.txt", "mix1.txt", "zero.txt",
+                              "zeroa.txt")]
     for f in files:
         k = f.stem
         ns = ([3, 7, 11] if k == "tri" else
-              [int(k[3:])] * 2 if k.startswith("two") else [int(k[2:])])
+              [int(k[3:])] * 2 if k.startswith("two") else
+              [1] if k in ("mix1", "zero", "zeroa") else [int(k[2:])])
         bad, prev = 0, None
         for line in f.read_text().splitlines():
             s, bits = line.split()

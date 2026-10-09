@@ -10,7 +10,8 @@
      $LCC -O3 tools/isa-probes/rndpred.c tools/isa-probes/rndpred.s -o rndpred
      ./rndpred                            # on hardware
 
-   With %rndpr readable it also writes trN.txt, twoN.txt and tri.txt:
+   With %rndpr readable it also writes trN.txt, mix1.txt, zero.txt,
+   zeroa.txt, twoN.txt and tri.txt:
    one line per read, "STATE BITS", STATE being %rndpr before it; and
    seqN.txt for N >= 6: %rndpr before the run, then the index of each
    true read of the million.  With %rndpr writable it also prints, for
@@ -35,6 +36,7 @@ long rp_idle (long);
 #define DECL(n) void rp_seq##n (unsigned char *, long); \
   void rp_tr##n (unsigned long *, unsigned char *, long);
 N15 (DECL)
+void rp_mix1 (unsigned long *, unsigned char *, long);
 void rp_two1 (unsigned long *, unsigned char *, long);
 void rp_two8 (unsigned long *, unsigned char *, long);
 void rp_two15 (unsigned long *, unsigned char *, long);
@@ -251,6 +253,19 @@ main (void)
         }
       if (wr)
         rp_rwd (-1L);
+      rp_mix1 (st, buf, NTR);
+      dump ("mix1.txt", 1, NTR);
+      if (wr)
+        {
+          /* Zero fields: both, then only the 17-bit one.  */
+          rp_rwd (0);
+          rp_tr1 (st, buf, 16);
+          dump ("zero.txt", 1, 16);
+          rp_rwd (0x0003ffff00000000L);
+          rp_tr1 (st, buf, 64);
+          dump ("zeroa.txt", 1, 64);
+          rp_rwd (-1L);
+        }
       rp_two1 (st, buf, NTR);
       dump ("two1.txt", 2, NTR);
       if (wr)

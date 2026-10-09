@@ -1244,6 +1244,60 @@ rp_tr15:
 	}
 	.size	rp_tr15, .-rp_tr15
 
+	.global	rp_mix1
+	.type	rp_mix1, #function
+	.align	8
+rp_mix1:
+	{
+	  setwd	wsz = 0x8, nfx = 0x1, dbl = 0x0
+	  return	%ctpr3
+	  addd,0	0x0, 0x0, %dr4
+	  addd,1	0x0, 0x1, %dr5
+	}
+	{
+	  disp	%ctpr1, .Lmix1
+	}
+.Lmix1:
+	{
+	  rrd	%rndpr, %dr7
+	}
+	{
+	  nop 2
+	}
+	{
+	  pass	%pred5, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred6
+	}
+	{
+	  pass	%spred0, @p1
+	  andp	@p1, @p1, @p4
+	  pass	@p4, %pred7
+	}
+	{
+	  pass	%rndpred1, @p0
+	  andp	@p0, @p0, @p4
+	  pass	@p4, %pred0
+	  subd,1	%dr2, 0x1, %dr2
+	}
+	{
+	  cmpledb,0	%dr2, 0x0, %pred1
+	  merged,1	%dr4, %dr5, %dr6, %pred0
+	}
+	{
+	  stb,2	%dr1, 0x0, %dr6
+	  addd,1	%dr1, 0x1, %dr1
+	  std,5	%dr0, 0x0, %dr7
+	  addd,0	%dr0, 0x8, %dr0
+	}
+	{
+	  ct	%ctpr1 ? ~%pred1
+	}
+	{
+	  ct	%ctpr3
+	}
+	.size	rp_mix1, .-rp_mix1
+
 	.global	rp_two1
 	.type	rp_two1, #function
 	.align	8

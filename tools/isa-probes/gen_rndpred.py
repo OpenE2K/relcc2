@@ -9,6 +9,8 @@ rp_rrd() returns %rndpr; rp_rwd(v) writes it.
 rp_seqN(out, n): n reads of %rndpredN, one a loop iteration, each
 stored as a byte 0 or 1.
 rp_trN(st, out, n): the same, also storing %rndpr before each read.
+rp_mix1(st, out, n): rp_tr1 with two instructions of other predicate
+logic (a %pred ELP and CLP, a %spred ELP and CLP) before each read.
 rp_twoN(st, out, n): two reads of %rndpredN in one wide instruction
 (@p0 and @p1), stored as bytes 2i and 2i+1, %rndpr before each pair.
 rp_tri(st, out, n): %rndpred3, 7 and 11 in one wide instruction,
@@ -46,8 +48,8 @@ def bits(srcs):
             + [f"pass\t@p{4 + k}, %pred{k}" for k in range(len(srcs))])
 
 
-def seq(n, trace):
-    name = f"{'tr' if trace else 'seq'}{n}"
+def seq(n, trace, mix=False):
+    name = f"{'mix' if mix else 'tr' if trace else 'seq'}{n}"
     # %dr0 out (or st with trace: %dr0 st, %dr1 out, %dr2 count).
     out, cnt = ("%dr1", "%dr2") if trace else ("%dr0", "%dr1")
     b = head(name)
@@ -55,6 +57,13 @@ def seq(n, trace):
     if trace:
         b += wi("rrd\t%rndpr, %dr7")
         b += wi("nop 2")
+    if mix:
+        # Other predicate logic between the reads: a %pred ELP with a CLP,
+        # and a %spred ELP.
+        b += wi("pass\t%pred5, @p0", "andp\t@p0, @p0, @p4",
+                "pass\t@p4, %pred6")
+        b += wi("pass\t%spred0, @p1", "andp\t@p1, @p1, @p4",
+                "pass\t@p4, %pred7")
     b += wi(*bits([n]), f"subd,1\t{cnt}, 0x1, {cnt}")
     b += wi(f"cmpledb,0\t{cnt}, 0x0, %pred1",
             "merged,1\t%dr4, %dr5, %dr6, %pred0")
@@ -104,6 +113,7 @@ def main():
     for n in range(1, 16):
         cases.append(seq(n, False))
         cases.append(seq(n, True))
+    cases.append(seq(1, True, mix=True))
     for n in (1, 8, 15):
         cases.append(multi(f"two{n}", [n, n]))
     cases.append(multi("tri", [3, 7, 11]))

@@ -459,9 +459,9 @@ groups:
   rules:
   - ops: pass andp landp movep
     lat: "1; 0 within an instruction"
-    does: "PLS logic on primary predicates `@pN`: `pass` copies a `%pred` (or a loop/compare condition) to `@p` or back, `andp`/`landp` give c0 && c1 (each optionally negated; `landp`'s second operand is lazy for diagnostic values), `movep` moves a predicate conditionally. 1 cycle through a `%pred`, 0 within a wide instruction (two levels at most)."
-    use: Branch conditions, if-conversion of `&&`/`||` chains.
-    see: semantics.md, "Predicate logic"; bundle.md, "PLS"
+    does: "PLS logic on primary predicates `@pN`: `pass` loads a `%pred` or a special predicate (`%lcntex`, `%spred`, `%rndpred`) into `@p0`-`@p3`, or writes a CLP result back to a `%pred`; `andp`/`landp` give c0 && c1 (each optionally negated; `landp`'s second operand is lazy for diagnostic values); `movep c, v` writes v to its `%pred` only when c is true. 1 cycle through a `%pred`, 0 within a wide instruction (two levels at most)."
+    use: Branch conditions, if-conversion of `&&`/`||` chains (lcc does every conjunction with `landp`, and uses `andp` only to copy or invert).
+    see: predicates.md; semantics.md, "Predicate logic"; bundle.md, "PLS"
   - ops: clpandp clplandp
     does: "Stand-alone predicate logic outside a wide instruction, `clpandp %predA, %predB, %predC` (gas expands it into PLS syllables); runs in user mode."
   - ops: srp crp slrp

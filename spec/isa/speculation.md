@@ -56,8 +56,8 @@ What happens to a diagnostic operand ([hw] unless marked):
 |---|---|---|
 | ALU or FP operand (`addd`, `faddd`, ...) | SIGILL, `ILL_ILLOPN` | diagnostic result |
 | Compare operand (`cmpedb`) | SIGILL, `ILL_ILLOPN` | diagnostic predicate |
-| Diagnostic predicate as an operation's condition (`? %pred0`) | SIGILL, `ILL_ILLOPN` | diagnostic result [source] |
-| Diagnostic predicate in `merge` | SIGILL, `ILL_ILLOPN` | diagnostic result [source] |
+| Diagnostic predicate as an operation's condition (`? %pred0`, and `? ~%pred0` alike) | SIGILL, `ILL_ILLOPN`, at the operation | the operation runs and its result is diagnostic: an `addd,sm`, an `ldd,sm` (its register), a `cmpesb,sm` (its predicate) (`preds.c` `dg_*`; [predicates.md](predicates.md)) |
+| Diagnostic predicate in `merge` | SIGILL, `ILL_ILLOPN` | diagnostic result (`dg_mrg*`) |
 | Diagnostic predicate in `ct ? %pred0` | SIGILL, `ILL_ILLOPN` | — |
 | `merge` choosing the diagnostic operand / the other one | trap / no trap [source] | diagnostic / no effect |
 | Store data | SIGILL (calling-convention.md) | the store is done with the register's bits (a wholly diagnostic register stores `4afafafa4afafafa`); read back by an ordinary load the value has tag 0 |

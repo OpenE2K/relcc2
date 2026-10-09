@@ -456,10 +456,10 @@ bytes (isa-score models this).
 | ALU, multiply, divide, load → register use | yes | values correct at any distance ≥ 1, also integer ↔ FP and across clusters |
 | an operation **under a false predicate** → a reader of its destination | **no wait** | a reader one cycle after an `ldd` or `muld` whose predicate is false runs as if that operation wrote another register (2.0 cycles a step, against 5.9 and 9.8 when it executes; `pocchk.c`, 4C, 8C2, 2C3): the interlock follows the predicate, so the other arm of an if-converted if-else costs nothing |
 | compare → predicated ALU op, `ct ? pred`, `ibranch ? pred` | yes | correct at distance ≥ 1 |
-| compare or predicate logic (`pass`/`landp`/`pass`) → predicated op or `merge` in the wide instruction of a **taken return** (`ct %ctpr3` after `return`) | **no** | at distance 1 the op reads the predicate as it was before the compare or logic, with no stall; at distance 2 it reads the new value (`i17l_*` for predicate logic: 4C, 8C2, 2C3; the proof-of-concept back end's finding I38). A taken branch (`ct %ctpr1`, near or far), a `call`, a `ct` that is not taken and no transfer all wait (`tools/isa-probes/preds.c`, `i17_*`; 4C and Elbrus-8C2; the proof-of-concept back end's finding I17, where a `merge` in a return's instruction broke expat). Keep a compare 2 instructions before any predicate reader in a return's instruction. On v6 (the 2C3) distance 1 reads the new value. |
+| compare or predicate logic (`pass`/`landp`/`pass`) → predicated op or `merge` in the wide instruction of a **taken return** (`ct %ctpr3` after `return`) | **no** | at distance 1 the op reads the predicate as it was before the compare or logic, with no stall (in the 2026-10-10 runs an `addd` reader after a compare got the new value instead in 4 of 4 runs on the 4C and 1 of 4 on the 8C2, so the outcome depends on timing; `merge` readers, and readers after predicate logic, always got the old one); at distance 2 it reads the new value (`i17l_*` for predicate logic: 4C, 8C2, 2C3; the proof-of-concept back end's finding I38). A taken branch (`ct %ctpr1`, near or far), a `call`, a `ct` that is not taken and no transfer all wait (`tools/isa-probes/preds.c`, `i17_*`; 4C and Elbrus-8C2; the proof-of-concept back end's finding I17, where a `merge` in a return's instruction broke expat). Keep a compare 2 instructions before any predicate reader in a return's instruction. On v6 (the 2C3) distance 1 reads the new value. |
 | compare → `andp`, `andp` → predicated ALU op | yes | correct at distance ≥ 1 |
 | `andp` → `andp` in the same wide instruction (a CLP reading `@p4` written by an earlier CLP) | — | sees the new value: predicate logic chains inside one instruction |
-| compare → `andp` through `%spred0` in the same instruction | ? | read the old (false) value both on the 4C and under qemu; how `%spred` is meant to be used is not known yet |
+| an operation in ALC K whose operand isn't ready, in an instruction with `pass %spredK` | **no wait, by design** | the instruction issues without waiting for ALC K: the operation sees a diagnostic operand (SIGILL without `,sm`, a diagnostic result with it) and `%spredK` is true; 1,000 iterations of a load and such a consumer one instruction later take 6,002 cycles against 10,001 without `%spred` (`preds.c` `spt_*`, 4C, 8C2, 2C3; [predicates.md](predicates.md)) |
 | `disp`, `movtd` → `ct` | yes | correct at distance ≥ 1 |
 | `rws %fpcr` → `rrs %fpcr` | yes | |
 | `rws %pfpfr` (rounding mode) → FP operation | yes | |
@@ -694,7 +694,7 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
 
 - v4, v7; v6 on the Elbrus-16C (the 2C3 is the v6 machine measured).
 - Loop mode registers other than `%lsr` (`%ilcr`); APB throughput.
-- 128-bit operations (v5+), `%spred`.
+- 128-bit operations (v5+).
 - Throughput of 128-bit and packed FP operations, `mova`, AAU stores,
   and loads and stores of other sizes; whether the store bank rule
   involves physical address bits.

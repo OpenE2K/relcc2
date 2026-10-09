@@ -228,7 +228,7 @@ Bits 0–4 are `psrc`; bits 5–8 are the condition type:
 | 15 | `%predN && %NOT_LOOP_END` |
 | 10, 12, 13 | Reserved (and 11 before v7) |
 
-gas accepts conditions involving `%MLOCK` only on `ibranch`. In types 8, 9
+gas accepts conditions involving `%MLOCK` only on `ibranch` (and `rbranch`) and, from v6, `ibranchd`. In types 8, 9
 and 11, `%dt_alN`, `%cmpN` and `%clpN` refer to operations in the same
 bundle: a speculative operation in ALC N (true when it has a diagnostic
 operand; [speculation.md](speculation.md)), a compare in ALC N, and the
@@ -279,16 +279,18 @@ PLS0 and PLS1 each contain two ELPs and one CLP. PLS2 contains only a CLP.
   | ELP value | Source |
   |---|---|
   | `0x00` | `%lcntex` |
-  | `0bbbbb`, nonzero | `%spred`, with bits selecting ALC compare results 0–4 |
+  | `0bbbbbb`, nonzero | `%spred`, bits 0–5 naming ALC0–5 (objdump prints only 0–4): the instruction doesn't wait for those channels' operands, and the predicate is true if one wasn't ready |
   | `0x40` | `%bgrpred` |
-  | `0x41`–`0x4f` | `%rndpred1`–`%rndpred15` |
+  | `0x41`–`0x4f` | `%rndpred1`–`%rndpred15` (v3+): pseudo-random, from `%rndpr` |
   | `11nnnnn` | `%predN` |
+
+  What each source does: [predicates.md](predicates.md).
 
 - **CLP/MLP** (bits 0–15) combines two primary predicates:
 
   | Bits | Field |
   |---|---|
-  | 14–15 | opcode: 0 `andp`, 1 `landp`, 3 `movep` |
+  | 14–15 | opcode: 0 `andp`, 1 `landp`, 3 `movep` (MLP: `%pred` = p0 ? p1 : `%pred`, [predicates.md](predicates.md)) |
   | 13 | neg0 |
   | 10–12 | p0 |
   | 9 | neg1 |
@@ -312,9 +314,13 @@ first.
 | Bits | Field |
 |---|---|
 | 14–15 | Opcode: 0 RLP for ALC0–2, 1 RLP for ALC3–5, 2 MRGC for ALC0–2, 3 MRGC for ALC3–5 |
-| 10–13 | Mask: which of the three channels the entry applies to. Bit 3 is AM2/AM5 (the AAU increment of `staa`) |
-| 7–9 | Per-channel negation |
-| 0–6 | Predicate: `10nnnnn` `%pcntN`, `11nnnnn` `%predN` |
+| 10–13 | Mask: which of the three channels the entry applies to. Bit 3 is AM2/AM5 (the AAU increment of `staa`) in an RLP, and in MRGC entry 0 the `srp`/`crp`/`slrp` condition |
+| 7–9 | Per-channel negation; bit 9 (ALC2/5) also negates the AM2/AM5 and recovery-point conditions |
+| 0–6 | Predicate: `10nnnnn` `%pcntN`, `11nnnnn` `%predN`; the guide and MCST's qemu read `0xxxxxx` as `%lcntex`, which gas cannot write |
+
+gas shares one entry among the channels of a cluster that use the same
+predicate, each with its own negation; how many entries a wide
+instruction needs, and what the conditions do: [predicates.md](predicates.md).
 
 ## AAS: array access syllables [decoded]
 
@@ -366,9 +372,16 @@ one's value lands, for two ALU operations in one cluster or across
 clusters and for a load against an ALU operation. With both enabled the
 higher channel's result is left: ALC1 over ALC0 in either source order,
 ALC3 over ALC0, an ALC1 `addd` over an ALC0 `ldd` although the load
-completes later (`tools/isa-probes/pocchk.c`; 4C, 8C2 and 2C3 alike).
-gas accepts all of these without a warning; don't rely on the
-both-enabled order.
+completes later (`tools/isa-probes/pocchk.c`; 4C, 8C2 and 2C3 alike),
+and a load in the higher channel wins as well: an ALC2 `ldd` over an
+ALC0 `addd`, an ALC5 `ldd` over an ALC3 `addd`, the ALC2 one of two
+loads (ALC0 and 2) and the ALC3 one (ALC2 and 3), while an ALC3 `addd`
+beats an ALC2 `ldd` (`preds.c` `ww_*`, all three). gas accepts all of
+these without a warning. lcc relies on the rule: 1,010 instructions in
+its v3 libraries put an unpredicated default in a lower channel and a
+predicated override in a higher one (`addd,0,sm 0x0, %dr0, %dr3;
+addd,1 %dr0, 0x1, %dr3 ? %pred1`), and 165 hold two unpredicated
+writes (`getsp,0` and `ldd,2` into one register) ([predicates.md](predicates.md)).
 
 ### Memory accesses in one wide instruction [hw]
 

@@ -138,7 +138,7 @@ measured 0.54% of xz -6's cycles in `BUB_B_RF_SPILLFILL` on the 8C2
 | `%g12` | Reserved by the guide; used as the **static chain** by MCST's libffi (its closure trampolines load the closure address into `%g12` and jump; Go closures receive it there; its testsuite defines `STATIC_CHAIN_REG "%g12"`). In protected mode it is the thread pointer | guide 9.3.1.4, libffi |
 | `%g0`–`%g11`, `%g14`, `%g15` | Scratch across calls, but **not for temporaries**: a signal handler's writes to them reach the interrupted code (below) | kernel, hw |
 | `%g16`–`%g31` | Scratch: not preserved across calls; saved and restored around signal handlers, so usable for temporaries (lcc's code uses these and never `%g0`–`%g15`) | kernel, hw, lcc |
-| Predicates `%pred0`–`%pred31` | Saved and restored automatically; each call gets a fresh predicate file | guide 9.3.2, 9.5.3 |
+| Predicates `%pred0`–`%pred31` | Saved and restored automatically: the caller's come back whatever the callee writes. The callee starts with a copy of the caller's values (hw: `tools/isa-probes/preds.c` `call_*`; the guide says only "a new predicate file"), so it must write a predicate before reading it ([predicates.md](../isa/predicates.md)) | guide 9.3.2, 9.5.3, hw |
 | `%ctpr1`–`%ctpr3` | Scratch: not preserved across calls. Returns go through `%ctpr3` | guide 9.3.3 |
 | `%lsr`, `%ilcr` (loop status, counter) | Scratch | guide 9.3.4 |
 | `%fpfr`, `%pfpfr`, `%upsr` | Special: a function that changes them must restore them | guide 9.3.4 |

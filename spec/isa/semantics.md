@@ -499,8 +499,12 @@ AGENTS.md, gotchas.)
 ## Predicate logic [hw, source]
 
 A CLP (bundle.md, "PLS") combines two primary predicates `@pK`, each
-optionally negated: `andp` and `landp` both give `c0 && c1`, `movep`
-copies [source: MCST qemu `translate-pls.c`]. They differ in diagnostic
+optionally negated: `andp` and `landp` both give `c0 && c1`. The MLP
+`movep c, v, @pD` with `pass @pD, %predN` writes v to `%predN` when c
+is true and leaves `%predN` alone when c is false; a diagnostic c makes
+`%predN` diagnostic (`preds.c` `mv_*`, 4C, 8C2, 2C3; guide 10.5.6 has
+the operands the other way round; [predicates.md](predicates.md)).
+`andp` and `landp` differ in diagnostic
 (tagged) predicates, which a speculative compare of a diagnostic value
 yields (speculation.md) (`tools/isa-probes/preds.c`, `lp_*`; 4C and
 Elbrus-8C2 alike; a `ct` on the result traps with SIGILL `ILL_ILLOPN` if

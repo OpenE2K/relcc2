@@ -186,6 +186,18 @@ predicate ends (7 iterations), still with `alc`, rotation and the store
 rules' prologue part (the last-iteration part needs `%LOOP_END`, which
 never comes).
 
+**Exits during the prologue.** In the combined conditions (ctcond types
+6, 7, 14, 15: `[~]%predN || %LOOP_END`, `[~]%predN && %NOT_LOOP_END`)
+the predicate is ignored while `pcnt` is not 0, unless `semc` is set:
+with `pcnt` 1 or 3 and `vlc` 0, every type gives the loop condition
+alone for both predicate values (`ct ? %pred0 && %NOT_LOOP_END` is
+taken with `%pred0` false, `ct ? %pred0 || %LOOP_END` not taken with it
+true), with or without `loop_mode`; with `pcnt` 0, or with `semc`,
+they follow the predicate (`preds.c` `le_*`, outside a loop, 4C, 8C2,
+2C3). So a pipelined while
+loop's exit test can't act on a predicate its prologue stages haven't
+computed yet ([predicates.md](predicates.md)).
+
 **Calls.** A call doesn't touch `%lsr`: a loop calling a function that
 leaves it alone counts right. A callee that runs its own loop leaves
 `%lsr` finished (`lcnt` 0, `over` 1), and the caller's loop then ends

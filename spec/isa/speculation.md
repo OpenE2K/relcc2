@@ -63,6 +63,8 @@ What happens to a diagnostic operand ([hw] unless marked):
 | Store data | SIGILL (calling-convention.md) | the store is done with the register's bits (a wholly diagnostic register stores `4afafafa4afafafa`); read back by an ordinary load the value has tag 0 |
 | Store under a diagnostic predicate (`std ? %pred0`) | SIGILL | **the store is done whatever the condition's polarity** (`? %pred0` and `? ~%pred0` alike), with bit 30 of each 32-bit half of the data set (42 → `400000004000002a`, `123456789abcdef0` → `52345678dabcdef0`) |
 | Store address | SIGILL `ILL_ILLOPN` | SIGILL `ILL_ILLOPN`: `,sm` does not help |
+| Store to an invalid address (not diagnostic): NULL, an unmapped page, a read-only page | SIGSEGV | SIGSEGV as well (`std,sm`, `stw,sm`; `si_code` `SEGV_MAPERR` at NULL, `SEGV_ACCERR` at the unmapped and the read-only page): **a store has no speculative form for its address**, so no store can run ahead of the test that guards it; a predicated store is the way to drop the branch (`spec.c` `stb_*`; the proof-of-concept back end's I36) |
+| Non-speculative operation **under a false predicate** with a diagnostic operand (`addd %dr3, 1, %dr8 ? %pred0`, `%pred0` false) | no trap, no effect (true predicate: SIGILL) | — |
 | Load address | trap [source] | diagnostic result [source] |
 | `movtd` into a CTPR | no trap; taking the `ct` traps (SIGILL; control-transfer.md) | |
 | 32-bit operation reading only a clean half | no trap (calling-convention.md) | |
@@ -83,7 +85,12 @@ Kernel exception → signal (kernel `traps.c`): `exc_diag_operand`,
 So the rule for a compiler: everything computed from a speculative
 operation stays speculative (`,sm`) until the guard is known; only then
 may a non-speculative operation, store or branch use it, and only on the
-path where the guard holds. A program that faults under speculation gets
+path where the guard holds. A consumer predicated on the guard may stay
+non-speculative: under a false predicate a diagnostic operand doesn't
+trap (above; `spec.c` `use_add_pfalse`, 4C, 8C2, 2C3; the
+proof-of-concept back end's I33), and lcc relies on it (`if (c) r = *q +
+7`: `ldw,2,sm` then `adds,0 … ? ~%pred0` without `,sm`). So `,sm` is
+needed only on consumers that run unconditionally. A program that faults under speculation gets
 SIGILL at the first non-speculative use instead of SIGSEGV, SIGBUS or
 SIGFPE at the faulting operation (source-compat.md).
 
@@ -225,6 +232,25 @@ The protocol, as lcc uses it and as measured:
      sets `%MLOCK`.
    - The check removes the entry: a second check of the same register
      reloads and sets `%MLOCK`.
+   - **A check is predicable.** Under a true predicate it acts as
+     above; under a **false** predicate it does nothing, entry intact or
+     lost: no access (no fault even from an unmapped address), no reload,
+     no `%MLOCK`, the register keeps the early value. So a load moved
+     above both its guard and a store gets its check **under the
+     guard's predicate**: where the guard is false its value isn't used
+     and nothing happens.
+   - **`,sm` makes it no check:** `ldd,5,sm … mas=0x3` is the fully
+     speculative load (as `ld,sm mas=0x3` elsewhere): it reloads even
+     when the entry is intact, never sets `%MLOCK`, and gives a
+     diagnostic value from an unmapped address (`spec.c` `kc_*`, 4C,
+     8C2, 2C3; the proof-of-concept back end's I29).
+   - **Distances:** the check may follow its lock load in the very next
+     instruction, also with an intersecting store between them (each a
+     cycle apart); it doesn't wait for the lock load's value, and a use
+     of the register right after the check gets the right value at the
+     lock load's latency. Two lock loads may share one wide instruction
+     (ALC0 and ALC3): both keep their entries (`spec.c` `kd_*`, 4C, 8C2
+     and 2C3 alike; the proof-of-concept back end's I30 and I40).
 4. **Recovery**: `rbranch label` (= `ibranch label ? %MLOCK`) in the
    **same wide instruction as the check** jumps when the check reloaded,
    to compensation code that recomputes whatever already used the early
@@ -255,7 +281,10 @@ sometimes kept (2 runs in 3; `q_cap33`).
 differ), with the same 32 doubleword entries (`k_cap32` kept, `k_cap33`
 lost, every run). Quad entries vary more: 33 to 44 quad locks sometimes
 keep the first entry and 48 never do. A compiler should count on 32
-entries; a lost entry only makes the check reload.
+entries; a lost entry only makes the check reload. The distances above
+(a check right after its lock, a use right after the check) and the
+predicated check behave the same on the 2C3, though its loads take 5
+cycles (`kc_*`, `kd_*`).
 
 Other MAS kinds [hw; qemu `mas-format.h`]. lcc 1.29.16 emits only the
 lock `mas=0x4` (always with `,sm`) and the check `mas=0x3` [lcc].

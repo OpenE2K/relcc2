@@ -128,11 +128,29 @@ Channels 0 and 1 read areas 0–31 (left halves), channels 2 and 3 areas
 the half. The area's first element is at
 
 ```
-start = AAD[d].base + AAIND[ind] + disp
+start = AAD[d].base + AAIND[ind] + (unsigned 32-bit) disp
 ```
 
-and each step adds `size(fmt) × AAINCR[incr]` bytes (negative increments
-work). A `mova` reads `size(X)` bytes at `current + I`.
+and each step adds `size(fmt) × AAINCR[incr]` bytes. A `mova` reads
+`size(X)` bytes at `current + I`.
+
+- **`disp` is zero-extended**: with base `lo + 64` and `disp=-64` (gas
+  encodes `0xffffffc0`) the first `mova` reads `lo + 2³²`, not `lo`, on
+  the 4C, 8C2 and 2C3 alike. Put a negative offset into the base or
+  `%aaind`, and `disp` at 0 or above (lcc always writes `disp=0`).
+- **Negative increments** (backward areas) work, but **on v3 an area may
+  not go below its base**: with the base at the first element read
+  (the highest) and `%aaincr1` = −1, the 4C's `movad`s give a diagnostic
+  value (SIGILL at the first use), whether the increment was written
+  with `aaurw` or `aaurwd`; with the base at the lowest element and the
+  start in `disp` (56 for 8 doublewords; lcc's v3 code puts the base
+  below the stream and its start in `%aaind`) it reads all 8 right. The
+  8C2 and the 2C3 read both arrangements right (`aaurwd` of −1). Whether
+  a 32-bit `aaurw` of a negative increment is sign-extended on v5+ was
+  not tried on purpose: if not, the area would step 2³² elements, 32 GiB
+  for doublewords (the warning below). So on v5+ write a negative
+  increment with `aaurwd`, as lcc does (`pocchk2.c` `apb_*`; the
+  proof-of-concept back end's I41).
 
 | Behaviour | Observed |
 |---|---|

@@ -352,7 +352,10 @@ gas rejects these combinations within one wide instruction:
 - two operations in the same channel;
 - a load or store with a MAS together with `setwd`, `wait` or a `call`
   ("cannot encode MAS: CS1 syllable is busy"): the MAS goes in CS1,
-  which those also use [checked].
+  which those also use [checked]. CS1 holds the MAS of several loads at
+  once: two lock loads (`ldd,0,sm … mas=0x4` and `ldd,3,sm … mas=0x4`)
+  assemble in one wide instruction and both record their entries (hw,
+  speculation.md).
 
 ### Two writes of one register [hw]
 
@@ -441,6 +444,15 @@ disassembling; the first four also by the proof-of-concept backend,
   depends on it.
 
 ## Known gas bugs [checked: gas 2.41-29.018, ours and lcc's; 2.41-29.023 native on the 4C and the 8C2]
+
+- **Two AAU stores with literal offsets in one wide instruction** (`{
+  staad %b[39], %aad2[ %aasti1 + 0x8 ]; staad %b[45], %aad2[ %aasti3 +
+  0x18 ] }`, as in lcc's kernels) fail with "literals cannot be packed
+  into a wide command", with or without explicit channels (2, 5), for v3
+  and v5. Written with each literal's slot, as lcc does (`_f32s,_lts1
+  0x8` and `_f32s,_lts0 0x18`, either way round), they assemble; one AAU
+  store with a literal next to a `std` with a 32-bit literal assembles
+  without (found by the proof-of-concept backend, I42).
 
 - **Internal error on a label after a short label difference.** A label
   defined in `.text` after a `.rodata` `.short` or `.byte` holding the

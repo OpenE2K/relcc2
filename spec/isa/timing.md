@@ -41,7 +41,7 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | combined integer (`add_addd`, `shl_addd`; ALC1/4) | 2 | 2 | 5 |
 | integer multiply (`muls`, `muld`) | 4 | 4 | 5 |
 | FP add, multiply (single and double) | 4 | 4 | 5 |
-| combined FP (`fmul_addd`) | 8 | 8 | 9 |
+| combined FP (`fmul_addd`), through any of its three operands (all are read at issue: the addend too, `pocchk2.c`, 4C, 8C2, 2C3) | 8 | 8 | 9 |
 | FP min/max (`fmaxd`, `fmind`, packed `pfmaxd`) | — | **2** (also on the 8C2) | — |
 | `fdivs` | 11 | 11 | 13 |
 | `fdivd` | 14 | 14 | 17 |
@@ -276,7 +276,16 @@ behind them (and behind `fsqrts` at 5) is not known.
 agree in bits 6–7 (the same 64-byte bank of four: 0, 8, 16, 32, 48, 256
 or 512 bytes apart), and 1 cycle otherwise (64, 80, 96, 128, 192, 320,
 384, 448 apart). `stw` pairs behave the same way. Alternating stores to
-one bank in successive instructions cost nothing.
+one bank in successive instructions cost nothing. **This holds only
+when instructions store to the same addresses again** (`bench.py`'s
+kernels store to two fixed places every instruction): in a run of 32
+instructions storing to the same two places 8 or 256 bytes apart, a
+pair costs 1.41 cycles on the 4C and 8C2 and 1.53 on the 2C3 (64 apart:
+1); when the addresses move on every instruction, as in a stream loop,
+two stores cost 1 cycle at any distance (8, 64, 256), and so do a store
+and a load. AAU stores (`staad`) behave exactly as `std` in all of these
+(`pocchk2.c` `t_st2_*`, `t_stld_*`; the proof-of-concept back end's
+finding I28).
 
 **A store and a load in one instruction** to the same 8 bytes take
 about 1.9 cycles. To other bytes of the same 32-byte block they take
@@ -392,12 +401,33 @@ returns its value about 7.6 cycles late (two 4-cycle stall steps: a
 store, reload and use take 14.5 cycles a step instead of 6.9). The load
 itself issues at once; only its result is delayed, and only when it is
 used. Any gap of one cycle or more between the store and the load
-removes the penalty completely. The match is by aligned doubleword: a
+removes the penalty completely. (A store's base or data register
+written by the instruction before costs nothing: `pocchk2.c`
+`t_stbase_k*`, `t_stdata_k*`, all three machines.) The match is by aligned doubleword: a
 narrower or wider reload, and `stw` at +0 followed by `ldw` at +4 (no
 overlapping bytes), all pay it; the next doubleword, the next line or
 any other address doesn't. So keep a reload of a just-stored location
 (a spill and its fill, a stack argument) at least one instruction away
 from the store.
+
+**Loads whose value is never read** (`pocchk2.c` `t_dead_*`, the
+proof-of-concept back end's finding I37): a step of four independent
+`ldd` to lines that miss the caches, ten empty cycles, then the four
+registers (A) overwritten, (B) left alone, or (D) read; (C) is the step
+without the loads. Cycles a step, the best of three sweeps of 256 MiB:
+
+| Case | 4C, each load on a new page | 4C, 576 bytes apart | 8C2, new pages | 8C2, 576 apart | 2C3, new pages | 2C3, 576 apart |
+|---|---|---|---|---|---|---|
+| A: loads, registers overwritten | 102 | 43 | 12 | 13 | 17 | 14 |
+| B: loads, registers left | 98 | 43 | 11 | 12 | 17 | 14 |
+| C: no loads | 11 | 11 | 11 | 11 | 11 | 11 |
+| D: loads, values read | 202 | 136 | 40 | 172 | 219 | 184 |
+
+So a write of a pending load's register doesn't wait for the load (A ≈
+B), the 8C2 and 2C3 overlap independent misses (four dead misses cost
+them 0–6 cycles), and the 4C doesn't: four misses nobody reads cost it
+about 32 cycles, 87 with TLB misses. On v3 a speculative load that
+misses is not free even when its value turns out dead.
 
 ## Array prefetch
 
@@ -426,7 +456,7 @@ bytes (isa-score models this).
 | ALU, multiply, divide, load → register use | yes | values correct at any distance ≥ 1, also integer ↔ FP and across clusters |
 | an operation **under a false predicate** → a reader of its destination | **no wait** | a reader one cycle after an `ldd` or `muld` whose predicate is false runs as if that operation wrote another register (2.0 cycles a step, against 5.9 and 9.8 when it executes; `pocchk.c`, 4C, 8C2, 2C3): the interlock follows the predicate, so the other arm of an if-converted if-else costs nothing |
 | compare → predicated ALU op, `ct ? pred`, `ibranch ? pred` | yes | correct at distance ≥ 1 |
-| compare → predicated op or `merge` in the wide instruction of a **taken return** (`ct %ctpr3` after `return`) | **no** | at distance 1 the op reads the predicate as it was before the compare, with no stall; at distance 2 it reads the new value. A taken branch (`ct %ctpr1`, near or far), a `call`, a `ct` that is not taken and no transfer all wait (`tools/isa-probes/preds.c`, `i17_*`; 4C and Elbrus-8C2; the proof-of-concept back end's finding I17, where a `merge` in a return's instruction broke expat). Keep a compare 2 instructions before any predicate reader in a return's instruction. On v6 (the 2C3) distance 1 reads the new value. |
+| compare or predicate logic (`pass`/`landp`/`pass`) → predicated op or `merge` in the wide instruction of a **taken return** (`ct %ctpr3` after `return`) | **no** | at distance 1 the op reads the predicate as it was before the compare or logic, with no stall; at distance 2 it reads the new value (`i17l_*` for predicate logic: 4C, 8C2, 2C3; the proof-of-concept back end's finding I38). A taken branch (`ct %ctpr1`, near or far), a `call`, a `ct` that is not taken and no transfer all wait (`tools/isa-probes/preds.c`, `i17_*`; 4C and Elbrus-8C2; the proof-of-concept back end's finding I17, where a `merge` in a return's instruction broke expat). Keep a compare 2 instructions before any predicate reader in a return's instruction. On v6 (the 2C3) distance 1 reads the new value. |
 | compare → `andp`, `andp` → predicated ALU op | yes | correct at distance ≥ 1 |
 | `andp` → `andp` in the same wide instruction (a CLP reading `@p4` written by an earlier CLP) | — | sees the new value: predicate logic chains inside one instruction |
 | compare → `andp` through `%spred0` in the same instruction | ? | read the old (false) value both on the 4C and under qemu; how `%spred` is meant to be used is not known yet |
@@ -581,9 +611,10 @@ conflicts, the store bank rule (two stores agreeing in address bits
   A fused multiply-add (5) is thus cheaper than `fmul_addd` (8) and
   rounds once (semantics.md).
 - **A compare before a taken return**: the predicate written by a
-  compare one instruction before a `ct %ctpr3` that returns now
-  reaches a predicated operation or `merge` in the return's
-  instruction (v3 and v5 read the old value; Hazards, below).
+  compare, or by predicate logic (`landp`), one instruction before a
+  `ct %ctpr3` that returns now reaches a predicated operation or `merge`
+  in the return's instruction (v3 and v5 read the old value; Hazards,
+  below).
 - **`movtd` and `ct` through the same CTPR in one instruction**: the
   `ct` does not transfer (falls through); v3 and v5 transfer to the old
   target (`bench.py` hazard `movtd_ct`, distance 0).

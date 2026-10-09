@@ -211,7 +211,11 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     gen_pocchk.py writes pocchk.s and pocchk-cases.h:
                     divide latency by quotient, two writes of one
                     register, false-predicate interlocks, dbl and
-                    combined ops, misaligned costs, %g across signals),
+                    combined ops, misaligned costs, %g across signals;
+                    pocchk2.c, gen_pocchk2.py: fmul_addd operands, loads
+                    never read, window and call costs, the wbs rule,
+                    atomic spacing, store pairs, APB disp and backward
+                    areas),
                     run on hardware; -DSPEC_V5, -DLOOPS_V5, -DAPB_V5
                     builds add v5 cases
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
@@ -418,7 +422,8 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   quotient's size; 1 cycle apart stalls 4,
   `sdivd` wants 3, `fsqrts` also conflicts at 5) and L1 banks (two
   stores agreeing in address bits 6–7, or a store and a load in one
-  32-byte block, can take 2 cycles). The Elbrus-8C2 (v5,
+  32-byte block, can take 2 cycles, but only when instructions store
+  to the same addresses again: in a stream they cost nothing). The Elbrus-8C2 (v5,
   `timing-e8c2.yaml`, timing.md "Elbrus-8C2") has every v3 latency,
   hazard and control delay; v5 adds 6 FP ops per cycle (ALC2/5),
   128-bit `qp*` ops with scalar latencies; `ldqp` bypasses L1 (served
@@ -656,7 +661,7 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 
 0. `docs/spec-poc-findings.md` (the PoC agent's file, untracked): all
    entries so far are folded into `spec/` and `doc/` and removed from it;
-   new ones continue as I28, A21, P39.
+   new ones continue as I43, A22, P44 (I35 is still open).
 1. Extend the compat suite (see Current state). It runs on the 4C with
    `run.py --target v3 --remote ...`; all pairs match qemu except the
    tag-trap tests, which pass on the 4C and on the 8C2 (v5, `--target

@@ -121,6 +121,16 @@ def main():
                                "disp\t%ctpr1, %%LOCKED"], nop,
                               ["ct\t%ctpr1 ? %pred0"], nop])
     add("use_cmp", ld + [["cmpedb,0\t%dr3, 0x0, %pred0"], nop])
+    # A non-speculative operation under a false (or true) predicate with a
+    # diagnostic operand (the PoC's I33).
+    add("use_add_pfalse", ld + [["cmpesb,0\t0x0, 0x1, %pred0"], nop,
+                                ["addd,0\t%dr3, 0x1, %dr8 ? %pred0"], nop])
+    add("use_add_ptrue", ld + [["cmpesb,0\t0x0, 0x0, %pred0"], nop,
+                               ["addd,0\t%dr3, 0x1, %dr8 ? %pred0"], nop])
+    # A store, with and without ,sm, to the address in b (the PoC's I36).
+    add("stb_sm", [["std,2,sm\t%dr2, 0x0, %dr3"], nop])
+    add("stb_nosm", [["std,2\t%dr2, 0x0, %dr3"], nop])
+    add("stwb_sm", [["stw,2,sm\t%dr2, 0x0, %r3"], nop])
     # A store whose data, predicate or address comes from a speculative
     # load from a (diagnostic or the valid 0); b is the target (preset
     # 7), c = 42. %dr8 reads the target back (speculatively, so a tagged
@@ -257,6 +267,41 @@ def main():
     call = [["disp\t%ctpr1, spec_nop"], nop, ["call\t%ctpr1, wbs = 0x3c"],
             ["return\t%ctpr3"], nop]
     add("k_callonly", inv + call)
+    # Checks under a predicate or with ,sm (the PoC's I29): lock big[0]
+    # (7), optionally a store that kills the entry (st0, 42), then a check
+    # of the address in a (unmapped 0x100) or of big[1], plain, under a
+    # true or false %pred0, or with ,sm.
+    def chk(addr, pred=None, sm=""):
+        cond = f" ? {pred}" if pred else ""
+        return [[f"ldd,5{sm}\t{addr}, %dr8, mas=0x3{cond}", "rbranch\t%%LOCKED"],
+                nop]
+    ptrue = [["cmpesb,0\t0x0, 0x0, %pred0"], nop]
+    pfalse = [["cmpesb,0\t0x0, 0x1, %pred0"], nop]
+    for where, addr in (("bad", "%dr1, 0x0"), ("b1", "%dr2, 0x8")):
+        for kill, st in (("intact", []), ("lost", st0)):
+            add(f"kc_plain_{where}_{kill}", inv + spld(8) + st + chk(addr))
+            add(f"kc_ptrue_{where}_{kill}", inv + ptrue + spld(8) + st
+                + chk(addr, "%pred0"))
+            add(f"kc_pfalse_{where}_{kill}", inv + pfalse + spld(8) + st
+                + chk(addr, "%pred0"))
+            add(f"kc_sm_{where}_{kill}", inv + spld(8) + st
+                + chk(addr, sm=",sm"))
+    # Distances (the PoC's I30, I40): the check in the instruction right
+    # after the lock (with or without a store between), the use right
+    # after the check; against a plain load used right away; two lock
+    # loads in one instruction, both checked.
+    lk = ["ldd,0,sm\t%dr2, 0x0, %dr8, mas=0x4"]
+    ck = ["ldd,5\t%dr2, 0x0, %dr8, mas=0x3", "rbranch\t%%LOCKED"]
+    add("kd_lock_check_use", inv + [lk, ck, ["addd,0\t%dr8, 0x1, %dr8"], nop])
+    add("kd_lock_st_check_use", inv + [lk, ["std,2\t%dr2, 0x0, %dr3"], ck,
+                                         ["addd,0\t%dr8, 0x1, %dr8"], nop])
+    add("kd_lock_gap5_check_use", inv + [lk] + [["nop 4"]] + [ck,
+                                         ["addd,0\t%dr8, 0x1, %dr8"], nop])
+    add("kd_ld_use", inv + [["ldd,0\t%dr2, 0x0, %dr8"],
+                            ["addd,0\t%dr8, 0x1, %dr8"], nop])
+    add("kd_two_locks", inv + [["ldd,0,sm\t%dr2, 0x0, %dr8, mas=0x4",
+                                "ldd,3,sm\t%dr2, 0x8, %dr12, mas=0x4"], nop]
+        + check(8) + check(12, off=8))
     add("k_call_check", inv + call + check(8))
     add("k_call_ld_check", inv + call + spld(8) + check(8))
     add("k_ld_call", inv + spld(8) + call)

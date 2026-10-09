@@ -167,6 +167,20 @@ main (int argc, char **argv)
   USES (use_cmpsm_pred)
   USES (use_cmpsm_ct)
   USES (use_cmp)
+  USES (use_add_pfalse)
+  USES (use_add_ptrue)
+  {
+    char *ro = page (1);
+    mprotect (ro, pg, PROT_READ);
+#define STB(n) \
+    run (#n, spec_##n, "valid", 0, (long) &cell[3], 42); \
+    run (#n, spec_##n, "NULL", 0, 0, 42); \
+    run (#n, spec_##n, "unmapped page", 0, (long) unmapped, 42); \
+    run (#n, spec_##n, "read-only page", 0, (long) ro, 42);
+    STB (stb_sm)
+    STB (stb_nosm)
+    STB (stwb_sm)
+  }
 
 #define STU(n) \
   cell[3] = 7; \
@@ -226,6 +240,17 @@ main (int argc, char **argv)
   K (k_overwrite)
   big[1] = 0x2222; K (k_oa_st0) big[1] = 0x2222; K (k_oa_st8) big[1] = 0;
   K (k_callonly) K (k_call_check) K (k_call_ld_check) K (k_ld_call)
+#define KC(n) big[0] = 7; big[1] = 99; \
+  run (#n, spec_##n, "b[0] 7, b[1] 99, a 0x100", 0x100, (long) big, 42);
+  KC (kc_plain_bad_intact) KC (kc_plain_bad_lost) KC (kc_ptrue_bad_intact)
+  KC (kc_ptrue_bad_lost) KC (kc_pfalse_bad_intact) KC (kc_pfalse_bad_lost)
+  KC (kc_sm_bad_intact) KC (kc_sm_bad_lost)
+  KC (kc_plain_b1_intact) KC (kc_plain_b1_lost) KC (kc_ptrue_b1_intact)
+  KC (kc_ptrue_b1_lost) KC (kc_pfalse_b1_intact) KC (kc_pfalse_b1_lost)
+  KC (kc_sm_b1_intact) KC (kc_sm_b1_lost)
+  KC (kd_lock_check_use) KC (kd_lock_st_check_use) KC (kd_lock_gap5_check_use)
+  KC (kd_ld_use) KC (kd_two_locks)
+  big[1] = 0;
   big[0] = 7;
   run ("k_trap", spec_k_trap, "page fault between", (long) page (1),
        (long) big, 42);

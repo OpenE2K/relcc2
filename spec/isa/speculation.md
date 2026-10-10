@@ -480,6 +480,59 @@ unless an option allows it; either way it needs an `-fno-spec-fp`
 equivalent. A `,sm` store must not rely on a diagnostic predicate to
 suppress it.
 
+## Recovery points (binary translation) [hw, source]
+
+Hardware support for MCST's x86 binary translator (the kernel's "binco",
+which runs x86 code in a "secondary space"), not for compiled code. A
+**recovery point** marks where a translated region can be restarted;
+between it and its end the processor is in **generations mode**, in
+which it tracks the region's loads and stores. Sources: the kernel
+(`cpu_regs_types.h` `e2k_rpr_t`, `traps.c` `do_recovery_point`,
+`ttable.c`, `fault.c`, `trap_table.S.h`, `sec_space.c`), gas
+(`parse_srp_args`); measured with `tools/isa-probes/rp.c` on the 4C,
+8C2 and 2C3. The guide doesn't describe it, and lcc never emits it.
+
+- **Operations** (SS, bundle.md): `srp` (bit 27, "store recovery
+  point"), `crp` ("clear"), and `slrp` (v3+, both bits, a loop recovery
+  point); each may take a condition (`srp ? %predN`: the RPC entry,
+  predicates.md), and under a false one does nothing.
+- **`%rpr`** (state registers 0xa0 `%rpr.lo`, 0xa2 `%rpr.hi`), readable
+  and writable with `rrd`/`rwd` in user mode (bits 0–2 of the IP read
+  0). The kernel's layout: `lo` = IP (bits 0–47) and `stp` (bit 58);
+  `hi` = BR (bits 0–27), a second BR image `tbr` (bits 32–59) and
+  `tsrp` (bit 63). `srp` and `slrp` write the address of **their own
+  wide instruction** to `lo` and the current BR to `hi` (with `setbn rbs
+  = 4, rsz = 3, rcur = 1; setbp psz = 2`: `hi` = `0x810c4`); after `srp;
+  crp` `lo` reads 0. Our `slrp` left `stp` clear.
+- **What generations mode forbids**, from `srp` until `crp` or the next
+  kernel entry (whose code runs `crp`, "flush generations table", and
+  keeps `%rpr`):
+  - v3 and v5 (4C, 8C2): an atomic lock-wait load (`mas = 0x7`, glibc's
+    stdio lock) is SIGILL `ILL_ILLOPC`. Plain loads and stores, calls,
+    returns and faults behave as outside it (a NULL load is SIGSEGV).
+  - v6 (2C3): the recovery-point exception (`exc_recovery_point`, #31;
+    SIGBUS `BUS_OBJERR` for a task the kernel doesn't know as binco)
+    comes for the lock-wait load, for a fault in the region (a NULL
+    load gave SIGBUS, not SIGSEGV), and on entering code that isn't in
+    the instruction cache (the first instruction of `printf`, of
+    `ld.so`'s `_dl_fixup`); the kernel calls the last kind "false
+    exc_recovery_point exceptions … when loading instructions into
+    L1$".
+  - Memory is not rolled back: a store done before the exception stays
+    (all three).
+- **The kernel's part**: the translator registers a range and a return
+  IP (`SET_RP_BOUNDS_AND_IP`). A trap inside that range in generations
+  mode makes the kernel **drop** the trap's pending loads and stores
+  instead of replaying them from the trap cellar, and return to the
+  registered IP (the translator's recovery code); a store fault in the
+  range is SIGBUS. `exc_recovery_point` reaches user code as SIGBUS
+  `BUS_OBJERR` (except for binco on v6). `%rpr` is saved and restored
+  with the x86 segment registers (`%cs` … `%ss`) for binco tasks and
+  passed in `sigcontext` (`rpr_lo`, `rpr_hi`). Erratum
+  `CPU_HWBUG_GENERATIONS_L2_PREF` (E16C rev 2, E8V7 rev 0): generations
+  conflict with the L2 prefetcher, which the kernel turns off while the
+  translator runs.
+
 ## Emulators
 
 | | 4C | MCST's qemu | Community qemu |

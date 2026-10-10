@@ -200,7 +200,8 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     instruction, %spred, %pcnt, loop exits, false and
                     diagnostic conditions) and the random predicates
                     (rndpred.c, gen_rndpred.py; check_rndpred.py on the
-                    host)
+                    host) and the recovery points of the x86 binary
+                    translator (rp.c, rp.s: srp, slrp, crp, %rpr)
                     and every v3 packed operation (semp.c;
                     gen_semp.py writes semp.s)
                     and square roots and reciprocals (sqrt.c,
@@ -515,6 +516,15 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   predicates in 47% of its wide instructions (`landp` trees, opposite
   predicates for both arms, a conditional `ct` per path) and relies on
   the higher channel winning when two enabled writes hit one register.
+
+  Recovery points (speculation.md, `rp.c`): `srp`/`slrp`/`crp` and
+  `%rpr` serve MCST's x86 binary translator: `srp` writes its own
+  address and BR to `%rpr` (user-readable and writable) and starts
+  "generations mode", in which a lock-wait load is SIGILL on v3/v5 and
+  a lock-wait load, a fault or an instruction-cache fill is the
+  recovery-point exception (SIGBUS) on v6; memory is not rolled back;
+  the kernel returns a trap inside a registered region to the
+  translator's recovery IP. Nothing for a compiler.
 
 ### Hardware errata (spec/isa/hwbugs.md)
 

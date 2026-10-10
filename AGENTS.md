@@ -225,7 +225,8 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     pocchk2.c, gen_pocchk2.py: fmul_addd operands, loads
                     never read, window and call costs, the wbs rule,
                     atomic spacing, store pairs, APB disp and backward
-                    areas),
+                    areas, stores of FP and integer results across
+                    clusters),
                     run on hardware; -DSPEC_V5, -DLOOPS_V5, -DAPB_V5
                     builds add v5 cases
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
@@ -345,7 +346,8 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   scheduled latencies match the guide (int 1, FP/mul 4, L1 load 3,
   `disp`→`ct` 5, ...); crossing between the clusters ALC0–2 and ALC3–5
   costs +1 for integer/load results and +2 for FP ones (the guide's
-  int→FP +1 is this crossing); a stall costs about a
+  int→FP +1 is this crossing; a store takes its data like an FP operand:
+  FP data +2 only across clusters, integer data no crossing cost); a stall costs about a
   whole latency extra (exactly: an operand e cycles early stalls
   4 × ceil(e/4)); an FP-side result routed to an integer op is a cycle
   late when an integer op or load issues in its channel 2 cycles after
@@ -696,7 +698,7 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 
 0. `docs/spec-poc-findings.md` (the PoC agent's file, untracked): all
    entries so far are folded into `spec/` and `doc/` and removed from it;
-   new ones continue as I44, A22, P44 (I35 is still open).
+   new ones continue as I47, A22, P63 (I35 and I45 are still open).
 1. Extend the compat suite (see Current state). It runs on the 4C with
    `run.py --target v3 --remote ...`; all pairs match qemu except the
    tag-trap tests, which pass on the 4C and on the 8C2 (v5, `--target

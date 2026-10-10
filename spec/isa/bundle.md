@@ -353,7 +353,11 @@ from `fapb` lines ran as described there on the 4C.
 gas rejects these combinations within one wide instruction:
 
 - a store in ALC2 together with a load in ALC3;
-- a store in ALC5 together with a load in ALC0;
+- a store in ALC5 together with a load in ALC0. "Store" includes the
+  AAU stores (`staa*`) and the AAU register writes (`aaurw*`, which are
+  `staa` with MAS `0x3f`), "load" a prefetch (`ldb,sm … mas=0x20`), so a
+  scheduler must reserve these as stores and loads [checked, v3, v5,
+  v6; found by the proof-of-concept back end, I46];
 - `disp` and `ldisp` together (both need CS0);
 - two operations in the same channel;
 - a load or store with a MAS together with `setwd`, `wait` or a `call`

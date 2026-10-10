@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Write pocchk2.s and pocchk2-cases.h: checks of the proof-of-concept
-back end's findings I28, I31, I32, I34, I37, I41, I43 and A21
+back end's findings I28, I31, I32, I34, I37, I41, I43, I44 and A21
 (docs/spec-poc-findings.md) for pocchk2.c.
 
   python3 tools/isa-probes/gen_pocchk2.py
@@ -227,6 +227,42 @@ for k in range(1, 7):
     timed(f"t_stdata_k{k}", setup,
           lambda i, k=k: wi(f"std,2\t%dr0, {8 * i:#x}, %dr{8 + i % k}",
                             f"addd,0\t%dr{8 + i % k}, {8 * k:#x}, %dr{8 + i % k}"))
+
+# I44: a store of an FP-side result: each step's producer reads the
+# previous step's result, and a store in the same instruction stores it;
+# D cycles a step (the instruction and D - 1 empty ones).  A store that
+# waits longer than the producer's own consumer stalls the step.
+FP = wi(f"addd,0\t0x0, {ONE}, %dr20", "addd,1\t0x0, 0x0, %dr21",
+        f"addd,3\t0x0, {ONE}, %dr23")
+for prod, x, y, d in (("faddd", 0, 2, 4), ("faddd", 0, 5, 4),
+                      ("faddd", 3, 2, 4), ("faddd", 3, 5, 4),
+                      ("faddd", 0, 5, 5), ("faddd", 0, 5, 6),
+                      ("faddd", 0, 2, 5), ("fmuld", 0, 2, 4),
+                      ("fmuld", 0, 5, 4), ("fmuld", 3, 2, 4)):
+    src2 = "%dr21" if prod == "faddd" else "%dr23"
+    timed(f"t_fpst_{prod}{x}_st{y}_d{d}", FP,
+          lambda i, prod=prod, x=x, y=y, d=d, src2=src2:
+          wi(f"{prod},{x}\t%dr20, {src2}, %dr20",
+             f"std,{y}\t%dr0, {8 * i:#x}, %dr20") + nops(d - 1))
+# References: an integer consumer of the FP result (pays +2 in any
+# cluster), and fdivd (ALC5 only) into a store in ALC2.
+for x, y, d in ((0, 1, 4), (0, 1, 6), (0, 4, 6)):
+    timed(f"t_fpst_faddd{x}_addd{y}_d{d}", FP,
+          lambda i, x=x, y=y, d=d:
+          wi(f"faddd,{x}\t%dr20, %dr21, %dr20",
+             f"addd,{y}\t%dr20, 0x0, %dr22") + nops(d - 1))
+# Integer data: addd's result stored the next cycle, the same or the
+# other cluster.
+for x, y, d in ((0, 2, 1), (0, 5, 1), (3, 2, 1), (3, 5, 1), (0, 5, 2)):
+    timed(f"t_ist_addd{x}_st{y}_d{d}", FP,
+          lambda i, x=x, y=y, d=d:
+          wi(f"addd,{x}\t%dr22, 0x1, %dr22",
+             f"std,{y}\t%dr0, {8 * i:#x}, %dr22") + nops(d - 1))
+for y, d in ((2, 14), (2, 15), (2, 16)):
+    timed(f"t_fpst_fdivd5_st{y}_d{d}", FP,
+          lambda i, y=y, d=d:
+          wi("fdivd,5\t%dr20, %dr23, %dr20",
+             f"std,{y}\t%dr0, {8 * i:#x}, %dr20") + nops(d - 1), n=16)
 
 # I43: AAU stores from a misaligned base (a, any offset): four staad of
 # 0x1111111111111111 × (1..4), or four staaw of 0x11111111 × (1..4),

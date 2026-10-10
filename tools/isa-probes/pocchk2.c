@@ -120,6 +120,9 @@ main (int argc, char **argv)
   /* ./pocchk2 VERSION i43: only the misaligned AAU stores.  */
   if (argc > 2 && strcmp (argv[2], "i43") == 0)
     goto i43;
+  /* ./pocchk2 VERSION i44: only the stores of FP results.  */
+  if (argc > 2 && strcmp (argv[2], "i44") == 0)
+    goto i44;
 
   printf ("I34 fmul_addd chained through an operand: cycles a step, gap 0..9\n");
   fma_row ("op1", fma_op1);
@@ -217,6 +220,40 @@ main (int argc, char **argv)
   KB (p2_t_stdata)
 #undef KB
   printf ("\n");
+
+i44:
+  printf ("I44 a store of an FP result in the instruction of the next "
+          "producer (cycles a step; producer,X -> store,Y, D cycles a "
+          "step):\n");
+#define FS(n, what, steps) \
+  printf ("  %-34s %.2f\n", what, best (p2_t_fpst_##n, mem, 0, 0, 50) / steps);
+  FS (faddd0_st2_d4, "faddd,0 -> std,2  D 4", 32.0)
+  FS (faddd0_st5_d4, "faddd,0 -> std,5  D 4", 32.0)
+  FS (faddd3_st2_d4, "faddd,3 -> std,2  D 4", 32.0)
+  FS (faddd3_st5_d4, "faddd,3 -> std,5  D 4", 32.0)
+  FS (faddd0_st2_d5, "faddd,0 -> std,2  D 5", 32.0)
+  FS (faddd0_st5_d5, "faddd,0 -> std,5  D 5", 32.0)
+  FS (faddd0_st5_d6, "faddd,0 -> std,5  D 6", 32.0)
+  FS (fmuld0_st2_d4, "fmuld,0 -> std,2  D 4", 32.0)
+  FS (fmuld0_st5_d4, "fmuld,0 -> std,5  D 4", 32.0)
+  FS (fmuld3_st2_d4, "fmuld,3 -> std,2  D 4", 32.0)
+  FS (faddd0_addd1_d4, "faddd,0 -> addd,1  D 4 (integer)", 32.0)
+  FS (faddd0_addd1_d6, "faddd,0 -> addd,1  D 6 (integer)", 32.0)
+  FS (faddd0_addd4_d6, "faddd,0 -> addd,4  D 6 (integer)", 32.0)
+  FS (fdivd5_st2_d14, "fdivd,5 -> std,2  D 14", 16.0)
+  FS (fdivd5_st2_d15, "fdivd,5 -> std,2  D 15", 16.0)
+  FS (fdivd5_st2_d16, "fdivd,5 -> std,2  D 16", 16.0)
+#define IS(n, what) \
+  printf ("  %-34s %.2f\n", what, best (p2_t_ist_##n, mem, 0, 0, 50) / 32.0);
+  IS (addd0_st2_d1, "addd,0 -> std,2  D 1 (integer data)")
+  IS (addd0_st5_d1, "addd,0 -> std,5  D 1 (integer data)")
+  IS (addd3_st2_d1, "addd,3 -> std,2  D 1 (integer data)")
+  IS (addd3_st5_d1, "addd,3 -> std,5  D 1 (integer data)")
+  IS (addd0_st5_d2, "addd,0 -> std,5  D 2 (integer data)")
+#undef IS
+#undef FS
+  if (argc > 2 && strcmp (argv[2], "i44") == 0)
+    return 0;
 
 i43:
   printf ("I43 AAU stores from a misaligned base (4 elements, then the "

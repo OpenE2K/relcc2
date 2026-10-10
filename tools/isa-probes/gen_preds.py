@@ -49,6 +49,7 @@ dg_*: %pred1 diagnostic (cmpedb,sm of a failed ldd,sm), then an addd
 non-speculative use of the result; 7/9 executed, 5 not, a signal if
 diagnostic; *_nouse return 1 unless the operation itself traps.
 cr_*: a compare under a false or true predicate; returns %pred2.
+callf_*: whether a call under a false predicate keeps %ctpr1 and %ctpr3.
 ww_*: two operations write %dr0 in one wide instruction, both enabled.
 """
 
@@ -234,6 +235,16 @@ def more_cases():
         for v in (0, 1):
             cases.append(new(f"call_kept_{pat:x}_{v}", setp(bits)
                              + call(f"leaf_set{v}") + mask()))
+    # A call under a false (p0) or true (p1) predicate: does it keep the
+    # CTPRs?  ctpr1: a ct %ctpr1 after it, prepared before it, returns 1
+    # (a call that empties it makes the ct trap); ctpr3: the return
+    # prepared at entry, used after it, returns 5.
+    for v in (0, 1):
+        pre = (setp([(0, v)]) + wi("disp\t%ctpr2, pr_leaf") + wi("nop 4")
+               + wi("addd,0\t0x0, 0x5, %dr0")
+               + wi("call\t%ctpr2, wbs = 0x4 ? %pred0") + wi("nop 2"))
+        cases.append(new(f"callf_ctpr1_p{v}", pre + wi("ct\t%ctpr1")))
+        cases.append(new(f"callf_ctpr3_p{v}", pre))
     # Two writes of one predicate in one instruction.
     for a, b in ((0, 1), (0, 3), (3, 4), (1, 3)):
         for va in (0, 1):

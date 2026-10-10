@@ -160,10 +160,14 @@ def latency(p, c, key, pch=None, cch=None):
     cl = model.class_of(p)
     if cl is None:
         return 1
-    # A store takes its data without the FP-side -> integer or the
-    # cluster penalty (seen on the 4C: results stored the next cycle from
-    # the other cluster or the FP side don't stall).
+    # A store takes its data like an FP consumer: no FP-side -> integer
+    # penalty, and an integer result from either cluster the next cycle;
+    # an FP-side result from the other cluster 2 cycles later (timing.md,
+    # "Clusters"; pocchk2.c t_fpst_*, t_ist_*, all three machines).
     if key in c.data:
+        pc, cc = cluster(pch), cluster(cch)
+        if cl["fpside"] and pc is not None and cc is not None and pc != cc:
+            return cl["lat"] + 2
         return cl["lat"]
     fp_cons = model.is_fp_consumer(c.name) or c.unit == "aas"
     lat = cl["lat"] if fp_cons else cl["to_int"]

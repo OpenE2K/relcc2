@@ -174,6 +174,23 @@ paths are interlocked (hazard tests `int_fp_use`, `fp_int_use` and their
 scheduler: give each result two latencies, own cluster and other cluster,
 and prefer placing a consumer in the producer's cluster.
 
+**A store's data** waits like an FP operand, not an integer one
+(`tools/isa-probes/pocchk2.c`, `t_fpst_*` and `t_ist_*`; a chain of
+steps, each a producer of the next value and a store of the last one in
+one instruction; 4C, 8C2 and 2C3 alike; found by the proof-of-concept
+back end, I44):
+
+| Producer → store data | Same cluster | Other cluster |
+|---|---|---|
+| `addd` | 1 | 1 (no crossing cost) |
+| `faddd`, `fmuld` | 4 (not the 6 an integer op waits) | 6 |
+| `fdivd` (ALC5) | — | 16 (14 + 2) |
+
+A store's address operands pay the integer crossing (+1, as a load's
+address does): two stores a cycle after the `addd`s that advance their
+bases take 4.66 cycles an instruction when one base comes from the other
+cluster (`t_st2_std_inc_*`).
+
 ## Stalls cost more than the latency
 
 The pipeline interlocks, but an early consumer is expensive. For a

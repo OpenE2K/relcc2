@@ -654,10 +654,31 @@ save, so they prefer call-clobbered globals and the outgoing `%b[0..7]`:
 after unrolling, the proof of concept found a leaf daxpy's values in
 `%b[]` while `%r4`–`%r63` stayed unused, and values in `%b[]` block a
 pipelined loop. It exempts `LOCAL_REGNO` in both places and keeps
-regrename out of `%b[]` (`HARD_REGNO_RENAME_OK`); making `%b[0..7]`
+regrename out of `%b[]` (`HARD_REGNO_RENAME_OK`) and, in a function that
+calls, inside the window allocation left (D2, P51); making `%b[0..7]`
 fixed instead broke vector results returned in `%b[0]` (pr123753,
 pr86363 at `-Os`). Under real pressure (a full window) allocation still
 uses `%b[]`.
+
+**Registers above `%r63`** (P59): a window has up to 112 pairs, but `%r`
+names reach 64 registers and the rest only through `%b[]`
+(registers.md). lcc uses them in big FP kernels: NPB LU's `jacld`,
+`jacu` and `rhs` run at `wsz = 0x60` with all of `%b[0..127]` as plain
+names (`setbn rsz = 0x3f, rbs = 0x20`, no `abn`), `buts` at 0x5b (lcc
+`-O3`, v3–v6). It keeps such a window also at calls that are few or go
+to small leaves (SP's `x_solve`, BT's `initialize`, LU's `error`):
+`setbn rsz = wsz − 0x21, rbs = 0x20, rcur = rsz − 3` puts `%b[0..7]` at
+the top four pairs and `%b[8 + i]` at `%dr(64 + i)` whatever the size,
+and the calls use `wbs = wsz − 4`, so those registers stay below the
+callee and survive calls like `%r`. Where hot calls go to big callees
+(LU's `ssor`) it keeps 0x22 and grows only around pipelined loops, whose
+rings (`rcur = 0`) take the bottom of that area. The proof of concept,
+with only `%r` and `%b[0..7]`, spilled (`jacld` 223 frame accesses,
+lcc's 0–6) and ran `jacld` 3.4 times as long as lcc on the 2C3; making
+`%b[8..63]` call-clobbered lost, as IRA's caller saves
+(`-fcaller-saves`, on at `-O2`) put values crossing calls there and
+saved them at every call, and values crossing pipelined loops took the
+rings' names. (lcc's LU `rhs` spills too: 126–263 frame accesses.)
 
 ### D2. Window size
 
@@ -680,8 +701,26 @@ costs about 3 cycles, about what the spills cost. The proof of concept
 tried lcc's way (grow only around pipelined loops) and limiting
 register renaming to keep windows small: xz's spill stalls went from
 60 M cycles to 0 and its run time stayed the same, and bzip2 -9 got 2.6%
-slower, so renaming freedom is worth more than window size (P31's
-companion finding I31). A `getsp` in the `setwd` instruction is free.
+slower (P31's companion finding I31): there, renaming freedom is worth
+more than window size. Not in deep chains of hot calls (P51): once D1's
+`LOCAL_REGNO` exemption lets regrename into unused window registers, it
+spreads values over all 64 `%r`, since it takes the register with the
+oldest `tick` and one it never took has tick 0 (regrename.cc:449, :492),
+then marks it ever live (:552). Lua's interpreter chain (`luaV_execute`,
+`luaD_precall`, `precallC`, `str_sub`, `lua_pushlstring`,
+`luaS_newlstr`) then kept 32, 25, 32, 5, 5 and 32 pairs below its calls
+(7, 5, 7, 5, 5, 7 after allocation alone; lcc 53, 9, 9, 5, 4, 6, `-O3`
+for the 8C2) and spent 5% of k-nucleotide's cycles on register-file
+spills. The proof of concept keeps renaming inside the window
+allocation left (`HARD_REGNO_RENAME_OK`) in a function that calls,
+unless its calls are rare next to its hottest block (1/16) or go only to
+leaves and functions calling only leaves (GCC expands callees first
+within a file, cgraphunit.cc:1978–2000): spills 602 M → 10 M on the 8C2,
+set 2 geomean 0.991 (8C2) and 0.986 (2C3), CoreMark −0.2% (renaming
+everywhere matters in CoreMark's `matrix_test` and bzip2's `mainSort`,
+whose calls are rare or shallow). regrename runs only with
+`-frename-registers`, which `-funroll-loops` turns on (common.opt:2836).
+A `getsp` in the `setwd` instruction is free.
 
 ### D3. Predicates
 
@@ -760,8 +799,9 @@ bzip2 −9 2.6% faster) need three things from the port: (1) GCC accepts
 a conditional return only as a plain `(set (pc) (if_then_else c (return)
 (pc)))` (`condjump_p`, jump.cc:789; cfgrtl's "return not followed by
 barrier"), so the pattern can't carry `(use %ctpr3)`: keep `%ctpr3` live
-to the end through `EPILOGUE_USES` in functions that prepare it at
-entry (`df_update_exit_block_uses` once known); (2) sched-deps gives
+to the end through `EPILOGUE_USES` (df-scan.cc:3638) in every function
+with conditional returns, also those that call
+(`df_update_exit_block_uses` once known); (2) sched-deps gives
 registers live at a jump's target a latency-0 anti dependence, which put
 `return %ctpr3` and the conditional `ct` in one instruction, which gas
 rejects before v6 (control-transfer.md, "Restrictions"): add a true
@@ -771,6 +811,21 @@ under the condition into a register still live on the other path needs
 its dependence on later reads dropped, or every exit waits for the one
 before.
 
+**In functions that call** (P56; lcc `-O3` on v3, v5 and v6): lcc
+prepares `return %ctpr3` right after the last call before an exit (one
+instruction later when that one already holds a prepare or a `ct
+%ctpr3`), and every later exit shares that prepare, even across a call
+under a predicate that excludes the exit's (`call %ctpr1 ? %pred1` …
+`ct %ctpr3 ? %pred3`; a call under a false predicate leaves the CTPRs,
+control-transfer.md). The proof of concept copies the return block's
+prepare into each block that returns through it (only where `%ctpr3`
+is dead on the other path; a prepare needs no `,sm`) and, in machine
+reorg, deletes a prepare that an earlier one already holds on every
+path in with no call between; no GCC pass does this, since the prepare
+appears with the epilogue, after postreload CSE. 127 of Lua's 1,398
+return prepares went, each a 6-cycle wait: Lua 0.7–1.0% fewer cycles,
+speedtest1 1.4%, LAME 0.2% on the 8C2.
+
 Two hardware facts shape this (`spec/isa/control-transfer.md`, measured
 on the 4C):
 
@@ -778,7 +833,8 @@ on the 4C):
   `ct` through an empty CTPR traps (SIGILL). Model `call` as clobbering
   `%ctpr1–3` (they are call-used anyway, registers.md) and never keep a
   prepared value live across a call; the return must be prepared again
-  after the last call. A `ct` with a false condition never traps, so
+  after the last call. A call under a false predicate leaves them
+  (`preds.c` `callf_*`), which lcc uses (above). A `ct` with a false condition never traps, so
   prepares may be speculative and hoisted above the condition.
 - **A taken `ibranch` costs 6 cycles; a taken `ct` prepared in time costs
   nothing**, calls and returns included. The M1 `ibranch` form is
@@ -924,6 +980,22 @@ each one cost it a debugging session:
 - **`PROMOTE_MODE` must agree with `TARGET_PROMOTE_FUNCTION_MODE`**
   (narrow integers to `DImode` in both), or expand asserts on call
   results. `TARGET_SUPPORTS_WIDE_INT` 1 (16-byte `__int128` constants).
+- **Extensions in loop recurrences** (P45): with `SImode` promoted
+  (above), each 32-bit operation on an `int` variable is followed by an
+  `sxt` back into its `DImode` register, and in a loop that `sxt` sits
+  in the recurrence (the proof of concept: nussinov's `max` at II 3,
+  lcc's 2, on the 2C3; `s += a[i]` at II 2, lcc's 1). ext-dce (`-O2`,
+  before combine) removes none of them: a promoted subreg read by a
+  compare or an `if_then_else` (`cmplsb`, `merges`) counts as reading
+  all 64 bits (ext-dce.cc:1400–1416; such codes are not
+  `safe_for_live_propagation`, :151–153), and a 64-bit use after the
+  loop (a returned sum) keeps the extension inside it, since ext-dce
+  deletes extensions but never moves them. lcc keeps such values in 32
+  bits (`adds`, `cmplsb`, `merges`) and extends once after the loop, or
+  into another register where a 64-bit use in the loop needs it (lcc
+  `-O3`, v3–v6). The proof of concept does it after register
+  allocation: an extension whose uses all read 32 bits becomes a copy,
+  one whose 64-bit uses all follow the loop moves to the loop's exits.
 - **Narrow arguments:** the ABI wants callers to extend and callees to
   extend again, but GCC asks one hook (`promote_function_mode`,
   `for_return` 0) for both sides. The proof of concept answers
@@ -983,8 +1055,11 @@ each one cost it a debugging session:
   32-bit operations (registers.md).
 - Facts from `spec/isa/semantics.md` that are GCC settings:
   `SHIFT_COUNT_TRUNCATED` 1 (scalar shifts only, above); `fmul_add*`
-  are not fused (only with `-ffp-contract=fast`, never `fma`; v6's
-  `fma*` are fused, "What a v6 mode adds"); `fmax`/`fmin` are
+  are not fused: they round twice, as RTL's `(plus (mult a b) c)`
+  means, so they need no `-ffp-contract` (lcc forms them at `-O3` with
+  `-ffp-contract=off` too) and never implement `fma` (v6's `fma*` are
+  fused, "What a v6 mode adds"); where to form them is a per-loop
+  choice (7.7, P61); `fmax`/`fmin` are
   x86-style, not C's;
   FP `lt`/`le` signal on quiet NaNs and `eq`/`uod` don't; integer compares
   have no `ne`/`gt`/`ge` forms.
@@ -1090,7 +1165,8 @@ Written in `.md` with `define_automaton`, `define_cpu_unit`,
   a `define_bypass` per format pair); FP compare → predicated op
   4, → `ct` 5; `andp` chains inside one wide instruction (0) and costs 1
   through a `%pred`, 2 to a predicated op and 3 to `ct`. Schedule loads
-  for an L1 hit, as lcc does. A stall
+  for an L1 hit, as lcc does outside pipelined loops (inside them, 7.7,
+  "Plain loads in a pipelined loop"). A stall
   costs about a whole latency extra, so latencies must be exact. v6
   differs (measured on an Elbrus-2C3, timing.md "Elbrus-2C3 (v6)"):
   load→use 5 in either cluster, `ldqp` 5, integer compare or `andp` →
@@ -1404,6 +1480,26 @@ check may follow its lock load in the next instruction and needs no
 latency of its own; users of the register go at the lock load's
 latency.
 
+**Version straight-line code for aliasing before speculating it** (P47;
+lcc's NPB bt.c at `-O3` for v3, v5 and v6; the PoC on the 8C2 and 2C3).
+Each check takes ALC2 or ALC5 and an `rbranch`, so a block with many
+loads after stores through other pointers runs out of instructions:
+NPB BT's `binvcrhs` (5×5 updates through `lhs`, `c`, `r`) took the PoC
+973 wide instructions a call with 295 checks. lcc compares the 200-byte
+ranges of `lhs` and `c` (`cmpledb` of each base + 200 against the other
+base, joined by `landp`) and only where they overlap branches to a copy
+with lock/check pairs; it repeats the test before each of three parts
+of the function and never tests the 40-byte `r` (65 pairs in all, all
+in the overlap copies, 749 wide instructions). GCC versions only loops
+for aliasing (`create_runtime_alias_checks`, tree-data-ref.cc:2685);
+basic-block SLP doesn't. The PoC versions blocks outside loops in a
+late GIMPLE pass (pointers set before the block, constant offsets, at
+least 8 loads after a store through another pointer) and gives the
+disjoint copy a clique with a base per pointer: 112 wide instructions,
+BT.W 10.47 → 6.18 s on the 8C2 (lcc 6.34), 13.25 → 9.66 s on the 2C3.
+Inside a loop RTL would believe such a clique across iterations (7.7,
+"`restrict` cliques hold within one iteration only").
+
 GCC's Haifa scheduler already does `BEGIN_DATA` speculation for ia64
 with these hooks: `TARGET_SCHED_NEEDS_BLOCK_P` (does a check need a
 recovery block: only if consumers were moved above the check),
@@ -1418,8 +1514,11 @@ patterns must express:
 - The check goes in ALC2 or ALC5 (it also occupies a store channel), the
   lock load in ALC0 or ALC3 **with `,sm`** (without it no entry is
   recorded and every check reloads), and `rbranch` in the check's
-  instruction, always, as lcc does (a consumer right after a check
-  without `rbranch` once saw the early value in the proof of concept).
+  instruction (a consumer right after a check without `rbranch` once
+  saw the early value in the proof of concept; lcc leaves it out only
+  where nothing read the register since the lock load, 6 checks in NPB
+  BT and SP). Two checks, in ALC2 and ALC5, may share one `rbranch`
+  (lcc: 63 instructions in SP, floyd-warshall's kernel; speculation.md).
   An intact check costs nothing, also for a use in the next
   instruction (measured); a failed one about 4 cycles plus the
   compensation code (the proof of concept's measurement).
@@ -1504,9 +1603,85 @@ check-free semi-speculative form works.
     also `%b[0..7]` look like the outgoing registers, so a call argument
     set up in `%b[0]` before the loop was deleted as dead
     (`pr111048.c`, `va-arg-22.c` at `-Os`). Make the first `setbn` use
-    `%b[0..7]` and the second set them, and make the kernel use every
-    ring name at its end (a value read in the next iteration under
-    another name looks dead).
+    only those of `%b[0..7]` that are live after the loop, the second set
+    all eight, and the kernel use every ring name at its end (a value
+    read in the next iteration under another name looks dead). Uses of
+    all eight make every `%b` register look live into every pipelined
+    loop, and so live out of any loop before one: a pipeliner working
+    loop by loop then refused NPB SP's hottest flux loop for a `%b[1]` it
+    used only as a temporary (P48; 117 operations at II 17 once
+    narrowed). A value can stay in `%b[0..7]` across the loop only with
+    the proof of concept's layout (ring below the outgoing pairs); with
+    lcc's (ring starting at the outgoing pairs, D1) none may, and lcc
+    sets them again after the loop (LU's `ssor`).
+  - *The unroller's split induction variables are a recurrence* (P62).
+    With `-fsplit-ivs-in-unroller` (the default, common.opt:3039),
+    `loop2_unroll` gives the copies `i0 = i + 8; …; i = i0 + 8`
+    (loop-unroll.cc:1472, `split_iv` :1710): two adds in a chain every
+    iteration, so II ≥ 2 however few the operations (the PoC's gemm
+    unrolled by two). On x86 fwprop folds the `+ 8` into the addresses
+    and leaves `i = i + 16`; E2K addresses have two terms, so the chain
+    reaches the final code (`addd %g16, 8, %g29` … `addd %g29, 8,
+    %g16`). Before pipelining, rewrite the last add as `i = i + 16` with
+    `i0` derived from `i` (the PoC's gemm: II 1), and compare accesses
+    through `i0` with those through `i` in `i`'s terms: SMS's DDG asks
+    `may_alias_p` (ddg.cc:379), which skips offset-based disambiguation
+    (alias.cc:3225), so it would order every store of one copy before
+    every load of the other.
+- **Dependence cliques for arrays updated in place** (P46; NPB SP, the
+  PoC on the 8C2): SP's sweeps update plane `i` of a global array from
+  planes `i1 = i + 1` and `i2 = i + 2`, set outside the inner loop.
+  GCC's dependence test for that loop sees `i` and `i1` as unrelated
+  invariants and answers "don't know" (`analyze_ziv_subscript` needs
+  their difference to fold to a constant, tree-data-ref.cc:3752);
+  expanding their SSA definitions (`tree_to_aff_combination_expand`,
+  tree-affine.cc:976) shows they differ by 1, which in-bounds indexing
+  makes disjoint. Give the RTL pipeliner that answer as a dependence
+  clique valid for the whole loop (`loop->owned_clique`, which
+  tree-data-ref.cc:3076 trusts across iterations). A clique sits only on
+  a `MEM_REF` (tree.h:1455), so a declared array's reference must become
+  `MEM[(T *)&decl]`; the alias oracle reads it there
+  (tree-ssa-alias.cc:2506), but ivopts' `copy_ref_info` looks for it
+  through `get_base_address`, which returns the decl for `MEM[&decl]`
+  (tree.cc:13291), and drops it (tree-ssa-address.cc:1021, 1050): walk
+  the old reference's components instead. With both, the PoC's SP loops
+  pipeline at II 2 with array prefetch (SP.W 22.35 → 15.56 s; lcc
+  11.3). Relating the planes in RTL (registers a constant apart) works
+  only for pointers set from one base (PolyBench's seidel-2d), not for
+  SP's offsets, which multiply loop counters.
+- **Where alias information goes in the pass pipeline** (P50; the PoC on
+  the 8C2 and 2C3):
+  - *Tag loops where they are innermost, twice.* `cunroll` runs after
+    `vect` and `predcom` (passes.def:322–327), so a loop whose small
+    inner loops it unrolls becomes innermost only then: SP's sweeps have
+    `for (m = 0; m < 3; m++)` loops inside the `k` loop (at `-O2`
+    `cunrolli` may not grow code, tree-ssa-loop-ivcanon.cc:1786, and
+    unrolls only the first; `cunroll` does the rest when allowed to grow,
+    opts.cc:1435; at `-O3` `cunrolli` takes them all). Tagging after
+    `vect` gave each `m` loop a clique and the `k` loop none; tagging only
+    after `cunroll` and `slp` lost PolyBench's adi, jacobi-2d, heat-3d
+    and fdtd-2d, which predictive commoning leaves unpipelinable once
+    versioned (adi 3× slower). The PoC tags after `vect` and again after
+    `slp` for loops that became innermost in between, both before ivopts
+    (SP.W 14.47 → 12.74 s on the 8C2, lcc 11.3; BT.W 6.16 → 5.62 s).
+    The second run must take the first run's `MEM[&decl]` references as
+    the same objects as plain ones: `operand_equal_p` treats different
+    cliques as different trees (fold-const.cc:3635).
+  - *LIM's unsigned rewrite loses points-to precision* (mainline; GCC
+    15.3 keeps the pointer arithmetic). LIM rewrites arithmetic it
+    hoists out of a conditional block as unsigned
+    (tree-ssa-loop-im.cc:1460; `POINTER_PLUS_EXPR` becomes `PLUS_EXPR`
+    and a conversion, gimple-fold.cc:11158): FT's `evolve` gets
+    `(dcomplex (*)[256][256]) ((unsigned long) &u0 + k * 1048576)`. PRE
+    starts by recomputing points-to (`TODO_rebuild_alias`,
+    tree-ssa-pre.cc:4634), which merges the operands of integer
+    arithmetic (gimple-ssa-pta-constraints.cc:2332) and takes any
+    non-zero constant for an address of non-local memory (:908), so the
+    row pointer may alias every global array, and ivopts copies that to
+    its addresses. Restoring `{ u0 }` for a pointer converted from
+    `&decl` plus an integer computed from no pointer let the loop
+    pipeline (II 9 for four elements, 122 cycles an iteration before):
+    FT.W 0.64 → 0.54 s on the 8C2, 0.58 → 0.49 s on the 2C3.
 - **Rotating registers**: two different things share the name.
   *Window shifting* — each call slides the register window, as SPARC's
   `save`/`restore` and E2K's `call wbs=` do — is handled by hardware and
@@ -1581,6 +1756,22 @@ check-free semi-speculative form works.
   it reads in the same cycle, dataflow sees the jump read that write
   (the hardware reads before writing) and deletes the prologue's
   definition: keep that name free in the loop end's cycle.
+- **A while loop's trip count is a guess** (P52): GCC's static profile
+  gives a loop's exits 11% between them (`PRED_LOOP_EXIT`,
+  predict.def:119; split per exit, predict.cc:2183), so a hash-chain
+  walk with a "found" exit stays 94.5% at its NULL test and the guessed
+  profile says about 13 nodes a lookup (Lua's `internshrstr`), where hash
+  chains hold one or two. Pipelined, that walk paid its prologue on
+  nearly every lookup and stalled on speculative loads of the nodes past
+  the one it stopped at. The PoC lowers the profile of a walk whose
+  pointer starts at an array element at a computed index and is replaced
+  by a field of what it points to (`scale_loop_profile`,
+  cfgloopmanip.cc:698) and keeps it from the pipeliner: k-nucleotide
+  7.39 → 6.92 s on the 8C2 (lcc 6.0); CoreMark's long list walks stay
+  pipelined. lcc pipelines no walk with a second exit, bucket or list
+  alike (it peels the first nodes with speculative loads, then runs a
+  plain loop), but does pipeline one-exit walks such as `for (; p; p =
+  p->next) n++` (lcc `-O3`, v3–v6).
 - **Copies in the latch lose the count** (P43): out-of-SSA leaves a
   rotation of loop state (`ym2 = ym1; ym1 = y`, PolyBench's deriche) as
   register copies in the latch after the exit test, and
@@ -1632,6 +1823,25 @@ check-free semi-speculative form works.
   (speculation.md; P30, `vect-alias-check-18.c` gave wrong bytes when a
   redone add's operand was overwritten there; possibly also P28's GMP
   failure).
+- **Several lock/check pairs in one loop** (P58; lcc's PolyBench
+  floyd-warshall at `-O3`, v3, v5 and v6 alike): in `path[i][j] = min
+  (path[i][j], path[i][k] + path[k][j])` the store may hit `path[i][k]`
+  (at `j == k`) and `path[k][j]` (when `i == k`). lcc's kernel is three
+  wide instructions: `path[i][j]` through array prefetch, `path[i][k]`
+  and `path[k][j]` each with a lock load every iteration (the invariant
+  one too: a check removes its entry), both checks (ALC2, ALC5) in one
+  instruction with one `rbranch`, and compensation code that redoes the
+  add and the compare from both checked values, since `%MLOCK` doesn't
+  say which failed. On v3/v5 a check runs 14 or 15 iterations after its
+  lock, so about 29 of the 32 DAM entries are in use (v6: 2 iterations).
+  Don't version for such an element: `path[i][k]` lies in the row the
+  loop stores, so the run-time test always fails. The PoC forwards the
+  stored `path[i][k]` through a register instead, a recurrence that
+  holds its kernel to II 5 (74.7 s against lcc's 47 on the 8C2).
+  Splitting the `j` loop at `j == k` would make `path[i][k]` invariant on
+  both sides, with no check; GCC's loop splitting splits only at a
+  relational test in the body, or `==` with the first or last value
+  (tree-ssa-loop-split.cc:122).
 - **Alias queries after register allocation** (P31): `may_alias_p` in
   machine reorg reads `reg_base_value`, which only `init_alias_analysis`
   computes; `end_alias_analysis` keeps the old vector, so a pass there
@@ -1677,6 +1887,23 @@ check-free semi-speculative form works.
   such a load may miss L1, schedule it earlier or keep the operations
   apart (the PoC's L2-sized daxpy: 1.19 cycles an element combined, 1.06
   apart, 1.11 with the load 4 cycles earlier).
+- **Form combined FP operations per loop, never on a recurrence** (P61).
+  Combine forms a non-fused `(plus (mult))` pattern wherever it matches
+  (`-ffp-contract` gates only `convert_mult_to_fma`,
+  tree-ssa-math-opts.cc:3402). lcc combines where the FP channels bound
+  the kernel: PolyBench heat-3d on v3, II 12 with 20 `fmul_addd` (60
+  operations apart on 48 slots); gemm on v5, nine elements in five wide
+  instructions; NPB FT's `fftz2`. It keeps them apart in reductions
+  (bicg's `q[i]`, Linpack's `ddot`) and in its DAM daxpy versions, though
+  it combines its other daxpy kernels (lcc `-O3`). Through the addend
+  the combined operation takes 8 cycles to the add's 4, so on a
+  recurrence it lengthens the II (the PoC's bicg: 12 cycles for two
+  elements instead of 8). The PoC forms them in its pipeliner, in loops
+  known to run 64 times or more, for a product that one add or subtract
+  alone reads and an addend not carried or derived from a carried value:
+  heat-3d 5.84 → 4.96 s on the 8C2; formed everywhere, Linpack's short
+  daxpy loops lost. Give the pattern an insn condition that is false
+  outside the pass that forms them.
 - **Keep `%ctpr2` free across a loop that may use array prefetch**
   (P42): only `%ctpr2` can hold the APB program, so a branch prepared in
   `%ctpr2` and live through an inner counted loop costs that loop its
@@ -1686,7 +1913,16 @@ check-free semi-speculative form works.
   our benchmark builds) and loads APB programs into `%ctpr2`, though it
   uses `%ctpr2` for other branches too. Prepare such a branch after the
   loop only for a loop that will use APB (re-preparing one already
-  placed cost the PoC's CoreMark 0.64%).
+  placed cost the PoC's CoreMark 0.64%), so decide which loops those are
+  before branches get CTPRs: once prepares are shared and hoisted, the
+  jumps reached through `%ctpr2` from a loop's exit need not go to one
+  place (P60). Short loops count: NPB FT's butterfly (`fftz2`, 16
+  iterations at run time) is a two-instruction kernel in lcc's v5 and
+  v6 code, 4 `movad`, 4 `staad` with `incr` and 8 FP operations (2
+  combined) filling all six channels of both instructions, where the
+  PoC, its outer back edge in `%ctpr2`, takes II 5. lcc keeps an outer
+  branch prepared in `%ctpr3` across that loop and prepares the back
+  edge in `%ctpr1` again after it.
 - **APB areas: `disp` at 0 or more, backward areas based at their
   lowest element** (I41): `disp` is zero-extended, so a negative offset
   goes into the descriptor's base or `%aaind`; on v3 an area may not go
@@ -1719,6 +1955,97 @@ check-free semi-speculative form works.
   when it shortens the kernel or the loop runs 256 times or more; a
   run-time test on the count, as lcc does, would get the memory gains for
   loops of unknown length.
+- **Plain loads in a pipelined loop: read them far ahead** (P44): a load
+  array prefetch doesn't serve (v3/v4 without proven alignment, gathers,
+  the DAM versions of loops), scheduled for L1, stalls the whole kernel
+  on every miss (the PoC's v3 mvt: 278 cycles an element, lcc's 45). lcc
+  issues such loads 40–90 cycles before their use in 31 of the 155 v3
+  PolyBench kernels that have them (mvt's column walk: 22 iterations at
+  II 4), 40–76 on v5 and v6, and 22–47 even in CoreMark's `matrix_test`
+  (lcc `-O3`; timing.md, "Memory"). SMS takes edge latencies from
+  `dep_cost` (ddg.cc:222), so from `TARGET_SCHED_ADJUST_COST`, which can
+  tell SMS by `common_sched_info->sched_pass_id == SCHED_SMS_PASS`
+  (sched-int.h:28). The PoC gives a load no recurrence goes through 48
+  cycles there: its v3 2mm, 3mm, lu, ludcmp and syrk ran 3–4 times
+  faster, mvt 0.28 → 0.91 of lcc's speed, doitgen on the 8C2 0.65 →
+  0.95. It does so only in loops known or bounded to run long (a
+  profile, a constant count, or `get_max_loop_iterations_int`,
+  cfgloop.cc:2049, between 64 and 2^20): with every loop reading far,
+  CoreMark lost 18% and xz 28% on the 8C2 (the stages cost every way
+  in). Never raise II for it; when the ring runs out, halve the distance
+  (deriche's II-1 loops need 56 stages at 48 cycles and fit at 24).
+- **Big counted loops want loop mode and array prefetch even when
+  overlap gains nothing** (P53): in a loop of hundreds of operations the
+  II can't be much below one iteration, so a pipeliner that wants a
+  clearly shorter kernel refuses it, and the list-scheduled loop stalls
+  on L2 (NPB LU's blts, buts and jacld at 1.5 times their modelled
+  cycles in the PoC on the 8C2). lcc runs them as `loop_mode` loops that
+  don't overlap iterations (no `abn`; only induction and recurrence
+  values cross the back edge) with APB where it can: v5 jacld and jacu
+  in kernels of 105–106 wide instructions with 20 `mova`s, blts in 112
+  with 85 (lcc `-O3`, NPB LU class W; their values in `%b[]`, D1,
+  "Registers above `%r63`"). So decide APB per counted loop and count it
+  when deciding whether pipelining pays; SMS keeps a single-stage
+  schedule only with `--param sms-min-sc=1` (default 2,
+  modulo-sched.cc:1660). The PoC pipelined such loops at an II up to
+  5/4 of one iteration (blts at II 284: LU.W 11.93 → 11.41 s); its two
+  resource-bound loops then had about 260 values live at once, more than
+  the ring and the window hold, and spill slots stored and reloaded
+  across iterations: overlapping loops that big needs placement that
+  keeps lifetimes short, and spill code turned back into values.
+- **Unroll a column walk so each copy has its own area** (P54): on v3–v5
+  one area fetches at most a 64-byte line every 2 cycles from L1
+  (apb.md, "Timing"), so a load stepping a line or more an iteration
+  holds the loop to 2 cycles whatever its II (PolyBench cholesky's
+  init_array, `A[s][t]` down a column: 2.1 at II 1 on the 8C2). lcc
+  unrolls such loops with an area per copy (two for a plain column walk
+  on v3, v5 and v6; nine in cholesky's init_array on v5/v6), though not
+  syrk's (one area, 1.05 s on the 8C2). The PoC returns 2 from
+  `TARGET_LOOP_UNROLL_ADJUST` (loop-unroll.cc:371; the RTL unroller runs
+  only under `-funroll-loops`, loop-init.cc:570, which rs6000 turns on at
+  `-O2`, rs6000-common.cc:41) for such a one-block loop: syrk 0.66 s,
+  cholesky 1.96 → 1.38 s (lcc 1.49). Reading the columns with plain
+  loads instead lost 6.4% of PolyBench: from memory they need the
+  prefetch.
+- **An area's base can be an induction register plus invariants**
+  (P55): ivopts addresses a plane of a 3-D array as the inner induction
+  variable plus outer-loop values (NPB SP's xi fluxes: `_368 = ivtmp.89
+  + ivtmp.37; MEM[_368 + ivtmp.90]`), so the load's base is a register
+  the loop computes. The setup can still compute the area's start (the
+  induction register's start plus the invariants and the constant);
+  leaving such loads out kept 127 of SP's loads on memory (taking them:
+  SP.W 25.40 → 23.71 s on the 2C3). Compare stores in the same terms:
+  lcc reads all 37 loads of that loop through APB on v5 and v6, the five
+  `rhs` planes it updates in place included (a store to an element
+  already read is fine, apb.md, "Stores into a prefetched array").
+- **After register allocation, analyse addresses per definition**
+  (P57): one hard register holds several values of a loop body
+  (addresses and doubles share one register file), so a post-RA
+  pipeliner like C6x's that wants one definition per register in the
+  loop loses loads: in SP's xi fluxes `_368`'s register later held three
+  sums of doubles, and 21 of 38 loads stayed plain. Take a definition
+  when every address through it, directly or through registers derived
+  from it, comes before the register's next definition; use-def chains
+  give that (`df_chain_add_problem (DF_UD_CHAIN)`, df.h:1038, as
+  `mips_df_reorg` does, mips.cc:19813), or analyse before allocation.
+  The PoC: 6 plain loads left, SP.W 23.65 → 21.10 s on the 2C3.
+- **If-convert loops before RTL, loads included** (P49): for `ix[k] =
+  (xr[k] >= roundfac) ? ix[k] : 0` (LAME's `count_bits`), GIMPLE loads
+  `ix[k]` only under the condition and stores a PHI of it and 0. RTL
+  if-conversion won't run a load that may trap (`noce_try_cmove_arith`,
+  ifcvt.cc:2683), so the loop stays two blocks and isn't pipelined.
+  GCC's tree if-conversion knows the load is safe, because the same
+  reference is written on every path (`ifcvt_memrefs_wont_trap`,
+  tree-if-conv.cc:903), and turns the PHI into a `COND_EXPR`, but it runs
+  only for the vectorizer: it versions the loop under
+  `.LOOP_VECTORIZED` and the converted copy is deleted when the loop
+  isn't vectorized (tree-vectorizer.cc:1350); `-ftree-loop-if-convert`
+  does nothing (common.opt:2040). So the port needs its own GIMPLE step,
+  or a GCC change that keeps the conversion. The PoC's step runs such
+  loads always and makes the PHIs selects; the loop then pipelines at II
+  1 (LAME 9.34 → 7.64 s on the 8C2, lcc 7.44). lcc makes the loop one
+  `loop_mode` block: the load `,sm` every iteration, `merges`, an AAU
+  store (lcc `-O3`, v3/v5/v6).
 - **Branchy loops** are where lcc's lead on integer code comes from
   (zlib `-9`: lcc 1.18 s, the proof-of-concept back end 2.24 s on the
   8C2; P22): lcc turns a chain of tests (zlib's `longest_match`) into one

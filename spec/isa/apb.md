@@ -468,7 +468,11 @@ result is the swapped high doubleword). An area with `fmt` 7 makes the
   off (`-fswp-maxopers=0`, guide 6.3.6), for counted loops with no calls whose loads have an address linear in
   the iteration (`a[i]`, `a[k*i + c]`, `p++`, structure fields); reads
   of up to 32 bytes per array per iteration (more are split into
-  several areas). Up to 32 arrays and 8 increments [guide 6.6].
+  several areas). Up to 32 arrays and 8 increments [guide 6.6]. lcc's v3
+  code stops at 32 areas (NPB SP's xi-flux loop: 32 areas and 5 plain
+  loads); its v5 and v6 code reads more arrays through one descriptor
+  with the start addresses in `%aaind` (that loop: all 37 loads, 22
+  descriptors and 15 `%aaind` indices) [lcc; the PoC's P57].
 - On v3 it needs alignment of 2-, 4- and 8-byte elements: at `-O3` and
   `-O4` it uses APB only where it can prove it (global arrays, a pointer
   passed through `__builtin_assume_aligned`) or with `-faligned` or

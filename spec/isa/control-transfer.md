@@ -112,6 +112,11 @@ So:
   everything it still needs, its own return included. MCST's qemu clears
   them on return (`translate-ct.c`); its `ct` on an empty CTPR is not
   implemented (it aborts), while the community qemu traps with SIGILL.
+  A `call` under a false predicate is no call: it leaves all three
+  (`%ctpr1` and a return prepared in `%ctpr3` before it still work after
+  it, `tools/isa-probes/preds.c` `callf_*`, 4C, 8C2, 2C3), and lcc relies
+  on this, sharing one return prepare across such calls (the
+  proof-of-concept back end's P56).
 - A `ct` traps only when taken, so a conditional transfer may name a CTPR
   that is not valid when the condition is false, and a prepare may be
   speculative: lcc issues `movtd,0,sm` for indirect calls and `switch`.

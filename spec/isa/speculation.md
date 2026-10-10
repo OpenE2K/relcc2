@@ -259,8 +259,14 @@ The protocol, as lcc uses it and as measured:
    `rbranch` is needed; but the proof-of-concept backend saw a consumer
    one instruction after such a check get the early value (once in 1,000
    calls, inside a larger function, I11), and neither it nor our probes
-   could reproduce that in isolation. lcc always puts `rbranch` in the
-   check's instruction, and so should a compiler.
+   could reproduce that in isolation. lcc puts `rbranch` in the check's
+   instruction except where nothing read the register since the lock
+   load (2 checks in NPB BT and 4 in SP at `-O3` for v5, e.g. `{ ldd,2
+   %r20, 0x98, %r1, mas=0x3; ldd,3,sm %r20, 0x98, %r13, mas=0x4 }`), and
+   it lets two checks, in ALC2 and ALC5, share one `rbranch` (63
+   instructions in SP, PolyBench floyd-warshall's kernel) [lcc; the
+   proof-of-concept back end's P47]. Given I11, a compiler should keep
+   the `rbranch` unless no use of the register precedes the check.
 
 **Quad lock and check loads (v5+)** [hw: Elbrus-8C2, `spec.c` built
 with `-DSPEC_V5`, `./spec-v5 v5`]: `ldqp,0,sm … %qprN, mas=0x4` with

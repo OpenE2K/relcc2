@@ -240,9 +240,11 @@ as `r == 0 || r == 0x40` [lcc]. **MCST's qemu raises invalid for
   two (integer 1 + 1 = 2, FP 4 + 4 = 8, timing.md) and FP rounds after
   each stage (below); the integer forms run only in ALC1 and ALC4.
 - `fmul_addd a, b, c, dst` = (a × b) + c with **two roundings** (not
-  fused): `(1 + 2^-30)(1 − 2^-30) − 1` gives 0, not −2^-60. Combined FP
-  operations may be used only under `-ffp-contract=fast`, never for
-  `fma()`.
+  fused): `(1 + 2^-30)(1 − 2^-30) − 1` gives 0, not −2^-60. So a
+  combined FP operation computes exactly what the separate multiply and
+  add do, and a compiler may form one under any `-ffp-contract` setting
+  (lcc 1.29.16 forms the same 95 `fmul_add` in a gemm at `-O3` with
+  `-ffp-contract=off`), but never for `fma()`.
 
 ## Packed operations of v3 [hw]
 

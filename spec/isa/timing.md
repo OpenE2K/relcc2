@@ -331,7 +331,12 @@ integer work per cycle, and twice the FP work.
 
 ## Memory
 
-Compilers schedule every load for an L1 hit (3 cycles; 5 on v6); lcc does too.
+Compilers schedule loads for an L1 hit (3 cycles; 5 on v6), and so does
+lcc outside pipelined loops. Inside them lcc issues the loads array
+prefetch doesn't serve far ahead of their use: 40–90 cycles in 31 of the
+155 v3 PolyBench kernels with such loads (mvt's column walk: 22
+iterations at II 4), 40–76 on v5 and v6, 22–47 in CoreMark's
+`matrix_test` (lcc 1.29.16 `-O3`; the proof-of-concept back end's P44).
 Longer latencies cannot be scheduled for and are left to the interlock,
 prefetching and APB, so `bench.py` measures them only with `--memory`
 (pinned with `--numa CPU:MEM`). For reference, on the 4C (64 KiB L1D and

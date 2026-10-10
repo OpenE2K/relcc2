@@ -431,7 +431,9 @@ conditional `abgc` cannot share an instruction with any `ct`.
   so it traps whether or not its value would take the branch.
 - Conditional calls and returns work like branches: `call %ctpr1, wbs
   = 4 ? %pred0`, `ct %ctpr3 ? %pred0`. A `call` under a false predicate
-  is not free: it still spills the chain stack (kernel `ttable.c`
+  leaves the CTPRs, unlike a call that runs (`callf_*`) [hw], so a
+  return prepared before it still works after it (lcc relies on this),
+  but it is not free: it still spills the chain stack (kernel `ttable.c`
   comment) [source].
 - `alc`, `abn` and `abp` have `f` and `t` bits that act when the
   instruction does not or does transfer ([loops.md](loops.md)); a

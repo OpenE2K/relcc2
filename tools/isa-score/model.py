@@ -48,13 +48,19 @@ CLASSES = {
     "getsp":  dict(lat=2, to_int=2, fpside=False),   # timing.md (pmu.c)
     "load":   dict(lat=3, to_int=3, fpside=False),   # L1 hit
     "ldqp":   dict(lat=11, to_int=11, fpside=False),  # v5: served by L2
-    "idiv":   dict(lat=11, to_int=11, fpside=False),
+    # Integer divides leave their result on the FP side (13 to an
+    # integer op); smodx/umodx 10, 12 (timing.md, "Every v3 operation").
+    "idiv":   dict(lat=11, to_int=13, fpside=True),
+    "imod":   dict(lat=10, to_int=12, fpside=True),
     "imul":   dict(lat=4, to_int=6, fpside=True),
     "fp":     dict(lat=4, to_int=6, fpside=True),    # fadd, fmul, fmin
     "cfp":    dict(lat=8, to_int=10, fpside=True),   # fmul_add etc.
     "fdivs":  dict(lat=11, to_int=13, fpside=True),
     "fdivd":  dict(lat=14, to_int=16, fpside=True),
-    "fsqrt":  dict(lat=12, to_int=14, fpside=True),
+    "fsqrt":  dict(lat=12, to_int=14, fpside=True),   # fsqrts, pfsqrts
+    "fsqrtid": dict(lat=11, to_int=13, fpside=True),  # fsqrttd: fdivd's
+    "pfdivd": dict(lat=14, to_int=16, fpside=True),   # pfdivd, pfsqrttd
+    "frcp":   dict(lat=6, to_int=8, fpside=True),     # frcps, frsqrts
     # Conversions: 4 to a consumer that reads the result in the format
     # it was produced in; reading it in another one (a double as a
     # single, an integer as a double: +1; a single as a double: +2) is
@@ -67,8 +73,14 @@ CLASSES = {
     "pmul":   dict(lat=2, to_int=4, fpside=True),
     "fma":    dict(lat=5, to_int=7, fpside=True),    # v6 fused fma*, qpfma*
     "fx":     dict(lat=5, to_int=7, fpside=True),    # 80-bit add
-    "fxmul":  dict(lat=4, to_int=6, fpside=True),
+    "fxmul":  dict(lat=4, to_int=6, fpside=True),    # 80-bit result; movx
+    "fxconv": dict(lat=5, to_int=7, fpside=True),    # to and from 80-bit
+    "fxcmpr": dict(lat=4, to_int=6, fpside=True),    # fxcmp*f flags word
+    "fxsqrti": dict(lat=11, to_int=13, fpside=True),
     "fxdiv":  dict(lat=16, to_int=18, fpside=True),
+    # State register reads: %ip, %upsr ... 2; the FP state 11.
+    "rr":     dict(lat=2, to_int=2, fpside=False),
+    "rrfp":   dict(lat=11, to_int=11, fpside=False),
     "mova":   dict(lat=5, to_int=5, fpside=None),    # no cluster penalty
     "aaur":   dict(lat=3, to_int=3, fpside=False),   # not measured
 }
@@ -84,6 +96,8 @@ PRED_LAT = {"icmpp": (2, 3, 1), "fcmpp": (4, 5, 3), "plog": (2, 3, 1),
 # logic reaches a predicated ALU op in 1 cycle (2 before).
 V6_CLASSES = {"load": dict(lat=5, to_int=5, fpside=None),
               "ldqp": dict(lat=5, to_int=5, fpside=None)}
+# v5 and later (the Elbrus-8C2 and 2C3): pfdivd and pfsqrttd take 16.
+V5_CLASSES = {"pfdivd": dict(lat=16, to_int=18, fpside=True)}
 V6_PRED_LAT = {"icmpp": (1, 3, 1), "plog": (1, 3, 1)}
 
 # Prepare -> transfer through a CTPR.
@@ -113,21 +127,32 @@ def bap_to_mova(op):
 # integer-side operation (ALU or load, not a store) issues in the same
 # channel PORT_DISTANCE cycles after it.
 PORT_DISTANCE = 2
-INT_SIDE = {"int", "cint", "getsp", "load", "ldqp", "idiv"}
+INT_SIDE = {"int", "cint", "getsp", "load", "ldqp", "rr", "rrfp"}
 
 # timing.md, "Memory": a load of an aligned doubleword stored in the
 # instruction just before returns its value about 7.6 cycles late (two
 # stall steps); one cycle between them removes it.
 STORE_RELOAD_DELAY = 8
 
-# timing.md, "Throughput": the divider in ALC5 (fdivs, fdivd, sdivs,
-# sdivd, fsqrts) stalls a divide issued 1 cycle after another by 4, and
-# an fsqrts 5 cycles after another by 2.  The fractional averages at
-# distance 2 (sdivd 3.4, fsqrts 2.8) are not modelled.
+# timing.md, "Throughput": the divider in ALC5 (every divide, square
+# root and reciprocal estimate, integer, FP, packed and 80-bit) stalls
+# one issued 1 cycle after another by 4, an fsqrts or pfsqrts 5 cycles
+# after another by 2, and anything within 9 cycles after an smodx or
+# umodx until those 9 have passed.  The fractional averages at distance
+# 2 (sdivd 3.4, fsqrts 2.8, ...) are not modelled.
 DIVIDER_OPS = ("fdivs", "fdivd", "sdivs", "sdivd", "udivs", "udivd",
-               "fsqrts", "fsqrtid", "fsqrttd")
+               "fsqrts", "fsqrtid", "fsqrttd", "sdivx", "udivx", "smodx",
+               "umodx", "pfdivs", "pfdivd", "pfsqrts", "pfsqrttd", "frcps",
+               "frsqrts")
 DIVIDER_STALL = {1: 4}
 FSQRT_STALL = {5: 2}
+FSQRT_OPS = ("fsqrts", "pfsqrts")
+DIVIDER_BUSY = {"smodx": 9, "umodx": 9}
+
+
+def is_divider(name):
+    """Whether NAME issues to the ALC5 divider."""
+    return name in DIVIDER_OPS or name.startswith(("fxdiv", "fxsqrt"))
 
 # timing.md, "Throughput": two stores in one instruction whose addresses
 # agree in bits 6-7 take 2 cycles.  Addresses are known only as base +
@@ -151,6 +176,8 @@ def class_of(op):
     """Latency class of OP on its ISA version."""
     if getattr(op, "iset", 3) >= 6 and op.cls in V6_CLASSES:
         return V6_CLASSES[op.cls]
+    if getattr(op, "iset", 3) >= 5 and op.cls in V5_CLASSES:
+        return V5_CLASSES[op.cls]
     return CLASSES.get(op.cls)
 
 
@@ -186,12 +213,34 @@ def classify(name):
         return "load"
     if re.match(r"[su]div", n):
         return "idiv"
+    if re.match(r"[su]modx", n):
+        return "imod"
+    if re.match(r"[su]mulx_f", n):
+        return "imul"
+    if re.match(r"fxsqrti", n):
+        return "fxsqrti"
     if re.match(r"fx(div|sqrt)", n):
         return "fxdiv"
-    if re.match(r"fxmul", n):
+    if re.match(r"fxmul[sdx][sd]$", n):
+        return "fx"          # a single or double result: 5
+    if re.match(r"fxmul", n) or n in ("movx", "movxa", "movxc"):
         return "fxmul"
     if re.match(r"fx(add|sub|rsub|scale)", n):
         return "fx"
+    if re.match(r"fxcmp(ud|od)[sdx]f$", n):
+        return "fxcmpr"
+    if re.match(r"fxto|(f[sd]|i[sd])tofx$", n):
+        return "fxconv"
+    if n in ("pfdivd", "pfsqrttd"):
+        return "pfdivd"
+    if n == "fsqrttd":
+        return "fdivd"
+    if n == "fsqrtid":
+        return "fsqrtid"
+    if n in ("frcps", "frsqrts"):
+        return "frcp"
+    if n == "phminposuh":
+        return "pmul"
     if re.match(r"(p?f|qpf)divs", n):
         return "fdivs"
     if re.match(r"(p?f|qpf)div", n):
@@ -210,9 +259,9 @@ def classify(name):
         return "fminmax"
     if n in ("qphminposuh", "qpsgn2mskb"):
         return "pslow"
-    if n in ("qpfdtoifd", "qpfstoifs"):
+    if n in ("qpfdtoifd", "qpfstoifs", "pfdtoifd", "pfstoifs"):
         return "fp"
-    if re.match(r"(f[sdx]|i[sd]|pf|qpf|qpf[sd]|qpi[sd])to", n) or n in ("movif", "movfi"):
+    if re.match(r"(f[sdx]|i[sd]|pf|pf[sd]|pi[sd]|qpf|qpf[sd]|qpi[sd])to", n) or n in ("movif", "movfi"):
         return "conv"
     if re.match(r"(p?fcmp|qpfcmp)", n):
         return "fcmpr"
@@ -384,6 +433,8 @@ def parse_line(line, unknown):
     operands = [o.strip() for o in rest_nomas.split(",")] if rest_nomas else []
     op = Op(line, name, "alc", chan, lts=lts, cs1=cs1, preds=preds, lits=lits)
     op.cls = classify(name)
+    if name in ("rrs", "rrd"):
+        op.cls = "rrfp" if re.search(r"%(pfpfr|fpcr|fpsr)\b", rest) else "rr"
     if name not in unknown.known_names:
         op.known = False
     store = ALU_STORE.match(name) and not name.startswith("st_") or \

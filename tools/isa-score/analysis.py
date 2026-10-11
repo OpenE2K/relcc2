@@ -455,13 +455,18 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None):
             if extra > wait:
                 wait, why = extra, f"APB area bandwidth ({max(area_bytes.values())} bytes)"
             # The divider (ALC5): a divide 1 cycle after another waits 4,
-            # an fsqrts 5 cycles after another fsqrts 2.
+            # an fsqrts 5 cycles after another fsqrts 2, anything during
+            # an smodx's 9 cycles until they have passed.
             for op in ins.ops:
-                if op.name in model.DIVIDER_OPS and last_div is not None:
+                if model.is_divider(op.name) and last_div is not None:
                     dist = issue - last_div[1]
                     w = model.DIVIDER_STALL.get(dist, 0)
-                    if op.name == "fsqrts" and last_div[0] == "fsqrts":
+                    if op.name in model.FSQRT_OPS \
+                            and last_div[0] in model.FSQRT_OPS:
                         w = max(w, model.FSQRT_STALL.get(dist, 0))
+                    busy = model.DIVIDER_BUSY.get(last_div[0], 0)
+                    if dist < busy:
+                        w = max(w, model.stall(busy - dist))
                     if w > wait:
                         wait, why = w, f"divider ({op.name} {dist} after {last_div[0]})"
             # Two stores in one instruction to the same bank (address bits
@@ -501,7 +506,7 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None):
                 if op.mem and op.mem[0] == "st" and op.mem[1] is not None \
                         and op.mem[2] is not None:
                     last_store.append((op.mem[1], op.mem[2] // 8, issue))
-                if op.name in model.DIVIDER_OPS:
+                if model.is_divider(op.name):
                     last_div = (op.name, issue)
             fpside[:] = [f for f in fpside if f[2] >= issue - 8]
             for (p, ch, pis) in fpside:

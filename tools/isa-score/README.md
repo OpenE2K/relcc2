@@ -73,8 +73,11 @@ cycle late when an integer operation or load issues in the same channel
 2 cycles after its producer (`spec/isa/timing.md`). Also from
 `timing.md`: a load of the aligned doubleword stored in the instruction
 just before gets its value 8 cycles late (same base register, offsets
-in one doubleword); a divide 1 cycle after another waits 4 and an
-`fsqrts` 5 cycles after another 2 (the fractional rates at distance 2
+in one doubleword); a divide 1 cycle after another waits 4 (every
+operation of the ALC5 divider: divides, square roots and reciprocal
+estimates, integer, FP, packed and 80-bit), an `fsqrts` or `pfsqrts` 5
+cycles after another 2, and anything within 9 cycles of an `smodx` or
+`umodx` until those 9 have passed (the fractional rates at distance 2
 are not modelled); two stores in one instruction with the same base
 whose offsets agree in bits 6–7 take a cycle more (the base is assumed
 256-byte aligned). The `stld.c` probe's 60 straight-line cases are

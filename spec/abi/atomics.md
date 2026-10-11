@@ -41,7 +41,8 @@ loop around a **locked load** and an **unlocking store**. lcc's
 - The load has MAS `0x7` and must be in ALC0: "lock-wait" load (qemu
   `target/e2k/mas-format.h`, `e2k_parse_mas_lds1`: mod 7, not speculative,
   channel 0; mod 5 is the variant for channel 0 or for a 16-byte load in
-  channel 2). It reads the value and sets a lock on the address.
+  channel 2, v5+ only: "What breaks the lock" below). It reads the value
+  and sets a lock on the address.
 - The store has MAS `0x2`: "wait-unlock" store
   (`e2k_parse_mas_sts1`, mod 2). It writes only if the lock is still held,
   then releases it. lcc puts it in ALC2.
@@ -94,6 +95,75 @@ loop around a **locked load** and an **unlocking store**. lcc's
   fully relaxed memory ordering (#89527) and puts `wait st_c, ma_c`
   around its own; lcc doesn't, and `litmus_rmw.c` found no reordering
   across the 4C's chips (hwbugs.md).
+
+### What breaks the lock [hw]
+
+`tools/abi/probes/lockloss.c` (kernels from `gen_lockloss.py`) on the
+4C, 8C2 and 2C3: each attempt of lcc's fetch-add tried once, with
+something put between the lock-wait load and the wait-unlock store, and
+`rbranch` counting failures instead of retrying (failures per million
+attempts):
+
+| Between the lock and the unlock | 4C | 8C2 | 2C3 |
+|---|---|---|---|
+| nothing (lcc's sequence) | 3 | 5 | 0 |
+| ALU operations, a taken `ibranch`, a call and return of a function with no memory access, `rrd %clkr`, `wait` | 1–7 | 1–5 | 2–3 |
+| **any load or store by the same thread, to any address** (another page, the locked word, +8 … +65536; any channel and size) | **all** | all | all |
+| a system call (`sdisp` entry 3 or the fast entry 6), even with no memory access | all | all | all |
+| about 512 / 4,096 / 32,768 empty cycles | 221 / 1,760 / 17,800 | 102 / 830 / 6,700 | 80 / 630 / 5,050 |
+| a second lock-wait load | SIGBUS | SIGBUS | SIGBUS |
+
+- Interrupts break the lock in proportion to the window (0.15–0.54 per
+  million window cycles, about 300–430 a second: the timer tick); there
+  is no timeout. So the retry loop is needed even in one thread.
+- The wait-unlock store must have the locked address and size, else it
+  fails and writes nothing; so does one with no lock taken. It goes in
+  ALC2: in ALC5 it is SIGILL on the 4C, accepted on v5 and v6.
+- `%MLOCK` is valid only in the store's own wide instruction: an
+  `rbranch` one or two instructions later is never taken, even when the
+  store failed.
+- The first wait-unlock store ends the lock (a second one always fails).
+  A lock not ended by a store is ended by the thread's next memory
+  access; **if a lock-wait load comes first, it is SIGBUS**. So a
+  compare-exchange must store on both outcomes, as lcc's does (GCC's
+  usual expansion branches out without storing), or touch memory before
+  the next lock-wait load. An abandoned lock does not block other cores.
+- The access must be naturally aligned: a misaligned lock-wait load is
+  SIGBUS `BUS_OBJERR` and writes nothing (8-byte, all three; a 16-byte
+  `ldqp` one is `BUS_ADRALN` on v5, `BUS_OBJERR` on v6; `memx.c`).
+  Under-aligned `__atomic` objects need libatomic's locks.
+- **Other cores.** The lock covers a 64-byte block (another core's
+  accesses at +64 and beyond never break it). Their loads and stores of
+  the block are held off for 1,024 to 1,536 cycles, then break the lock
+  (`./lockloss hold`). Against lcc's short window, remote loads rarely
+  break it (5–200 per million), and remote stores rarely on the 4C
+  (35–195) but about half the time on the 8C2 and a quarter on the 2C3,
+  which still makes progress. Contended fetch-adds stayed atomic in
+  every run (the word equalled both threads' successes).
+
+  | Contended fetch-add, cycles per success | 4C, one chip | 4C, two chips | 8C2 | 2C3 |
+  |---|---|---|---|---|
+  | one word, or two words of one 64-byte block | 71 | 339 (the remote thread wins 5:1) | 126 | 87 |
+  | separate blocks | 30–33 | 30–33 | 30–33 | 30–33 |
+  | lcc's `__atomic_fetch_add` loop, one word | 54–122 | 543 (8.6:1) | 90 | 92 |
+
+- A compare-exchange loop against another core's stream of fetch-adds
+  on the same word nearly starves on one 4C chip (115–987 failed CASes
+  per increment, 15,000–70,600 cycles each; across chips 11, the 8C2
+  2–18, the 2C3 0.4–1). Against relaxed plain stores it needs under one
+  retry per increment.
+- MAS mod 5: SIGILL on v3; on v5 and v6 `ldd,0 … mas=0x5` behaves as
+  mod 7, and an `ldq` register pair (ALC0+2) with mod 5 and an `stq,2`
+  unlock works, as qemu's decoding has it. lcc's 16-byte loop
+  (`ldqp,0 … mas=0x7`, `stqp,2 … mas=0x2`) follows the same rules.
+
+For a compiler: emit the sequence as one unit after register allocation
+(no spill, reload or stack access inside, nothing that may enter the
+kernel), keep it a few cycles long (lcc's is 2–8), put `rbranch` in the
+store's instruction, never leave a lock open, and prefer fetch-op
+sequences to CAS loops where the operation exists. MCST's qemu keeps the
+lock across memory accesses, so code that breaks these rules passes
+there and livelocks on hardware.
 
 ## Loads, stores and fences (lcc)
 

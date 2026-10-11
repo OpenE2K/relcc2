@@ -140,10 +140,18 @@ above 127.
 
 ## setjmp/longjmp, contexts
 
-glibc implements `setjmp`/`longjmp`, `getcontext`/`setcontext` and
-`makecontext` in assembly and C with kernel support for the hardware
-stacks (`OpenE2K/glibc/sysdeps/unix/sysv/linux/e2k`). A compiler only needs
-to treat `setjmp` as returning twice. The compat suite (`longjmp` unit)
+glibc implements `setjmp`/`longjmp` in assembly and C with kernel
+support for the hardware stacks (`OpenE2K/glibc/sysdeps/unix/sysv/linux/e2k`).
+The user contexts are kernel calls: `getcontext` is fast system call 4,
+`setcontext` and `swapcontext` are system calls 369 and 371, and there
+is **no `makecontext`**: E2K's glibc exports `int makecontext_e2k (ucp,
+fn, argc, ...)` (system call 370, which allocates hardware stacks for
+the context and can fail) and `freecontext_e2k` (372, which frees them)
+instead (glibc `ucontext.h`, `makecontext.c`, `Versions`; lcc
+1.29.16's sysroot has no `makecontext`). Code written for
+`makecontext` (coroutine libraries, gccgo's goroutines) needs porting,
+and every switch is a system call [source]. A compiler only needs to
+treat `setjmp` as returning twice. The compat suite (`longjmp` unit)
 checks `longjmp` across frames built by another compiler, from recursion
 depths up to 200 (enough to spill register windows to the procedure
 stack), both from the callee itself and through a callback into the

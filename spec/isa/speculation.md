@@ -564,5 +564,6 @@ where the guard is false.
 
 - Quad lock and check loads on v3 (`ldq` exists only in protected
   mode there).
-- `masf4` encodings on v6, partial speculative loads across pages on
-  v7 (kernel `cpu_features.h`).
+- Partial speculative loads across pages on v7 (kernel
+  `cpu_features.h`); the v6 MAS bits `mas6.c` didn't try (`m3`, `be`
+  with acquire/release, `dc_ch` with `m1`, a quad watch load).

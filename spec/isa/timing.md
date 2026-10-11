@@ -718,7 +718,6 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
 
 - v4, v7; v6 on the Elbrus-16C (the 2C3 is the v6 machine measured).
 - Loop mode registers other than `%lsr` (`%ilcr`); APB throughput.
-- 128-bit operations (v5+).
 - Throughput of 128-bit and packed FP operations, `mova`, AAU stores,
   and loads and stores of other sizes; whether the store bank rule
   involves physical address bits.

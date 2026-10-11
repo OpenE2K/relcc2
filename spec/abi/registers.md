@@ -141,7 +141,7 @@ measured 0.54% of xz -6's cycles in `BUB_B_RF_SPILLFILL` on the 8C2
 | Predicates `%pred0`–`%pred31` | Saved and restored automatically: the caller's come back whatever the callee writes. The callee starts with a copy of the caller's values (hw: `tools/isa-probes/preds.c` `call_*`; the guide says only "a new predicate file"), so it must write a predicate before reading it ([predicates.md](../isa/predicates.md)) | guide 9.3.2, 9.5.3, hw |
 | `%ctpr1`–`%ctpr3` | Scratch: not preserved across calls. Returns go through `%ctpr3` | guide 9.3.3 |
 | `%lsr`, `%ilcr` (loop status, counter) | Scratch | guide 9.3.4 |
-| `%fpfr`, `%pfpfr`, `%upsr` | Special: a function that changes them must restore them. **`UPSR.fsm` (bit 8) is never changed**: processes start with it clear, and with it set the FP predicate compares give x86 results for NaN operands (semantics.md), so code may assume it is clear (owner's decision, 2026-10-11) | guide 9.3.4 |
+| `%fpcr`, `%fpsr`, `%pfpfr`, `%upsr` | Special: a function that changes them must restore them. **`UPSR.fsm` (bit 8) is never changed**: processes start with it clear, and with it set the FP predicate compares give x86 results for NaN operands (semantics.md), so code may assume it is clear (owner's decision, 2026-10-11) | guide 9.3.4 |
 | `WD`, `BR`, `USD`, `CUD`, `GD`, `CUIR`, `TSD`, `IP` | Saved and restored automatically | guide 9.3.4 |
 
 The kernel saves all globals on context switch, but around a user signal

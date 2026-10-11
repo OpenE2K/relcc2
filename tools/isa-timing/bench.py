@@ -2423,9 +2423,15 @@ def parse(text):
 
 def sched_latency(pts):
     """Smallest gap at which a step costs exactly gap + fixed cycles."""
-    # The loop's own overhead adds a few tenths of a cycle per step.
+    # The loop's own overhead adds a few tenths of a cycle per step: the
+    # smallest excess over gap + fixed among the gaps (a stall adds at
+    # least 3), up to 0.45 above it.  On the 4C it is sometimes 0.46-0.5
+    # for a whole run; a stray reading below gap + fixed counts as 0.
+    over = max(0.0, min(t - gap - fixed for gap, fixed, t in pts))
+    if over > 1.5:
+        return None              # every gap stalls
     for gap, fixed, t in pts:
-        if t <= gap + fixed + 0.45:
+        if t <= gap + fixed + over + 0.45:
             return gap
     return None
 

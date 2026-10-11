@@ -2206,6 +2206,9 @@ Decided by the owner:
   every pair). The 8C2 does not fill fresh registers with tagged values
   (only qemu does), and v6 has longer load latencies (performance
   only).
+- `UPSR.fsm` is never changed (2026-10-11): with it set the FP predicate
+  compares give x86 results for NaN operands (semantics.md), and code
+  may assume it clear (registers.md).
 
 ### lcc's builtins and intrinsics (source compatibility)
 

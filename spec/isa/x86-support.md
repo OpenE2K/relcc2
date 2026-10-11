@@ -76,8 +76,8 @@ Ranked by how directly a compiler or a JIT can use them.
    the sum, and `cctopo` (or `cctopb` for the carry) turns them into a
    predicate: `__builtin_add_overflow`, `__builtin_sub_overflow` and
    32-bit `__builtin_mul_overflow` (`smulx_fw`, `umulx_fw`) in two
-   operations, where lcc emits about seven (an add, two compares,
-   predicated moves and extensions; lcc never
+   operations, where lcc emits ten (an add, three compares, four
+   predicated moves and two extensions; lcc never
    uses the flag operations except through its four
    `__builtin_e2k_*_f*` builtins). The `_fd` forms (v3+) do 64-bit add
    and subtract; there are no 64-bit multiply flags. Both run only in
@@ -130,7 +130,8 @@ Ranked by how directly a compiler or a JIT can use them.
 8. **FP environment and x86 emulation.** `%pfpfr` has MXCSR's layout and
    `%fpcr`/`%fpsr` x87's (lcc maps `_mm_getcsr`, `_FPU_GETCW` straight
    to them), `UPSR.fsm` makes the predicate FP compares treat unordered
-   as x86 flags do (semantics.md), and the flag
+   as x86 flags do (semantics.md; an emulator only: compiled code never
+   changes it, registers.md), and the flag
    operations, `fx*`, `%bgr` and `fcmpud*f` are what an open x86
    user-mode emulator on Elbrus (box64-style) would build on.
 9. **Wait on memory (v6).** The watch-for-modification load plus `wait

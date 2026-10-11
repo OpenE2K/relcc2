@@ -442,7 +442,9 @@ community qemu evaluates `cctopl` as true when SF and OF are both set.
 lcc doesn't emit any of them for C: its `__builtin_add_overflow` on
 `int` is ten operations of compares and selects, where `adds_fw` then
 `cctopo` give the overflow predicate (and `cmposb a, b` alone gives
-subtraction's; their latencies are not measured).
+subtraction's). Every flag form takes 2 cycles (the multiplies 4), also
+into `cctop`, and `cctop*` reaches a predicated operation in 2 (1 on
+v6) (timing.md).
 
 Apart from the flag forms, MCST's qemu differs from the hardware in this
 sweep only in FP flags:

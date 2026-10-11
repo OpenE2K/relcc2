@@ -22,6 +22,15 @@ measurement:
   hz     Hazards: does an operation D cycles (0 = same wide instruction)
          after a producer see the new value or the old one? Old values
          mean the dependency is not interlocked.
+  v3op   The v3 sweep, printed as sched and tp lines: a scheduled
+         latency for every v3 computational operation without one
+         (v3op_*, generated from binutils-ops.yaml), divider sharing of
+         the remaining ALC5 operations (v3div_*), state-register costs
+         (v3st_*) and wait costs (v3wait_*). `--only v3op` runs it
+         alone; a full run leaves it out (about 9,000 kernels). The
+         timing YAML files include it: run the built bench binary on the
+         host once without an argument and once with `v3op`, join the
+         two outputs and pass them to --results with --yaml.
 
 Usage:
   bench.py [--target T] [--remote [USER@]HOST] [--ssh-key FILE] [--ssh-port N]
@@ -876,6 +885,540 @@ def add_v6():
     CTL_KINDS.extend(["pcmp_alu", "pcmp_ct"])
 
 
+# The v3 sweep, kind "v3op" (only with --only v3op, not in a full run;
+# v3 operations being valid on all later targets, it runs on each):
+#   v3op_*   a scheduled-latency chain for every v3 computational
+#            operation without a latency of its own (generated from
+#            binutils-ops.yaml, as v5op_*), to a consumer of its own
+#            class and, for FP-side results, to an integer operation;
+#            the combined integer operations through operand c (a
+#            representative set);
+#   v3div_*  divider sharing: the ALC5 operations not yet timed, alone,
+#            every g cycles, alternating with fdivd, and two a cycle
+#            apart;
+#   v3st_*   state registers: rrs/rws %pfpfr (and %fpcr, %fpsr for
+#            80-bit operations), rrd %ip, rrs/rws %upsr, alone and to the
+#            reads and operations after them;
+#   v3wait_* wait all_c, ld_c|st_c, all_e alone in a loop and after a
+#            store, a load or an FP operation.
+# Kernel names are the keys of SCHED / TP / TP2 as for the other kinds;
+# V3OP says which of them belong to v3op.
+V3OP = set()
+V3OP_SKIPPED = {}       # operation -> why it has no v3op chain
+TP_INIT = {}            # TP kernel name -> extra setup ("; " between ops)
+
+# Operand types: i / w a 64 / 32-bit integer, I packed integers in a
+# 64-bit register, F a 32-bit x86 flags word, g / f a double / single,
+# P two packed singles, x an 80-bit value, p a predicate, n an 8-bit
+# immediate.  Chain registers: %dr2 / %r2 the chained value, %dr8 / %r8
+# a result that needs converting back; constants (INIT and the chain's
+# setup): %dr3 1, %dr4 1.0, %dr5 0, %r6 1.0f, %dr7 (1.0f, 1.0f) or
+# 80-bit 1.0.  An 80-bit operand is never 0 (%dr5 has no valid
+# exponent part); it is 1.0.
+_V3_INTLIKE = set("iwIF")
+_V3_SIZE = {"i": "d", "I": "d", "g": "d", "P": "d", "x": "d",
+            "w": "s", "F": "s", "f": "s"}
+_V3_ZERO = {"i": "%dr5", "I": "%dr5", "g": "%dr5", "P": "%dr5",
+            "x": "%dr7", "w": "%r5", "F": "%r5", "f": "%r5"}
+_V3_ONE = {"i": "%dr3", "I": "%dr3", "g": "%dr4", "P": "%dr7",
+           "x": "%dr7", "w": "%r3", "F": "%r3", "f": "%r6"}
+# The 64-bit register holding a valid value of a type (after `ord` with 0).
+_V3_ONEBITS = {"i": "%dr3", "I": "%dr3", "w": "%dr3", "F": "%dr3",
+               "g": "%dr4", "f": "%dr6", "P": "%dr7"}
+_V3_INIT = {"i": "addd,0 0x0, 0x1, %dr2", "w": "addd,0 0x0, 0x1, %dr2",
+            "I": "addd,0 0x0, 0x1, %dr2", "F": "addd,0 0x0, 0x1, %dr2",
+            "g": "addd,0 0x0, %dr4, %dr2", "f": "addd,0 0x0, %dr6, %dr2",
+            "P": "addd,0 0x0, 0x3f8000003f800000, %dr2",
+            "x": "fdtofx,0 %dr4, %dr2"}
+_V3_INIT7 = {"P": "addd,1 0x0, 0x3f8000003f800000, %dr7",
+             "x": "fdtofx,1 %dr4, %dr7"}
+# Converters bringing a result of type R back to the chained source's
+# type T, each reading the result in the format it was produced in.
+_V3_CONV = {("f", "g"): "fstofd", ("g", "f"): "fdtofs",
+            ("w", "g"): "istofd", ("w", "f"): "istofs",
+            ("i", "g"): "idtofd", ("i", "f"): "idtofs",
+            ("g", "i"): "fdtoid", ("f", "i"): "fstoid",
+            ("g", "w"): "fdtoistr", ("f", "w"): "fstoistr",
+            ("P", "I"): "pfstois", ("I", "P"): "pistofs",
+            ("f", "x"): "fstofx", ("g", "x"): "fdtofx",
+            ("w", "x"): "istofx", ("i", "x"): "idtofx",
+            ("x", "f"): "fxtofs", ("x", "g"): "fxtofd",
+            ("x", "w"): "fxtois", ("x", "i"): "fxtoid"}
+_V3_FX = {"s": "f", "d": "g", "x": "x"}
+_V3_CVT = {"fs": "f", "fd": "g", "is": "w", "id": "i"}
+# Integer-side results (an integer consumer is the chain itself).
+_V3_INTOPS = re.compile(
+    r"^((add|sub|and|andn|or|orn|xor|xorn|shl|shr|sar|scl|scr|getf|insf|"
+    r"merge|popcnt|lzcnt|bitrev)[sd]|sxt|(?![su]mulx)[a-z]+_f[bhwd])$")
+_V3_COMBINED = re.compile(r"^(and|andn|or|orn|xor|xorn|add|sub|scl|scr|shl|"
+                          r"shr|sar|getf|merge)_")
+# Timed elsewhere (timing.md rows from pocchk.c, pmu.c, sqrt.c, or a
+# bench.py pair whose name is not the operation's).
+_V3_MEASURED = {"fsqrtid", "fsqrttd", "frcps", "frsqrts", "sdivs", "udivs",
+                "udivd", "fdtofx", "fxtofd"}
+_V3_NOTSWEPT = [
+    (re.compile(r"^(ld|st)"), "memory access (timing.md, Memory)"),
+    (re.compile(r"^aaur"), "AAU register access (apb.md)"),
+    (re.compile(r"^(apto|cudtoap|gdtoap|getsap|getva|vfsi|getpl|gettag|"
+                r"puttag|gettc|gettst|invtc|puttc|puttst|movt)"),
+     "tags, protected mode, CTPR moves (movtd -> ct is a ctl kernel)"),
+    (re.compile(r"^(rr|rw)[sd]$"), "state register: v3st_* kernels"),
+    (re.compile(r"^getsp$"), "allocates stack; timed by pmu.c"),
+    (re.compile(r"^mov(if|fi)$"), "timed (movfi_movif, pmu.c)"),
+    (re.compile(r"^fxsqrt[iut]xx$"), "timed (fxsqrt*xx)"),
+]
+
+
+def _v3_types(n, alopf, args):
+    """(source types, result type, index of the chained source) of a v3
+    operation, or a string saying why it is not swept on its own."""
+    w = {"s": "w", "d": "i"}
+    if alopf in ("ALOPF7", "ALOPF8"):          # into a predicate
+        srcs = list(args)
+    else:
+        srcs = list(args[:-1])
+    ns = len(srcs)
+    if n in ("movx", "movxa", "movxc"):
+        return ["x"], "x", 0
+    m = re.match(r"(f[sd]|i[sd])tofx$", n)
+    if m:
+        return [_V3_CVT[m[1]]], "x", 0
+    m = re.match(r"fxto(fs|fd|id|is)(tr)?$", n)
+    if m:
+        return ["x"], _V3_CVT[m[1]], 0
+    if re.match(r"fxsqrt[iut][sdx]x$", n):
+        return "square root step: v3op_fxsqrt*[sd]x chains of all three"
+    m = re.match(r"fxcmp[a-z]+?([sdx])([bf])$", n)
+    if m:
+        return ["x", _V3_FX[m[1]]], "p" if m[2] == "b" else "F", 0
+    m = re.match(r"fx[a-z]+?([sdx])([sdx])$", n)
+    if m:
+        return ["x", _V3_FX[m[1]]], _V3_FX[m[2]], 0
+    m = re.match(r"(f[sd]|i[sd])to(f[sd]|i[sd])(tr)?$", n)
+    if m:
+        return [_V3_CVT[m[1]]], _V3_CVT[m[2]], 0
+    if n in ("fdtoifd", "fstoifs"):
+        t = "g" if n == "fdtoifd" else "f"
+        return [w[args[0]], t], t, 1
+    if n.startswith(("popcnt", "lzcnt", "bitrev")):
+        return [w[a] for a in srcs], w[args[-1]], 0
+    if n in ("pfstois", "pfstoistr"):
+        return ["P"], "I", 0
+    if n == "pistofs":
+        return ["I"], "P", 0
+    if n == "pfdtofs":
+        return ["g"], "f", 0
+    if n in ("pfdtois", "pfdtoistr"):
+        return ["g"], "w", 0
+    if n == "pfstofd":
+        return ["f"], "g", 0
+    if n == "pfdtoifd":
+        return ["i", "g"], "g", 1
+    if n == "pfstoifs":
+        return ["i", "P"], "P", 1
+    if n in ("pfdivs", "pfsqrts"):              # scalar singles (semantics.md)
+        return ["f"] * ns, "f", 0
+    if n.startswith("pf"):
+        t = "P" if n.endswith("s") else "g"
+        return [t] * ns, t, 0
+    if n == "pextrh":
+        return ["I", "I", "n"], "w", 0
+    if n in ("pinsh", "pshufw", "psllqh", "psllql", "psrlqh", "psrlql"):
+        return ["I", "I", "n"], "I", 0
+    if n == "pshufh":
+        return ["I", "n"], "I", 0
+    if n.startswith("p"):
+        return ["I"] * ns, "I", 0
+    m = re.match(r"fcmp(eq|lt|le|uod|neq|nlt|nle|od|ud)([sd])([bf]?)$", n)
+    if m:
+        t = "f" if m[2] == "s" else "g"
+        return [t, t], {"b": "p", "f": "F", "": t}[m[3]], 0
+    if n in ("fsqrts", "frcps", "frsqrts"):
+        return ["f"], "f", 0
+    if n == "fsqrtid":
+        return ["g"], "g", 0
+    if n == "fsqrttd":
+        return ["g", "g"], "g", 0
+    m = re.match(r"f(add|sub|mul|max|min|div)([sd])$", n) or re.match(
+        r"f(add|sub|mul)_(add|sub|rsub)([sd])$", n)
+    if m:
+        t = "f" if n.endswith("s") else "g"
+        return [t] * ns, t, 0
+    if n.startswith("cctop"):
+        return ["F"], "p", 0
+    if re.match(r"cmp", n):
+        return [w[a] for a in srcs], "p", 0
+    if re.search(r"_f[bhwd]$", n):
+        return [w[a] for a in srcs], "F", 0
+    if n in ("smulx", "umulx"):
+        return ["w", "w"], "i", 0
+    if re.match(r"[su](div|mod)x$", n):
+        return ["i", "w"], "w", 0
+    if n in ("sxt", "insfs", "insfd") or alopf in ("ALOPF1", "ALOPF11",
+                                                   "ALOPF2", "MERGE"):
+        return [w[a] for a in srcs], w[args[-1]], 0
+    return f"no rule for {alopf} {args}"
+
+
+def _v3_alu_ops(isa):
+    """{name: (alopf, args, channels)} of the v3 ALU operations valid on
+    ISA (channels on v3, the smallest set; later ISAs add channels)."""
+    import yaml
+    data = yaml.load((ROOT / "spec/isa/binutils-ops.yaml").read_text(),
+                     Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader))
+    isets, out = {}, {}
+    for e in data["alu_ops"]:
+        if e.get("isets"):
+            isets.setdefault(e["name"], set()).update(e["isets"])
+    for e in data["alu_ops"]:
+        n = e["name"]
+        if not e.get("isets") or min(isets[n]) > 3 or 3 not in isets[n]:
+            continue
+        if isa not in isets[n]:
+            V3OP_SKIPPED[n] = f"not in elbrus-v{isa}"
+            continue
+        if 3 in e["isets"]:
+            alopf, args, chans = out.get(n, (e["alopf"], e["args"], set()))
+            out[n] = (alopf, args, chans | set(e["channels"]))
+    return out
+
+
+def _v3_reg(t, k):
+    return f"%r{k}" if _V3_SIZE[t] == "s" else f"%dr{k}"
+
+
+def _v3_fpch(ch):
+    """An ALC0/1/3/4 channel (FP conversions) in CH's cluster."""
+    return ch if ch in (0, 1, 3, 4) else (1 if ch == 2 else 3)
+
+
+def _v3_back_pred(t, ch):
+    """From %pred1 back to the chained value of type T (merge keeps it or
+    gives 0; an 80-bit value is rebuilt as 1.0)."""
+    if t == "x":
+        return [(f"merged,{ch} %dr4, %dr4, %dr8, %pred1", 12),
+                (f"fdtofx,{_v3_fpch(ch)} %dr8, %dr2", 12)]
+    return [(f"merged,{ch} %dr5, %dr2, %dr2, %pred1", 12)]
+
+
+def _v3_reset(t, ch, out, r):
+    """An integer consumer of OUT (type R) that throws its value away, then
+    the chained source rebuilt from a constant of type T: for results no
+    converter brings back (80-bit, flags, NaN-prone)."""
+    size = _V3_SIZE[r]
+    tmp = "%r8" if size == "s" else "%dr8"
+    lines = [(f"and{size},{ch} {out}, 0x0, {tmp}", 12)]
+    if t == "x":
+        lines += [(f"ord,{ch} %dr8, %dr4, %dr8", 12),
+                  (f"fdtofx,{_v3_fpch(ch)} %dr8, %dr2", 12)]
+    else:
+        lines += [(f"ord,{ch} %dr8, {_V3_ONEBITS[t]}, %dr2", 12)]
+    return f"and{size}", lines
+
+
+def v3_op_chains(isa=3):
+    """Scheduled-latency chains for the v3 computational operations
+    without a latency of their own: {name: (init, step, maxgap)}.
+
+    v3op_NAME           the result feeds the same operation (or, for a
+                        result in another type, a converter reading it in
+                        its own format: v3op_NAME_to_CONV; a predicate a
+                        merge, v3op_NAME_to_merged; a flags word cctope);
+    v3op_NAME_to_addd   (or adds, andd, ands) an integer consumer of an
+                        FP-side result, in the producer's channel.
+    The chained source gets %dr2 / %r2; other sources are 0, or 1 of
+    their type for divisors (a 0 divisor is SIGFPE), multipliers and
+    80-bit second operands."""
+    out = {}
+    measured = set(SCHED) | _V3_MEASURED     # (LAT is back-to-back only)
+    for n, (alopf, args, chans) in sorted(_v3_alu_ops(isa).items()):
+        why = next((r for p, r in _V3_NOTSWEPT if p.match(n)), None)
+        if why is None and _V3_COMBINED.match(n):
+            why = "combined integer: v3op_* representative set"
+        typ = why or _v3_types(n, alopf, args)
+        if isinstance(typ, str):
+            V3OP_SKIPPED[n] = typ
+            continue
+        srcs, r, k = typ
+        t = srcs[k]
+        ch = min(chans)
+        self_done = n in measured or any(s.startswith(n + "_to_")
+                                         for s in SCHED)
+        int_done = any(s.startswith((n + "_to_addd", n + "_to_adds"))
+                       for s in SCHED)
+        alc5 = chans == {5}
+        types = set(srcs) | {r, t}
+        init = "; ".join([_V3_INIT[t]] + [_V3_INIT7[c] for c in "Px"
+                                          if c in types])
+        ops = []
+        for i, a in enumerate(srcs):
+            if a == "n":
+                ops.append("0x1")
+            elif i == k:
+                ops.append(_v3_reg(a, 2))
+            elif i == 1 and (re.search(r"div|mod|mul|sqrtt", n)
+                             or n.startswith("fx")):
+                ops.append(_V3_ONE[a])
+            else:
+                ops.append(_V3_ZERO[a])
+        direct = r == t or (r in _V3_INTLIKE and t in _V3_INTLIKE)
+        res = "%pred1" if r == "p" else _v3_reg(r, 2 if direct else 8)
+        tail = ", %pred0" if alopf.endswith("MERGE") else ""
+        op = f"{n},{ch} " + ", ".join(ops + [res]) + tail
+        big = 24 if alc5 else 10
+        if not self_done:
+            if direct:
+                key, step = f"v3op_{n}", []
+                gap = 6 if _V3_INTOPS.match(n) else (8 if r in "IF" else big)
+            elif r == "p":
+                key, step = f"v3op_{n}_to_merged", _v3_back_pred(t, ch)
+                gap = 6 if t in _V3_INTLIKE else big
+            elif r == "F":
+                cc = 0 if ch < 3 else 3
+                key = f"v3op_{n}_to_cctope"
+                step = [(f"cctope,{cc} %r8, %pred1", 12)] + _v3_back_pred(t, cc)
+                gap = big
+            else:
+                cv = _V3_CONV[(r, t)]
+                key = f"v3op_{n}_to_{cv}"
+                step = [(f"{cv},{_v3_fpch(ch)} {res}, {_v3_reg(t, 2)}", 12)]
+                gap = big
+            out[key] = (init, [(op, None)] + step, gap)
+        if r == "p" or _V3_INTOPS.match(n) or int_done:
+            continue
+        if direct and r != "x":
+            c = "adds" if _V3_SIZE[r] == "s" else "addd"
+            step = [(f"{c},{ch} {res}, {_V3_ZERO[r]}, {res}", 12)]
+        elif (r, t) in _V3_CONV and r != "x":
+            c = "adds" if _V3_SIZE[r] == "s" else "addd"
+            step = [(f"{c},{ch} {res}, {_V3_ZERO[r]}, {res}", 12),
+                    (f"{_V3_CONV[(r, t)]},{_v3_fpch(ch)} {res}, "
+                     f"{_v3_reg(t, 2)}", 12)]
+        else:
+            c, step = _v3_reset(t, ch, res, r)
+        out[f"v3op_{n}_to_{c}"] = (init, [(op, None)] + step, big + 2)
+    out.update(_v3_special_chains())
+    return out
+
+
+def _v3_special_chains():
+    """The combined integer operations through each operand (a
+    representative set), merge_* (with its predicate), and the 80-bit
+    square root steps from a single or double."""
+    out = {}
+    one = "addd,0 0x0, 0x1, %dr2"
+    firsts = ("and", "andn", "or", "orn", "xor", "xorn", "add", "sub", "scl",
+              "scr", "shl", "shr", "sar", "getf")
+    seconds = ("and", "andn", "or", "orn", "xor", "xorn", "sub", "rsub")
+    # X_Y a, b, c computes Y(c, X(a, b)) (semantics.md); _opc chains
+    # through c, _opb through b, no suffix through a.
+    for x in firsts:
+        op = f"{x}_addd"
+        out[f"v3op_{op}_opc"] = (one, [(f"{op},1 %dr5, %dr5, %dr2, %dr2",
+                                        None)], 6)
+        if op not in SCHED:
+            out[f"v3op_{op}"] = (one, [(f"{op},1 %dr2, %dr5, %dr5, %dr2",
+                                        None)], 6)
+    for y in seconds:
+        op = f"add_{y}d"
+        out[f"v3op_{op}_opc"] = (one, [(f"{op},1 %dr5, %dr5, %dr2, %dr2",
+                                        None)], 6)
+    for x in ("add", "and", "xor", "shl"):
+        op = f"{x}_adds"
+        out[f"v3op_{op}_opc"] = (one, [(f"{op},1 %r5, %r5, %r2, %r2",
+                                        None)], 6)
+    for x in ("add", "shl"):
+        op = f"{x}_addd"
+        out[f"v3op_{op}_opb"] = (one, [(f"{op},1 %dr5, %dr2, %dr5, %dr2",
+                                        None)], 6)
+    # merge_Y a, b, c, pred: Y(c, pred ? b : a).  %pred0 is false in the
+    # loop; %pred2 is set true for the _t form.
+    for y in ("and", "andn", "or", "orn", "xor", "xorn", "add", "sub",
+              "rsub"):
+        for wd, r in (("d", "%dr"), ("s", "%r")):
+            op = f"merge_{y}{wd}"
+            out[f"v3op_{op}_opc"] = (
+                one, [(f"{op},1 {r}5, {r}5, {r}2, {r}2, %pred0", None)], 6)
+    for wd, r in (("d", "%dr"), ("s", "%r")):
+        op = f"merge_add{wd}"
+        out[f"v3op_{op}"] = (
+            one, [(f"{op},1 {r}2, {r}5, {r}5, {r}2, %pred0", None)], 6)
+    out["v3op_merge_addd_opb"] = (
+        one, [("merge_addd,1 %dr5, %dr2, %dr5, %dr2, %pred0", None)], 6)
+    out["v3op_merge_addd_opb_t"] = (
+        one + "; cmpedb,3 %dr3, 0x1, %pred2",
+        [("merge_addd,1 %dr5, %dr2, %dr5, %dr2, %pred2", None)], 6)
+    out["v3op_cmpesb_to_merge_addd"] = (
+        one, [("cmpesb,1 %r2, %r5, %pred1", None),
+              ("merge_addd,1 %dr5, %dr2, %dr5, %dr2, %pred1", 12)], 6)
+    # fxsqrti<t>x a, s; fxsqrtu<t>x a, s, s; fxsqrtt<t>x a, s, r (lcc's
+    # sqrtl, semantics.md) from a single or double a, the root converted
+    # back to a's type: each step scanned in turn.
+    for t, init, back in (("s", "addd,0 0x0, %dr6, %dr2", "fxtofs,3 %dr9, %r2"),
+                          ("d", "addd,0 0x0, %dr4, %dr2", "fxtofd,3 %dr9, %dr2")):
+        a = "%r2" if t == "s" else "%dr2"
+        i = f"fxsqrti{t}x,5 {a}, %dr8"
+        u = f"fxsqrtu{t}x,5 {a}, %dr8, %dr8"
+        s = f"fxsqrtt{t}x,5 {a}, %dr8, %dr9"
+        out[f"v3op_fxsqrti{t}x"] = (init, [(i, None), (u, 24), (s, 24),
+                                           (back, 12)], 18)
+        out[f"v3op_fxsqrtu{t}x"] = (init, [(i, 24), (u, None), (s, 24),
+                                           (back, 12)], 24)
+        out[f"v3op_fxsqrtt{t}x_to_{back.split(',')[0]}"] = (
+            init, [(i, 24), (u, 24), (s, None), (back, 12)], 24)
+    return out
+
+
+# Divider sharing (v3div_*): the ALC5 operations whose unit was not
+# measured, with constant operands (1, 1.0, 1.0f, 80-bit 1.0 in %dr7).
+# "{s}" is a 32-bit destination.
+V3_DIV = [
+    ("fsqrtid", "fsqrtid,5 %dr4, {d}"),
+    ("fsqrttd", "fsqrttd,5 %dr4, %dr4, {d}"),
+    ("udivs", "udivs,5 %r3, %r3, {s}"),
+    ("udivd", "udivd,5 %dr3, %dr3, {d}"),
+    ("sdivx", "sdivx,5 %dr3, %r3, {s}"),
+    ("udivx", "udivx,5 %dr3, %r3, {s}"),
+    ("smodx", "smodx,5 %dr3, %r3, {s}"),
+    ("umodx", "umodx,5 %dr3, %r3, {s}"),
+    ("fxdivxx", "fxdivxx,5 %dr7, %dr7, {d}"),
+    ("fxdivdd", "fxdivdd,5 %dr7, %dr4, {d}"),
+    ("fxdivss", "fxdivss,5 %dr7, %r6, {s}"),
+    ("fxsqrtixx", "fxsqrtixx,5 %dr7, {d}"),
+    ("fxsqrtuxx", "fxsqrtuxx,5 %dr7, %dr7, {d}"),
+    ("fxsqrttxx", "fxsqrttxx,5 %dr7, %dr7, {d}"),
+    ("pfdivs", "pfdivs,5 %r6, %r6, {s}"),
+    ("pfdivd", "pfdivd,5 %dr4, %dr4, {d}"),
+    ("pfsqrts", "pfsqrts,5 %r6, {s}"),
+    ("pfsqrttd", "pfsqrttd,5 %dr4, %dr4, {d}"),
+    ("frcps", "frcps,5 %r6, {s}"),
+    ("frsqrts", "frsqrts,5 %r6, {s}"),
+]
+_FDIVD = "fdivd,5 %dr4, %dr4, {d}"
+
+
+def _v3_tp():
+    """The v3div_, v3st_ and v3wait_ throughput kernels: (TP, TP2)."""
+    tp, tp2 = {}, {}
+    for n, op in V3_DIV:
+        tp[f"v3div_{n}"] = ([op], f"{n} every cycle")
+        for g in range(2, 9):
+            tp[f"v3div_{n}_g{g}"] = ([op, f"nop {g - 1}"],
+                                     f"{n} every {g} cycles")
+        # One unit with fdivd: alternating, 5 cycles an instruction as
+        # fdivd alone every cycle; separate, 1.
+        tp2[f"v3div_fdivd_{n}_alt"] = ([_FDIVD], [op],
+                                       f"fdivd, {n} alternating")
+        # Two a cycle apart, then 8 quiet: 9 cycles a pair without a
+        # conflict (4.5 an instruction), 13 with fdivd's (6.5); alone
+        # (_g8) 8 an instruction.
+        tp2[f"v3div_{n}_{n}_1"] = ([op], [op, "nop 7"],
+                                   f"{n}, {n} 1 later, 8 quiet")
+        tp2[f"v3div_fdivd_{n}_1"] = ([_FDIVD], [op, "nop 7"],
+                                     f"fdivd, {n} 1 later, 8 quiet")
+        tp2[f"v3div_{n}_fdivd_1"] = ([op], [_FDIVD, "nop 7"],
+                                     f"{n}, fdivd 1 later, 8 quiet")
+    tp2["v3div_fdivd_fdivd_1"] = ([_FDIVD], [_FDIVD, "nop 7"],
+                                  "fdivd, fdivd 1 later, 8 quiet")
+    sid, std = dict(V3_DIV)["fsqrtid"], dict(V3_DIV)["fsqrttd"]
+    tp2["v3div_fsqrtid_fsqrttd_alt"] = ([sid], [std],
+                                        "fsqrtid, fsqrttd alternating")
+    tp2["v3div_fsqrtid_fsqrttd_1"] = ([sid], [std, "nop 7"],
+                                      "fsqrtid, fsqrttd 1 later, 8 quiet")
+    for name in list(tp) + list(tp2):
+        TP_INIT[name] = "fdtofx,0 %dr4, %dr7"
+    # State registers, every instruction (a write writes back the value
+    # read in the setup, %r7).
+    st = {
+        "v3st_rrs_pfpfr": (["rrs,0 %pfpfr, {s}"], "rrs %pfpfr", None),
+        "v3st_rws_pfpfr": (["rws,0 %r7, %pfpfr"], "rws %pfpfr", "%pfpfr"),
+        "v3st_rws_fpcr": (["rws,0 %r7, %fpcr"], "rws %fpcr", "%fpcr"),
+        "v3st_rrs_upsr": (["rrs,0 %upsr, {s}"], "rrs %upsr", None),
+        "v3st_rws_upsr": (["rws,0 %r7, %upsr"], "rws %upsr", "%upsr"),
+        "v3st_rrd_ip": (["rrd,0 %ip, {d}"], "rrd %ip", None),
+    }
+    for name, (ops, what, reg) in st.items():
+        tp[name] = (ops, what + " every cycle")
+        if reg:
+            TP_INIT[name] = f"rrs,0 {reg}, %r7"
+    # Does a write of %pfpfr wait for operations in flight?
+    for name, a, what in (
+            ("v3st_rws_rrs_pfpfr", "rrs,0 %pfpfr, {s}", "rws %pfpfr, rrs %pfpfr"),
+            ("v3st_faddd_rws_pfpfr", "faddd,0 %dr4, %dr5, {d}",
+             "faddd, rws %pfpfr"),
+            ("v3st_fdivd_rws_pfpfr", _FDIVD, "fdivd, rws %pfpfr")):
+        first, second = ((["rws,0 %r7, %pfpfr"], [a]) if name.startswith(
+            "v3st_rws") else ([a], ["rws,0 %r7, %pfpfr"]))
+        tp2[name] = (first, second, what + " alternating")
+        TP_INIT[name] = "rrs,0 %pfpfr, %r7"
+    # wait alone, and after a store, a load or FP operations.
+    for name, w in (("all_c", "all_c = 1"), ("ld_st_c", "ld_c = 1, st_c = 1"),
+                    ("all_e", "all_e = 1"), ("st_c", "st_c = 1"),
+                    ("ld_c", "ld_c = 1")):
+        tp[f"v3wait_{name}"] = ([f"wait {w}"], f"wait {w} every instruction")
+    for name, a, w in (
+            ("std_ld_st_c", "std,2 %dr1, 0x100, %dr3", "ld_c = 1, st_c = 1"),
+            ("std_st_c", "std,2 %dr1, 0x100, %dr3", "st_c = 1"),
+            ("ldd_ld_st_c", "ldd,0 %dr1, 0x100, {d}", "ld_c = 1, st_c = 1"),
+            ("std_all_c", "std,2 %dr1, 0x100, %dr3", "all_c = 1"),
+            ("faddd_all_c", "faddd,0 %dr4, %dr5, {d}", "all_c = 1"),
+            ("faddd_all_e", "faddd,0 %dr4, %dr5, {d}", "all_e = 1"),
+            ("fdivd_all_c", _FDIVD, "all_c = 1")):
+        tp2[f"v3wait_{name}"] = ([a], [f"wait {w}"],
+                                 f"{a.split(',')[0]}, wait {w} alternating")
+    return tp, tp2
+
+
+# Costs around the state registers (v3st_*, scheduled latency): a read
+# to its consumer, a write to a read or a use of the new state, an FP
+# operation to a read of the flags it sets (inexact: 1 + 2^-63 as a
+# double, 1 + 2^-70 as an 80-bit value; as hazard test fadd_pfpfr).
+# The setup reads the register into %r8, which the write writes back.
+SCHED_V3ST = {
+    "v3st_rrs_pfpfr_to_ands": (
+        "addd,1 0x0, 0x0, %dr2",
+        [("rrs,0 %pfpfr, %r8", None), ("ands,0 %r8, %r5, %r9", 12)], 8),
+    "v3st_rws_pfpfr_to_rrs": (
+        "addd,1 0x0, 0x0, %dr2; rrs,0 %pfpfr, %r8",
+        [("rws,0 %r8, %pfpfr", None), ("rrs,0 %pfpfr, %r9", 12)], 12),
+    "v3st_rws_pfpfr_to_faddd": (
+        "addd,1 0x0, 0x0, %dr2; rrs,0 %pfpfr, %r8",
+        [("rws,0 %r8, %pfpfr", None), ("faddd,0 %dr4, %dr5, %dr9", 12)], 12),
+    "v3st_faddd_to_rrs_pfpfr": (
+        "addd,1 0x0, 0x0, %dr2; addd,3 0x0, 0x3c00000000000000, %dr10",
+        [("faddd,0 %dr4, %dr10, %dr9", None), ("rrs,0 %pfpfr, %r8", 12)], 12),
+    "v3st_rws_fpcr_to_fxaddxx": (
+        "addd,1 0x0, 0x0, %dr2; rrs,0 %fpcr, %r8; fdtofx,3 %dr4, %dr7",
+        [("rws,0 %r8, %fpcr", None), ("fxaddxx,0 %dr7, %dr7, %dr9", 12)], 12),
+    "v3st_fxadddx_to_rrs_fpsr": (
+        "addd,1 0x0, 0x0, %dr2; fdtofx,3 %dr4, %dr7; "
+        "addd,4 0x0, 0x3b90000000000000, %dr10",
+        [("fxadddx,0 %dr7, %dr10, %dr9", None), ("rrs,0 %fpsr, %r8", 12)], 12),
+    "v3st_rrd_ip_to_addd": (
+        "addd,1 0x0, 0x0, %dr2",
+        [("rrd,0 %ip, %dr8", None), ("addd,0 %dr8, %dr5, %dr9", 12)], 8),
+    "v3st_rrs_upsr_to_ands": (
+        "addd,1 0x0, 0x0, %dr2",
+        [("rrs,0 %upsr, %r8", None), ("ands,0 %r8, %r5, %r9", 12)], 8),
+    "v3st_rws_upsr_to_rrs": (
+        "addd,1 0x0, 0x0, %dr2; rrs,0 %upsr, %r8",
+        [("rws,0 %r8, %upsr", None), ("rrs,0 %upsr, %r9", 12)], 12),
+}
+
+
+def add_v3op(isa=3):
+    """Add the v3op kernels for elbrus-vISA (once; every target)."""
+    if V3OP:
+        return
+    chains = v3_op_chains(isa)
+    chains.update(SCHED_V3ST)
+    tp, tp2 = _v3_tp()
+    for table, new in ((SCHED, chains), (TP, tp), (TP2, tp2)):
+        assert not set(new) & set(table), set(new) & set(table)
+        table.update(new)
+        V3OP.update(new)
+
+
 def tp_kernel(name, k):
     if name in TP:
         groups, what = [TP[name][0]], TP[name][1]
@@ -893,7 +1436,9 @@ def tp_kernel(name, k):
             if op.startswith("nop"):
                 ops.append(op)
                 continue
-            if op.startswith(("fadds", "fdivs", "fsqrts", "sdivs")):
+            if "{s}" in op:
+                ops.append(op.replace("{s}", f"%r{reg}"))
+            elif op.startswith(("fadds", "fdivs", "fsqrts", "sdivs")):
                 ops.append(op.replace("{d}", f"%r{reg}"))
             elif op.startswith("ldq,"):
                 # A register pair: an even register, a fresh pair each time.
@@ -924,7 +1469,7 @@ def tp_kernel(name, k):
 	}}
 	{{
 	  nop 7
-	  {V5_TP_INIT if name in TP_V5 else ""}
+	  {V5_TP_INIT if name in TP_V5 else TP_INIT.get(name, "").replace("; ", chr(10) + chr(9) + "  ")}
 	}}
 	{{
 	  nop 7
@@ -1520,6 +2065,7 @@ HZ_DISTANCES = range(0, 9)
 
 
 def generate(out, memory=False):
+    add_v3op()          # no-op when main() added them for its target
     out.mkdir(parents=True, exist_ok=True)
     asm = ["\t.ignore\tld_st_style", "\t.ignore\tstrict_delay", "\t.text",
            """
@@ -1538,11 +2084,13 @@ rdclk:
 	.size	rdclk, .-rdclk
 """]
     decl, lat_rows, ctl_rows, hz_rows, tp_rows = [], [], [], [], []
+    v3tp_rows, v3sched_rows = [], []    # the v3op kind (--only v3op)
     for name in list(TP) + list(TP2) + list(TPN):
         for k in (K1, K2):
             asm.append(tp_kernel(name, k))
             decl.append(f"long tp_{name}_{k}(long, void *);")
-        tp_rows.append(f'\t{{"{name}", tp_{name}_{K1}, tp_{name}_{K2}}},')
+        (v3tp_rows if name in V3OP else tp_rows).append(
+            f'\t{{"{name}", tp_{name}_{K1}, tp_{name}_{K2}}},')
     for name in LAT:
         for k in (K1, K2):
             asm.append(lat_kernel(name, k))
@@ -1555,7 +2103,8 @@ rdclk:
         for gap in range(1, maxgap + 1):
             asm.append(sched_kernel(name, gap))
             decl.append(f"long sched_{name}_{gap}(long, void *);")
-            sched_rows.append(f'\t{{"{name}", {gap}, {fixed}, sched_{name}_{gap}}},')
+            (v3sched_rows if name in V3OP else sched_rows).append(
+                f'\t{{"{name}", {gap}, {fixed}, sched_{name}_{gap}}},')
     chase_rows = []
     for gap in CHASE_SCHED_GAPS:
         asm.append(sched_kernel("chase", gap, CHASE_SCHED))
@@ -1613,6 +2162,15 @@ static struct {{ const char *name; int ops; kern f1, f2; }} lat[] = {{
 static struct {{ const char *name; int gap, fixed; kern f; }} sched[] = {{
 {chr(10).join(sched_rows)}
 }};
+/* The v3op kind: printed as tp and sched lines; a null name ends them. */
+static struct {{ const char *name; kern f1, f2; }} v3tp[] = {{
+{chr(10).join(v3tp_rows)}
+	{{0}}
+}};
+static struct {{ const char *name; int gap, fixed; kern f; }} v3sched[] = {{
+{chr(10).join(v3sched_rows)}
+	{{0}}
+}};
 static struct {{ int gap; kern f; }} chase_sched[] = {{
 {chr(10).join(chase_rows)}
 }};
@@ -1629,9 +2187,12 @@ static void *cell[512] __attribute__((aligned(4096)));
 static const char *only;
 
 /* With an argument, run only the kinds named in it ("tp,lat"). */
+/* v3op (about 9,000 kernels) runs only when asked for by name.  */
 static int want(const char *kind)
 {{
-	return !only || strstr(only, kind);
+	if (!only)
+		return strcmp(kind, "v3op") != 0;
+	return strstr(only, kind) != 0;
 }}
 
 static unsigned long best(kern f, long n, void *p)
@@ -1695,6 +2256,13 @@ int main(int argc, char **argv)
 		       (double)(t2 - t1) / ((double)n * ({K2} - {K1})),
 		       (double)t1 / n, (double)t2 / n);
 	}}
+	for (unsigned i = 0; want("v3op") && v3tp[i].name; i++) {{
+		void *p = cell;
+		unsigned long t1 = best(v3tp[i].f1, n, p), t2 = best(v3tp[i].f2, n, p);
+		printf("tp %s %.3f %.2f %.2f\\n", v3tp[i].name,
+		       (double)(t2 - t1) / ((double)n * ({K2} - {K1})),
+		       (double)t1 / n, (double)t2 / n);
+	}}
 	memset(cell, 0, sizeof cell);	/* the throughput stores wrote it */
 	cell[0] = &cell[0];
 	for (unsigned i = 0; want("lat") && i < sizeof lat / sizeof lat[0]; i++) {{
@@ -1720,6 +2288,13 @@ int main(int argc, char **argv)
 			      t0 = best(sched[i].f, m / 2, cell);
 		printf("sched %s %d %d %.3f\\n", sched[i].name, sched[i].gap,
 		       sched[i].fixed, (double)(t - t0) / ((double)(m - m / 2) * {SCHED_STEPS}));
+	}}
+	for (unsigned i = 0; want("v3op") && v3sched[i].name; i++) {{
+		long m = n / 8;	/* half of sched's: there are thousands */
+		unsigned long t = best(v3sched[i].f, m, cell),
+			      t0 = best(v3sched[i].f, m / 2, cell);
+		printf("sched %s %d %d %.3f\\n", v3sched[i].name, v3sched[i].gap,
+		       v3sched[i].fixed, (double)(t - t0) / ((double)(m - m / 2) * {SCHED_STEPS}));
 	}}
 	size_t csizes[] = {{ {", ".join(str(x) for x, _ in chase_sched)} }};
 	int chuge[] = {{ {", ".join(str(h) for _, h in chase_sched)} }};
@@ -1945,7 +2520,7 @@ def main():
                     "on node MEM (numactl --preferred)")
     ap.add_argument("--only", metavar="KIND,...",
                     help="run only these kinds (tp, lat, chase, sched, "
-                    "chsched, br, ctl, hz); not with --yaml")
+                    "chsched, br, ctl, hz, v3op); not with --yaml")
     ap.add_argument("--results", type=Path, metavar="FILE",
                     help="don't run: read the output of an earlier run "
                     "(e.g. one started with nohup on the host)")
@@ -1960,6 +2535,7 @@ def main():
         add_v5()
     if m and int(m.group(1)) >= 6:
         add_v6()
+    add_v3op(int(m.group(1)) if m else 3)
     if args.results:
         res = parse(args.results.read_text())
         report(res)

@@ -45,6 +45,7 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | combined integer (`add_addd`, `shl_addd`; ALC1/4) | 2 | 2 | 5 |
 | integer multiply (`muls`, `muld`) | 4 | 4 | 5 |
 | FP add, multiply (single and double) | 4 | 4 | 5 |
+| FP multiply (`fmuld`, `fmuls`, `pfmuls`) with a denormal operand or a tiny result; adds and divides don't change (semantics.md, "Rounding modes, flush to zero and denormals are zero") | — | 5 | — |
 | combined FP (`fmul_addd`), through any of its three operands (all are read at issue: the addend too, `pocchk2.c`, 4C, 8C2, 2C3) | 8 | 8 | 9 |
 | FP min/max (`fmaxd`, `fmind`, packed `pfmaxd`) | — | **2** (also on the 8C2) | — |
 | `fdivs` | 11 | 11 | 13 |
@@ -526,6 +527,10 @@ load about 4 more latency, 7–11 across a line), and peeling or
 versioning for alignment pays; v6 handles misaligned accesses at full
 speed. (lcc keeps `-mstrict-align` up to v4, source-compat.md; the
 8C2's misaligned accesses work but are no faster than the 4C's.)
+16-byte accesses (`memx.c`; semantics.md, "Memory, tag and descriptor
+operations"): 32 `ldq` take 33 cycles aligned or at +8 and 133 at +4 or
++1 on the 8C2, 32 `stq` 41 and 297; misaligned `ldqp`/`stqp` are SIGBUS
+there. On the 2C3 all four take the aligned time at any offset.
 
 **Store to load** (`tools/isa-probes/stld.c`, 4C and 8C2 alike): a load
 of a doubleword just stored, issued in the **very next** instruction,

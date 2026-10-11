@@ -1,0 +1,160 @@
+# x86 translator support, and what native code can take from it
+
+Elbrus has hardware for MCST's x86 binary translator (lcc's documentation
+calls it Lintel; the kernel calls a task running it "binco" and the x86
+address space it emulates the "secondary space"). This file lists those
+facilities: what each is, how it is encoded, which ISA versions have it,
+whether ordinary native code can use it. It then asks what a native
+compiler (the GCC port) or a JIT can take from them. Most facilities
+are already in other spec files; this one gathers them and adds what
+the sweep of the kernel, binutils, both qemus, glibc, libgcc and lcc's
+output found.
+
+Marks: **[hw]** measured on the 4C, 8C2 and 2C3 (the file named);
+**[source]** read in MCST Linux (`arch/e2k`), binutils, glibc, libgcc
+or the qemus; **[lcc]** seen in lcc 1.29.16 / 1.31.05 output or its
+shipped libraries; *inferred* where it is our reading. The guide says
+nothing about binary translation.
+
+## Becoming a translator task [source]
+
+The kernel treats a task as binco when the **main executable's ELF
+header** has `EF_E2K_X86APP` (`e_flags` bit 2), which MCST ld sets with
+`--e2k-x86app` (elf.md names the flag). It is decided at `exec`,
+inherited by `fork` and `clone`, and cannot be switched at run time or
+by a shared library. A binco task:
+
+- may call the translator's syscall `el_binary` (number 260; set a
+  segment descriptor, register a recovery-point range, query the
+  secondary-space offset, and services the translator uses to run x86
+  programs); every command returns `-EPERM` for other tasks;
+- gets its segment registers, `%rpr` and the TC state saved and
+  restored at context switches, and the memory lock table (MLT) dumped
+  into `sigcontext` at traps;
+- has **different signal semantics**: a handler is entered with the
+  interrupted `%g16`–`%g31` and `%bgr` (not cleared), and `sigreturn`
+  does not restore `%g16`–`%g31`, which lcc-compiled code uses for
+  temporaries ([registers.md](../abi/registers.md));
+- on some CPUs (Elbrus-16C rev 2, Elbrus-8V7 rev 0) runs with the L2
+  prefetcher off (erratum `GENERATIONS_L2_PREF`).
+
+So the translator-only facilities below come at the price of a
+different process model; they are not something a compiler can use in
+ordinary programs.
+
+## The facilities
+
+| Facility | Encoding | ISA | Native user code | Where |
+|---|---|---|---|---|
+| x86 EFLAGS results of add, sub, logic, inc/dec, shifts, rotates, 32×32 multiply | `*_f{b,h,w}` (v1+), `*_fd` (v3+), ALC0/3 | v1+ | yes [hw] | semantics.md, "x86 flag operations" |
+| an x86 condition of a flags word into a predicate | `cctop{o,b,e,be,s,p,l,le}`, ALC0/3 | v1+ | yes [hw] | semantics.md, predicates.md |
+| x87 80-bit arithmetic, `%fpcr`/`%fpsr` | `fx*`, `movif`/`movfi` | v1+ | yes [hw] | semantics.md, "80-bit operations" |
+| the x87 register stack: rotating globals | `%bgr`, `abg` (v1–v5), `abgc`/`rbgc` (v6+), `vfbg`; v6 `mkfsw`, `modbgv`, `vfbgv` | v1+ | yes [hw] (`vfbg` and `%bgrpred` never run) | loops.md |
+| x86 FP compare results into a register (`ucomisd` flags), MXCSR layout of `%pfpfr` | `fcmpud*f`, `fcmpod*f`, `fxcmpud*f` | v1+ | yes [hw]; lcc uses `fxcmpudxf` for `long double` `isless`/`isnan` [lcc] | semantics.md |
+| x86-compatible FP compare mode, strict alignment | `%upsr` bit 8 `fsm`, bit 2 `ac` | v3+ (`fsm`) | writable: lcc's startup (`__cpu_init`) sets and restores `fsm` in every program, and `crtalign.o` (`-faligned-check`) sets `ac` [lcc]; what `fsm` changes is not measured | registers.yaml |
+| random predicates for sampling | `%rndpred1`–`15`, state `%rndpr` | v3+ | yes [hw] | predicates.md |
+| issue without waiting for late operands | `%spred` | v1+ | yes [hw] | predicates.md |
+| branch or call to a register | `ibranchd`, `icalld` | v6+ | yes [hw]; lcc 1.31.05 uses them only for v7 (jump tables, indirect tail calls and calls) [lcc] | control-transfer.md |
+| recovery points, "generations mode" | `srp`, `crp`, `slrp` (SS), `%rpr` (0xa0, 0xa2) | v1+ (`slrp` v3+) | the operations run; the kernel's restart-on-trap service needs a binco task; `%rpr` is not preserved for other tasks [hw, source] | speculation.md, "Recovery points" |
+| segment registers | `%cs` … `%ss`, `.lo`/`.hi` (state registers 0x34–0x3f) | v1+ | set only through `el_binary` (binco); layout not in any open source | — |
+| segment-relative loads and stores | `ld{c,d,e,f,g,s}s{b,h,w,d,q}`, `st…`; v5 `qp`/`mqp` forms; two 32-bit address operands | v1+ | they run but use whatever descriptor is loaded: they fault in an ordinary task [hw] | semantics.md |
+| secondary-space address | a segment access lands at `0x4000_0000_0000` + the 32-bit x86 address on v3–v5, at the x86 address itself on v6+ (as the recorded fault addresses show) [hw, source] | v1+ | — | — |
+| x86 `LOCK` support: memory lock table (MLT), lock-and-trap-on-store and lock-and-trap-on-access loads, store-and-unlock | MAS kinds on secondary-space accesses; `%mlt_inv` (MMU register) | v1+ | only through segment accesses (binco) | — |
+| "TC" state (`%tcd`, `%tc`, `%tst`; `gettc`, `puttc`, `invtc`; `gettst`, `puttst`) and the SS "TS" field (`flushts`, `invts`, `puttsdc*`, `invtsc*`) | ALC0/3; SS type 1 bits 26, 28–29 | v1+ (`flushts` v3+) | binco context state; meaning not in any open source; `gettc`/`puttc` with ordinary operands are SIGILL [hw] | operations-v3.md |
+| global-descriptor-relative loads and stores | `ldgd*`, `stgd*` | v1+ | lcc's 32-bit (`-mptr32`) code makes every memory access with them; in 64-bit processes they fault [lcc, hw] | operations-v3.md |
+| a cache line flush that also drops the instruction cache | a store with MAS 0xf (`mod` 7, opc 1); MAS 0x17 is the I-cache-only line flush | v3+ | yes: libgcc's `__clear_cache` runs 0xf stores, and `ld.so` 0x17 stores, in user mode [source, lcc] | below |
+| what the trap left behind | `sigcontext`: `tir_*` (exception and channel), `trap_cell_*` (the trapped wide instruction's pending memory operations), `sbbp` (32-entry branch history), `dam`, `upsr`; `UC_HANDLE_SIGRETURN_CELLAR` | — | filled for every task (the binco part is `rpr_*` and `mlt`) [source] | below |
+| wait for a memory location to change (v6) | a load with the "watch for modification" MAS (`m1`, `m2` set), then `wait mem_mod = 1, int = 1` | v6+ | the kernel's idle loop uses it; whether user mode may is not known [source] | — |
+| x86 paging registers (`%cr3_rg`, MTRRs, `%pat`, …) | MMU registers | — | privileged | — |
+
+## What native code can take
+
+Ranked by how directly a compiler or a JIT can use them.
+
+1. **Overflow and carry tests in two operations.** `adds_fw a, b` gives
+   the flags of `a + b` in the same instruction as the `adds` that gives
+   the sum, and `cctopo` (or `cctopb` for the carry) turns them into a
+   predicate: `__builtin_add_overflow`, `__builtin_sub_overflow` and
+   32-bit `__builtin_mul_overflow` (`smulx_fw`, `umulx_fw`) in two
+   operations, where lcc emits about ten compares and merges (lcc never
+   uses the flag operations except through its four
+   `__builtin_e2k_*_f*` builtins). The `_fd` forms (v3+) do 64-bit add
+   and subtract; there are no 64-bit multiply flags. Both run only in
+   ALC0 and ALC3, and their latency is not measured yet; a
+   flag-producing op and the plain op can share an instruction. A JIT
+   for a dynamic language gets cheap overflow-checked small integers
+   the same way.
+2. **Publishing JIT code.** After writing code: `wait st_c = 1`, a store
+   with MAS 0xf to every 256-byte line of the code, `wait fl_c = 1`
+   (libgcc's `__clear_cache`, which the GCC port's
+   `__builtin___clear_cache` and trampolines can call; its comment
+   says the step will not shrink on future CPUs). Then enter the new
+   code through a control transfer, as the kernel does before v7
+   (`disp` + `ct`). `mprotect` from writable to executable flushes
+   nothing, so the flush is needed with W^X too. Neither qemu models
+   instruction caches, so a missing flush shows only on hardware.
+   *Measured: nothing yet* (cost per line, other cores).
+3. **Implicit null checks and guard pages.** A SIGSEGV handler gets, in
+   `sigcontext`, the trapped instruction's pending memory operations
+   (address, value, tag, a condition word with the destination
+   register, channel and kind) and the exception registers, without
+   decoding the bundle. The kernel reads back the saved IP (`cr0_hi`)
+   on `sigreturn`, which is the hook a runtime needs to resume at a
+   slow path; `UC_HANDLE_SIGRETURN_CELLAR` asks it to complete the
+   instruction's other memory operations. *Source only; to be
+   verified on hardware before a design relies on it.*
+4. **Cheap sampling.** `%rndpred` gives an operation that runs on a
+   deterministic 2⁻ᴺ of executions with no counter (predicates.md):
+   sampled profiling counters for a JIT's tier-up decisions, or
+   sampled instrumentation. `sigcontext.sbbp` (the last 32 branches)
+   could feed a branch-history sampler like Intel's LBR.
+5. **Non-blocking loads.** `%spred` lets an instruction issue before a
+   load's data arrives and tells afterwards whether it was late
+   (predicates.md): a JIT can try a fast path and fall back without
+   stalling on a miss.
+6. **An operand-stack cache.** `%bgr` rotates `%g24`–`%g31` as an
+   8-entry stack (`abgd` push, `abgi` pop, traps on overflow on v3–v5;
+   `abgc` on v6): the top of a stack machine's operand stack (an
+   interpreter or a JIT for a stack VM) in registers without moves.
+   Those registers are scratch in the ABI, so calls into C must save
+   them.
+7. **Indirect dispatch.** On v7 `ibranchd`/`icalld` are lcc's choice
+   for jump tables and indirect calls; on v6 a taken `ibranchd` costs
+   12 cycles, so a hoisted `movtd` + `ct` stays better there.
+8. **FP environment and x86 emulation.** `%pfpfr` has MXCSR's layout and
+   `%fpcr`/`%fpsr` x87's (lcc maps `_mm_getcsr`, `_FPU_GETCW` straight
+   to them), `UPSR.fsm` selects x86-compatible FP compares, and the flag
+   operations, `fx*`, `%bgr` and `fcmpud*f` are what an open x86
+   user-mode emulator on Elbrus (box64-style) would build on.
+9. **Wait on memory (v6).** If user mode may use it, the watch-for-
+   modification load plus `wait mem_mod` is a MONITOR/MWAIT for spin
+   loops in runtimes and garbage collectors. Not known yet; v6's
+   erratum `WAIT_INT` (spurious wakeups) applies.
+10. **Only for a dedicated host process** (linked with
+    `--e2k-x86app`): segment-relative accesses take a base and a limit
+    from a descriptor and two 32-bit address parts, which fits a
+    sandboxed 32-bit linear memory (WebAssembly-style) without
+    explicit bounds checks; and the recovery-point service sends any
+    trap inside a registered code range back to a chosen IP with the
+    faulting page mapped, a restartable region. Against them: the
+    descriptor layout is undocumented, the memory must live in the
+    secondary space (offset by `0x4000_0000_0000` on v3–v5), memory is
+    not rolled back, the signal semantics of `%g16`–`%g31` change, and
+    nothing about them is measured. Guard pages and rseq-style
+    restartable sequences are the simpler tools.
+
+Not usable from native code: the x86 paging registers, reading the MLT,
+and the TC/TS state, whose purpose the open sources don't explain.
+
+## Open questions
+
+- Latency of the flag operations and of `cctop*` after them.
+- Cost of the MAS 0xf flush per 256-byte line, and whether other cores
+  see the new code without more.
+- Whether `sigcontext`'s trap cellar and exception registers are filled
+  as the kernel source says, and the IP redirect works, for an ordinary
+  task.
+- What `UPSR.fsm` changes in `fcmp*`; whether `UPSR.ac` traps every
+  misaligned access.
+- Whether user mode may use the v6 watch-for-modification `wait`.
+- The segment descriptor layout, and what a limit violation gives.

@@ -138,6 +138,8 @@ spec/isa/      ISA spec: operations-v3.md, operations-v5.md (what v4/v5 add:
                compute), apb.md (array prefetch), speculation.md
                (speculative operations, diagnostic values, DAM),
                loops.md (loop mode, %lsr, rotation),
+               x86-support.md (the x86 translator's facilities and
+               what native code can take from them),
                predicates.md (everything about predicates: state,
                every operation that writes or reads one, encoding,
                limits per wide instruction, timing, lcc's use, how to

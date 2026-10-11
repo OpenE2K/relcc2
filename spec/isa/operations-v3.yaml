@@ -92,11 +92,13 @@ groups:
     does: High 64 bits of the 128-bit product, signed or unsigned.
     use: "`smuldi3_highpart`, `umuldi3_highpart`, division by constants."
   - ops: sdiv{s,d} udiv{s,d}
-    does: Quotient truncated toward zero; division by zero is SIGFPE (`FPE_INTDIV`); `sdivd MIN, −1` = MIN. ALC5 only, shares the divider (timing.md, "Divider").
+    lat: "11 (small quotients, up to 18); 13 to an integer op"
+    does: Quotient truncated toward zero; division by zero is SIGFPE (`FPE_INTDIV`); `sdivd MIN, −1` = MIN. ALC5 only, shares the divider (timing.md, "Divider"); the result arrives on the FP side, so an integer op waits 2 more.
     use: "`div`, `udiv<mode>3`; `%` is divide, multiply, subtract (as lcc). Speculative (`,sm`) forms defer the fault."
     see: semantics.md, "Division"
   - ops: sdivx udivx smodx umodx
-    does: 64-bit a ÷ 32-bit b into 32 bits (quotient or remainder); SIGFPE for a zero divisor, a quotient that doesn't fit, and for the remainders when a shifted left by the divisor's leading zeros overflows. ALC5.
+    lat: "11 (`sdivx`, `udivx`), 10 (`smodx`, `umodx`); 13, 12 to an integer op"
+    does: 64-bit a ÷ 32-bit b into 32 bits (quotient or remainder); SIGFPE for a zero divisor, a quotient that doesn't fit, and for the remainders when a shifted left by the divisor's leading zeros overflows. ALC5; `smodx` and `umodx` hold the divider 9 cycles.
     use: Only for proven ranges.
     see: semantics.md, "Other scalar operations"
   - ops: sxt
@@ -178,20 +180,21 @@ groups:
     does: a + b, a − b, a × b, correctly rounded.
     use: "`add`, `sub`, `mul<mode>3`."
   - ops: fdiv{s,d}
-    does: a ÷ b, correctly rounded, IEEE flags. ALC5 (divider), 11 / 14 cycles.
+    does: a ÷ b, correctly rounded, IEEE flags. ALC5 (divider), 11 / 14 cycles, 13 / 16 to an integer op.
     use: "`div<mode>3`."
     see: semantics.md, "Square root and reciprocals"
   - ops: fsqrts fsqrtid fsqrttd
+    lat: "12 (`fsqrts`); 11 + 14 (`fsqrtid`, `fsqrttd`); 14, 13, 16 to an integer op"
     does: "`fsqrts` √a; a double square root is `fsqrtid a, t` then `fsqrttd a, t, r`, correctly rounded as a pair (`fsqrtid` alone is an intermediate in its own format). ALC5."
     use: "`sqrt<mode>2` (keep the pair together)."
     see: semantics.md, "Square root and reciprocals"
   - ops: frcps frsqrts
-    lat: "8"
+    lat: "6; 8 to an integer op"
     does: 12-bit estimates of 1/a and 1/√a, no flags.
     use: "`-ffast-math` reciprocal estimates with Newton steps (lcc never)."
     see: semantics.md, "Square root and reciprocals"
   - ops: fmax{s,d} fmin{s,d}
-    does: x86 `maxsd`/`minsd`, **b** if either is a NaN or both are zeros. 2 cycles.
+    does: x86 `maxsd`/`minsd`, **b** if either is a NaN or both are zeros. 2 cycles, 4 to an integer op.
     use: "`smax`, `smin` only under `-ffinite-math-only` or for `a > b ? a : b`."
     see: semantics.md, "FP min, max and combined operations"
   - ops: fcmp{eq,lt,le,uod,neq,nlt,nle,od}{s,d}b
@@ -204,6 +207,7 @@ groups:
     use: Branch-free FP selects with `and`/`andn`.
     see: semantics.md, "Floating-point compares"
   - ops: fcmp{ud,od}{s,d}f
+    lat: "4 to an integer op or `cctop`"
     does: "x86 `ucomisd`/`comisd` flags into a register: less 0x01, equal 0x40, greater 0, unordered 0x45; `ud` quiet, `od` signalling."
     use: "C's `isless` family: `fcmpuddf` then a `cmpand*`."
     see: semantics.md, "Floating-point compares"
@@ -213,12 +217,12 @@ groups:
     use: "`fix_trunc`, `lrint<mode><mode>2`."
     see: semantics.md, "Other scalar operations"
   - ops: istofs istofd idtofs idtofd
-    lat: "4"
+    lat: "4; 6 to an integer op"
     does: 32- or 64-bit signed integer → single or double, current rounding mode.
     use: "`float<mode><mode>2`; unsigned via a fix-up sequence."
     see: semantics.md, "Other scalar operations"
   - ops: fstofd fdtofs
-    lat: "4"
+    lat: "4; 6 to an integer op"
     does: Single → double (exact), double → single (rounded).
     use: "`extendsfdf2`, `truncdfsf2`."
     see: timing.md, "Formats"
@@ -246,23 +250,30 @@ groups:
     narrower result (semantics.md, "80-bit operations").
   rules:
   - match: 'fx(add|sub|rsub|mul)(ss|sx|dd|dx|xs|xd|xx)'
-    does: "a (80-bit) op b (type of the first suffix letter: single, double, 80-bit) → result of the second letter's type; `rsub` is b − a. 4–5 cycles."
+    lat: "5 (`fxmul` with an 80-bit result 4); 7 to an integer op (6)"
+    does: "a (80-bit) op b (type of the first suffix letter: single, double, 80-bit) → result of the second letter's type; `rsub` is b − a."
     use: "`long double` arithmetic, also with a narrower operand or result."
   - match: 'fxdiv(ss|sx|dd|dx|xs|xd|xx)'
-    does: a ÷ b as above, ALC5, 16–18 cycles.
+    lat: "16; 18 to an integer op"
+    does: a ÷ b as above, ALC5.
   - ops: fxdivt{ss,sx,dd,dx}
-    does: A division step that needs a prepared operand (invalid for ordinary ones); not decoded, lcc doesn't emit it.
+    does: A division step that needs a prepared operand (invalid for ordinary ones); not decoded, lcc doesn't emit it. 19 cycles with ordinary operands (the invalid path).
     see: semantics.md, "80-bit operations"
   - match: 'fxsqrt[iut][sdx]x'
+    lat: "11 (`fxsqrti*`), 16 (`fxsqrtu*`, `fxsqrtt*`; `fxsqrtuxx` 16–17, 18 on v6)"
     does: "Square root steps: lcc's `fxsqrtixx a, t; fxsqrtuxx a, t, t; fxsqrttxx a, t, r` equals x87 `fsqrt`; the steps alone are not decoded. ALC5, 53 cycles for the chain."
     use: "`sqrtxf2` as the three-step chain."
   - match: 'fxcmp(eq|lt|le|uod|neq|nlt|nle|od)[sdx]b'
+    lat: "4 to a predicated op"
     does: Predicate compare of a (80-bit) with b; quiet and signalling as the scalar compares.
   - match: 'fxcmp(ud|od)[sdx]f'
+    lat: "6 to an integer op or `cctop`"
     does: x86 flag layout as `fcmp*f`; `ud` quiet, `od` signalling.
   - ops: fxtof{s,d} fxto{is,id,istr,idtr} fdtofx fstofx idtofx istofx
+    lat: "5; 7 to an integer op"
     does: "Conversions to and from 80-bit as x87 loads and stores (`fld`, `fstp`, `fild`, `fistp`, `fisttp` for `tr`)."
   - ops: movx movxa movxc
+    lat: "4; 6 to an integer op"
     does: 80-bit copy, copy with the sign cleared (`fabs`), copy with the sign flipped (`fchs`); no flags.
     use: "`movxf`, `absxf2`, `negxf2`."
   - ops: movif movfi
@@ -273,9 +284,10 @@ groups:
 - title: Packed integer (64-bit registers)
   intro: >
     Lanes of 8 (b), 16 (h), 32 (w) or 64 (d) bits, little-endian.
-    Mostly 1 cycle (multiplies and SAD 2) to packed or FP consumers, 4 to
-    integer ones; add/sub/compare/min/max/average forms in ALC0/3,
-    multiplies, `pmadd*`, `psadbw`, unpacks and packs in ALC1/4 (v3).
+    Mostly 1 cycle (multiplies, SAD and `phminposuh` 2) to packed or FP
+    consumers, 4 to integer ones; add/sub/compare/min/max/average forms
+    in ALC0/3, multiplies, `pmadd*`, `psadbw`, unpacks and packs in
+    ALC1/4 (v3).
     Semantics follow the community qemu's `helper_vec.c` except the
     points in semantics.md, "Packed operations of v3".
   rules:
@@ -352,14 +364,15 @@ groups:
   intro: >
     `pf*s` treat the register as two singles, `pf*d` as one double
     (identical to the scalar operation, kept for encoding symmetry).
-    4 cycles; flags as the scalar operations (semantics.md, "Packed
-    operations of v3").
+    4 cycles (min, max and compares 2), 6 to an integer op; flags as the
+    scalar operations (semantics.md, "Packed operations of v3").
   rules:
   - ops: pfadd{s,d} pfsub{s,d} pfmul{s,d} pfmax{s,d} pfmin{s,d}
     does: Lane-wise add, subtract, multiply, x86-style max and min.
     use: "`V2SF` arithmetic."
   - ops: pfdiv{s,d} pfsqrts pfsqrttd
-    does: "`pfdivs`, `pfdivd`: IEEE values but **no flags**; `pfsqrts` = `fsqrts` of the low single (not packed), `pfsqrttd` = `fsqrttd`."
+    lat: "11 (`pfdivs`), 12 (`pfsqrts`), 14 (`pfdivd`, `pfsqrttd`; 16 on v5 and v6)"
+    does: "`pfdivs`, `pfdivd`: IEEE values but **no flags**; `pfsqrts` = `fsqrts` of the low single (not packed), `pfsqrttd` = `fsqrttd`. From v5 `pfdivd` and `pfsqrttd` take 2 cycles more than `fdivd` and `fsqrttd`."
     see: semantics.md, "Packed operations of v3"
   - ops: pfcmp{eq,lt,le,uod,neq,nlt,nle,od}{s,d}
     does: All-ones lanes where the compare holds; eq, neq, od, uod quiet (also on qemu's error list), lt/le signal.
@@ -447,7 +460,8 @@ groups:
 - title: Registers and state
   rules:
   - ops: rr{s,d} rw{s,d}
-    does: "Read or write a state register: in user mode `%pfpfr`, `%fpcr`, `%fpsr` (FP control and status), `%lsr`/`%ilcr` (loops), `%clkr` (cycle counter), `%ip`, `%idr`, `%dimar0/1`, …; ALC0. `rwd %lsr` needs 4 cycles before `rrd %lsr`."
+    lat: "2 (`%ip`, `%upsr`); 11 (`%pfpfr`, `%fpcr`, `%fpsr`)"
+    does: "Read or write a state register: in user mode `%pfpfr`, `%fpcr`, `%fpsr` (FP control and status), `%lsr`/`%ilcr` (loops), `%clkr` (cycle counter), `%ip`, `%idr`, `%dimar0/1`, …; ALC0, one a cycle. `rwd %lsr` needs 4 cycles before `rrd %lsr`; a write of the FP state is seen by the next operation but does not overlap a divide in flight (timing.md, \"Every v3 operation\")."
     use: "`fenv`, the GOT base (`rrd %ip`), loop counts, cycle counting."
     see: registers.yaml; spec/abi/registers.md
   - ops: getsp
@@ -489,7 +503,7 @@ groups:
   - ops: pref
     does: "Prefetch code at a label into the instruction cache, `pref %iprN, label` (guide 10.9.6); runs in user mode."
   - ops: ipd nop wait
-    does: "`ipd N` instruction prefetch depth of a preparation; `nop N` N empty cycles after the instruction; `wait` orders memory (`ld_c`, `st_c`, …: atomics.md, fences)."
+    does: "`ipd N` instruction prefetch depth of a preparation; `nop N` N empty cycles after the instruction; `wait` orders memory (`ld_c`, `st_c`, …: atomics.md, fences): 6–7 cycles with nothing outstanding, about 14 after a store (timing.md, \"Every v3 operation\")."
     use: "`ipd` as lcc; `wait st_c` for C11 seq_cst stores; `nop` for delays under `.ignore strict_delay`."
   - ops: setwd setbn setbp vfrpsz
     does: "`setwd` sets the window size, `nfx` and `dbl`; `setbn`/`setbp` the rotating register and predicate areas; `vfrpsz rpsz = N` checks the parameter area size (`rpsz = 0` in a plain function is SIGILL `ILL_ILLOPC`)."

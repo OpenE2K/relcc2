@@ -183,21 +183,21 @@ def probe_runs(ops):
 
 def latencies():
     """Operation -> latency cells: the first machine's value, and the
-    2C3's where v6 differs from it."""
+    8C2's or 2C3's where v5 or v6 differs from those before it."""
     out = {}
     for path, tag in ((ISA / "timing-e2s.yaml", ""),
                       (ISA / "timing-e8c2.yaml", " (v5)"),
                       (ISA / "timing-e2c3.yaml", " (v6)")):
         data = yaml.safe_load(path.read_text())
         for k, v in (data.get("scheduled_latency") or {}).items():
-            name = re.sub(r"^v[56]op_", "", k)
+            name = re.sub(r"^v[356]op_", "", k)
             if v.get("latency") is None:
                 continue
             if name not in out:
                 out[name] = [f"{v['latency']}{tag}"]
-            elif tag == " (v6)" and not any(
+            elif tag and not any(
                     c.split()[0] == str(v["latency"]) for c in out[name]):
-                out[name].append(f"{v['latency']} (v6)")
+                out[name].append(f"{v['latency']}{tag}")
     return out
 
 
@@ -239,6 +239,7 @@ def render(rules_doc, ops, owner):
     lat = latencies()
     usage = yaml.safe_load((ISA / "lcc-usage.yaml").read_text())["counts"]
     runs, timed = probe_runs(ops)
+    timed |= {n for n in ops if n in lat}       # bench.py's generated chains
     out = [l.rstrip() for l in rules_doc["header"].splitlines()]
     out.append("")
     for g in rules_doc["groups"]:

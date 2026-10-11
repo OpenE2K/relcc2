@@ -336,7 +336,9 @@ uses none of the v6 forms. Not tried, on purpose (a contact's machine):
 Not tried, on purpose, on the shared machines: mod 1 (no address
 translation), mod 7 in ALC2/5 and stores with mod 7 (MMU, cache and TLB
 operations, kernel `asm/mas.h`), stores with mod 1 or 6 (MMIO), and the
-lock-wait load with mod 5.
+lock-wait load with mod 5. Shipped user-mode code does run two of the
+mod 7 stores: libgcc's `__clear_cache` the cache line flush (MAS 0xf)
+and `ld.so` the I-cache line flush (MAS 0x17) (x86-support.md).
 
 With mod 7 a load can move above both a branch and a store: the check,
 placed under the guard, turns into a normal load whenever the

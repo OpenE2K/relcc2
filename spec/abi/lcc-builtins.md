@@ -152,7 +152,7 @@ Verified on the 4C, 8C2 and 2C3 by `models.c`; `be` means byte-swapped
 | `pst_128 (v, p, mask)`, `pst_128_sm` | `stmqp` (`,sm`): byte j written when mask bit j is set |
 | `pst_128_be (v, p, mask)` | `stmqp` with MAS 0x8: the 16 bytes reversed, the mask applied **before** the reversal (bit j guards data byte j, stored at byte 15 − j) |
 | `prefetch (p, hint)` | `ldb,sm` to `%empty` with MAS by hint: `E2K_HINT_NTA` (0) 0x60, `E2K_HINT_T2` (1) 0x40, `E2K_HINT_T1` (2) and `E2K_HINT_T0` (3) 0x20; the same as GCC's `__builtin_prefetch (p, rw, hint)`, which lcc implements the same way for either `rw` |
-| `clflush (p)` | `wait st_c = 1`, a store of 0 with MAS 0xf (`mod` 7) to `p`, `wait fl_c = 1` (inline asm; not run here: MAS `mod` 7 stores are not probed on the shared machines) |
+| `clflush (p)` | `wait st_c = 1`, a store of 0 with MAS 0xf (`mod` 7) to `p`, `wait fl_c = 1` (inline asm; not run here: MAS `mod` 7 stores are not probed on the shared machines; libgcc's `__clear_cache` runs the same stores in user mode, x86-support.md) |
 
 ### Memory access with a MAS [lcc, hw]
 

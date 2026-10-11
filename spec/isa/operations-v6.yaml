@@ -72,7 +72,7 @@ groups:
     use: "`fma`, `fms`, `fnma`, `fnms<mode>4`; `fma()`; contraction (the combined `fmul_add*` round twice)."
   - ops: ibranchd icalld
     does: "Branch (`ibranchd,0 %drN, %empty [? cond]`) or call (`icalld,0 wbs = N, %drN, %empty`) to the address in a register, without a CTPR. A taken `ibranchd` costs 12 cycles beyond its instruction however early the address is ready; `icalld` + return 23 a call (`disp` + `call` 14)."
-    use: "Code size only: `movtd` 9 cycles ahead + `ct`/`call` is faster for indirect jumps and calls (control-transfer.md, \"v6\"). binutils uses `ibranchd` in v7 PLT entries."
+    use: "Code size only: `movtd` 9 cycles ahead + `ct`/`call` is faster for indirect jumps and calls (control-transfer.md, \"v6\"). binutils uses `ibranchd` in v7 PLT entries, and lcc 1.31.05 for v7 jump tables, indirect tail calls and calls (not for v6)."
     lat: "12 (taken)"
   - ops: mkfsw
     does: "An x87 status word from a and b: C0, C2, C3 = bits 0, 2, 6 (CF, PF, ZF) of a, TOP = b mod 8, other bits 0 (what `fnstsw` returns after an `fcmpud*f`-style compare)."

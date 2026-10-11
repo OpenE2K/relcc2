@@ -391,7 +391,7 @@ groups:
     does: Loads and stores through x86-style segment registers set up by a binary translator; **fault in user mode** (SIGILL, SIGSEGV or SIGBUS).
     see: semantics.md, "Memory, tag and descriptor operations"
   - ops: ldgd{b,h,w,d,q} stgd{b,h,w,d,q} ldcud{b,h,w,d,q}
-    does: "Loads/stores relative to the global (GD) or compilation-unit (CUD) descriptor of protected mode; SIGSEGV `SEGV_BNDERR` in ordinary user mode."
+    does: "Loads/stores relative to the global (GD) or compilation-unit (CUD) descriptor; SIGSEGV `SEGV_BNDERR` in an ordinary 64-bit process, but lcc's 32-bit code (`-mptr32`) makes every memory access with `ldgd*`/`stgd*` (x86-support.md)."
   - ops: ldap{b,h,w,d,q} stap{b,h,w,d,q}
     does: Loads/stores through a protected-mode array pointer; SIGILL `ILL_ILLOPN` in ordinary user mode.
   - ops: ldrd strd

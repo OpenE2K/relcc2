@@ -84,6 +84,12 @@ PROBES = {
     "sem6.s": ("sem6.c", "2C3"),
     "ctl6.s": ("ctl6.c", "2C3"),
     "mas6.s": ("mas6.c", "2C3"),
+    "memx.s": ("memx.c", "4C, 8C2, 2C3"),
+    "memx-v5.s": ("memx.c", "8C2, 2C3"),
+    "fpenv.s": ("fpenv.c", "4C, 8C2, 2C3"),
+    "fpenv-v6.s": ("fpenv.c", "2C3"),
+    "fpcost.s": ("fpcost.c", "4C, 8C2, 2C3"),
+    "pf.s": ("pf.c", "4C, 8C2, 2C3"),
 }
 ABI_PROBES = "tools/abi/probes"
 

@@ -31,6 +31,11 @@ Each thread has three stacks (guide 9.1.1):
   saving and restoring the old value around it (`adds` + `getsp %g24`;
   the 32-bit form, whose amount the kernel sign-extends). Found by the
   proof-of-concept backend (`docs/spec-poc-findings.md` A16).
+  The kernel grows the main stack by exactly the amount asked for and
+  then rewrites the stack size in every chain frame, so the first deep
+  recursion in the main thread costs time quadratic in its depth (49 s
+  for 250,000 levels on the 4C; threads are not affected):
+  [kernel-interface.md](kernel-interface.md), "The data stack".
 - The previous `USD` is restored automatically on return, so functions
   don't deallocate their stack.
 - Areas in a frame, from higher to lower addresses: local variables,
@@ -52,8 +57,12 @@ Each call pushes 32 bytes:
 
 User code reads the chain stack with the `access_hw_stacks` system call
 (`E2K_GET_CHAIN_STACK_SIZE`, `E2K_READ_CHAIN_STACK_EX`). glibc's
-`backtrace` takes the return addresses from it. Frames with a zero return
-address belong to kernel signal handling.
+`backtrace` takes the return addresses from it. A signal handler's
+caller is a frame that returns into the kernel's `[trampolines]` page
+(+0x100, the `sigreturn` code), and the chain continues below it into the
+interrupted code; the bottom frame's return address is zero (hw:
+"Signal frames" below; glibc's comment and MCST's libgcc speak of zero
+return addresses for signal frames, which this 6.1 kernel does not show).
 
 The current function's own return address is in the `%cr0.hi` register
 (the top chain frame stays in registers until the next call spills it):
@@ -112,6 +121,40 @@ C++ exceptions use MCST's E2K `libgcc_s`:
   `_Unwind_Exception`), not to a larger `alignas`: an `alignas(32)` object
   lands at an address that is 16 mod 32 (compat, hw). A compiler must not
   assume more than 16 for a caught object.
+
+### Signal frames, cancellation (hw)
+
+`tools/abi/probes/sigeh.cc` (with `sigeh-c.c`), built by lcc 1.29.16's
+`l++ -O2`, the same with `-fnon-call-exceptions`, on the 4C, 8C2 and 2C3
+(all agree, except where noted):
+
+| Case | Result |
+|---|---|
+| `_Unwind_Backtrace` and glibc's `backtrace` in a handler of a `raise`d signal | both walk through the signal frame to `main` and `_start`: the handler, `[trampolines]+0x100`, a libc frame, `raise`, the caller, …; `_Unwind_Backtrace` ends with `_URC_END_OF_STACK` |
+| `throw` in a handler of a `raise`d signal, caught in the code that called `raise` | **the process dies with SIGSEGV** |
+| `throw` caught inside the handler itself | works, and the program goes on |
+| `throw` in a SIGSEGV handler for a load fault, in C++ code or in an assembly leaf, with or without `-fnon-call-exceptions` | `terminate` (no handler found; SIGABRT) |
+| `pthread_cancel` of a C thread blocked in `pause ()`, with a `pthread_cleanup_push` handler | works: the cleanup handler runs, `PTHREAD_CANCELED` |
+| `pthread_cancel` of a C++ thread in a `pthread_testcancel` loop | works: destructors run, `catch (abi::__forced_unwind &)` sees it and rethrows |
+| `pthread_cancel` of a C++ thread blocked in `pause ()` | **the process dies**: SIGILL on the 4C, SIGSEGV on the 8C2 and 2C3 |
+| `pthread_exit` from a nested C++ function | works: destructors run, `catch (...)` sees it and rethrows |
+| `siglongjmp` out of a handler | works; the signal mask is restored |
+
+So with lcc's runtime an exception (or a forced unwind) cannot cross a
+kernel signal frame. MCST's unwinder lands in the catching frame by
+rewriting the return addresses of every frame between with
+`set_backtrace` and then returning through them (above); the kernel's
+`set_backtrace` skips trampoline frames (kernel `kernel/backtrace.c`),
+and returning through the handler's caller runs `sigreturn`, which
+restores the interrupted state (inferred). Cancellation of a thread
+blocked in a system call goes through glibc's SIGCANCEL handler, which
+unwinds from inside the handler, hence the death of the blocked C++
+thread. In C, `pthread_cleanup_push` registers a jump buffer, and glibc's
+forced-unwind stop function leaves for it with a `longjmp`, which can
+cross the signal frame as `siglongjmp` does, so the C thread survives
+(glibc `nptl/unwind.c`; inferred). A port that uses MCST's unwinder inherits all of
+this; it needs no `MD_FALLBACK_FRAME_STATE_FOR` (signal frames have no
+FDE and are skipped like any other frame without one).
 
 ## Debug information (gdb, lcc)
 

@@ -13,7 +13,8 @@ code.
 | [stack-and-unwinding.md](stack-and-unwinding.md) | User stack, hardware stacks, exceptions, backtraces |
 | [elf.md](elf.md) | ELF header, sections, relocations, PIC and PLT, TLS |
 | [atomics.md](atomics.md) | Atomic read-modify-write, memory orders, 16-byte atomics |
-| [source-compat.md](source-compat.md) | Predefined macros, inline-asm constraints and register names, lcc options that change code |
+| [source-compat.md](source-compat.md) | Predefined macros, inline-asm constraints, modifiers and clobbers, register names, lcc options that change code |
+| [kernel-interface.md](kernel-interface.md) | System calls, auxiliary vector, contexts, signals and their frames, hardware and data stacks, address space, `-pg`, sanitizers, static PIE |
 
 ## Sources
 
@@ -28,9 +29,10 @@ Each rule is marked with where it comes from:
 | **libffi** | MCST's libffi 3.3 E2K port (`src/e2k/`, MIT licence; `tools/setup/fetch-lcc-libs.sh`): an independent implementation of the calling convention by MCST, built with lcc and run against lcc code under qemu |
 | **binutils** | MCST's GPL binutils, `OpenE2K/binutils-gdb` (`bfd/elfxx-e2k.c`, `gas/config/tc-e2k.c`) |
 | **gdb**, **glibc**, **kernel**, **libgcc** | MCST's GPL sources: `OpenE2K/gdb`, `OpenE2K/glibc`, `OpenE2K/linux`, and the E2K libgcc in lcc's `internal-lcc-libs-open-source` tarball |
+| **compiler-rt** | MCST's compiler-rt 11.1.0 (Apache-2.0 with LLVM exceptions) from the same tarball (`lib/compiler_rt-11.1.0`): the sanitizer runtimes lcc links |
 | **qemu** | `OpenE2K/qemu-e2k-mcst` and `OpenE2K/qemu-e2k-community` (source or behaviour) |
 | **compat** | Checked by the compatibility suite `tools/abi/compat`: caller and callee built by different compilers, run under MCST's qemu-e2k |
-| **hw** | Run on hardware: Elbrus 4C (v3), by the compat suite (`run.py --remote`) or a probe in `tools/abi/probes` |
+| **hw** | Run on hardware: Elbrus 4C (v3), 8C2 (v5) or 2C3 (v6), by the compat suite (`run.py --remote`) or a probe in `tools/abi/probes` |
 
 Where lcc and Unipro disagree, lcc is the reference: it built the system.
 
@@ -39,7 +41,8 @@ and on an Elbrus 4C (v3). On the 4C every pair gives the same results as
 under qemu except the tag trap in "Unused parts of a slot", which needs a
 diagnostic tag that qemu puts in fresh registers and the 4C does not. Other
 rules are marked **compat** rather than **hw** until a hardware run is
-recorded against them; v5 and v6 hardware runs are still to do.
+recorded against them. The suite also passes on the 8C2 (v5) and the 2C3
+(v6).
 
 ## Compatibility suite
 

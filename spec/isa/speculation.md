@@ -36,7 +36,9 @@ Status markers, in addition to bundle.md's:
 A register holds a 2-bit tag per 32-bit half (kernel `tags.h`): 0 is a
 number, 1 marks the half as diagnostic (the guide simplifies this to one
 bit per half; the other values are protected-mode pointers). Memory has
-the same tags. A diagnostic double has tag 5 (both halves). The 4C fills
+the same tags, one per 32-bit word, written by `,sm` stores and read
+back only by the fill MAS ("Spill and fill" below). A diagnostic double
+has tag 5 (both halves). The 4C fills
 a failed load's result with `4afafafa4afafafa`; a failed division or FP
 operation returns the result it computed with bit 30 of each half set
 (`1.0 / 0.0` → `7ff0000040000000`, `1.0 / 3.0` → `7fd5555555555555`,
@@ -60,22 +62,22 @@ What happens to a diagnostic operand ([hw] unless marked):
 | Diagnostic predicate in `merge` | SIGILL, `ILL_ILLOPN` | diagnostic result (`dg_mrg*`) |
 | Diagnostic predicate in `ct ? %pred0` | SIGILL, `ILL_ILLOPN` | — |
 | `merge` choosing the diagnostic operand / the other one | trap / no trap [source] | diagnostic / no effect |
-| Store data | SIGILL (calling-convention.md) | the store is done with the register's bits (a wholly diagnostic register stores `4afafafa4afafafa`); read back by an ordinary load the value has tag 0 |
+| Store data | SIGILL (calling-convention.md) | the store is done with the register's bits (a wholly diagnostic register stores `4afafafa4afafafa`) and tags; read back by an ordinary load the value has tag 0, by the fill MAS its tag ("Spill and fill") |
 | Store under a diagnostic predicate (`std ? %pred0`) | SIGILL | **the store is done whatever the condition's polarity** (`? %pred0` and `? ~%pred0` alike), with bit 30 of each 32-bit half of the data set (42 → `400000004000002a`, `123456789abcdef0` → `52345678dabcdef0`) |
 | Store address | SIGILL `ILL_ILLOPN` | SIGILL `ILL_ILLOPN`: `,sm` does not help |
 | Store to an invalid address (not diagnostic): NULL, an unmapped page, a read-only page | SIGSEGV | SIGSEGV as well (`std,sm`, `stw,sm`; `si_code` `SEGV_MAPERR` at NULL, `SEGV_ACCERR` at the unmapped and the read-only page): **a store has no speculative form for its address**, so no store can run ahead of the test that guards it; a predicated store is the way to drop the branch (`spec.c` `stb_*`; the proof-of-concept back end's I36) |
 | Non-speculative operation **under a false predicate** with a diagnostic operand (`addd %dr3, 1, %dr8 ? %pred0`, `%pred0` false) | no trap, no effect (true predicate: SIGILL) | — |
-| Load address | trap [source] | diagnostic result [source] |
+| Load address (a diagnostic base, a diagnostic offset or a base with one diagnostic half) | SIGILL `ILL_ILLOPN`, `si_addr` the instruction | diagnostic result, no kernel entry (`4000000040000000` on the 4C and 8C2, `400defad400defad` on the 2C3), also for mod 3; `rbranch ? %dt_alN` is taken with the load in ALC N (`memx.c` `da_*`) |
 | `movtd` into a CTPR | no trap; taking the `ct` traps (SIGILL; control-transfer.md) | |
 | 32-bit operation reading only a clean half | no trap (calling-convention.md) | |
 
 The store rows come from `spec.c`'s `st_*` cases (4C, 8C2 and 2C3
 alike). In a register the tag is what makes a value diagnostic and its
 bits don't matter; after a `,sm` store, an ordinary load of the word
-returns those bits with tag 0, so through memory a diagnostic value
-becomes an ordinary number (whether memory keeps the tag for some other
-access, as kernel `tags.h` suggests, wasn't tested). A store under a
-diagnostic predicate changes memory whatever its data.
+returns those bits with tag 0, so through an ordinary load a diagnostic
+value becomes an ordinary number; memory keeps the tag, and only the
+fill MAS reads it back (below). A store under a diagnostic predicate
+changes memory whatever its data.
 
 Kernel exception → signal (kernel `traps.c`): `exc_diag_operand`,
 `exc_diag_cond`, `exc_diag_ct_cond` → SIGILL `ILL_ILLOPN`;
@@ -93,6 +95,34 @@ proof-of-concept back end's I33), and lcc relies on it (`if (c) r = *q +
 needed only on consumers that run unconditionally. A program that faults under speculation gets
 SIGILL at the first non-speculative use instead of SIGSEGV, SIGBUS or
 SIGFPE at the faulting operation (source-compat.md).
+
+### Spill and fill [hw: `memx.c` `fill*`, `ovw*`, `tldw*`; 4C, 8C2, 2C3]
+
+A register that may hold a diagnostic value can be spilled only with a
+`,sm` store (a plain store of it traps, above) and reloaded only with the
+**fill** MAS, `ld… mas=0x4` without `,sm`: the one load that returns the
+memory tags with the bits. lcc's spill code is exactly this (`std,2,sm`
+to the slot, `ldd,N … mas=0x4` back; 14,740 fills in lcc 1.29.16's v3
+system libraries) [lcc].
+
+| Reload of a slot written by `std,sm` of a diagnostic doubleword | Result |
+|---|---|
+| `ldd … mas=0x4` in ALC0, 2, 3 or 5 | `4afafafa4afafafa`, tag 5: the diagnostic value again; an `addd` of it is SIGILL, an `addd,sm` diagnostic, `rbranch ? %dt_al0` taken, a plain `std` of it SIGILL |
+| `ldd`, `ldd,sm`, `ldd,sm … mas=0x3`, the lock `ldd,sm … mas=0x4` | the same bits with tag 0: **the deferred fault is lost silently** |
+| `ldw … mas=0x4` after `stw,sm` | tag 1 (one word) |
+
+- The tag is per 32-bit word. A clean store to any byte of a word clears
+  that word's tag only: after `stw` at +0 the fill reads tag 4 (high
+  word still diagnostic), after `stw` or `std` at +4 tag 1, after `stb`
+  at +1 tag 4, after `std` at +2 tag 0, after a full `std` or `std,sm` of
+  a clean value tag 0. So a slot reused at a narrower width keeps the
+  other word's tag: reload at the width the slot was last written.
+- A fill costs what a plain load costs, and gas and the hardware accept
+  it in all four load channels (v3, v5, v6); `mas_mod.c` had run only
+  ALC0 with clean data.
+- So for a compiler: spill every register that may be speculative with
+  `st,sm` and reload every spill slot with the fill MAS (free); never
+  reload such a slot with an ordinary load.
 
 ## Speculative operations [hw]
 
@@ -148,6 +178,28 @@ Measured costs on the 4C:
 - A fully speculative (mod 3) load never enters the kernel, but returns a
   diagnostic value for pages the process has not touched yet, so code
   using it needs a recovery path [lcc-doc `-fspec-ld`].
+
+**Accesses that cross into another page** [hw: `memx.c` `pc_*`, `pcq_*`;
+4C, 8C2, 2C3]: an 8- or 4-byte access starting 4 (or 2) bytes before the
+end of a valid page:
+
+| Next page | `ld,sm` (mod 0) | `ld,sm … mas=0x3` | `ld`, fill | `st`, `st,sm` |
+|---|---|---|---|---|
+| `PROT_NONE` | **whole value diagnostic**, the valid bytes too (about 100 cycles) | diagnostic | SIGSEGV `SEGV_ACCERR` | SIGSEGV `SEGV_ACCERR`, **nothing written** |
+| unmapped | whole value diagnostic, one kernel entry (5,000–5,700 cycles) | diagnostic | SIGSEGV `SEGV_MAPERR` | SIGSEGV `SEGV_MAPERR`, nothing written |
+| valid, not yet touched | paged in, the data | diagnostic | paged in, the data | both parts written |
+
+`si_addr` is **the first byte of the bad page**, not the access's
+address. 16-byte accesses: on v5 `ldqp`/`stqp` check alignment first, so
+any crossing one is SIGBUS ([semantics.md](semantics.md), "Memory, tag
+and descriptor operations"); on v6 they behave as above, except a
+low-confidence anomaly of `ldqp,sm` whose high half lies wholly in the
+bad page ([hwbugs.md](hwbugs.md), "What our probes saw"). So code that
+reads past the end of a buffer with speculative loads (string functions)
+must use naturally aligned accesses, which never cross a page; an
+unaligned one turns valid bytes diagnostic. Once, inside a full run on
+the 4C, a mod 3 load crossing into a valid, touched page came back
+diagnostic; 30 isolated runs on each machine always gave the data.
 
 lcc's `-fsemi-spec-ld` (default) makes loads moved from under a predicate
 semi-speculative; `-fspec-ld` uses fully speculative loads with
@@ -292,8 +344,9 @@ entries; a lost entry only makes the check reload. The distances above
 predicated check behave the same on the 2C3, though its loads take 5
 cycles (`kc_*`, `kd_*`).
 
-Other MAS kinds [hw; qemu `mas-format.h`]. lcc 1.29.16 emits only the
-lock `mas=0x4` (always with `,sm`) and the check `mas=0x3` [lcc].
+Other MAS kinds [hw; qemu `mas-format.h`]. For data speculation lcc
+1.29.16 emits only the lock `mas=0x4` (always with `,sm`) and the check
+`mas=0x3` [lcc]; its spill reloads use the fill (mod 4 without `,sm`).
 
 | Operation | MAS mod | Channels | Effect |
 |---|---|---|---|
@@ -304,7 +357,7 @@ lock `mas=0x4` (always with `,sm`) and the check `mas=0x3` [lcc].
 | `st` | 3, store and unlock | ALC2 (ALC5 for quad) | stores and removes the entry of its **data** register |
 | `st` | 5, unlock | ALC2 (ALC5 for quad) | removes the entry of its data register; **does not write memory** |
 | `st` | 4, no check | any store channel | stores without removing entries: a later check of the overwritten bytes passes with the stale value |
-| `ld` (not speculative) | 4, fill | ALC0 | an ordinary load [hw: `mas_mod.c`, 4C and 8C2] |
+| `ld` (not speculative) | 4, fill | ALC0, 2, 3, 5 | a load that also reads the memory tags: lcc's spill reload ("Spill and fill" above) [hw: `memx.c`, `mas_mod.c`] |
 | `ld` | 6, I/O (MMIO) | ALC2, ALC5 | an access to I/O space, as the kernel's `inb`/`inw`/`inl` do (`asm/io.h`, `MAS_IO_OPERATION`, at `IO_AREA_PHYS_BASE + port`); privileged: SIGILL `ILL_PRVOPC` in user mode [hw] |
 | `st` | 6, I/O (MMIO) | ALC2, ALC5 | the store form, the kernel's `outb`/`outw`/`outl` [source; not run here, see below] |
 | `ld` | 2, 3 or 6 in ALC0 (reserved) | ALC0 | SIGILL `ILL_ILLOPC` |

@@ -609,7 +609,9 @@ user code gets:
 
 | Operations | Result |
 |---|---|
-| `stq addr, off, src`, `ldq addr, off, dst` (v5) | store or load a register pair (16 bytes, low register first) at addr + off |
+| `stq addr, off, src`, `ldq addr, off, dst` (v5) | store or load a register pair (16 bytes, low register first) at addr + off, **at any address** (v5 and v6; `memx.c` `q_*`). `ldq` takes ALC0+2 or 3+5, so two fit a wide instruction; `stq` takes ALC2+5, so one does |
+| `ldqp`, `stqp` (v5) misaligned (+1, +4, +8) | v5 (the 8C2): **SIGBUS `BUS_ADRALN`**, `si_addr` the instruction, and `ldqp,sm` (mod 0 or 3) gives a wholly diagnostic value; v6 (the 2C3): they work at any address (`memx.c` `q_*`) |
+| `ld… mas=0x7` (lock-wait) misaligned | SIGBUS `BUS_OBJERR`, nothing written (8-byte, all three; 16-byte `ldqp` lock-wait: `BUS_ADRALN` on v5, `BUS_OBJERR` on v6) ([atomics.md](../abi/atomics.md)) |
 | `stmqp addr, mask, src` (v5) | masked 16-byte store: **byte i of the quad register is written when bit i of `mask`'s low 16 bits is set** (`0xaaaa` writes the odd bytes, bits 16–31 are ignored); the address is `addr` alone, no offset; on v5 **any address not aligned to 16 bytes is SIGBUS** (`BUS_ADRALN`), even with a mask that selects only the aligned part; v6 (the 2C3) takes any address and writes the selected bytes from there (`stmqp.c`) |
 | `ldaab`, `ldaah`, `ldaaw`, `ldaad`, `ldaaq` (and `ldaaqp`, v5) | AAU loads: the element at the descriptor's base + `%aasti` index, where `staa*` would store it (apb.md) |
 | `aaurr` (of `%aaind1`) | 0 |
@@ -631,7 +633,13 @@ So in user mode the useful ones are the AAU loads and descriptor reads,
 `stq`, `stmqp` and the tag-free moves; everything that takes a
 protected-mode descriptor, a segment or a privileged register faults.
 `stmqp` suits vector tails, on v5 only at 16-byte aligned addresses (on
-v6 at any); lcc's v5 and v6 byte loops don't use it. The tag
+v6 at any); lcc's v5 and v6 byte loops don't use it. A vectorizer's
+misaligned 16-byte access (`movmisalign`) is `ldq`/`stq` (or two `ldd`)
+on v5 and `ldqp`/`stqp` on v6; a speculative `ldqp` on v5 must be known
+16-byte aligned, or it is always diagnostic. Misaligned `ldq`/`stq` on
+v5 cost more: 32 of them take 133 cycles for loads and 297 for stores at
++4 or +1, against 33 and 41 aligned or at +8 (v6: 33 and 41 at any
+offset; `memx.c`). The tag
 operations behave as plain moves on untagged data; tagged values come
 from speculation (speculation.md) and the protected mode, which this
 probe doesn't cover.

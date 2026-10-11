@@ -952,10 +952,11 @@ _V3_INTOPS = re.compile(
     r"merge|popcnt|lzcnt|bitrev)[sd]|sxt|(?![su]mulx)[a-z]+_f[bhwd])$")
 _V3_COMBINED = re.compile(r"^(and|andn|or|orn|xor|xorn|add|sub|scl|scr|shl|"
                           r"shr|sar|getf|merge)_")
-# Timed elsewhere (timing.md rows from pocchk.c, pmu.c, sqrt.c, or a
-# bench.py pair whose name is not the operation's).
-_V3_MEASURED = {"fsqrtid", "fsqrttd", "frcps", "frsqrts", "sdivs", "udivs",
-                "udivd", "fdtofx", "fxtofd"}
+# Timed elsewhere (timing.md rows from pocchk.c, pmu.c, or a bench.py
+# pair whose name is not the operation's).  sqrt.c's numbers for
+# fsqrtid, fsqrttd, frcps and frsqrts are back-to-back costs, so those
+# get chains here.
+_V3_MEASURED = {"sdivs", "udivs", "udivd", "fdtofx", "fxtofd"}
 _V3_NOTSWEPT = [
     (re.compile(r"^(ld|st)"), "memory access (timing.md, Memory)"),
     (re.compile(r"^aaur"), "AAU register access (apb.md)"),
@@ -1251,6 +1252,27 @@ def _v3_special_chains():
     out["v3op_cmpesb_to_merge_addd"] = (
         one, [("cmpesb,1 %r2, %r5, %pred1", None),
               ("merge_addd,1 %dr5, %dr2, %dr5, %dr2, %pred1", 12)], 6)
+    # A double square root, fsqrtid a, t then fsqrttd a, t, r (fsqrttd
+    # needs fsqrtid's t: semantics.md): each step to the other and the
+    # pair to an FP operation.
+    sq = "addd,0 0x0, %dr4, %dr2"
+    out["v3op_fsqrtid_to_fsqrttd"] = (sq, [
+        ("fsqrtid,5 %dr2, %dr7", None), ("fsqrttd,5 %dr2, %dr7, %dr8", 24),
+        ("faddd,3 %dr8, %dr5, %dr2", 24)], 18)
+    out["v3op_fsqrttd_to_fsqrtid"] = (sq, [
+        ("fsqrtid,5 %dr2, %dr7", 24), ("fsqrttd,5 %dr2, %dr7, %dr2", None)],
+        24)
+    out["v3op_fsqrttd_to_faddd"] = (sq, [
+        ("fsqrtid,5 %dr2, %dr7", 24), ("fsqrttd,5 %dr2, %dr7, %dr8", None),
+        ("faddd,3 %dr8, %dr5, %dr2", 12)], 24)
+    # An integer divide's result to an FP-side consumer and to an integer
+    # operation in the other cluster (v3op_sdivd_to_addd: in ALC5).
+    out["v3op_sdivd_to_idtofd"] = (one, [
+        ("sdivd,5 %dr2, %dr3, %dr8", None), ("idtofd,3 %dr8, %dr9", 12),
+        ("fdtoid,3 %dr9, %dr2", 12)], 18)
+    out["v3op_sdivd_to_addd0"] = (one, [
+        ("sdivd,5 %dr2, %dr3, %dr8", None), ("addd,0 %dr8, %dr5, %dr2", 12)],
+        18)
     # fxsqrti<t>x a, s; fxsqrtu<t>x a, s, s; fxsqrtt<t>x a, s, r (lcc's
     # sqrtl, semantics.md) from a single or double a, the root converted
     # back to a's type: each step scanned in turn.
@@ -1377,7 +1399,13 @@ def _v3_tp():
 SCHED_V3ST = {
     "v3st_rrs_pfpfr_to_ands": (
         "addd,1 0x0, 0x0, %dr2",
-        [("rrs,0 %pfpfr, %r8", None), ("ands,0 %r8, %r5, %r9", 12)], 8),
+        [("rrs,0 %pfpfr, %r8", None), ("ands,0 %r8, %r5, %r9", 12)], 16),
+    "v3st_rrs_fpsr_to_ands": (
+        "addd,1 0x0, 0x0, %dr2",
+        [("rrs,0 %fpsr, %r8", None), ("ands,0 %r8, %r5, %r9", 12)], 16),
+    "v3st_rrs_fpcr_to_ands": (
+        "addd,1 0x0, 0x0, %dr2",
+        [("rrs,0 %fpcr, %r8", None), ("ands,0 %r8, %r5, %r9", 12)], 16),
     "v3st_rws_pfpfr_to_rrs": (
         "addd,1 0x0, 0x0, %dr2; rrs,0 %pfpfr, %r8",
         [("rws,0 %r8, %pfpfr", None), ("rrs,0 %pfpfr, %r9", 12)], 12),

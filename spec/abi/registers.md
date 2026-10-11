@@ -59,7 +59,10 @@ proof-of-concept backend's probe, `docs/spec-poc-findings.md` A2):
 - Operations in the wide instruction with `setwd` may already use the new
   window: `{ setwd wsz = 8; addd %r0, 5, %r12 }` works (lcc puts `getsp
   ..., %r3` there), but `%b[]` in the instruction with `setbn` still uses
-  the old rotating base.
+  the old rotating base. (MCST's qemu applies the new base there, so code
+  that writes an argument register next to its `setbn` works under qemu
+  and fails on hardware: a recursion written so dies with
+  SIGSEGV at once on the 4C; `tools/abi/probes/sysabi.s`, `sa_down`.)
 
 What windows cost (`pocchk2.c`, `%clkr`; 4C, 8C2 and 2C3 alike; the
 proof-of-concept back end's I31):

@@ -51,7 +51,7 @@ ordinary programs.
 | x87 80-bit arithmetic, `%fpcr`/`%fpsr` | `fx*`, `movif`/`movfi` | v1+ | yes [hw] | semantics.md, "80-bit operations" |
 | the x87 register stack: rotating globals | `%bgr`, `abg` (v1–v5), `abgc`/`rbgc` (v6+), `vfbg`; v6 `mkfsw`, `modbgv`, `vfbgv` | v1+ | yes [hw]; v3–v5 rename `%g24`–`%g31` from the next instruction (10 cycles after `rws %bgr`); **v6 renames nothing**, only `cur` changes (`vfbg` and `%bgrpred` never run) | loops.md |
 | x86 FP compare results into a register (`ucomisd` flags), MXCSR layout of `%pfpfr` | `fcmpud*f`, `fcmpod*f`, `fxcmpud*f` | v1+ | yes [hw]; lcc uses `fxcmpudxf` for `long double` `isless`/`isnan` [lcc] | semantics.md |
-| x86-compatible FP compare mode, strict alignment | `%upsr` bit 8 `fsm`, bit 2 `ac` | v3+ (`fsm`) | writable [hw]; with `fsm` the predicate FP compares read unordered as x86 flags do (`lt`, `le`, `eq` true, `neq` false) [hw]; `crtalign.o` (`-faligned-check`) sets `ac` [lcc] | semantics.md, "Floating-point compares" |
+| x86-compatible FP compare mode, strict alignment | `%upsr` bit 8 `fsm`, bit 2 `ac` | v3+ (`fsm`) | writable [hw]; with `fsm` the predicate FP compares read unordered as x86 flags do (`lt`, `le`, `eq` true, `neq` false) [hw]; with `ac` a misaligned `ldw` or `ldd` raises SIGBUS (`BUS_ADRALN`, `si_addr` the wide instruction's address, not the data's) [hw: `tools/abi/probes/sysabi.c` section 8], and glibc's own `printf` then faults on the 2C3 (v6 glibc makes misaligned accesses), not on the 8C2; `crtalign.o` (`-faligned-check`) sets `ac` [lcc]. `%upsr` reads 0x1 (bit 0 `fe`) on the 4C and 8C2 and 0 on the 2C3 | semantics.md, "Floating-point compares" |
 | random predicates for sampling | `%rndpred1`–`15`, state `%rndpr` | v3+ | yes [hw] | predicates.md |
 | issue without waiting for late operands | `%spred` | v1+ | yes [hw] | predicates.md |
 | branch or call to a register | `ibranchd`, `icalld` | v6+ | yes [hw]; lcc 1.31.05 uses them only for v7 (jump tables, indirect tail calls and calls) [lcc] | control-transfer.md |
@@ -161,10 +161,12 @@ and the TC/TS state, whose purpose the open sources don't explain.
 
 - Whether other cores see new code after the MAS 0xf flush without
   more.
-- Whether `sigcontext`'s trap cellar and exception registers are filled
-  as the kernel source says, and the IP redirect works, for an ordinary
-  task.
-- Whether `UPSR.ac` traps every misaligned access.
+- Whether the IP redirect works for an ordinary task. (The trap cellar
+  and exception registers are filled as the kernel source says, for a
+  load fault and for `raise`: [kernel-interface.md](../abi/kernel-interface.md),
+  "Signals".)
+- Whether `UPSR.ac` also traps misaligned stores and 16-byte accesses
+  (it traps misaligned `ldw` and `ldd`).
 - The segment descriptor layout, and what a limit violation gives.
 
 Measured with `tools/isa-probes/native.c` (and bench.py's distance

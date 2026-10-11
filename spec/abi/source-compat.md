@@ -93,7 +93,8 @@ Constraints, as lcc 1.28+ defines them:
 - Operands print as the base register name whatever their size or
   constraint: `%0` becomes `%r2` for a `long`, an `__int128` pair or an
   `x` operand (`asmops.c`). The operation decides the width (`fxsqrtixx
-  %1, %0` in mathinline.h); no operand modifiers are used.
+  %1, %0` in mathinline.h); mathinline.h uses no operand modifiers.
+  lcc's modifiers are listed below.
 - An `x` value must be copied only with `movx` (or rebuilt with
   `movif` from its two halves): a 64-bit copy (`addd`) drops the 16-bit
   extended part. lcc packs an `x` input with `movif`, emits `movx r, r`
@@ -113,6 +114,146 @@ a prefix is ordinary registers, so a 16-byte variable at `%g2` occupies
 numbers allowed). By default (`-mold-register-asm-long-double`) a `long
 double` named without `x` is still placed in the extended register, with
 a warning.
+
+### Other constraints (lcc)
+
+lcc 1.29.16 (`e2k-v3`, `e2k-v5.8c2`, `e2k-v6.2c3`) and 1.31.05 (`e2k-v3`)
+accept the same letters and print operands the same way
+(`tools/abi/probes/asmconv.py` prints every case below; its output is
+identical for the four compilers):
+
+| Constraint | lcc | Operand prints as |
+|---|---|---|
+| `m`, `o` | accepted, also as outputs (`=m`, `+m`) | `%rN, 0x0`: lcc always loads the address into a register and prints base and a zero offset, also for `p->b`, `p[50]`, a global or a local array element. The text fits the address operands of a load or store (`ldd %1, %0`) |
+| `i`, `n` | any integer constant | hex, **unsigned at the width of the operand's C type**: `(int) -1` gives `0xffffffff`, `-1L` gives `0xffffffffffffffff`, `(short) -1` gives `0xffff`. A `double` constant prints its bits (`1.5` gives `0x3ff8000000000000`). With `i`, the address of a global prints as gas's literal syntax `[ g ]` (non-PIC; an error with `-fPIC`); the address of a local is an error |
+| `I` | 0–31 | as `i` (the range of the 5-bit `src1` literal) |
+| `J` | 0–255 | as `i` (the range of an 8-bit ALES literal, `pshufh` and ALOPF11_LIT8; inferred) |
+| `g` | accepted | a register in every probe (`%r3`), also for a memory operand |
+| `rm`, `mr`, `ri`, `im` | accepted | a constant prints as for `i` |
+| `0`–`9` (matching) | accepted | the matched register |
+| modifiers `=`, `+`, `&` | accepted | |
+| `V`, `<`, `>`, `s`, `X`, `p`, `E`, `F`, `f` | error "asm operand %0 of asm statement have unknown constraint" | |
+| every other letter (`K`–`P`, `G`, `H`, `a`–`e`, `h`, `j`–`l`, `q`, `t`–`w`, `y`, `z`, `A`–`D`, `Q`–`U`, `W`, `Y`, `Z`) | error #1121 "unknown asm constraint letter" | |
+
+The unsigned printing matters with 64-bit operations: `(int) -1` passed
+with `i` to `addd` reaches gas as `0xffffffff`, which gas encodes as
+`_f64 0xffffffff`, that is +4294967295, not −1 ([bundle.md](../isa/bundle.md),
+"Literal values"). The installed headers cast such operands to an
+unsigned 64-bit type first (`__e2k_syscall_arg_t`).
+
+Constraints in use: glibc's E2K sysdeps use `r` (137), `=r` (111), `+r`
+(58), `ri` (21), `=&r` (2), `i` (1) and `g` (1, protected-mode malloc);
+the kernel's uapi headers use `ri` (51), `=r` (13) and `i` (8) [source].
+
+### Operand modifiers (lcc)
+
+| Modifier | lcc prints |
+|---|---|
+| `%#` | the `wbs` of a call made inside the asm (next section) |
+| `%=` | a number unique to this asm in the output (`1`) |
+| `%%` | `%` |
+| `%[name]` | the named operand |
+| `%cN` | a constant without decoration: `5` gives `0x5`, `&g` gives `g`. On a register: error "operand modifier 'c' should only be used for constants" |
+| `%nN` | the negated constant: `5` gives `0xfffffffb` (`int` width), `-5L` gives `0x5` |
+| `%HN` | the second register of a 16-byte `r` operand: an `__int128` in `%r4`+`%r5` prints `%r4` for `%0` and `%r5` for `%H0`. On an 8-byte operand or an `x` operand: error "operand modifier 'H' should only be used with quadro" |
+| `%a`, `%l`, `%P`, `%p`, `%w`, `%d`, `%x`, `%X`, `%h`, `%b`, `%q`, `%s`, `%z`, `%k`, `%V`, `%K` | error "unknown operand modifier" |
+
+- In a basic asm (no colons) `%` is not special: `asm volatile ("%#")`
+  prints `%#` as written.
+- `asm goto` is rejected by lcc 1.29.16 and 1.31.05 ("конструкция asm goto
+  пока не поддержана", not supported yet).
+
+### `%#`: the window base for a call inside the asm (lcc)
+
+lcc replaces `%#` with the pair at which `%b[0]` currently starts, `rbs +
+rcur` of the function's `setbn`, in hex. lcc's own calls in the same
+function use the same `wbs`, and lcc sets `wsz` to `%#` + 4, so `call
+%ctpr1, wbs = %#` hands the callee the 4 pairs (`%b[0]`–`%b[7]`) that the
+C convention and the kernel's system call entry expect
+([registers.md](registers.md), window units; the entries start with
+`VFRPSZ_SETWD(4)`, kernel `kernel/trap_table.S:535-555`;
+[kernel-interface.md](kernel-interface.md)). `asmconv.py`:
+
+| Function (one `asm volatile`) | lcc `-O` | `setwd` | `setbn` | `%#` |
+|---|---|---|---|---|
+| leaf, any asm text | `-O0` | `wsz = 0x8` | `rsz = 0x3, rbs = 0x4, rcur = 0x0` | `0x4` |
+| leaf, any asm text | `-O1` … `-O3` | `wsz = 0x9` | `rsz = 0x4, rbs = 0x4, rcur = 0x1` | `0x5` |
+| asm and a call with 12 arguments | `-O2` | `wsz = 0x9` | `rsz = 0x4, rbs = 0x4, rcur = 0x1` | `0x5` (the call: `wbs = 0x5`) |
+| 8 arguments live across the asm | `-O2` (`-O0`: `wsz = 0xc`, `rbs = 0x8`, `%#` 0x8) | `wsz = 0xb` | `rsz = 0x4, rbs = 0x6, rcur = 0x1` | `0x7` |
+| the same leaf without the asm | any | `wsz = 0x4` | none | — |
+
+So `wsz − %#` is 4 in every case. The asm may write `%b[0]`–`%b[7]` and
+read results from `%b[0]`; lcc reserves no stack argument area for it (no
+`getsp`).
+
+When lcc sets up that area: for every `asm volatile`, with or without
+`%#` and whatever its clobbers (also `asm volatile ("")`), and for a
+non-volatile asm with a `"call"` or `"b[N]"` clobber. A non-volatile asm
+without them gets no rotating base (`-O2`: `wsz = 0x8` and no `setbn`;
+`-O0`: `wsz = 0x4`), yet `%#` still prints `0x4`, so a call made there
+would not pass `%b[]` to the callee. Every `%#` in glibc and the kernel
+is in an `asm volatile` or in an asm that lists `"call"` (the kernel's
+four non-volatile ones, `asm/e2k_api.h:3094-3206`). With `_Pragma
+("asm_inline")` lcc parses the asm itself and emits the same `wbs`.
+
+Users: glibc's `INTERNAL_SYSCALL` (`sysdeps/unix/sysv/linux/e2k/sysdep.h:229`,
+`call %ctpr1, wbs = %#`), the uapi `__E2K_SYSCALL_0` … `_7` macros
+(`arch/e2k/include/uapi/asm/e2k_api.h:128-331`) and 25 uses in the
+kernel's own `asm/e2k_api.h` (also `hcall …, wbs = %#`). (GCC hands `%`
+followed by a punctuation character to the target's operand printer when
+`TARGET_PRINT_OPERAND_PUNCT_VALID_P` accepts it, `gcc/final.cc:3574`.)
+
+### Clobber names (lcc)
+
+The same in lcc 1.29.16 (`e2k-v3`, `e2k-v5.8c2`, `e2k-v6.2c3`, `-O0`
+and `-O2`) and 1.31.05 (`e2k-v3`) (`asmconv.py`):
+
+| Name | lcc | Effect on a non-volatile asm (`-O2`) | glibc | kernel uapi |
+|---|---|---|---|---|
+| `"memory"` | accepted | memory values loaded before it are loaded again after it | the spinlocks (`nptl/pthread_spin_*.c`) and every syscall | — |
+| `"cc"` | accepted | none seen | — | — |
+| `"call"` | accepted | the asm is treated as a call: outgoing area reserved (`wsz = 0x9`), `return %ctpr3` prepared again after it, memory reloaded, operands in window registers instead of `%g16`–`%g31` | `"call", "memory"` on every syscall (`sysdep.h:172-173`) | — |
+| `"ctpr1"`–`"ctpr3"`, `"%ctpr1"`–`"%ctpr3"` | accepted; `ctpr0`, `ctpr4` unknown | `"ctpr3"` on a non-volatile asm: `return %ctpr3` prepared after it | `"%ctpr1"`–`"%ctpr3"` (`nptl/pthread_spin_lock.c:40-44`) | `"ctpr1"`–`"ctpr3"` (`E2K_SYSCALL_CLOBBERS`, `e2k_api.h:108-111`) |
+| `"b[0]"`–`"b[7]"`, `"%b[0]"`–`"%b[7]"` | accepted; `"b[8]"` and above: error `регистр "%b[8]" нельзя использовать в качетсве clobber'а` (cannot be a clobber; lcc's spelling); `"db[0]"`, `"b0"` unknown | as `"call"`, and `setwd nfx = 0x0` | — | `"b[0]"`–`"b[7]"` (`E2K_SYSCALL_CLOBBERS`) |
+| `"pred0"`–`"pred31"`, `"%pred0"`–`"%pred31"` | accepted; `pred32`, `p0` unknown | none seen (lcc kept no predicate live across an asm in any probe) | `"%pred0"` (spinlock) | — |
+| `"g0"`–`"g31"`, `"%g0"`–`"%g31"` | accepted; `dg16`, `xg16`, `qg16` unknown | without clobbers lcc may give a non-volatile asm's operands `%g16` and up (leaf functions use them as scratch); with `"g16"` it used `%g17` and reloaded a value it had kept in `%g16`; all of `g16`–`g31`: window registers | — | — |
+| `"r0"`–`"r63"`, `"%r0"`–`"%r63"` | accepted; `r64` and above, `dr0`, `xr0`, `qr0` unknown; at `-O0` a clobbered `rN` that holds an operand is an error ("clobber %r0 conflicts with operand %1") | `setwd nfx = 0x0` | — | — |
+| state, AAU and special registers (`lsr`, `ilcr`, `pfpfr`, `fpcr`, `fpsr`, `upsr`, `usd`, `wd`, `br`, `psr`, `cr0`, `aasr`, `aad0`, `aasti0`, `empty`, `MLOCK`, `clkr`, `rndpr`, `tst`, `tc`), with or without `%` | error #1118 "unknown register name" | | | |
+
+The kernel's own headers (not uapi) also use `"r0"`–`"r7"`,
+`"pred0"`–`"pred31"`, `"%g0"`–`"%g31"`, `"g16"`–`"g31"` and `"%b[0]"`–`"%b[7]"`,
+and note that `"lsr"` cannot be named, so they clobber the CTPRs instead
+(`asm/e2k_api.h:2786`). Their four non-volatile calls clobber `"call"`,
+`"memory"`, `"pred19"` and the global they use (`"g" #greg_no`,
+`asm/e2k_api.h:3100-3215`).
+
+GCC accepts a clobber only if it is a register name, an
+`ADDITIONAL_REGISTER_NAMES` or `OVERLAPPING_REGISTER_NAMES` alias,
+`"memory"`, `"cc"` or `"redzone"`, after stripping one leading `%`;
+anything else is "unknown register name" (`gcc/varasm.cc:978-1095`,
+`gcc/cfgexpand.cc:3496-3502`). So `"call"` and `"b[N]"` need to be names
+the port knows.
+
+### What lcc assumes an asm does (lcc)
+
+| Asm | lcc |
+|---|---|
+| `asm volatile`, any clobbers | a barrier for everything: reserves the outgoing area, prepares `return %ctpr3` and loop `disp`s again after it (also with no clobbers: CTPRs are never kept across it), and reloads memory as if `"memory"` were given |
+| non-volatile | follows the clobber list: keeps `return %ctpr3` prepared across it unless `"ctpr3"`, `"call"` or a `"b[N]"` is listed; may put operands in `%g16`–`%g31` unless `"call"` or that `gN` is listed; reuses a value loaded before it unless `"memory"`, `"call"` or a `"b[N]"` is listed (`asmconv.py`, "Effects") |
+
+The uapi system call macros list neither `"memory"` nor `"call"`, so they
+rely on this (inferred). GCC does not treat `asm volatile` as a memory clobber and may
+move it relative to other code (`gcc/doc/extend.texi:11797-11801`,
+`12423-12434`), so with GCC, values loaded before such a call may be
+reused after a system call that wrote them (inferred).
+
+lcc also has `#pragma asm_inline`, `#pragma no_asm_inline` and
+`#pragma asm_length (N)` (the asm's length in cycles, 0–14, E2K only)
+(**lcc-doc** `pragma_mcst.html`). glibc uses the first two
+(`sysdeps/e2k/dl-machine.h:89-95`, `sysdeps/e2k/fpu/e_coshf.c:44`) and
+the kernel all three (`asm/compiler.h:43-67`); MCST's libgcc
+`__e2k_clear_cache` uses `no_asm_inline` (`config/e2k/clear-cache.c`). GCC
+ignores unknown pragmas (a warning with `-Wunknown-pragmas`).
 
 Register names for `-ffixed-<reg>` and `-fcall-used-<reg>` (as in GCC):
 `g0`..`g31`, `r0`..`r63`, `pred0`..`pred31`.

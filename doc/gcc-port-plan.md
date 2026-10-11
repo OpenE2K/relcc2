@@ -1046,7 +1046,7 @@ each one cost it a debugging session:
   (zlib's `inflate_fast`) otherwise stays a branch loop. `expand_divmod`
   itself prices a division by a register, so this doesn't change how
   divisions expand. Integer divides take 11–18 cycles by the quotient's
-  size (timing.md).
+  size, 2 more to an integer operation (timing.md).
 - **Combined integer operations** (`shr_andd`, `xor_xors`, … in ALC1/4,
   latency 2) only where a loop is bound by the six ALU channels and the
   pair is off its recurrence; formed by default they made the PoC's
@@ -1151,12 +1151,15 @@ Written in `.md` with `define_automaton`, `define_cpu_unit`,
   use the measured table in `spec/isa/timing.md` (data in
   `spec/isa/timing-e2s.yaml`, from `tools/isa-timing/bench.py`): integer
   1, combined integer 2, FP and integer multiply 4, combined FP 8,
-  `fdivs`/`fdivd` 11/14, `fsqrts` 12, `sdiv` 11, load 3 (L1 hit),
-  compare→predicated op 2, compare→`ct` 3, `disp`→`ct` 5, `return`→`ct` 6,
-  `movtd`→`ct` 9, FP or multiply → integer +2. Crossing between the
-  channel clusters ALC0–2 and ALC3–5 costs +1 for integer and load
-  results and +2 for FP-class ones (the guide's "integer → FP +1" is this
-  crossing); model it with `define_bypass` or by tracking the cluster.
+  `fdivs`/`fdivd` 11/14, `fsqrts` 12, a double square root `fsqrtid` 11
+  + `fsqrttd` 14, `sdiv` 11, load 3 (L1 hit), compare→predicated op 2,
+  compare→`ct` 3, `disp`→`ct` 5, `return`→`ct` 6, `movtd`→`ct` 9, FP,
+  multiply or divide (integer divides too) → integer +2; every other v3
+  operation is in timing.md, "Every v3 operation", by latency class.
+  Crossing between the channel clusters ALC0–2 and ALC3–5 costs +1 for
+  integer and load results and +2 for FP-class ones (the guide's
+  "integer → FP +1" is this crossing); model it with `define_bypass` or
+  by tracking the cluster.
   These match guide 6.1. Where the guide is wrong or silent: packed
   integer ops take 1 cycle (multiply 2) to packed/FP consumers and 4 to
   integer ones; conversions 4 (6 to integer), but an FP-side result

@@ -10,7 +10,8 @@ Elbrus-8C2 (E8C2, elbrus-v5, 1.26–1.5 GHz; data in
 and an Elbrus-2C3 (E2C3, elbrus-v6, 2 GHz; data in
 [timing-e2c3.yaml](timing-e2c3.yaml), section "Elbrus-2C3 (v6)").
 Every latency, hazard and control-transfer delay measured on the 4C and
-the 8C2 is the same. **v6 changes the timing**: an L1 load takes 5
+the 8C2 is the same, except that v5 made `pfdivd` and `pfsqrttd` 2
+cycles slower. **v6 changes the timing**: an L1 load takes 5
 cycles instead of 3, an integer compare reaches a predicated operation
 in 1 cycle instead of 2, `ldqp` goes through L1, and a few conflicts
 are gone; everything else is as on v3 and v5. The sections below
@@ -26,7 +27,10 @@ describe v3 and v5; "Elbrus-2C3 (v6)" lists what differs.
 - **Scheduled latency**: the same chain with each operation followed by
   `nop`s so the next one issues `gap` cycles later; the latency is the
   smallest gap at which a step costs exactly `gap` cycles (no stall). This
-  is the value a scheduler needs.
+  is the value a scheduler needs. The loop adds a few tenths of a cycle
+  a step, taken as the smallest excess over `gap` among a chain's gaps
+  (a stall adds at least 3); on the 4C it is sometimes 0.46–0.5 for a
+  whole run.
 - **Hazards**: a producer and a consumer `D` cycles apart (`D = 0`: same
   wide instruction), checking whether the consumer sees the new value.
   `.ignore strict_delay` keeps gas from inserting delays.
@@ -46,9 +50,9 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | `fdivs` | 11 | 11 | 13 |
 | `fdivd` | 14 | 14 | 17 |
 | `fsqrts` | — | 12 | 13 |
-| `fsqrtid`; `fsqrtid` → `fsqrttd` → use (one double `sqrt`) | — | 12; 29 (so `fsqrttd` about 17) | — |
-| `frcps`, `frsqrts` (12-bit estimates, semantics.md) | — | 8 | — |
-| `sdivs`, `sdivd`, `udivs`, `udivd` | — | **11 to 18, by the quotient's size** (below) | 13 |
+| `fsqrtid` → `fsqrttd` or any FP op; `fsqrttd` → FP op (one double `sqrt`: 25) | — | 11; 14 (13; 16 to an integer op) | 13; 17 |
+| `frcps`, `frsqrts` (12-bit estimates, semantics.md) | — | 6 (8 to an integer op) | 9 |
+| `sdivs`, `sdivd`, `udivs`, `udivd` | — | **11 to 18, by the quotient's size** (below); 13 for small quotients to an integer op | 13 |
 | `ldd`, L1 hit, any of ALC0/2/3/5 → next load's address | 3 | 3 | 5 |
 | `ldd` → integer op | 3 | 3 | — |
 | `ldb`, `ldh`, `ldw` → integer op | 3 | 3 | — |
@@ -66,7 +70,11 @@ smallest gap from a divide to its use that costs no stall; 4C, 8C2 and
 (2^27), 15 (2^37), 16 (2^47), 17 (2^57), 18 (2^63); `sdivs` 11–14 up to
 2^31. `bench.py`'s 11 is the small-quotient case (its chain divides 1
 by 1). A scheduler can't know the quotient; 13–15 covers quotients up
-to 2^37. FP divides don't vary (`fdivd` 14 whatever the operands).
+to 2^37. FP divides don't vary (`fdivd` 14 whatever the operands). The
+quotient arrives on the FP side, like an FP result: an integer operation
+waits 2 more, in either cluster (`sdivd` → `addd` 13 in ALC0 or ALC5),
+an FP-side one doesn't (`sdivd` → `idtofd` 11; "Every v3 operation",
+below).
 | compare → `ct ? pred` | 3 | 3 | — |
 | `disp` → `ct` | 5 | 5 | — |
 | `return` → `ct` | 6 | 6 | — |
@@ -85,7 +93,7 @@ to 2^37. FP divides don't vary (`fdivd` 14 whatever the operands).
 | `umulhd` (high half of a 128-bit product) | 4 | 4 | — |
 | `smulx`, `umulx` (32 × 32 → 64) | — | 4; 6 to an integer op | — |
 | `insfs`, `insfd` (field insert) | — | 1; 2 across clusters | — |
-| `sdivx`, `udivx`; `smodx`, `umodx` (64 ÷ 32, ALC5) | — | 11; 10 | — |
+| `sdivx`, `udivx`; `smodx`, `umodx` (64 ÷ 32, ALC5) | — | 11; 10 (13; 12 to an integer op) | — |
 | `mpsadbh` | — | 2; 4 to an integer op | — |
 | `fsubs`, `fsubd`; `fmaxs` | — | 4; 2 | — |
 | round to integral `fdtoifd`, `fstoifs` | — | 4 | — |
@@ -134,6 +142,103 @@ operations match the guide. Differences:
 - FP compares into predicates are two cycles slower than integer
   compares (4 to a predicated operation, 5 to `ct`).
 - Loads beyond L1 are not scheduled for (see Memory).
+
+## Every v3 operation [hw]
+
+`bench.py --only v3op` chains every v3 computational operation that had
+no scheduled latency (807 chains, generated from `binutils-ops.yaml` as
+the v5 ones are): the result feeds the same operation, or a conversion,
+`merge` or `cctope` that reads it in the format it was produced in, and
+each FP-side result also goes to an integer operation in its own
+channel. Combined integer operations are chained through each operand.
+The 4C, the 8C2 and the 2C3 agree on every chain except where noted
+(v6: an integer compare or `cctop` reaches `merge` in 1, as above; v5
+and v6: `pfdivd` and `pfsqrttd` 16). The data is in the three YAML
+files (`v3op_*`, `v3st_*`).
+
+| Latency to its own kind | To an integer op | Operations |
+|---|---|---|
+| 1 | — | scalar logic, shifts and rotates (`scl`, `scr`), `getfd`, `merges`, `popcnts`, `bitrevs`, `sub` |
+| 1 | 4 | every packed integer operation except the multiplies: add and subtract (also saturating), compares, min/max, averages, shifts (`psllqh` …), packs and unpacks, `pshufh`, `pshufw`, `pmerge`, `pinsh`, `pextrh`, `pmovmsk*`, `psign*`, horizontal add and subtract, logic |
+| 2 | 2 | the x86 flag forms (`*_fb`, `_fh`, `_fw`, `_fd`); combined integer operations through any operand (`and_addd`, `add_xord`, `merge_addd` …); an integer compare, `cmpand*` or `cctop*` → `merge` (v6: 1) |
+| 2 | 4 | FP compares into a register (`fcmp*s`, `fcmp*d`, `pfcmp*`), FP min/max (`fmins`, `pfmax*`, `pfmin*`), packed multiplies (`pmulh*`, `pmadd*`, `pmulubhh`), `phminposuh` |
+| 4 | 4 | the FP flags compares `fcmp{ud,od}{s,d}f` (to `cctop` as to any integer op) |
+| 4 | — | FP compares into a predicate (`fcmp*b`, `fxcmp*b`) → predicated op or `merge` |
+| 4 | 6 | FP add, subtract, multiply, scalar and packed (`pfhadds`, `pfaddsubs` …); conversions, also packed (`pfdtois`, `pistofs` …) and round to integral, to a consumer of their format; `smulhd`, `umulhd`, `umulx`; the multiply flag forms (`smulx_fw` …); 80-bit `movx`, `movxa`, `movxc` and `fxmul*` with an 80-bit result |
+| 5 | 7 | 80-bit add, subtract and `rsub`, `fxmul*` with a single or double result, conversions to and from 80-bit (`fxto*`, `*tofx`) |
+| 6 | 6 | the 80-bit flags compares `fxcmp{ud,od}*f` (to `cctop` as to any integer op) |
+| 6 | 8 | `frcps`, `frsqrts` |
+| 8 | 10 | combined FP, scalar and packed, every first and second stage (`fsub_rsubs`, `pfhadd_addsubs` …) |
+| 10 | 12 | `smodx`, `umodx` |
+| 11 | 13 | integer divides with small quotients (`sdivs`, `sdivd`, `udivs`, `udivd`, `sdivx`, `udivx`; 11–18 by the quotient, above), `fsqrtid`, `pfdivs`; the 80-bit `fxsqrti*` (to an FP op only) |
+| 12 | 14 | `fsqrts`, `pfsqrts` |
+| 14 | 16 | `fdivd`, `fsqrttd`; `pfdivd` and `pfsqrttd` on v3 (16 and 18 on v5 and v6) |
+| 16 | 18 | 80-bit divides `fxdiv*`; the square root steps `fxsqrtu*` (`fxsqrtuxx` 16–17, 18 on v6) and `fxsqrtt*` (to an FP op only) |
+| 19 | 20 | `fxdivt*`, timed with ordinary operands, for which they return invalid (semantics.md) |
+
+What this adds to the table above:
+
+- **Every FP-side result reaches an integer operation 2 cycles later**,
+  in any channel and either cluster, and that includes the divider's
+  integer results (13, not 11) and the 80-bit unit's (7). Packed integer
+  results and FP compares into a register are the exceptions with +3,
+  as before.
+- **A double square root is 25 cycles**: `fsqrtid` 11, `fsqrttd` 14
+  (`fsqrttd` reads `fsqrtid`'s result as its second operand, which it
+  needs: semantics.md). The 12, "about 17" and 8 for `fsqrtid`,
+  `fsqrttd` and `frcps` recorded before came from `sqrt.c`'s
+  back-to-back chains, which include the stall (13, 17, 9).
+- **`pfdivd` and `pfsqrttd`** compute what `fdivd` and `fsqrttd` do
+  (semantics.md) and take as long on v3, but 2 cycles more on v5 and
+  v6.
+- `pextrh`'s own chain reads its 32-bit result as 64 bits; its 4 to
+  `adds` is the cleaner figure. `pmovmsk*` were chained as packed
+  integers (1), their result being an integer mask: 4 to an integer op.
+
+**The divider.** Every ALC5 operation that divides, takes a root or
+estimates a reciprocal shares one unit with `fdivd` (`v3div_*` kernels):
+alternating with `fdivd` it costs what `fdivd` alone does (5 an
+instruction), and two a cycle apart take 13 cycles a pair, as two
+`fdivd`. Cycles per operation when one issues every `g` cycles:
+
+| Operations | `g` = 1 | 2 | 3 | 4 | 5 | 6+ |
+|---|---|---|---|---|---|---|
+| `fsqrtid`, `udivs`, `sdivx`, `udivx`, `pfdivs`, `frcps`, `frsqrts`, `fxsqrtixx` (as `fdivs`) | 5 | 2 | 3 | 4 | 5 | `g` |
+| `udivd` (as `sdivd`) | 5 | 3.4 (v5, v6: 2) | 3 | 4 | 5 | `g` |
+| `pfdivd` | 5 | 2 (v5: 2.5) | 3 | 4 | 5 | `g` |
+| `fxdivxx`, `fxdivdd`, `fxdivss` | 5 | 3.4 | 3 | 4 | 5 | `g` |
+| `fxsqrtuxx`, `fxsqrttxx` | 5 | 3.4 | 3 (v5, v6: 4.4) | 4 | 5 | `g` |
+| `fsqrttd` | 5 | 4 (v6: 2) | 5 (v6: 3) | 4 | 5 | `g` |
+| `pfsqrts` (as `fsqrts`) | 7 | 2.8 | 3 | 4 | 7 | `g` |
+| `pfsqrttd` | 5 (v5: 6) | 4 (v5: 3.6, v6: 2) | 5 (v5: 3.9, v6: 3) | 4 | 5 (v5: 6) | `g` |
+| `smodx`, `umodx` | 9 | 10 | 11 | 12 | 9 | 10, 11, 12, 9 … |
+
+`smodx` and `umodx` hold the unit for 9 cycles: anything issued sooner
+waits in 4-cycle steps (alternating with `fdivd`, 7 an instruction; two
+a cycle apart, 21 a pair, or 17 with `fdivd` either way round).
+isa-score models all of these as divider operations, and the 9 cycles.
+
+**State registers** (`v3st_*`). `rrs` and `rws` of `%pfpfr`, `%fpcr`
+and `%upsr`, and `rrd %ip`, issue one a cycle. A read of the FP state
+(`%pfpfr`, `%fpcr`, `%fpsr`) delivers its value 11 cycles later; `%upsr`
+and `%ip` 2. Writes need no distance: an operation in the next
+instruction sees a new `%pfpfr` or `%fpcr`, and an `rrs` of the flags
+issued in the instruction after an FP operation waits nothing (its
+result is late anyway). Two patterns serialise: a write after a read of
+`%pfpfr` waits for the read (`rws`, `rrs` alternating: 10 cycles a
+pair), and a write of `%pfpfr` does not overlap a divide in flight
+(`fdivd`, `rws` alternating: 22 a pair; with `faddd` 2). So `fesetenv`
+and friends cost a dozen cycles, and FP code should not read the flags
+on a hot path.
+
+**`wait`** (`v3wait_*`) costs 6–7 cycles even with nothing outstanding
+(`all_c`, `ld_c`, `ld_c`+`st_c` 7; `st_c`, `all_e` 6). After the
+operation it waits for, a pair costs: `std` then `wait st_c` (or
+`ld_c`+`st_c`, `all_c`) 15 (v6 16), so a store completes about 14
+cycles after issue; `ldd` then `wait ld_c`+`st_c` 8 (v6 11); `faddd`
+then `wait all_c` 10, `all_e` 10 (v6 16); `fdivd` then `wait all_c`
+20. A C11 fence or seq_cst store (atomics.md) therefore costs about 15
+cycles after a store.
 
 ## Formats
 
@@ -276,9 +381,11 @@ The exceptions are the divider and the memory banks.
 
 **Divider.** `fdivs`, `fdivd`, `sdivs`, `sdivd` and `fsqrts` share one
 unit in ALC5 (a `fdivd`/`sdivd` pair alternating behaves like either
-alone). It is pipelined, but some issue distances conflict and stall
-the later instruction. Cycles per divide when one issues every `g`
-cycles:
+alone), and so does every other ALC5 operation that divides, takes a
+root or estimates a reciprocal ("Every v3 operation", above, which has
+their patterns; `smodx` and `umodx` hold it 9 cycles). It is
+pipelined, but some issue distances conflict and stall the later
+instruction. Cycles per divide when one issues every `g` cycles:
 
 | `g` | 1 | 2 | 3 | 4 | 5 | 6+ |
 |---|---|---|---|---|---|---|
@@ -286,7 +393,8 @@ cycles:
 | `sdivd` | 5 | 3.4 | 3 | 4 | 5 | `g` |
 | `fsqrts` | 7 | 2.8 | 3 | 4 | **7** | `g` |
 
-So a scheduler should keep divides 2 cycles apart (3 for `sdivd`) and
+So a scheduler should keep divides 2 cycles apart (3 for `sdivd` and
+`udivd` on v3, and for the 80-bit divides and square root steps) and
 not issue `fsqrts` exactly 5 cycles after another. Fractions are
 averages of a pattern of stalled and unstalled issues; the structure
 behind them (and behind `fsqrts` at 5) is not known.
@@ -520,8 +628,10 @@ being store + load pairs in one 32-byte block (1.8–2 cycles either
 way), so the governor doesn't affect cycle counts. All 80 scheduled latencies,
 28 back-to-back costs, 21 hazards, 11 control-transfer delays and 10
 branch costs equal the 4C's, and so do 164 of the 166 kernels of the
-monitor probe (`pmu.c`, cycles from `TICKS`). So v3 latencies hold for
-v5, as lcc's documentation says for v1–v5. What v5 adds or changes:
+monitor probe (`pmu.c`, cycles from `TICKS`), and of the v3 sweep's 807
+chains all but `pfdivd` and `pfsqrttd` ("Every v3 operation", above).
+So v3 latencies hold for v5, as lcc's documentation says for v1–v5.
+What v5 adds or changes:
 
 - **Six FP operations per cycle.** v4 added `faddd`, `fmuld`,
   `fmul_add*` (and the single forms) in ALC2 and ALC5, so 6 `faddd`,
@@ -579,13 +689,18 @@ v5, as lcc's documentation says for v1–v5. What v5 adds or changes:
   other cluster cost 4 on both machines (`paddw` → `paddw,3`, `qpaddd` →
   `qpaddd,3`), not latency + 2: an FP-side result in the other cluster
   costs at least what it costs an integer consumer.
-- **Divider:** `sdivd` every 2 cycles no longer conflicts (2 cycles; v3
-  3.4); the other divider distances are as on v3 (`fsqrts` still
-  conflicts at 5). An ALC5 FP operation never conflicts with a divide
-  in flight (distances 1–16 for `faddd` and `fmuld`), except in one
-  pattern: `fdivd` every 2 cycles with an ALC5 FP operation in every
-  gap costs 2.76 cycles per pair instead of 2 (probably what lcc 1.26's
-  "FP operations in channel 5 need special scheduling" is about).
+- **Divider:** `sdivd` and `udivd` every 2 cycles no longer conflict (2
+  cycles; v3 3.4); `fxsqrtuxx` and `fxsqrttxx` every 3 cycles now do
+  (4.4; v3 3), `pfdivd` every 2 cycles takes 2.5, and `pfsqrttd` has a
+  pattern of its own (6, 3.6, 3.9, 4, 6 at `g` = 1–5); the other
+  divider distances are as on v3 (`fsqrts` still conflicts at 5).
+  `pfdivd` and `pfsqrttd` take 16 cycles to an FP op, 18 to an integer
+  op (v3 14, 16; `fdivd`, `fsqrttd` stay 14). An ALC5 FP operation
+  never conflicts with a divide in flight (distances 1–16 for `faddd`
+  and `fmuld`), except in one pattern: `fdivd` every 2 cycles with an
+  ALC5 FP operation in every gap costs 2.76 cycles per pair instead of
+  2 (probably what lcc 1.26's "FP operations in channel 5 need special
+  scheduling" is about).
 - **A store and a load in one 32-byte block** in one instruction take
   1.8–2 cycles in every run (the 4C sometimes runs them at 1); two
   stores agreeing in address bits 6–7 take 2, as on the 4C.
@@ -597,8 +712,9 @@ v5, as lcc's documentation says for v1–v5. What v5 adds or changes:
 `add_v6`), and the probes in `tools/isa-probes` run on it and on the
 8C2 side by side. These stay as on v3 and v5: every integer, multiply,
 divide, FP, conversion, packed and 128-bit latency (the `v5op_*`
-chains: all 195 equal), the format penalties, the crossing costs
-between clusters and between the integer and FP sides, the stall rule
+chains: all 195 equal; the v3 sweep's 807 chains: all equal the 8C2's
+but the integer compares into `merge`, below), the format penalties,
+the crossing costs between clusters and between the integer and FP sides, the stall rule
 (an early consumer waits in 4-cycle steps), write-back conflicts,
 branch costs (a taken `ibranch` 6, a prepared `ct` 0), CTPR delays (`disp` 5, `movtd` 9, `return` 6), the divider's own
 conflicts, the store bank rule (two stores agreeing in address bits
@@ -644,12 +760,20 @@ conflicts, the store bank rule (two stores agreeing in address bits
   target (`bench.py` hazard `movtd_ct`, distance 0).
 - **Conflicts that are gone**: an FP operation in ALC5 next to a divide
   (`fdivd` every 2 cycles with `faddd,5` between: 1 cycle each, v5
-  1.38), and a store and a load in one 32-byte block in one
-  instruction (1 cycle, v5 1.8–2; one store with two loads in one
-  instruction took 1 cycle in one run and 2 in another, the 8C2 always
-  2). The store bank rule stays. `qpcheckd` with equal operands issues
-  two a cycle (ALC0 and ALC3).
-- **`fxsqrtu*`** takes 18 cycles (16).
+  1.38), and divider distances that conflicted: `fsqrttd` and
+  `pfsqrttd` every 2 or 3 cycles take 2 and 3 (v3 4 and 5). The store
+  bank rule stays. `qpcheckd` with equal operands issues two a cycle
+  (ALC0 and ALC3).
+- **A store and a load in one 32-byte block** in one instruction still
+  take 1 or 2 cycles, by run, as on the 4C: in four runs on 2026-10-12
+  a pair in the cell's first block always took 2, one in the block at
+  +0x100 took 2 in two runs and 1 in two (the 2026-10-06 run, 1 there,
+  had looked like the conflict was gone).
+- **`fxsqrtuxx`** takes 18 cycles (16–17; from a single or double,
+  `fxsqrtusx` and `fxsqrtudx`, 16 as before).
+- **`wait`** after a load or an FP operation costs more: `ldd` then
+  `wait ld_c`+`st_c` 11 cycles a pair (v3, v5 8: the load's 5), `faddd`
+  then `wait all_e` 16 (10); after a store 16 (15).
 - **Store to load**: a reload of the same aligned doubleword in the next
   instruction still costs 7.6 cycles (lcc 1.26's note that v6 removed
   the store-to-load bypass shows no extra cost), but a load of *other*

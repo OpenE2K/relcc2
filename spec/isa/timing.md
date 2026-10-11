@@ -62,19 +62,6 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | integer op → FP add | 1 + 1 | 1 in the same cluster, 2 across (see Clusters) | — |
 | FP add → FP multiply | 4 | 4 | — |
 | compare → predicated ALU op | 2 | 2 | — |
-
-**Integer divides take longer for larger quotients** (`pocchk.c`, the
-smallest gap from a divide to its use that costs no stall; 4C, 8C2 and
-2C3 alike, signed and unsigned alike): 11 cycles for quotients below
-2^8, then about one more per 8–10 bits: 12 (2^10–2^17), 13 (2^20), 14
-(2^27), 15 (2^37), 16 (2^47), 17 (2^57), 18 (2^63); `sdivs` 11–14 up to
-2^31. `bench.py`'s 11 is the small-quotient case (its chain divides 1
-by 1). A scheduler can't know the quotient; 13–15 covers quotients up
-to 2^37. FP divides don't vary (`fdivd` 14 whatever the operands). The
-quotient arrives on the FP side, like an FP result: an integer operation
-waits 2 more, in either cluster (`sdivd` → `addd` 13 in ALC0 or ALC5),
-an FP-side one doesn't (`sdivd` → `idtofd` 11; "Every v3 operation",
-below).
 | compare → `ct ? pred` | 3 | 3 | — |
 | `disp` → `ct` | 5 | 5 | — |
 | `return` → `ct` | 6 | 6 | — |
@@ -118,6 +105,19 @@ below).
 | `andp` → `ct ? pred` | 3 | 3 | — |
 | FP compare (`fcmpltdb`) → predicated ALU op | — | 4 | — |
 | FP compare → `ct ? pred` | — | 5 | — |
+
+**Integer divides take longer for larger quotients** (`pocchk.c`, the
+smallest gap from a divide to its use that costs no stall; 4C, 8C2 and
+2C3 alike, signed and unsigned alike): 11 cycles for quotients below
+2^8, then about one more per 8–10 bits: 12 (2^10–2^17), 13 (2^20), 14
+(2^27), 15 (2^37), 16 (2^47), 17 (2^57), 18 (2^63); `sdivs` 11–14 up to
+2^31. `bench.py`'s 11 is the small-quotient case (its chain divides 1
+by 1). A scheduler can't know the quotient; 13–15 covers quotients up
+to 2^37. FP divides don't vary (`fdivd` 14 whatever the operands). The
+quotient arrives on the FP side, like an FP result: an integer operation
+waits 2 more, in either cluster (`sdivd` → `addd` 13 in ALC0 or ALC5),
+an FP-side one doesn't (`sdivd` → `idtofd` 11; "Every v3 operation",
+below).
 
 Rows marked (pmu.c) come from `tools/isa-probes/pmu.c` (producer, D
 cycles of `nop`, consumer, counted with the TICKS monitor;

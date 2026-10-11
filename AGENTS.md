@@ -150,7 +150,11 @@ spec/isa/      ISA spec: operations-v3.md, operations-v5.md (what v4/v5 add:
                lcc-usage.yaml (operation counts in lcc's system libraries)
 spec/abi/      ABI spec for e2k64: data layout, registers + DWARF, calling
                convention, stacks and unwinding, ELF/relocations/PIC/TLS,
-               atomics, source-level conventions (macros, asm, options),
+               atomics, source-level conventions (macros, asm
+               constraints, modifiers and clobbers, options),
+               kernel-interface.md (system calls, auxv, contexts,
+               signals and their frames, hardware and data stacks,
+               address space, -pg, sanitizers, static PIE),
                lcc-builtins.md (lcc 1.31's builtins and <e2kintrin.h>:
                the spec for lcc-compatible builtins; lcc-builtins.yaml
                from lcc's manual, -names.yaml every name lcc knows,
@@ -165,7 +169,8 @@ tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas;
                     count_lcc_ops.py (lcc-usage.yaml), gen_operations.py
                     (operations-v{3,5,6,7}.md), count_lcc_preds.py
                     (how lcc's libraries use predicates), list_pred_ops.py
-                    (the operations that write or read predicates)
+                    (the operations that write or read predicates),
+                    check_literals.py (what gas makes of each literal)
 tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
 tools/isa-timing/   latency/hazard microbenchmarks run on hardware over SSH
 tools/isa-score/    scores a compiled program's use of E2K parallelism:
@@ -225,6 +230,18 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     field extract (getf.c, getf.s), v1-v2 operations on
                     v3+ (v2ops.c, v2ops.s), control operations from user
                     mode (ctlops.c, ctlops.s),
+                    and memory accesses: spill and fill of tags,
+                    diagnostic addresses, misaligned 16-byte and
+                    page-crossing accesses (memx.c; gen_memx.py writes
+                    memx.s, memx-v5.s and their -cases.h),
+                    and the FP environment: every ordinary FP
+                    operation under each rounding mode and fz/daz
+                    against SSE (fpenv.c; gen_fpenv.py writes fpenv.s,
+                    fpenv-v6.s, fpenv-ops.h; check_fpenv.c on an x86
+                    host), glibc's fenv functions (fenvlib.c),
+                    denormal costs (fpcost.c, gen_fpcost.py),
+                    and software prefetch, cache fill levels and line
+                    sizes (pf.c, gen_pf.py; pf-lcc.c for lcc's loops),
                     and rechecks of the PoC's findings (pocchk.c;
                     gen_pocchk.py writes pocchk.s and pocchk-cases.h:
                     divide latency by quotient, two writes of one
@@ -242,9 +259,20 @@ tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     asmops.c and stackprot.c; tagtrap.c, dbl.c,
                     ldouble.c, ctpr.c, dso/run.sh and elfops/run.sh run
                     on hardware, as do litmus.c, getsp.c and
-                    reenter.c with their .s files, and litmus_rmw.c);
+                    reenter.c with their .s files, and litmus_rmw.c;
+                    sysabi.c/.s (the kernel interface: FP state across
+                    handlers, alternate stacks, frame placement, stack
+                    exhaustion and growth, auxv, maps, %clkr, UPSR.ac,
+                    system call costs), sigeh.cc with sigeh-c.c
+                    (exceptions and cancellation across signal frames),
+                    pgprof.c (-pg with gprof) and lockloss.c
+                    (gen_lockloss.py: what breaks an atomic's lock) run
+                    on hardware; sanitize.c is read with -S);
                     find_builtins.py, gen_builtins.py and
-                    gen_builtins_misc.py ask lcc 1.31.05 about its builtins
+                    gen_builtins_misc.py ask lcc 1.31.05 about its builtins;
+                    asmconv.py asks lcc about inline-asm constraints,
+                    modifiers, clobbers and %#, prefetch.py what
+                    __builtin_prefetch becomes for each target
 tools/abi/builtins/ lcc-compatible builtins test: gen.py writes ops.c
                     (a result hash per operation builtin), models.c checks
                     the rest against reference models, run.py compares a
@@ -394,7 +422,12 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   exception unmasked a speculative FP op always gives a diagnostic
   (SIGILL at the use instead of SIGFPE); a `,sm` store under a
   diagnostic predicate is still done, with bit 30 of each data word set,
-  and a diagnostic store address traps even with `,sm`; lcc marks most
+  and a diagnostic store address traps even with `,sm`; memory keeps a
+  tag per 32-bit word and only the fill MAS (mod 4 without `,sm`, lcc's
+  spill reload) reads it back, every other load drops it (`memx.c`); an
+  `ld,sm` crossing into a bad page is wholly diagnostic, a crossing store
+  writes nothing, `si_addr` is the page boundary; misaligned
+  `ldqp`/`stqp` are SIGBUS on v5, fine on v6; lcc marks most
   FP operations `,sm` (all of them in pipelined loops, divisions too)
   and stores whose data or predicate are speculative, so lcc `-O3` code
   dies with SIGILL after `feclearexcept` unless built with
@@ -445,7 +478,7 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   32-byte block, can take 2 cycles, but only when instructions store
   to the same addresses again: in a stream they cost nothing). The Elbrus-8C2 (v5,
   `timing-e8c2.yaml`, timing.md "Elbrus-8C2") has every v3 latency,
-  hazard and control delay; v5 adds 6 FP ops per cycle (ALC2/5),
+  hazard and control delay except `pfdivd`/`pfsqrttd` (16, v3 14); v5 adds 6 FP ops per cycle (ALC2/5),
   128-bit `qp*` ops with scalar latencies; `ldqp` bypasses L1 (served
   by L2: latency 11, one per cycle; `ldq` into a pair goes through L1,
   latency 3; lcc loads 128-bit data as two `ldd`); an APB area delivers
@@ -475,8 +508,9 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   probe lines identical to the 8C2's) and every v3/v5 latency, crossing,
   stall rule and CTPR delay holds, except: **L1 loads 5 cycles** in
   either cluster, `ldqp` through L1 (5, four a cycle), integer compare /
-  predicate logic → predicated op 1, no divider–ALC5 or store+load
-  32-byte block conflicts, `fxsqrtu` 18; L2 13 cycles (2 MiB, no L3),
+  predicate logic → predicated op 1, no divider–ALC5 conflict (a
+  store and a load in one 32-byte block still take 1 or 2 cycles by
+  run, as on the 4C), `fxsqrtu` 18; L2 13 cycles (2 MiB, no L3),
   memory ~220; APB areas deliver 32 bytes a cycle and keep their
   positions across traps; a late `%lsr` write ends the loop after one
   iteration; a compare before a taken return is seen. The v6 operations
@@ -498,6 +532,25 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   0x12 `,sm` is the fully speculative load, 0x11/0x13 `,sm` the lock
   loads. lcc's v6 code uses `fmad` only under `-ffast-math`. v4 and v7
   are not measured.
+
+  Every v3 operation's latency (`bench.py --only v3op`, 807 chains,
+  timing.md "Every v3 operation"; the three machines agree except as
+  noted): every FP-side result reaches an integer op 2 cycles later, the
+  divider's integer results included (integer divides 11 to FP, 13 to
+  integer; `smodx`/`umodx` 10/12); a double `sqrt` is `fsqrtid` 11 +
+  `fsqrttd` 14; `frcps`/`frsqrts` 6; 80-bit add/sub/conversions 5, `movx`
+  4; reading `%pfpfr`/`%fpcr`/`%fpsr` delivers in 11, `%upsr`/`%ip` in 2;
+  `wait` costs 6–7 cycles with nothing outstanding. FP environment
+  (semantics.md, `fpenv.c` against SSE on an x86 host): ordinary FP is
+  SSE with MXCSR bit for bit, flags included, in all rounding modes and
+  with `%pfpfr`'s `fz` (bit 15) and `daz` (bit 6), the 2C3's fused
+  `fma*` aside in one NaN case; a denormal operand or tiny result makes
+  a multiply 5 cycles, nothing else is slower; lcc links MCST's
+  `crtfastmath.o` (fz + daz) for `-ffast-math`. Caches and prefetch
+  (timing.md "Memory", `pf.c`): 32-byte L1 and 64-byte L2/L3 lines, no
+  hardware data prefetcher on the three; a prefetch with MAS 0 fills L1,
+  0x20 (lcc's) only L2, 0x40 only the 8C2's L3, 0x60 (lcc's locality 0)
+  nothing, which makes a stream 3–5× slower.
 
   Predicates (`spec/isa/predicates.md`; `preds.c`, `rndpred.c` on all
   three machines, identical except the v6 return fix): at most 4
@@ -647,7 +700,15 @@ read-modify-write is a lock-wait load (MAS 0x7, ALC0) plus wait-unlock
 store (MAS 0x2) with `rbranch` (= `ibranch ? %MLOCK`), whatever the
 order; fences and seq_cst/release accesses use `wait ld_c, st_c`.
 16-byte atomics are libatomic calls with a lock on v3/v4 and inline
-`ldqp`/`stqp` on v5+; mixing them on one object breaks. On the 4C
+`ldqp`/`stqp` on v5+; mixing them on one object breaks. What breaks
+the lock (`lockloss.c`, all three): any load or store by the thread, to
+any address, and any system call between the lock-wait load and the
+store (always), an interrupt (about one window in 10^6); `%MLOCK` is
+valid only in the store's instruction; a lock left open makes the next
+lock-wait load SIGBUS (so compare-exchange stores on both outcomes);
+other cores are held off a 64-byte block for 1,024–1,536 cycles; a CAS
+loop against fetch-adds nearly starves on one 4C chip; misaligned
+lock-wait is SIGBUS. On the 4C
 (`litmus.c`) v3 is TSO-like across wide instructions: only a load
 passing an earlier store, which `wait st_c` stops; two stores in one
 instruction may become visible in either order. Source-level
@@ -694,6 +755,31 @@ studying it showed that lcc callers store only the last fixed and the
 variadic arguments.
 C++ exceptions interoperate; the runtime aligns exception objects to 16
 bytes only. Still to add: `-march` variants.
+
+Kernel interface (`kernel-interface.md`, `sysabi.c`, hw on all three):
+system calls are `sdisp` entry 3 with 4 pairs handed over (`%#` =
+`wsz − 4`), fast calls entry 6, no vDSO, `AT_HWCAP` 0; the FP control
+registers are **not saved or restored around signal handlers** (the
+handler inherits the interrupted state and leaks its changes back); the
+signal frame is 4,272 bytes right below `USD` (no red zone), an
+alternate stack needs about 4,700 bytes (glibc's `MINSIGSTKSZ` 2,048 is
+refused); running out of a hardware stack is SIGKILL, never a catchable
+SIGSEGV; the first deep recursion in the main thread is quadratic (the
+kernel grows the data stack by each `getsp` and rewrites every chain
+frame's `ussz`: 49 s for 250,000 levels on the 4C; threads and a
+pre-grown stack are fast); a new thread's hardware stacks start at its
+creator's current size; `%clkr` is per core (unsynchronised on the 4C and
+2C3); glibc's fast `clock_gettime` costs 1,200–1,400 cycles on the 4C
+and 8C2 (the `lt` clock source), 234 on the 2C3; the 2C3's kernel uses
+the lower address layout; lcc's `-pie`/`-static-pie` don't imply
+`-fPIE`. With lcc's runtime an exception or a forced unwind cannot cross
+a signal frame (throwing from a handler and cancelling a C++ thread
+blocked in a system call kill the process; backtraces through handlers
+work), so the port needs no `linux-unwind.h`
+(`stack-and-unwinding.md`, "Signal frames, cancellation"). lcc's inline
+asm (`source-compat.md`, `asmconv.py`): `%#`, `%=`, `%c`, `%n`, `%H`
+modifiers, `"call"`/`"b[N]"`/`"ctprN"`/`"predN"` clobbers, constants
+printed unsigned at the C type's width.
 
 ### GCC port planning (doc/gcc-port-plan.md)
 
@@ -755,6 +841,18 @@ None at the moment.
   zero, a taken `ct` through an empty CTPR, a too-small `setwd`, a
   diagnostic-operand trap all stop it with "exception handling is
   unimplemented - aborting". Test those on the 4C.
+
+- MCST's qemu is too lenient in two ways that hide broken code: it
+  keeps an atomic's lock across loads and stores between the lock-wait
+  load and the wait-unlock store (hardware always fails the store, so
+  such a loop livelocks; atomics.md), and it applies `setbn`'s new base
+  to `%b[]` operands in the same instruction (hardware uses the old one;
+  registers.md). Run atomics and hand-written prologues on hardware.
+
+- MCST's glibc `fesetenv (FE_DFL_ENV)` unmasks the denormal exception
+  and sets x87 precision control to single (registers.md): after it a
+  denormal operand traps (SIGFPE, or SIGILL in speculative lcc code) and
+  `long double` rounds to 24 bits. Expect noise from tests that call it.
 
 - The community qemu (the owner's; to be fixed later) differs from the
   4C and MCST's qemu in two ways: under `dbl = 1` it zero-extends 32-bit

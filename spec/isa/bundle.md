@@ -119,6 +119,103 @@ Special destinations (`110xxxxx`): 13 `%tst`, 14 `%tc`, 15 `%tcd`, 17–19
 The register's width (`%r`, `%dr`, `%qr`, `%qpr`) comes from the operation,
 not from the encoding.
 
+#### Literal values [checked: gas and objdump, `tools/isa-extract/check_literals.py`; extension: source and lcc's code]
+
+| Literal | Encoding | Values | Extended to the operand's width | gas / objdump spelling |
+|---|---|---|---|---|
+| 5-bit | `src1` `110xxxxx` | 0–31 | zero | `0x1f` |
+| 4-bit | `src2` `1100xxxx` | 0–15 | zero | `0xf` |
+| 16-bit | `src2` `11010hll`: half `h` of LTS0 or LTS1 | −32768–32767 | sign | `_f16s 0xffa0` (−96); explicit slot `_f16s,_lts1hi 0xffa0` |
+| 32-bit | `src2` `110110ll`: LTS0–LTS3 | −2^31–2^31−1 | sign (to 64 bits for a 64-bit operand) | `_f32s 0xffffffa0` |
+| 64-bit | `src2` `110111ll`: LTS`ll` (low half) and LTS`ll+1` (high half), `ll` 0–2 | any | — (a 32-bit operand reads only LTS`ll`, MCST qemu) | `_f64 0x100000000` |
+| `src3` | — | — | — | no literal before v7: MCST qemu decodes `110xxxxx` there as illegal; gas rejects a literal store datum ("Register should be specified for SRC3"), also with `-mcpu=elbrus-v7` |
+| AAU (`ldaa*`, `staa*`) | ALS `lt` field: one LTS | 32 bits | zero (both qemus) | `_f32s,_lts1 0x8` |
+
+- Sources for the extension: binutils says so ("4 and 5 bit literals
+  unlike 16 and 32 bit ones are extended by zeroes rather than by sign",
+  `gas/config/tc-e2k.c:2108-2110`), objdump prints 16- and 32-bit
+  literals only as `_f16s`/`_f32s` (`opcodes/e2k-dis.c:433-475`), and both
+  emulators sign-extend them (MCST qemu `target/e2k/decoder.h:160-195`,
+  `tcg/translate-al.c:1660-1700`: `int16_t`, `int32_t`; community qemu
+  `target/e2k/translate.c:1449-1472`: `sextract32`, `(int32_t)`). lcc's
+  code depends on it: lcc 1.29.16's v3 `libc.so.6` has 8,179 loads and
+  7,478 stores with a negative `_f16s` offset, and lcc's `-O0` functions
+  reserve their argument area with `getsp _f16s,_lts1hi 0xfff0` (−16) and
+  similar.
+- A 16-bit literal in LTS2 or LTS3 is invalid: objdump prints `<illegal
+  _f16s,_lts2…>`, MCST qemu reads 0, the community qemu raises an
+  illegal-opcode exception. A 64-bit literal at LTS3 likewise.
+- gas's format specifiers are `_f16s`, `_f16`, `_f32s`, `_f32` and `_f64`
+  (`tc-e2k.c:1814-1819`); there is no `_f16u` or `_f32u`. `_f16` and
+  `_f32` only parse the value as unsigned and encode the same bits, which
+  are then sign-extended: `addd %dr0, _f32 0xffffffff, %dr1` adds −1, and
+  objdump prints it as `_f32s 0xffffffff`. Slot specifiers: `_lts0lo`,
+  `_lts0hi`, `_lts0`, `_lts1lo`, `_lts1hi`, `_lts1`, `_lts2`, `_lts3`
+  (`tc-e2k.c:1853-1862`).
+
+What gas picks for a bare constant (`tc-e2k.c:2137-2150`;
+`check_literals.py`):
+
+| Value | `src2` of a 64-bit operation (`ldd`, `std`, `addd`) | `src2` of a 32-bit operation (`adds`, `getsp`) |
+|---|---|---|
+| 0–15 | 4-bit | 4-bit |
+| 16 to 32767, −32768 to −1 | `_f16s` | `_f16s` |
+| 32768 to 2^31−1, −2^31 to −32769 | `_f32s` | `_f32s` |
+| anything else | `_f64` | `_f32s`, **truncated to 32 bits without a message** (`0x100000000` becomes `_f32s 0x0`) |
+
+In `src1` gas takes only 0–31; any other value, negative ones included,
+is "Invalid argument in position of SRC1", and gas never swaps the
+operands. So there is no free negative literal: −8 costs half an LTS,
++8 nothing.
+
+gas pitfalls (`check_literals.py`):
+
+- A minus sign right after a specifier is read as subtraction: `_f16s
+  -1` assembles as the expression `_f16s - 1`, an undefined symbol
+  `_f16s` with an `R_E2K_64_ABS_LIT` relocation and a `_f64` literal, with
+  no message (`_f32s -1`, `_f64 -1` too). Write `_f16s 0xffff`, `_f16s
+  (-1)` or a bare `-1`.
+- A value too large for an explicit format is truncated silently:
+  `_f16s 0x12345` encodes `0x2345` (`tc-e2k.c:2152`: "Currently this check
+  won't catch anything").
+- gas shares one LTS among the operations of a wide instruction that use
+  the same value (two `ldd … 0x12345` take one LTS), and puts a 16-bit
+  literal in a `hi` half first (`tc-e2k.c:2265-2270`).
+- Room: four LTS per wide instruction, so at most four 16-bit literals in
+  the halves of LTS0 and LTS1, four 32-bit literals or two 64-bit ones;
+  a fifth 16-bit value goes to a 32-bit LTS. More distinct values: error
+  "literals cannot be packed into a wide command". `setwd` takes LTS0
+  (CS1, below) [source].
+
+lcc writes every literal that needs an LTS with its format and slot
+(`_f16s,_lts0lo 0x38`, `_f32s,_lts1 0xffffffa0`, `[ _f64,_lts0 sym ]`)
+and does not always pick the smallest: 2,441 loads in its v3 `libc.so.6`
+carry a `_f32s` value that fits 16 bits.
+
+#### Address operands [gas, lcc]
+
+Loads (ALOPF1, ALOPF11: `ldb` … `ldd`, v5 `ldq`, `ldqp`) and stores
+(ALOPF3, ALOPF13: `stb` … `std`, v5 `stq`, `stqp`, `stmqp`) address
+`src1 + src2`; a store's datum is `src3` and must be a register. Every
+displacement fits in the operation itself; a larger one costs literal
+syllables, not instructions:
+
+| Address | Encoding | Literal space |
+|---|---|---|
+| register + register | `src1`, `src2` registers | none |
+| register + 0…15 | `src2` 4-bit | none |
+| register + 16…31 | `src1` 5-bit, base in `src2` (lcc: `ldd,3,sm 0x10, %dr2, %dr2`; 6,378 loads and 2,996 stores in its v3 `libc.so.6`) | none |
+| register + −32768…32767 | `src2` `_f16s` | half an LTS |
+| register + −2^31…2^31−1 | `src2` `_f32s` | one LTS |
+| register + any 64-bit value, `sym`, `sym+off` | `src2` `_f64` (`R_E2K_64_ABS_LIT` for a symbol) | two LTS |
+| register + `sym@GOT`, `@GOTPLT`, TLS offsets | `src2` `_f32s` with a relocation ([elf.md](../abi/elf.md)) | one LTS |
+| absolute | `src1` 0…31 + `src2` literal (`ldd 0x0, sym, %dr4`) | as the literal |
+
+There is no scaled index, no register + register + displacement and no
+negative short literal. AAU accesses (`ldaa*`, `staa*`) add a 32-bit
+literal that both emulators zero-extend (MCST qemu
+`tcg/translate-al-c11.c:153-156`, community qemu `translate.c:4320-4335`).
+
 ### Operand roles per format [checked except where marked]
 
 `args` in `binutils-ops.yaml` lists the operand formats in this order:

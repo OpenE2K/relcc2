@@ -651,7 +651,58 @@ glibc) when an operand is denormal, as x86 does: `1 + 4.9e-324`
 (`faddd`) gives flags 0x22 (denormal and inexact), `fmuld` and the
 compare `fcmpltd` with a denormal operand 0x02, and `fadds` the same, on
 the 4C and the Elbrus-8C2 alike; so do the v5 packed operations (below).
-Neither qemu ever sets it.
+Neither qemu ever sets it. Under `daz` (below) a denormal operand counts
+as zero and sets no flag.
+
+## Rounding modes, flush to zero and denormals are zero [hw]
+
+`%pfpfr` has x86 MXCSR's layout (spec/abi/registers.md): flags 0–5,
+**`daz` bit 6**, masks 7–12, rounding 13–14, **`fz` bit 15**. Both bits
+are writable from user mode (`rws %pfpfr`) and behave as SSE's DAZ and
+FTZ. `tools/isa-probes/fpenv.c` (`gen_fpenv.py`) runs every ordinary FP
+operation (`faddd`, `fsubd`, `fmuld`, `fdivd`, the `fsqrtid` +
+`fsqrttd` pair, `fmaxd`, the predicate compares, `fmul_addd`, their
+single forms, every FP↔integer conversion, `fdtofs`, `fstofd`, the v3
+packed `pfadds`, `pfsubs`, `pfmuls`, `pfaddd`, `pfmuld`; v6 `fmad`,
+`fmas`) on 120 edge-case inputs under all 16 settings of rounding,
+`fz` and `daz`, and on 1,500 random inputs in the four rounding modes;
+`check_fpenv.c` recomputes every line with SSE under the same MXCSR on
+an x86 host:
+
+| Machine | Lines | Different from SSE (result or flags) |
+|---|---|---|
+| 4C | 245,520 | 0 |
+| 8C2 | 245,520 | 0 |
+| 2C3 | 261,360 | 32, all one case: v6 `fmad`/`fmas` with a = sNaN and b = qNaN return a quieted, x86's `vfmadd213` b |
+
+So the ordinary FP unit is SSE plus MXCSR, bit for bit and flag for
+flag, in every rounding mode and with flush to zero and denormals are
+zero: `fz` flushes a tiny result after rounding and raises underflow
+and inexact even when the denormal result would have been exact; `daz`
+reads denormal operands as zero (with their sign) and suppresses the
+denormal flag; `fmul_add*` rounds twice and the v6 `fma*` once in every
+mode. Examples (all three machines):
+
+```
+fmuld 0.75*2^-1022 exact      %pfpfr 0x1f80: 000c000000000000 flags 00
+                              fz     0x9f80: 0000000000000000 flags 30
+fmuld 2^-540*2^-540, round up        0x5f80: 0000000000000001 flags 30
+faddd denormal + 0             daz   0x1fc0: 0000000000000000 flags 00
+fcmpeqd min denormal == 0      daz   0x1fc0: true
+```
+
+MCST's qemu differs in 2,232 lines besides its missing denormal flag:
+with `fz` it raises no underflow or inexact when it flushes, `fmaxd`
+under `daz` returns the denormal instead of 0, and for sNaN op qNaN it
+returns the qNaN.
+
+**Denormals cost one cycle, on multiplies only** (`fpcost.c`,
+`gen_fpcost.py`; identical on the three machines): an `fmuld`, `fmuls`
+or `pfmuls` whose operand is denormal or whose result is tiny has
+latency 5 instead of 4; `daz` removes the operand case on the 4C and
+8C2 (not on the 2C3), `fz` doesn't remove the tiny-result case. Adds,
+subtracts and divides (`fdivd` 17 back to back) take the same time
+with denormals. There is no microcode slow path as on x86.
 
 ## v5 operations [hw: Elbrus-8C2]
 

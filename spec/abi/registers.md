@@ -174,7 +174,7 @@ precision (inexact); glibc's `FE_*` values are those bits (`FE_INVALID`
 
 | Register | Used by | Bits |
 |---|---|---|
-| `%pfpfr` | `float`, `double`, packed | 0–5 flags (`ie de ze oe ue pe`); 7–12 masks (`im dm zm om um pm`, 1 = masked, i.e. flag << 7); 13–14 rounding (0 nearest, 1 down, 2 up, 3 toward zero: `FE_DOWNWARD` 0x2000 ...); 15 `fz` (flush to zero); 26–31 `die dde dze doe due dpe` |
+| `%pfpfr` | `float`, `double`, packed | 0–5 flags (`ie de ze oe ue pe`); 6 `daz` (denormals are zero; the kernel's `e2k_pfpfr_t` calls it `zero1`, MCST's qemu `daz`) [hw]; 7–12 masks (`im dm zm om um pm`, 1 = masked, i.e. flag << 7); 13–14 rounding (0 nearest, 1 down, 2 up, 3 toward zero: `FE_DOWNWARD` 0x2000 ...); 15 `fz` (flush to zero) [hw]; 26–31 `die dde dze doe due dpe`. Bits 0–15 are x86 MXCSR's layout, and the operations follow SSE exactly ([semantics.md](../isa/semantics.md), "Rounding modes, flush to zero and denormals are zero") |
 | `%fpcr` | 80-bit (x87 control word) | 0–5 masks (`im` ... `pm`); 6 always 1; 8–9 precision control; 10–11 rounding (`FE_FPCR_DOWNWARD` 0x400 ...); 12 `ic` |
 | `%fpsr` | 80-bit (x87 status word) | 0–5 flags; 7 `es` (error summary); 9 `c1`; 15 `bf` |
 
@@ -189,6 +189,31 @@ uses `%fpcr`/`%fpsr`. Processes start with all six flags set
 (`%pfpfr` 0x1fbf, `%fpsr` 0x3f; speculation.md), so code (and tests)
 must not assume clear flags at startup. (Found by the proof-of-concept
 backend, `docs/spec-poc-findings.md` P7.)
+
+**Flush to zero and denormals are zero** [hw: `tools/isa-probes/fenvlib.c`,
+all three machines]. MCST's libgcc has a `crtfastmath.c` whose
+constructor sets `%pfpfr` bits 6 and 15 ("mcstbug #149583"); lcc links
+`crtfastmath.o` for `-ffast-math` and `-Ofast` (not for its own
+`-ffast`), so such programs start with `%pfpfr` 0x9fff instead of
+0x1fbf. glibc's `fesetround`, `feclearexcept`, `feholdexcept`,
+`feupdateenv`, `feenableexcept`, `fegetenv` and `fesetenv` of a saved
+environment keep both bits; `fesetenv (FE_DFL_ENV)` and `fesetenv
+(FE_NOMASK_ENV)` clear them.
+
+**glibc's `fesetenv (FE_DFL_ENV)` is wrong** [hw, glibc
+`sysdeps/e2k/fpu/fesetenv.c`]: it means to mask every exception
+(`/* … все их маскируем */`) but writes `FE_ALL_EXCEPT << 7` to
+`%pfpfr` (0x1e80) and `FE_ALL_EXCEPT` to `%fpcr` (0x3d, read back as
+0x7d), and `FE_ALL_EXCEPT` lacks the denormal bit. Afterwards the
+denormal exception is unmasked in both registers (`1.0 + 4.9e-324`
+raises SIGFPE with si_code 5, `FPE_FLTUND`, or SIGILL in lcc `-O2` code,
+whose speculative FP operations turn it into a diagnostic value), and
+`%fpcr`'s precision control is 0, single: `long double` `1.0L / 3.0L`
+gives `0xa.aaaabp-5` instead of `0xa.aaaaaaaaaaaaaabp-5` until the
+environment is restored (processes start with `%fpcr` 0x37f). A test
+suite that calls `fesetenv (FE_DFL_ENV)` sees both. A compiler's
+`-ffast-math` startup should do what lcc's does (link MCST's
+`crtfastmath.o`).
 
 ## DWARF register numbers
 

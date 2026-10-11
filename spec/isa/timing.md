@@ -442,6 +442,46 @@ integer work per cycle, and twice the FP work.
 
 ## Memory
 
+**Cache geometry** [source: kernel `arch/e2k/kernel/cpu/cacheinfo.c:26-85`,
+the table behind `/sys/devices/system/cpu/cpu*/cache`; hw: sysfs on our
+three machines and `pf.c`'s stride chase agree]:
+
+| CPU | L1I | L1D | L2 | L3 |
+|---|---|---|---|---|
+| E2S (4C, v3) | 128 KiB, 4-way, 256-byte lines | 64 KiB, 4-way, 32-byte lines, write-through | 2 MiB per core, 4-way, 64-byte lines, write-back | none |
+| E8C2 (8C2, v5) | the same | the same | 512 KiB per core, 4-way, 64 B | 16 MiB shared, 16-way, 64 B |
+| E2C3 (2C3, v6) | the same | the same | 2 MiB per core, 4-way, 64 B | none |
+| E8C (v4) | the same | the same | 512 KiB, 4-way | 16 MiB shared, 16-way |
+| E1C+ (v4) | the same | the same | 2 MiB, 4-way | none |
+| E12C (v6) | the same | the same | 1 MiB, 4-way | 24 MiB, 16-way (the table marks it private) |
+| E16C (v6) | the same | the same | 1 MiB, 4-way | 32 MiB shared, 16-way |
+| E8V7 (v7) | the same | the same | 1 MiB, 4-way | 48 MiB shared, 16-way |
+
+- Every L1D is write-through ("Stores pass through L1$", kernel
+  `asm/cache.h:44`), so stores reach L2, whose lines are 64 bytes. The
+  kernel pads data that CPUs share to 64 bytes (`SMP_CACHE_BYTES`,
+  `cache_line_size()`, `INTERNODE_CACHE_BYTES`; `asm/cache.h:14-62`;
+  `L1_CACHE_SHIFT` 5, `L2_CACHE_SHIFT` 6, `E8C_L3_CACHE_SHIFT` 6 in
+  `asm/e8c.h:30`), and an atomic's lock covers a 64-byte block
+  ([atomics.md](../abi/atomics.md), "What breaks the lock").
+- Measured line sizes [hw: `pf.c` part 5, a chase with stride S through
+  64 MiB]: the cost per load doubles from stride 8 to 16 to 32 and again
+  to 64, then stays (4C 14.9, 27.1, 50.4, 90.5, 89.1, 89.2 cycles): 32-byte
+  L1 lines, 64-byte L2 (and 8C2 L3) lines, no adjacent-line fetch.
+- Instruction cache: 256-byte lines. MCST's libgcc (`__e2k_clear_cache`)
+  and the kernel's `flush_icache_range` flush one address per 256 bytes
+  (`E2K_ICACHE_SET_SIZE`: libgcc `config/e2k/clear-cache.c:55-77`, kernel
+  `asm/mmu_regs_types.h:303`, `mm/mmu.c:286-289`). What the flush costs:
+  [x86-support.md](x86-support.md).
+- **No hardware data prefetcher** on our three machines [source, hw]. The
+  kernel's feature flags give a TLB and an L1 prefetcher only to v7
+  (`CPU_FEAT_HW_PREFETCHER_TLB`, `_L1`) and an L2 prefetcher to
+  everything except E2S, E8C, E1C+, E8C2, E2C3, E16C rev < 2 and E12C
+  rev 0 (`CPU_FEAT_HW_PREFETCHER_L2`; `asm/cpu_features.h:793-815`); a
+  stream without prefetches pays a full memory access for every 64-byte
+  line on all three (below). Only software prefetches and APB fetch data
+  ahead.
+
 Compilers schedule loads for an L1 hit (3 cycles; 5 on v6), and so does
 lcc outside pipelined loops. Inside them lcc issues the loads array
 prefetch doesn't serve far ahead of their use: 40–90 cycles in 31 of the
@@ -452,7 +492,8 @@ Longer latencies cannot be scheduled for and are left to the interlock,
 prefetching and APB, so `bench.py` measures them only with `--memory`
 (pinned with `--numa CPU:MEM`). For reference, on the 4C (64 KiB L1D and
 2 MiB L2 per core, no L3, four NUMA nodes), a random pointer chase gave:
-L2 hit 9 cycles (the guide says 11), memory on the local node about
+L2 hit 9 cycles (the guide says 11; `pf.c`'s chase, loop included,
+reads 11.2), memory on the local node about
 105–110 (+15 with 4 KiB pages, from TLB misses), on another node about
 190–235.
 This 4C runs its DDR3 memory in two channels per processor instead of
@@ -512,6 +553,103 @@ little on either. On the 2C3 (v6; 2 MiB L2, no L3) every hint streams
 loads at the same speed (1.4 ns a line), `0x40` and `0x60` keep the hot
 set for loads and stores alike, and they make streamed stores faster
 (3.4 and 2.9 against 4.3 ns): there either is free.
+
+**Software prefetch** [lcc: `tools/abi/probes/prefetch.py`; hw: `pf.c`,
+`pf-lcc.c`]. A prefetch is a speculative byte load to `%empty`
+(`ldb,sm addr, off, %empty, mas=M`). lcc lowers `__builtin_prefetch (p,
+rw, locality)` and `__builtin_e2k_prefetch (p, hint)` (`<e2kintrin.h>`,
+hint = locality) to one such load and ignores `rw`; locality 3 depends
+on the CPUs the code may run on (`prefetch.py` over every lcc 1.29.16
+target and lcc 1.31.05's `-march`/`-mtune`):
+
+| locality | lcc 1.29.16 `e2k-v3`, `v6.16c`, `v6.2c3`; 1.31.05 `e2k-v3`, `v6.2c3`, `-march=elbrus-v3` … `v6`, `-mtune=elbrus-12c`, `16c`, `2c3` | lcc 1.29.16 `e2k-v3.4c`, `v4.1c+`, `v4.8c`, `v5.8c2`; 1.31.05 `e2k-v4.8c`, `v5.8c2`, `-mtune=elbrus-4c`, `8c`, `1c+`, `8c2`, `48c`, `8v7`, `-march=elbrus-v7` |
+|---|---|---|
+| 0 | `mas=0x60` | `mas=0x60` |
+| 1 | `mas=0x40` | `mas=0x40` |
+| 2 | `mas=0x20` | `mas=0x20` |
+| 3 (also `__builtin_prefetch (p)`) | `mas=0x20` | **no MAS** (0), in ALC3 |
+
+The split follows erratum `PREFETCH_EMPTY` (E12C, E16C and E2C3 rev 0:
+prefetches to `%empty` do nothing; workaround, the L1-bypass MAS:
+[hwbugs.md](hwbugs.md)): lcc uses MAS 0 only for code that cannot run
+on those CPUs (inferred). At `-O0` the generic and 12C/16C/2C3
+compilers give locality 1 `0x60`. `-fno-semi-spec-ld` adds the fully
+speculative mod 3 (`0x63`, `0x43`, `0x23`; speculation.md). lcc's own
+prefetches are `mas=0x20`: every load to `%empty` in the 31 shared
+libraries of lcc 1.29.16's sysroots has MAS 0x20. Its options: `-fprefetch`
+(loops that are not pipelined), `-fswp-prefetch` (pipelined loops),
+`-flist-prefetch` (lists), `-fguess-prefetch=N`; `-fprefetch-loop-arrays`
+is accepted.
+
+What each MAS fills [hw: `pf.c` part 4: 128 lines prefetched, a
+20,000-cycle wait, then each line loaded once; cycles per load]:
+
+| | 4C | 8C2 | 2C3 |
+|---|---|---|---|
+| no prefetch (memory) | 88 | 162 | 174 |
+| line in L1 / L2 / 8C2 L3 | 3.3 / 11.2 / — | 3.2 / 11.2 / 34.2 | 5.2 / 13.2 / — |
+| prefetch MAS 0x00 | L1 | L1 | L1 |
+| prefetch MAS 0x20 (lcc's) | **L2 only** | L2 only | L2 only |
+| prefetch MAS 0x40 | nothing | **L3 only** | nothing |
+| prefetch MAS 0x60 (lcc's locality 0) | **nothing** | nothing | nothing |
+
+So MAS 0x20 (the "not L1" hint, `dc_ch` 1) leaves the line in L2, 0x40
+in the 8C2's L3 and nowhere on the CPUs without one, and 0x60 fetches
+the line from memory and keeps it nowhere (as loads, these MAS values
+are the cache hints of "Cache hints in the MAS" above).
+
+| `pf.c`, cycles | 4C | 8C2 | 2C3 |
+|---|---|---|---|
+| random gather over 256 MiB, per element: none / MAS 0 / 0x20 / 0x40 (D ≥ 16 ahead) | 123 / 22 / 24 / 122 | 185 / 21 / 26 / 47 | 233 / 19 / 26.5 / 232 |
+| pointer chase with a jump pointer D ≥ 32 ahead, per node: none / MAS 0 / 0x20 | 116 / 33–35 / 35 | 182 / 11.6 / 18.2 | 221 / 13.8 / 21.2 |
+| stream, per 32-byte line: none / MAS 0 / 0x20, ≥ 512 bytes ahead | 52.6 / 8.7 / 14.3 | 87.9 / 8.5 / 17.3 | 96.7 / 10.5 / 18.3 |
+| any of these with MAS 0x60 | no gain | no gain | no gain |
+
+The 4C's chase levels off at about a third of a memory access, as if it
+kept only 3–4 misses in flight (inferred). lcc's own `s += a[i]` at
+`-O3` (`pf-lcc.c`, cycles per 32-byte line):
+
+| | 4C | 8C2 | 2C3 |
+|---|---|---|---|
+| default | 8.8 (no APB; lcc's own `0x20` prefetches) | 2.4 (APB) | 1.5 (APB) |
+| `-fno-loop-apb` | 8.8 | 12.7 | 11.4 |
+| `-fno-loop-apb` + `__builtin_prefetch` locality 3, 2 KiB ahead | 7.4 | 7.5 | 9.7 |
+| `-fno-loop-apb` + locality 0 (MAS 0x60) | **27.4** | **67.6** | **58.1** |
+
+So: APB beats software prefetch 3–7× on v5 and v6; a prefetch whose
+data is used soon is best with MAS 0 (L1), and lcc's `0x20` costs a
+little (an L2 hit per line) for keeping L1 clean; a locality-0 prefetch
+as lcc emits it (0x60) only adds memory traffic and makes a stream 3–5×
+slower. Following lcc (decision 7) means emitting 0x20; the measurements
+favour 0x00 for data used soon and nothing for locality 0 (0x40 on the
+8C2): the owner's call.
+
+**What GCC's parameters need** (GCC `params.opt:380-406`,
+`doc/params.texi:932-942`; GCC's defaults in brackets):
+
+| Parameter | 4C | 8C2 | 2C3 |
+|---|---|---|---|
+| `l1-cache-line-size` (bytes) [32] | 32 | 32 | 32 |
+| `l1-cache-size` (KiB, L1 data) [64] | 64 | 64 | 64 |
+| `l2-cache-size` (KiB) [512] | 2048 | 512 (plus a 16 MiB L3) | 2048 |
+| `prefetch-latency` (cycles) [200] | about 90 (memory) | about 160 | about 175 |
+| `simultaneous-prefetches` [3] | about 4 (inferred) | 12 or more (inferred) | 12 or more (inferred) |
+| prefetch distance | gather: 8–16 elements; stream: 512 bytes, 2 KiB safe | the same | the same |
+
+**C++17 interference sizes.** lcc does not provide them: lcc 1.29.16's
+`l++ -std=c++17` rejects `std::hardware_destructive_interference_size` for
+every target (`prefetch.py`), and neither
+`__cpp_lib_hardware_interference_size` nor `__GCC_DESTRUCTIVE_SIZE` is
+defined; lcc's libstdc++ is GCC 11's, whose `<new>` predates them. So
+there is no existing value to match. GCC defines `__GCC_DESTRUCTIVE_SIZE`
+and `__GCC_CONSTRUCTIVE_SIZE` from `--param destructive-interference-size`
+and `constructive-interference-size` (`c-family/c-cppbuiltin.cc:762-774`);
+a target that sets neither gets `l1-cache-line-size` for both
+(`cp/decl.cc:5833-5868`), 32 here. The value is part of the C++ ABI of
+any header that uses it (`-Winterference-size`). The facts for the choice
+(the owner's): L1D lines are 32 bytes, but L1D is write-through, L2
+lines are 64 bytes, the kernel separates shared data by 64 and an
+atomic's lock covers 64 bytes; 64 for the destructive size follows.
 
 **Misaligned loads and stores** (`pocchk.c`, cycles per wide
 instruction; any misaligned offset costs the same):

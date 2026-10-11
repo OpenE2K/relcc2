@@ -257,7 +257,9 @@ compensation code.
 
 Unaligned loads (`ldd` from a 4-aligned address) work and need no
 speculation [hw]. A load to `%empty` with `,sm` is a prefetch: lcc emits
-`ldb,0,sm ..., %empty, mas=0x20` (semi-speculative) [lcc]; the kernel's
+`ldb,0,sm ..., %empty, mas=0x20` (semi-speculative) in its own
+prefetches, while `__builtin_prefetch` with locality 3 may have no MAS
+(timing.md, "Software prefetch") [lcc]; the kernel's
 own prefetch uses mod 3 [source].
 
 ## Data speculation (DAM) [hw]

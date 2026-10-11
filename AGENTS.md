@@ -204,6 +204,11 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     (rndpred.c, gen_rndpred.py; check_rndpred.py on the
                     host) and the recovery points of the x86 binary
                     translator (rp.c, rp.s: srp, slrp, crp, %rpr)
+                    and the translator's facilities for native code
+                    (native.c, native.s; gen_native.py writes
+                    native-rot.s and native6.s: srp/crp cost,
+                    __clear_cache cost, UPSR.fsm, %bgr rotation delays,
+                    the v6 wait on memory)
                     and every v3 packed operation (semp.c;
                     gen_semp.py writes semp.s)
                     and square roots and reciprocals (sqrt.c,
@@ -527,6 +532,18 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   recovery-point exception (SIGBUS) on v6; memory is not rolled back;
   the kernel returns a trap inside a registered region to the
   translator's recovery IP. Nothing for a compiler.
+
+  The translator's facilities for native code (x86-support.md,
+  `native.c`): every x86 flag operation takes 2 cycles (32×32
+  multiplies 4) and `cctop*` reaches a predicated op in 2 (v6 1), so an
+  overflow test is two operations and 4 cycles; `srp`/`crp` cost
+  nothing; libgcc's `__clear_cache` (MAS 0xf) costs about 140 cycles
+  for a line and 7 a line in bulk; `UPSR.fsm` makes predicate FP
+  compares read unordered as x86 flags (`lt`/`le`/`eq` true); v3–v5
+  rename `%g24`–`%g31` the instruction after `abgd`/`abgi` and 10
+  cycles after `rws %bgr`, v6 doesn't rename them at all; the v6
+  watch-for-modification `wait` works in user mode, wakes as fast as
+  spinning and on every interrupt.
 
 ### Hardware errata (spec/isa/hwbugs.md)
 

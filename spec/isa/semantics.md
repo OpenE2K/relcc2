@@ -153,6 +153,16 @@ bits of a register FP compare with them (`cmpandesb r, 0x40, %pred`).
 
 ## Floating-point compares [hw]
 
+**`UPSR.fsm`** (bit 8, "x86-compatible floating compare", user-writable)
+changes the predicate compares for unordered operands: with it set,
+`fcmpltdb`, `fcmpledb` and `fcmpeqdb` give **true** and `fcmpneqdb`
+false for a NaN operand, as x86's `ucomisd` flags read by `jb`/`jbe`/`je`
+would; ordered results, `fcmpuoddb`, the register forms
+(`fcmpuddf`/`fcmpoddf`, 0x45 either way) and the exception flags don't
+change (`tools/isa-probes/native.c`, 4C, 8C2, 2C3 alike). Processes
+start with it clear, and lcc's startup sets it only to probe and puts it
+back, so compiled code must keep it clear.
+
 `fcmp<c>db` (double) and `fcmp<c>sb` (single) into a predicate, with `c`
 in `eq`, `lt`, `le`, `uod` (unordered), `neq`, `nlt`, `nle`, `od`
 (ordered). There is no `gt`/`ge`: swap the operands. With a NaN operand:

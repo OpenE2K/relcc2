@@ -90,8 +90,10 @@ to 2^37. FP divides don't vary (`fdivd` 14 whatever the operands).
 | `fsubs`, `fsubd`; `fmaxs` | — | 4; 2 | — |
 | round to integral `fdtoifd`, `fstoifs` | — | 4 | — |
 | `fscaled`, `fscales` (v4+, Elbrus-8C2) | — | 4 | — |
-| x86 flag forms (`adds_fw`, `addd_fd`, `incs_fw`, `shls_fw`); `smulx_fw` | — | 2, also to an integer op; 4 | — |
-| `cctopo` → predicated ALU op | — | 2 (as `cmpesb`) | — |
+| x86 flag forms (`adds_fw`, `subs_fw`, `ands_fw`, `incs_fw`, `shls_fw`, `addd_fd`, `subd_fd`, `incd_fd`, `shld_fd`, `sard_fd`, in ALC0 or ALC3); `smulx_fw`, `umulx_fw` | — | 2, also to an integer op or `cctop`; 4 | — |
+| `cctop{o,b,e,l}` → predicated ALU op or `merge` | — | 2 (as `cmpesb`; 1 on v6) | — |
+| `abgd`, `abgi` → a read of `%g24`–`%g31` under the new rotation (v3–v5) | — | the next instruction (`native.c`) | — |
+| `rws %bgr` → a read under the new rotation (v3–v5) | — | 10, or the next instruction after `wait all_e` (`native.c`) | — |
 | 80-bit `fxaddxx` / `fxmulxx` / `fxdivxx` | — | 5 / 4 / 16 | — |
 | `fxaddxx` → integer op | — | 7 | — |
 | `movfi` → `movif` (unpack and repack an 80-bit value) | — | 4 | — |

@@ -661,10 +661,6 @@ Neither qemu can be trusted on predicates beyond the basics:
 
 - `%bgrpred`; `%lcntex` as an RLP or MRGC condition (no gas syntax);
   ctcond types 9 and 11 (`%cmpN`, `%clpN`).
-- Whether `UPSR.fsm` ("floating comparison mode, x86 compatible") changes
-  `fcmp*b` results; user tasks start with it clear (kernel), and lcc's
-  startup (`__cpu_init`) sets it and restores it in every program, so
-  user mode may write it (x86-support.md).
 - The callee's initial predicate **tags** (only clean predicates were
   passed).
 - Whether a `,sm` load under a diagnostic predicate reads memory.

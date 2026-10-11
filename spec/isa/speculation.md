@@ -522,6 +522,11 @@ which it tracks the region's loads and stores. Sources: the kernel
     L1$".
   - Memory is not rolled back: a store done before the exception stays
     (all three).
+  - `srp` and `crp` cost nothing: a 5-instruction loop with both takes
+    6.00 cycles an iteration, as without (`tools/isa-probes/native.c`,
+    all three). On the 2C3 a region opened every iteration and closed
+    only after 100,000 of them ended in the recovery-point SIGBUS in one
+    run of two; one closed every iteration never did.
 - **The kernel's part**: the translator registers a range and a return
   IP (`SET_RP_BOUNDS_AND_IP`). A trap inside that range in generations
   mode makes the kernel **drop** the trap's pending loads and stores

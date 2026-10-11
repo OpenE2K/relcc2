@@ -357,6 +357,12 @@ touching the globals, restores it on return, and starts signal handlers
 with 0x0ff (`trap_table.S.h`, `signal.c`); a trap taken with invalid
 slots is harmless on both machines.
 
+Delays (`tools/isa-probes/native.c`, 4C and 8C2): after `abgd` or
+`abgi` the next wide instruction already names the registers by the
+new `cur` (a read in the same instruction sees the old naming); after
+`rws %bgr` a read sees the new naming from 10 cycles on, or in the next
+instruction after a `wait all_e`.
+
 lcc never emits `abg` or touches `%bgr`, so a compiler can ignore them;
 the ABI treats `%g24`–`%g31` as scratch (spec/abi/registers.md). v6
 replaces `abg` with `abgc`/`rbgc` (bundle.md). Neither emulator runs
@@ -385,11 +391,13 @@ current top):
 | `vfbgv a, b, dst` | SIGFPE `FPE_FLTINV` (an x87 stack fault) if a register in rot(b[7:0]) is full (overflow) or one in rot(b[15:8]) is empty (underflow); else writes 0 |
 | `mkfsw a, b, dst` | the x87 status word with TOP = b mod 8 (semantics.md, "v6 operations") |
 
-A C compiler still has no use for them.
+**v6 doesn't rename the rotating globals any more**: after `abgc 1`, or
+`rws` of `%bgr` with `cur` 1, `%bgr` reads `cur` 1 but `%g24` still
+names physical register 24 (`%g25` 25), at any distance and after `wait
+all_e` (`native.c` on the 2C3). `cur` is bookkeeping for the x87 helpers
+only. A C compiler still has no use for them.
 
 ## Not checked yet
 
-- The delays of `abg` and `rws %bgr` (the probe waits `wait all_e`
-  and 5 cycles after each).
 - What `ldovl` does.
 - v7.

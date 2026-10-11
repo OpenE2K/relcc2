@@ -79,7 +79,7 @@ six it doesn't implement.
 
 | Operations | ISA | ALC | Does | Lat | lcc v3 / v5 | Run on hardware |
 |---|---|---|---|---|---|---|
-| `abgc`, `rbgc` | 6–7 |  | Replace `abg` (gas rejects it for v6): `abgc N [? %predN]` adds N (1-7) to `%bgr.cur`, `rbgc` sets it to 0; neither checks or changes `val`, neither traps. **Use:** Binary translation only (loops.md, "v6"). |  |  | ctl6 (2C3) |
+| `abgc`, `rbgc` | 6–7 |  | Replace `abg` (gas rejects it for v6): `abgc N [? %predN]` adds N (1-7) to `%bgr.cur`, `rbgc` sets it to 0; neither checks or changes `val`, neither traps. **Use:** Binary translation only (loops.md, "v6"). |  |  | ctl6, native (2C3) |
 | `fillr`, `fillc` | 6–7 |  | Fill the register window stack or the chain stack back from memory (the counterparts of `flushr`, `flushc`); they run in user mode and return normally. |  |  | ctl6 (2C3) |
 | `hcall`, `icall` | 6–7 |  | Hypercall and its kernel-entry sibling (binutils `parse_hicall_args`: a trap number and `wbs`; the kernel enables user hypercall numbers through `%hcem`). |  |  | v6; not run (enters the hypervisor) |
 | `iret`, `hret`, `glaunch` | 6–7 |  | Privileged returns from traps and the hypervisor, guest launch. |  |  | v6; not run (privileged) |

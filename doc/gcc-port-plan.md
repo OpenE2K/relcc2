@@ -1895,10 +1895,18 @@ check-free semi-speculative form works.
     (`spec/isa/apb.md`, "Stores into a prefetched array").
 
   Size each area for the prefetch depth: about 1 KiB (`asz` 4) lets one
-  stream from memory run at L1 speed. `dcd = 0`, as lcc writes, is the
-  safe default; a large array read once can use `dcd` 2 (v3) or 3 (v5)
-  to keep the rest of the cache, at no cost to the stream
-  (`spec/isa/apb.md`, "Timing"). End the loop as lcc does, `{ disp
+  stream from memory run at L1 speed. Spread the areas over both halves
+  of the buffer, as lcc does: it gives arrays to the halves by turns
+  and sizes each half's areas to sum to 2 KiB. Each half has its own
+  2 KiB, so with one or two arrays every area can be 2 KiB, which on
+  the 4C is 5–13% faster from memory than 1 KiB. With 4 KiB pages, two
+  areas in one half make a column walk (bound by TLB misses) 9–40%
+  slower than one area in each half, on all three machines and at any
+  area size (I47; `spec/isa/apb.md`, "Which half an area is in").
+  `dcd = 0`, as lcc writes, is the safe default; a large array read
+  once can use `dcd` 2 (v3) or 3 (v5) to keep the rest of the cache, at
+  no cost to the stream (`spec/isa/apb.md`, "Timing"). End the loop as
+  lcc does, `{ disp
   %ctpr2, disp=0x0; aaurw 0, %aabf0 }`: the `%aabf0` write keeps a later
   trap from restarting the unit.
 
@@ -2100,7 +2108,30 @@ check-free semi-speculative form works.
   APB's loads do on v3 and v4 (I43; lcc's v3 PolyBench fdtd-2d uses 19
   `staad`). Two AAU stores with literal offsets in one instruction need
   explicit literal slots (`_f32s,_ltsN`) or gas rejects them
-  (bundle.md).
+  (bundle.md). On v3 an area's `mrng` may be at most 24 + *g*, where
+  *g* is the largest of 1, 2, 4 and 8 dividing both the area's start
+  and its step in bytes, and a `mova`'s `ind` must be a multiple of its
+  size; otherwise the movas return diagnostic values (I48, measured on
+  the 4C; `spec/isa/apb.md`, "Diagnostic results"). 24 + the element
+  size is always safe there, because v3 already needs element-aligned
+  starts. Where a group of loads needs a larger `mrng` than that, lcc
+  splits it into more areas. v5 and v6 have neither limit.
+- **Read all of a loop's streams through APB, backward ones too**
+  (I49). On the 4C, plain loads that miss L1 lose 1.25 cycles an
+  iteration in L2 while an area streams beside them: II 4 becomes
+  5.25, forward or backward, in any load channel. The 2C3 loses
+  0.5–1.25 cycles, the 8C2 at most 0.2. From memory such a loop runs
+  no faster than its plain stream alone. With every stream in an area
+  the loop keeps its II from memory on all three machines
+  (`spec/isa/apb.md`, "Plain loads beside an area"). A backward stream
+  takes an area based at its lowest element, with the start in
+  `%aaind` (I41), as lcc does. When one stream must stay plain on v3
+  (alignment unknown, a gather), APB for the other streams gains
+  little. lcc keeps APB there anyway (`g[i] * p[n - 1 - i]` with `p` a
+  pointer), while the proof-of-concept back end drops it from v3 loops
+  with a backward plain load (PolyBench durbin 5.40 → 3.96 s on the
+  4C). Measure before choosing either way, and include forward plain
+  streams in the test, since they pay the same.
 - **Array prefetch in a modulo scheduler** (P33, the PoC on the 4C and
   the 8C2): a load stepping one aligned element an iteration, through an
   address the loop steps and that no store of the loop writes before

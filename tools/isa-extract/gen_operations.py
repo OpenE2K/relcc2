@@ -93,6 +93,9 @@ PROBES = {
     "sregs.s": ("sregs.c", "4C, 8C2, 2C3"),
     "tagx.s": ("tagx.c", "4C, 8C2, 2C3"),
     "tagx-v5.s": ("tagx.c", "8C2, 2C3"),
+    "memleft.s": ("memleft.c", "4C, 8C2, 2C3"),
+    "memleft-v5.s": ("memleft.c", "8C2, 2C3"),
+    "memleft-v6.s": ("memleft.c", "2C3"),
 }
 ABI_PROBES = "tools/abi/probes"
 

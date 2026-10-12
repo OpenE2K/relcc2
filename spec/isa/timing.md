@@ -74,6 +74,7 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | `ldd`, L1 hit, any of ALC0/2/3/5 → next load's address | 3 | 3 | 5 |
 | `ldd` → integer op | 3 | 3 | — |
 | `ldb`, `ldh`, `ldw` → integer op | 3 | 3 | — |
+| AAU load (`ldaad`, MAS 0 or 0x60, in ALC2 or ALC5, line in L1) → integer op | — | **9** (8C2 11, 2C3 13: each machine's L2 hit, with no cluster-crossing cost; apb.md, "AAU loads"; `memleft.c`) | — |
 | integer op → load address | — | 1 | — |
 | FP add → integer op | 4 + 2 | 6 | — |
 | integer multiply (`muld`, `muls`) → integer op | 4 + 2 | 6 (7 with a write-back conflict, below) | — |
@@ -140,7 +141,9 @@ below).
 Rows marked (pmu.c) come from `tools/isa-probes/pmu.c` (producer, D
 cycles of `nop`, consumer, counted with the TICKS monitor;
 [monitors.md](monitors.md)), not from `bench.py`, so they are not in
-`timing-e2s.yaml`.
+`timing-e2s.yaml`; nor is the AAU load row, from
+`tools/isa-probes/memleft.c` `timing` (`t_use_ldaad*`: the load, D
+empty cycles, an `addd` in ALC0; 4C, 8C2, 2C3).
 
 The scheduled latencies of scalar integer, FP, control and predicate
 operations match the guide. Differences:
@@ -574,7 +577,8 @@ the access may fill: 0 all, 1 not L1, 2 not L1 or L2, 3 none
 is `mas=0x20`, `ld_*_t2` `mas=0x40`, `ld_*_nta` `mas=0x60` (v3 and v5);
 `st_*_nt` is a plain store on v3 and `mas=0x40` on v5; the stores of a
 loop under `#pragma vector nontemporal` ("no caching at any level, write
-combining") get `mas=0x60`, and lcc's software-pipelined streaming
+combining") get `mas=0x60` (`staad … mas=0x60` in a `loop_mode` loop:
+apb.md, "AAU stores"), and lcc's software-pipelined streaming
 loops at `-O3` load with `ldd,sm …, mas=0x20` (a second copy of the
 loop with `0x40`), after `ldb,sm …, %empty, mas=0x20` prefetches.
 Measured with `tools/isa-probes/mas_hint.c` (hand-written loops,
@@ -604,6 +608,28 @@ little on either. On the 2C3 (v6; 2 MiB L2, no L3) every hint streams
 loads at the same speed (1.4 ns a line), `0x40` and `0x60` keep the hot
 set for loads and stores alike, and they make streamed stores faster
 (3.4 and 2.9 against 4.3 ns): there either is free.
+
+AAU accesses take the hints exactly as ordinary ones do [hw:
+`tools/isa-probes/memleft.c` `hint`]. The measurement is the same, with
+two accesses a wide instruction (`h_*`), plus lcc's v5/v6 `#pragma
+vector nontemporal` shape (`staad` in a `loop_mode` loop with the APB
+program running, `k_staad_*`). A 256 KiB hot set, ns per line before →
+after a 32 MiB stream (the 4C run was perhaps not pinned to one node;
+each before/after pair comes from one run):
+
+| MAS | 4C `staad` / `ldaad` | 8C2 `staad` / `ldaad` | 2C3 `staad` / `ldaad` |
+|---|---|---|---|
+| 0 | 9.1 → 72.1 / 63.5 | 5.2 → 60.8 / 5.8 → 59.1 | 3.8 → 53.0 / 45.7 |
+| 0x20 | 9.1 → 72.9 / 62.9 | 4.6 → 59.8 / 59.1 | 3.8 → 53.0 / 45.7 |
+| 0x40 | **kept** (9.1 / 9.1) | 4.6 → 57.9 / 57.8 | **kept** (3.8 / 3.8) |
+| 0x60 | **kept** | **kept** (4.6 / 4.6) | **kept** |
+
+These match `std` and `ldd` in the same runs, and `k_staad` matches
+`h_staad`, so lcc's nontemporal `staad … mas=0x60` protects the cache
+on all three machines. One difference from `ldd`: a stream of plain
+`ldaad` doesn't disturb a 48 KiB set in L1 on the 4C (5.3 → 5.5) and
+the 2C3 (1.9 → 2.1), where `ldd` evicts it (5.5 → 64.6, 1.9 → 44.5),
+because AAU loads don't fill L1 (below). On the 8C2 both evict it.
 
 **Software prefetch** [lcc: `tools/abi/probes/prefetch.py`; hw: `pf.c`,
 `pf-lcc.c`]. A prefetch is a speculative byte load to `%empty`
@@ -648,6 +674,30 @@ So MAS 0x20 (the "not L1" hint, `dc_ch` 1) leaves the line in L2, 0x40
 in the 8C2's L3 and nowhere on the CPUs without one, and 0x60 fetches
 the line from memory and keeps it nowhere (as loads, these MAS values
 are the cache hints of "Cache hints in the MAS" above).
+
+The same holds for real loads and stores [hw:
+`tools/isa-probes/memleft.c` `fill`: 128 lines 64 bytes apart, evicted,
+then streamed with each access and MAS, a 20,000-cycle wait, then a
+dependent chase in ALC0 and, separately, in ALC3; cycles per load of
+the chase]:
+
+| MAS | 4C | 8C2 | 2C3 |
+|---|---|---|---|
+| 0 | L2 | L2 | L2 |
+| 0x20 | L2 | L2 | L2 |
+| 0x40 | nowhere (87 cycles a load, as cold) | **L3** (32.9) | nowhere |
+| 0x60 | nowhere | nowhere | nowhere |
+
+The table holds for `ldd`, `std`, `ldaad`, `staad` and lcc's
+nontemporal `loop_mode` `staad` alike, except that a stream of plain
+`ldd` (MAS 0) also leaves part of its lines in L1, on all three
+machines. Stores and AAU loads leave **no** line in L1 with any MAS, in
+either chase channel: after MAS 0 or 0x20 the chase costs 11.0 cycles
+a load on the 4C and 8C2 and 14.9 on the 2C3, the L2 hit with this
+chase (an L1 hit: 3.0, 3.0 and 7.0). So an AAU load doesn't fill L1
+(and, its latency being the L2 hit, presumably doesn't read it either;
+Latencies), and a store that misses L1 doesn't allocate a line there
+(inferred cause: L1 is write-through).
 
 | `pf.c`, cycles | 4C | 8C2 | 2C3 |
 |---|---|---|---|

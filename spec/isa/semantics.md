@@ -672,7 +672,7 @@ user code gets:
 | `ldqp`, `stqp` (v5) misaligned (+1, +4, +8) | v5 (the 8C2): **SIGBUS `BUS_ADRALN`**, `si_addr` the instruction, and `ldqp,sm` (mod 0 or 3) gives a wholly diagnostic value; v6 (the 2C3): they work at any address (`memx.c` `q_*`) |
 | `ld… mas=0x7` (lock-wait) misaligned | SIGBUS `BUS_OBJERR`, nothing written (8-byte, all three; 16-byte `ldqp` lock-wait: `BUS_ADRALN` on v5, `BUS_OBJERR` on v6) ([atomics.md](../abi/atomics.md)) |
 | `stmqp addr, mask, src` (v5) | masked 16-byte store: **byte i of the quad register is written when bit i of `mask`'s low 16 bits is set** (`0xaaaa` writes the odd bytes, bits 16–31 are ignored); the address is `addr` alone, no offset; on v5 **any address not aligned to 16 bytes is SIGBUS** (`BUS_ADRALN`), even with a mask that selects only the aligned part; v6 (the 2C3) takes any address and writes the selected bytes from there (`stmqp.c`) |
-| `ldaab`, `ldaah`, `ldaaw`, `ldaad`, `ldaaq` (and `ldaaqp`, v5) | AAU loads: the element at the descriptor's base + `%aasti` index, where `staa*` would store it (apb.md) |
+| `ldaab`, `ldaah`, `ldaaw`, `ldaad`, `ldaaq` (and `ldaaqp`, v5) | AAU loads: the element at the descriptor's base + `%aasti` index, where `staa*` would store it; served from L2, 9–13 cycles to a consumer, and with MAS mod 2 or 3 ordinary loads, not DAM checks (apb.md, "AAU loads") |
 | `aaurr` (of `%aaind1`) | 0 |
 | `aaurrq %aadN, dst` | the descriptor: after `aaurwq` of (0x0123456789abcdef, 0x10) the low half reads `0x1800456789abcdef`, the base's 48 bits with bits 59–60 set; the high half 0 on the 4C, `0x89abcdef` on the 8C2 |
 | `gettags src, dst` | the tags of `src` (0 for an ordinary value) |

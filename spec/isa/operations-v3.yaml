@@ -400,9 +400,9 @@ groups:
     does: Store the low 1, 2, 4, 8 bytes of the data. ALC2/5.
     use: "`mov<mode>` stores."
   - ops: ldaa{b,h,w,d,q} staa{b,h,w,d,q}
-    does: "Array access through an AAU descriptor `%aadN` and index `%aastiN` (+ literal); `incr` advances the index by `%aaincrN` × the element size. Stores obey loop-mode store suppression."
-    use: Pipelined loops (lcc's APB loops store with `staa`).
-    see: apb.md, loops.md
+    does: "Array access through an AAU descriptor `%aadN` and index `%aastiN` (+ literal); `incr` advances the index by `%aaincrN` × the element size. Stores obey loop-mode store suppression and need no alignment. A MAS acts as on `ld`/`st` (cache hints, `be`); mod 2 and 3 make an AAU load an ordinary load, not a DAM check. **AAU loads are served from L2**: 9 cycles to an integer op on the 4C, 11 on the 8C2, 13 on the 2C3, in either cluster, and they fill no L1 line."
+    use: "Pipelined loops: lcc's APB loops and its `#pragma vector nontemporal` loops (`mas=0x60`) store with `staa`; lcc emits no `ldaa`."
+    see: apb.md, "AAU stores", "AAU loads"; loops.md
   - ops: ld{cs,ds,es,fs,gs,ss}{b,h,w,d,q} st{cs,ds,es,fs,gs,ss}{b,h,w,d,q}
     does: Loads and stores through x86-style segment registers set up by a binary translator; **fault in user mode** (SIGILL, SIGSEGV or SIGBUS).
     see: semantics.md, "Memory, tag and descriptor operations"

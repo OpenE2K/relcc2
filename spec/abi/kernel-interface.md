@@ -763,8 +763,10 @@ the context's hardware stacks [hw: `abileft.c`; "User contexts"].
 `%g16`–`%g31` read 0 with tag 5, the kernel's "empty" value [hw: read
 with `gettagd` in an assembly handler before any compiled code, for
 `tgkill` and for a timer signal, `ctxsig.c` section 3], and `%bgr` is
-0xff (`signal.c:1271-1277`, `include/asm/tags.h:48`) [source; the
-frame's copy of the interrupted code's `%bgr` also read 0xff]. Reading
+0xff (`signal.c:1271-1277`, `include/asm/tags.h:48`) [hw: `kernleft.c`
+part 2, read by the handler's first instruction after code running
+with 0x1ff, 0x2ff and 0x3ff; the frame's `bgr` held the interrupted
+code's value; 4C, 8C2, 2C3]. Reading
 the empty registers does not trap. A non-speculative `addd %dg16, 0`
 gives 0 with tag 0, and a non-speculative `std` stores 0, which a
 fill-MAS load reads back with tag 5. A diagnostic value, such as the
@@ -835,9 +837,49 @@ in the frame are ignored [source]. Checked on hardware with an
 | `uc_mcontext.cr1_hi` (`br.rbs` 6 → 7) | ignored: `%b[0]` is the same register |
 | nothing; the handler writes `%g16`–`%g19` before returning | after a timer signal the interrupted code gets its own values back; after `tgkill` they are empty (0, tag 5), as above |
 
+More edits, each after a timer signal that interrupted user code [hw:
+`kernleft.c` part 2; 4C, 8C2, 2C3]:
+
+| Edited in the frame | After the handler returns |
+|---|---|
+| `uc_extra.bgr` (0x0ff → 0x37f: `cur` 3, `val` 0x7f) | applied: `%bgr` read 0x37f, and on the 4C and 8C2 `%g24` then named the register the code had used as `%g27`, as after a `rws %bgr`; the 2C3 renames nothing ([loops.md](../isa/loops.md), "Global register rotation") |
+| every `g[i]`, `gtag[i]` (0, and 5 for two of them) and `gext[i]` | applied, tags included. `gext` became the 16-bit extension (what `movfi` reads) on the 4C and the whole high half of the 128-bit register on the 8C2 and 2C3 |
+| a tag combination that `is_possible_qtag` rejects (`gtag[i]` holds register i's two 2-bit tags, bits 0–1 for the low half): tag 3 in the low half of an odd register (v3–v5), tag 2 in any half (v6) (kernel `include/asm/check_hw_ctx.h:13-28,58-67`) | `sigreturn` fails: the kernel logs "bad frame" and sends SIGSEGV (`SI_KERNEL`) at the interrupted IP (`kernel/ttable.c:2278-2284`). Each machine took the other's combination: `gtag[0]` = 2 came back in `%g16` on the 4C and 8C2, `gtag[1]` = 3 in `%g17` on the 2C3 |
+| `g[3]` = 0x4444444444444444 with `gtag[3]` = 5 (bit 30 set in both halves: diagnostic) | accepted; the first non-speculative use of `%g19` was SIGILL `ILL_ILLOPN`. So a frame can give `%g16`–`%g31` tags that `puttagd` refuses to make ([semantics.md](../isa/semantics.md), tag operations) |
+
 The frame's `g[]` holds the values `%g16`–`%g31` had when the code was
 interrupted. After `tgkill` these are the values from before the system
 call, which the program never sees again.
+
+**The rotating globals in the frame** [hw: `kernleft.c` part 2; source].
+The kernels of the 8C2 and 2C3 (MCST's 6.1-1.17 and 6.1-1.18) save
+`%g24`–`%g31` after setting `%bgr` to 0x0ff (`include/asm/trap_table.S.h:199-300`),
+so `g[8 + j]` is the register that `cur` 0 names `%g(24 + j)`, not the
+one the interrupted code named so: on the 8C2, code running with `cur`
+1 had its `%g31` in `g[8]`, and `sigreturn` put every value back (`cur`
+1, 2 and 3, ten runs each); spinning 100 ms without a signal (the case
+described for the 4C below) left them in place in ten runs. The 2C3
+does not rename. **The 4C moves
+them**: with `cur` c, `g[8 + j]` held what `cur` 0 names
+`%g(24 + ((j − c) & 7))`, and after `sigreturn` the code's `%g(24 + n)`
+held what it had put in `%g(24 + ((n − c) & 7))`: with `cur` 1, `%g24`
+held the old `%g31` (26 of 27 runs over `cur` 1–3; in the other, with
+`cur` 2, the frame was as on the 8C2 and the values came back in place).
+Left for 100 ms with no signal while a second thread waited to end the
+loop, the same code found its values moved by 1–3 places in 5 of 9 runs
+and in place in 4, so kernel entries without a signal move them too,
+not every one (inferred). The 4C's kernel (MCST's 6.1-1.9, commit
+6a2673970ea0, `include/asm/trap_table.S.h:141-239` there) saves
+`%g16`–`%g31` with privileged `strd` stores before it sets `%bgr` to
+0x0ff, under the interrupted code's `%bgr`; 6.1-1.17 moved the save of
+`%g24`–`%g31` after the write. That alone would put the code's own
+`%g(24 + j)` in `g[8 + j]`, which is not what the 4C showed, and a
+user-mode `std` of `%dg24`–`%dg31` under `cur` 1–3 stores the same
+registers an ALU read sees (4C, 8C2), so the mechanism is not known;
+`strd` cannot be tried from user mode, and ALT's newer 6.1.180 package,
+which carries 6.1-1.17's `arch/e2k` ("Contexts and threads"), was not
+tried. lcc never touches `%bgr`, so only code that rotates the globals
+itself is affected.
 
 **The FP control registers are not saved or restored around a handler**
 [hw]: a handler starts with the interrupted code's rounding mode and

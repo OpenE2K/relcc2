@@ -500,9 +500,14 @@ translator), `cur` being the top:
 | write of `%g24`–`%g31` | the value | never; `val` doesn't change |
 
 The kernel's trap entry saves `%bgr` and sets it to 0x0ff before
-touching the globals, restores it on return, and starts signal handlers
-with 0x0ff (`trap_table.S.h`, `signal.c`); a trap taken with invalid
-slots is harmless on both machines.
+touching `%g24`–`%g31` (MCST's 6.1-1.17 and later; the 4C's 6.1-1.9
+saves the globals first), restores it on return, and starts signal
+handlers with 0x0ff (`trap_table.S.h`, `signal.c`); a trap taken with
+invalid slots is harmless on both machines. But on the 4C a kernel
+entry under a nonzero `cur` can move the values of `%g24`–`%g31`
+(after a signal, `%g(24 + n)` held the old `%g(24 + ((n − cur) & 7))`;
+[kernel-interface.md](../abi/kernel-interface.md), "The rotating
+globals in the frame").
 
 Delays (`tools/isa-probes/native.c`, 4C and 8C2): after `abgd` or
 `abgi` the next wide instruction already names the registers by the

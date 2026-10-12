@@ -217,7 +217,12 @@ reads**. Stores to elements already read are harmless. lcc keeps to this
 loop on a run-time comparison of the pointers (`a ≤ b` among others)
 before the APB version; it never uses APB for `a[i + 2] = a[i] * 2`.
 Both qemus read memory when the `mova` executes, so they return the
-stored value.
+stored value. A small `%lsr.ldovl` keeps the unit fewer iterations
+ahead, and on v3 and v5 the movas then see stores `ldovl` or more
+iterations ahead of them; but it costs most of APB's speed, and the
+2C3 doesn't see stores less than 12 iterations ahead even at `ldovl` 1,
+so it is no way around this rule ([loops.md](loops.md), "Array-prefetch
+depth").
 
 ## Starting, pausing and stopping [hw]
 

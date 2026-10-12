@@ -51,7 +51,7 @@ ordinary programs.
 | x87 80-bit arithmetic, `%fpcr`/`%fpsr` | `fx*`, `movif`/`movfi` | v1+ | yes [hw]. `%fpsr` holds the six flags and C1 (and on v6 x87's stack-fault bit, which nothing sets and which does not set ES). ES and B are computed from the flags and `%fpcr`'s masks. C0, C2, C3 and TOP don't exist (the stack is `%bgr`, whose faults are separate SIGFPE `FPE_FLTINV` traps, loops.md). C1 is written only by non-speculative divides and the square root, so an emulator computes it for `fadd`, `fmul`, `fst` and the compares. An unmasked exception traps at the operation itself, with no deferred trap at the next FP instruction (registers.md, "Traps") [hw: `tools/isa-probes/sregs.c`] | semantics.md, "80-bit operations"; registers.md, "Floating-point control and status" |
 | the x87 register stack: rotating globals | `%bgr`, `abg` (v1–v5), `abgc`/`rbgc` (v6+), `vfbg`; v6 `mkfsw`, `modbgv`, `vfbgv` | v1+ | yes [hw]; v3–v5 rename `%g24`–`%g31` from the next instruction (10 cycles after `rws %bgr`); **v6 renames nothing**, only `cur` changes (`vfbg` and `%bgrpred` never run) | loops.md |
 | x86 FP compare results into a register (`ucomisd` flags), MXCSR layout of `%pfpfr` | `fcmpud*f`, `fcmpod*f`, `fxcmpud*f` | v1+ | yes [hw]; lcc uses `fxcmpudxf` for `long double` `isless`/`isnan` [lcc] | semantics.md |
-| x86-compatible FP compare mode, strict alignment | `%upsr` bit 8 `fsm`, bit 2 `ac` | v3+ (`fsm`) | writable [hw]; with `fsm` the predicate FP compares read unordered as x86 flags do (`lt`, `le`, `eq` true, `neq` false) [hw]; with `ac` a misaligned `ldw` or `ldd` raises SIGBUS (`BUS_ADRALN`, `si_addr` the wide instruction's address, not the data's) [hw: `tools/abi/probes/sysabi.c` section 8], and glibc's own `printf` then faults on the 2C3 (v6 glibc makes misaligned accesses), not on the 8C2; `crtalign.o` (`-faligned-check`) sets `ac` [lcc]. `%upsr` reads 0x1 (bit 0 `fe`) on the 4C and 8C2 and 0 on the 2C3 (the kernel sets `fe`; v6 dropped the FP-disabled trap, kernel `traps.c:946`, so the bit is presumably not implemented there, inferred) | semantics.md, "Floating-point compares" |
+| x86-compatible FP compare mode, strict alignment | `%upsr` bit 8 `fsm`, bit 2 `ac` | v3+ (`fsm`) | writable [hw]; with `fsm` the predicate FP compares read unordered as x86 flags do (`lt`, `le`, `eq` true, `neq` false) [hw]; with `ac` every misaligned access of 2 bytes or more raises SIGBUS (`BUS_ADRALN`, `si_addr` the wide instruction's address, not the data's), and a store writes nothing: loads and stores of 2, 4 and 8 bytes; the AAU's `ldaad`, `staad` and `staaw`; `ldq`/`stq` that aren't 16-byte aligned (at +8 too, where they otherwise work; 8C2, 2C3); and on the 2C3 `ldqp`/`stqp` at any misalignment. A speculative load (`ldd,sm` with MAS 0 or mod 3, `ldw,sm`, and `ldqp,sm` on the 2C3) gives the diagnostic value (`4afafafa4afafafa`, tag 5) instead of trapping; bytes and aligned accesses are unaffected [hw: `tools/abi/probes/sysabi.c` section 8, `tools/isa-probes/memleft.c` `ac`; 4C, 8C2, 2C3], and glibc's own `printf` then faults on the 2C3 (v6 glibc makes misaligned accesses), not on the 8C2; `crtalign.o` (`-faligned-check`) sets `ac` [lcc]. `%upsr` reads 0x1 (bit 0 `fe`) on the 4C and 8C2 and 0 on the 2C3 (the kernel sets `fe`; v6 dropped the FP-disabled trap, kernel `traps.c:946`, so the bit is presumably not implemented there, inferred) | semantics.md, "Floating-point compares" |
 | random predicates for sampling | `%rndpred1`–`15`, state `%rndpr` | v3+ | yes [hw] | predicates.md |
 | issue without waiting for late operands | `%spred` | v1+ | yes [hw] | predicates.md |
 | branch or call to a register | `ibranchd`, `icalld` | v6+ | yes [hw]; lcc 1.31.05 uses them only for v7 (jump tables, indirect tail calls and calls) [lcc] | control-transfer.md |
@@ -173,9 +173,10 @@ and the TC/TS state, whose purpose the open sources don't explain.
   and exception registers are filled as the kernel source says, for a
   load fault and for `raise`: [kernel-interface.md](../abi/kernel-interface.md),
   "Signals".)
-- Whether `UPSR.ac` also traps misaligned stores and 16-byte accesses
-  (it traps misaligned `ldw` and `ldd`).
 - The segment descriptor layout, and what a limit violation gives.
+- Whether `UPSR.ac` affects array prefetch (`mova` from a misaligned
+  area).
 
 Measured with `tools/isa-probes/native.c` (and bench.py's distance
-sweeps for the flag operations) on the 4C, 8C2 and 2C3.
+sweeps for the flag operations; `memleft.c` for `UPSR.ac` and the watch
+load) on the 4C, 8C2 and 2C3.

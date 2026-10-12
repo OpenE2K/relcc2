@@ -83,6 +83,17 @@ EDGES = [
      "r4", 11),
     (6, 1, "ldaad,2 %aad0 [ %aasti1 ], %dr4", "addd,0 %dr4, 0x0, %dr5",
      "r4", 13),
+    # pocchk4.c: flag forms and combined integer operations cross at +2,
+    # store data in 1 (3 across).
+    (3, 1, "adds_fw,0 %r9, %r8, %r8", "adds,1 %r8, 0x0, %r8", "r8", 2),
+    (3, 1, "adds_fw,0 %r9, %r8, %r8", "adds,3 %r8, 0x0, %r8", "r8", 4),
+    (3, 1, "adds_fw,3 %r9, %r8, %r8", "adds,4 %r8, 0x0, %r8", "r8", 2),
+    (3, 1, "add_addd,1 %dr9, %dr7, %dr8, %dr8", "addd,1 %dr8, 0x0, %dr8",
+     "r8", 2),
+    (3, 1, "add_addd,1 %dr9, %dr7, %dr8, %dr8", "addd,4 %dr8, 0x0, %dr8",
+     "r8", 4),
+    (3, 1, "adds_fw,0 %r9, %r8, %r8", "stw,2 %dr0, 0x0, %r8", "r8", 1),
+    (3, 1, "adds_fw,0 %r9, %r8, %r8", "stw,5 %dr0, 0x0, %r8", "r8", 3),
 ]
 
 

@@ -157,6 +157,15 @@ INT_SIDE = {"int", "cint", "getsp", "load", "ldqp", "aauld", "rr", "rrfp"}
 # rrs; not loads (ldw zero-extends), sxt, or FP-unit operations
 # (fadds, fstois, movts).
 DBL0_WIDE_READ = 4
+# (pocchk4.c rechecked it with more producers and readers: the flag
+# forms' 32-bit flags word, combined operations, compares.)
+
+# The x86 flag forms (adds_fw ...) and the combined integer operations
+# (class cint) reach an integer consumer in their own cluster in 2 cycles
+# and in the other in 4 (+2, not an integer op's +1), and store data in
+# 1, 3 across [tools/isa-probes/pocchk4.c; 4C, 8C2 and 2C3; timing.md].
+CINT_CROSS = 2
+CINT_STORE_DATA = 1
 DBL_CLASSES = {"int", "cint", "imul", "idiv", "imod", "rr"}
 DBL_NOT = ("movt",)          # movts and its forms: FP unit, dbl ignored
 
@@ -600,7 +609,10 @@ def parse_line(line, unknown):
     if any(k[0] == "p" for k in op.dsts) and re.match(
             r"q?pcmp(eq|gt)[bhwd][ao]p$", name):
         op.cls = "pcmpp"
-    elif any(k[0] == "p" for k in op.dsts) and name.endswith("b"):
+    elif any(k[0] == "p" for k in op.dsts) and (
+            name.endswith("b") or name.startswith("cctop")):
+        # cctop<c> is a compare of a flags word: 2 to a predicated op (1 on
+        # v6), 3 to ct, and no write-back conflict (pocchk4.c).
         op.cls = "fcmpp" if name.startswith(("fcmp", "pfcmp", "fxcmp")) \
             else "icmpp"
     if any(k[0] == "c" for k in op.dsts):          # movtd

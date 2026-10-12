@@ -189,8 +189,11 @@ def _reg_latency(p, c, key, cl, pch, cch):
     # "Clusters"; pocchk2.c t_fpst_*, t_ist_*, all three machines).
     if key in c.data:
         pc, cc = cluster(pch), cluster(cch)
-        if cl["fpside"] and pc is not None and cc is not None and pc != cc:
+        cross = pc is not None and cc is not None and pc != cc
+        if cl["fpside"] and cross:
             return cl["lat"] + 2
+        if p.cls == "cint":
+            return model.CINT_STORE_DATA + (2 if cross else 0)
         return cl["lat"]
     fp_cons = model.is_fp_consumer(c.name) or c.unit == "aas"
     lat = cl["lat"] if fp_cons else cl["to_int"]
@@ -207,7 +210,7 @@ def _reg_latency(p, c, key, cl, pch, cch):
             # machines), i.e. at least the cost to an integer consumer.
             lat = max(lat, cl["lat"] + 2, cl["to_int"])
         elif cl["fpside"] is False:
-            lat += 1
+            lat += model.CINT_CROSS if p.cls == "cint" else 1
     return lat
 
 

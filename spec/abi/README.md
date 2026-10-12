@@ -11,7 +11,7 @@ code.
 | [registers.md](registers.md) | Register files, windows, conventions, DWARF numbering |
 | [calling-convention.md](calling-convention.md) | Calls, argument passing, results, varargs |
 | [stack-and-unwinding.md](stack-and-unwinding.md) | User stack, hardware stacks, the stack registers and why split stacks are impossible, exceptions, backtraces, `setjmp`/`longjmp`, what they cost, scanning for roots (garbage collectors) |
-| [elf.md](elf.md) | ELF header, sections, relocations, PIC and PLT, TLS |
+| [elf.md](elf.md) | ELF header, sections, the executable-stack note, relocations, PIC and PLT, TLS |
 | [atomics.md](atomics.md) | Atomic read-modify-write, memory orders, 16-byte atomics |
 | [source-compat.md](source-compat.md) | Predefined macros, inline-asm constraints, modifiers and clobbers, register names, lcc options that change code |
 | [kernel-interface.md](kernel-interface.md) | System calls, auxiliary vector, contexts, signals and their frames, hardware and data stacks, address space, `-pg`, sanitizers, static PIE |

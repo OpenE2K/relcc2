@@ -67,7 +67,8 @@ with `INCOMPAT` if any input had it. Shared libraries don't take part.
   relocations are used.
 - The interpreter is `/lib64/ld-linux.so.2`.
 - `PT_E2K_TAG` = `PT_LOPROC` is defined (protected mode); lcc's 64-bit
-  output has no such segment. lcc doesn't emit `PT_GNU_STACK`.
+  output has no such segment. lcc doesn't emit `PT_GNU_STACK` either
+  (below, "Executable stack").
 - `_GLOBAL_OFFSET_TABLE_` is the start of `.got.plt`, and `DT_PLTGOT`
   points there. Its first three words are reserved: `[0]` = link-time
   address of `_DYNAMIC`, `[1]` = the module's `struct link_map *`,
@@ -86,6 +87,136 @@ Dynamic tags (binutils, glibc):
 | `DT_E2K_LAZY_GOT` | `DT_LOPROC + 3` | Lazy binding through `.got.plt` (current; below). ld.so binds a module lazily only if one of these tags is present |
 | `DT_PLTGOTSZ` | `DT_LOPROC + 0x101b` | Size of `.got` |
 | `DT_INIT_GOT`, `DT_EXPORT_PL`, `DT_EXPORT_PLSZ`, `DT_REAL_PLTGOT`, `DT_E2K_NO_SELFINIT` | following values | Protected mode |
+
+## Executable stack: `.note.GNU-stack` and `PT_GNU_STACK` (lcc, binutils, glibc, kernel, hw)
+
+On E2K, an object without the note, and a program or library without
+the segment, count as needing **no** executable stack. MCST's ld sets
+`elf_backend_default_execstack` to 0, "to be in line with the Kernel and
+glibc" (binutils `bfd/elf64-e2k.c:134-136`, `bfd/elf32-e2k.c:120-122`),
+and glibc and the kernel agree (below). LoongArch, RISC-V and 64-bit
+PowerPC do the same in binutils (`bfd/elfnn-loongarch.c:140`,
+`elfnn-riscv.c:5573`, `elf64-ppc.c:90`). x86-64 differs: there ld treats
+an object without the note as needing an executable stack (binutils'
+default, `bfd/elfxx-target.h:136-137`), and glibc makes thread stacks
+executable when the segment is missing (`sysdeps/x86_64/stackinfo.h:37`),
+although the kernel keeps the main stack non-executable (kernel
+`arch/x86/include/asm/elf.h:275-280`). lcc never writes the note, so its
+programs get non-executable stacks without one, and ld prints no
+"missing .note.GNU-stack" warning for its objects. The tools were
+checked by compiling and linking (`tools/abi/probes/execstack.sh`), the
+run-time behaviour from the sources and the machines' own files. No code
+was run on a stack.
+
+| Tool | No note in any input | `""` note | `"x"` note | Source |
+|---|---|---|---|---|
+| lcc 1.29.16 and 1.31.05 (v3, v5.8c2, v6.2c3) | always: no note in the `.s` or the `.o`; the driver runs gas with only `-mcpu=<CPU> -mptr64` (`elbrus-v3`, `elbrus-8c2`, `elbrus-2c3`) | with `-Wa,--noexecstack` | with `-Wa,--execstack` | lcc (`lcc -v`) |
+| gas | writes none unless the source has `.section .note.GNU-stack` or `--execstack`/`--noexecstack` is given | an empty `PROGBITS` section without flags | the same with `SHF_EXECINSTR` (readelf `X`) | binutils `gas/as.c:1429-1438`, `gas/config/obj-elf.c:672-675` |
+| ld | no `PT_GNU_STACK`, except with `-z stack-size=N` (then `RW` with `p_memsz` N); once any input has a note, inputs without one count as non-executable | `RW` | `RWE`, with the warning "X.o: requires executable stack (because the .note.GNU-stack section is executable)"; `ld -r` keeps the `X` note and gives the same warning | binutils `bfd/elf64-e2k.c:134-136`, `bfd/elf32-e2k.c:120-122`, `bfd/elflink.c:7152-7230` |
+| ld `-z noexecstack` / `-z execstack` | `RW` / `RWE` whatever the inputs; the lcc driver passes `-z` to ld itself (`lcc -z noexecstack`) | the same | the same | lcc |
+
+This holds for executables, shared libraries and `-static` executables,
+and for the ld of both lcc trees (2.41 in 1.29.16, 2.45.1 in 1.31.05).
+In lcc 1.29.16's sysroots (v3, v5.8c2 and v6.2c3; 997 E2K ELF files
+each), only `libcompiler_rt.asan.a` (lib32 and lib64) has a note: an
+empty one in `asan_interceptors_vfork.S.o`. So `lcc -fsanitize=address`
+programs get `RW`. lcc 1.31.05's v3 sysroot (992 files) also has LLVM's
+OpenMP runtime with an empty note, in lib32 and lib64: `libomp.so.1.0.0`
+(`RW`) and `libomp.a` (`z_Linux_asm.o`). No file has an `"x"` note or
+`RWE`. The rest, including `crt1.o`, `libc.a`, `libgcc.a` and the other
+shared libraries, have neither a note nor the segment. Not searched:
+1.31.05's v5.8c2 and v6.2c3 sysroots and the other 1.29.16 targets; not
+checked: whether 1.31.05's `-fopenmp` links the noted `libomp`. Unipro's
+clang emits `.section ".note.GNU-stack","",@progbits` (unipro).
+
+What the segment does at run time (kernel, glibc):
+
+| `PT_GNU_STACK` | Main stack at `exec` (the executable's segment) | Thread stacks (glibc) | When ld.so loads the file as a library (`DT_NEEDED` at startup or `dlopen`) |
+|---|---|---|---|
+| none | not executable | `PROT_READ`, `PROT_WRITE` | nothing changes |
+| `RW` | not executable | the same | nothing changes |
+| `RWE` | `VM_EXEC` | `PROT_EXEC` added | if the stacks are not executable yet, ld.so makes the main stack and every thread stack executable with `mprotect` |
+
+- Kernel: `fs/binfmt_elf.c:981-986` turns `PF_X` into `EXSTACK_ENABLE_X`
+  and a segment without it into `EXSTACK_DISABLE_X`. `fs/exec.c:810-820`
+  adds or removes `VM_EXEC`. Without the segment, the stack keeps
+  `VM_STACK_FLAGS`, which on E2K has no `VM_EXEC`. E2K's
+  `VM_DATA_DEFAULT_FLAGS` is `VM_READ`, `VM_WRITE`, `VM_MAYREAD`,
+  `VM_MAYWRITE`, `VM_MAYEXEC` (`arch/e2k/include/asm/page.h:319-320`,
+  `include/linux/mm.h:412-428`); the generic default would be
+  executable. The `brk` heap uses the same flags (`mm/mmap.c:3137`).
+  `VM_MAYEXEC` lets a program `mprotect` its stack executable. The
+  protected-mode loader always gives a non-executable stack
+  (`arch/e2k/kernel/binfmt_elfe2kp.c:1205-1206`).
+- `READ_IMPLIES_EXEC` is never set by `exec`. E2K doesn't define
+  `elf_read_implies_exec`, so the generic 0 applies
+  (`include/linux/elf.h:9-14`), also in the protected-mode loader
+  (`arch/e2k/kernel/binfmt_elfe2kp.c:1196`). When set by hand (`setarch
+  -X`), it adds `PROT_EXEC` only to `mmap` and `mprotect` calls that ask
+  for `PROT_READ` (`mm/mmap.c:1290-1292`, `mm/mprotect.c:708`). The stack
+  and the heap keep E2K's fixed flags (inferred: E2K's `SET_PERSONALITY`
+  doesn't touch the personality, `arch/e2k/include/asm/elf.h:248-280`).
+- The page tables enforce it. Every protection without `VM_EXEC` maps to
+  a PTE with `UNI_PAGE_NON_EX`, or to an invalid one for no access
+  (`arch/e2k/mm/init.c:63-80`, `include/asm/pgtable_def.h:527-554`). An
+  instruction-page fault in a mapping without `VM_EXEC` is `SIGSEGV` with
+  `SEGV_ACCERR`, "page is not executable" (`arch/e2k/mm/fault.c:3224-3226,
+  3615-3617, 3694-3697`). Not run.
+- glibc: `DEFAULT_STACK_PERMS` is `PF_R | PF_W`
+  (`sysdeps/e2k/stackinfo.h:31-32`). It is the starting value of
+  `_dl_stack_flags` in ld.so and in static programs (`elf/rtld.c:344`,
+  `elf/dl-support.c:188`), and of each loaded object's flags
+  (`elf/dl-load.c:1099-1102`). A `PT_GNU_STACK` replaces it
+  (`rtld.c:1469-1470`, `dl-support.c:376-377`, `dl-load.c:1217-1218`).
+  Thread stacks get `PROT_EXEC` only when `_dl_stack_flags` has `PF_X`
+  (`nptl/allocatestack.c:334-335`). Any object ld.so maps with `PF_X`, at
+  startup or by `dlopen`, makes all stacks executable
+  (`dl-load.c:1378-1425`, in `_dl_map_object_from_fd`;
+  `sysdeps/unix/sysv/linux/dl-execstack.c:33-80`). MCST didn't change this
+  behaviour; its only edit there is a pragma for lcc's protected mode
+  (`dl-load.c:1387-1393`).
+- [hw] On the 8C2 (kernel `6.1.0-1.17-e8c2-nn`; `execstack.sh
+  --remote`), the system's `cat` and `grep` have no `PT_GNU_STACK`,
+  `cat`'s personality is 0, and `/proc/self/maps` shows `[stack]` and
+  `[heap]` as `rw-p`. The saved run read the maps through `grep` (the
+  script now reads them with `cat`; not re-run). The 4C
+  (`6.1.158-mcst-e4c`) and the 2C3 (`6.1.0-1.18-e2c3`) gave the same in
+  hand-run checks whose output was not saved.
+
+The systems' own files have no `RWE` anywhere, and most have no segment
+at all [hw: readelf on the machines; the loop in `execstack.sh --remote`,
+run by the script on the 8C2 and by hand on the 4C and the 2C3]. The
+scan covers only the top level of each directory and only readable
+files. The `RW` ones include OpenSSH, OpenSSL, NSS, FFmpeg, x265, perf,
+7-Zip, Qt5Core, ICU, TBB, zstd, libsodium, LuaJIT and sudo's
+`cvtsudoers`. Why they are `RW` (`-Wl,-z,noexecstack`, or assembly
+sources with the note) was not established.
+
+| Machine | Directory | ELF files | No `PT_GNU_STACK` | `RW` | `RWE` |
+|---|---|---|---|---|---|
+| 4C, ALT Linux (`/bin` and `/lib64` link to `/usr`) | `/usr/bin` | 909 | 893 | 16 | 0 |
+| | `/usr/lib64` | 1,293 | 1,257 | 36 | 0 |
+| | `/usr/libexec` | 17 | 17 | 0 | 0 |
+| 8C2, Elbrus Linux 9.5.5 | `/bin` | 56 | 56 | 0 | 0 |
+| | `/usr/bin` | 1,249 | 1,143 | 106 | 0 |
+| | `/lib64` | 34 | 34 | 0 | 0 |
+| | `/usr/lib64` | 757 | 722 | 35 | 0 |
+| | `/usr/libexec` | 34 | 31 | 3 | 0 |
+| 2C3, Elbrus Linux 9.5.5 | `/bin` | 58 | 58 | 0 | 0 |
+| | `/usr/bin` | 1,343 | 1,239 | 104 | 0 |
+| | `/lib64` | 32 | 32 | 0 | 0 |
+| | `/usr/lib64` | 776 | 748 | 28 | 0 |
+| | `/usr/libexec` | 37 | 34 | 3 | 0 |
+
+For a compiler: write the note in every object, `""` normally and `"x"`
+only where a trampoline is built on the stack, as GCC's
+`file_end_indicate_exec_stack` does (`gcc/varasm.cc:8189-8199`). MCST
+gas accepts GCC's spelling, `.section .note.GNU-stack,"",@progbits`.
+Mixing these objects with lcc's is harmless and draws no linker warning,
+because no note means non-executable. A single `"x"` object makes the
+program's main stack and every thread stack executable, with the linker
+warning above. A trampoline needs that or a heap allocator
+([gcc-port-plan.md](../../doc/gcc-port-plan.md), D1, "Trampolines").
 
 ## Literal fields (binutils, gas; lcc)
 

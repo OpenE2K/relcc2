@@ -739,6 +739,7 @@ rounded down to a page: [stack-and-unwinding.md](stack-and-unwinding.md),
 | Static PIE's `brk` heap | from 0x8aaa_aaaa_a000 plus a little (seen 0x8aaa_aaaf…–0x8aaa_ac43…), while its image is in the `mmap` area | the same | `linux/fs/binfmt_elf.c:1186-1216` |
 | Non-PIE executables (lcc's default), static or not | 0x10000 | the same | binutils `ld/emulparams/elf_e2k.sh:3` |
 | Pages; ld `MAXPAGESIZE` | 4 KiB, huge 2 MiB and 1 GiB; 0x1000 | the same | `include/asm/page_size.h:14-43`; binutils `bfd/elf64-e2k.c:147` |
+| Stack and `brk` heap permissions | `rw-p`, never executable by default. The stacks become executable only through a `PT_GNU_STACK` with `PF_X` (the executable's at `exec`, or a library's when ld.so loads it) or through `mprotect` ([elf.md](elf.md), "Executable stack"). `exec` never sets `READ_IMPLIES_EXEC` | the same | `include/asm/page.h:319-320`; `linux/fs/exec.c:810-820`, `linux/include/linux/elf.h:9-14`, `linux/mm/mmap.c:3137` [hw: `/proc/self/maps` of a program without `PT_GNU_STACK` (`tools/abi/probes/execstack.sh --remote`); saved on the 8C2, checked by hand on the 4C and the 2C3] |
 
 MCST's sanitizers assume an older layout: a fixed maximum user address
 0xc2ff_ffff_ffff, the stack below 0xc2df_ffff_f000, the heap from

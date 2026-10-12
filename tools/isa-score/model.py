@@ -83,6 +83,13 @@ CLASSES = {
     "rrfp":   dict(lat=11, to_int=11, fpside=False),
     "mova":   dict(lat=5, to_int=5, fpside=None),    # no cluster penalty
     "aaur":   dict(lat=3, to_int=3, fpside=False),   # not measured
+    # AAU loads (ldaa*, ALC2/5): served by L2 even with the line in L1,
+    # 9 cycles to an integer op on the 4C from either cluster (apb.md,
+    # "AAU loads"; timing.md; tools/isa-probes/memleft.c t_use_ldaad*,
+    # measured with the line in L1, as the model assumes for loads; a
+    # line only in L2 presumably costs the same).  Other consumers are
+    # not measured and get the same.
+    "aauld":  dict(lat=9, to_int=9, fpside=None),
 }
 
 # Producers of predicates: (to a predicated ALU op, to ct, to PLS logic).
@@ -95,9 +102,12 @@ PRED_LAT = {"icmpp": (2, 3, 1), "fcmpp": (4, 5, 3), "plog": (2, 3, 1),
 # goes through L1 (5; 11 on v5), and an integer compare or predicate
 # logic reaches a predicated ALU op in 1 cycle (2 before).
 V6_CLASSES = {"load": dict(lat=5, to_int=5, fpside=None),
-              "ldqp": dict(lat=5, to_int=5, fpside=None)}
-# v5 and later (the Elbrus-8C2 and 2C3): pfdivd and pfsqrttd take 16.
-V5_CLASSES = {"pfdivd": dict(lat=16, to_int=18, fpside=True)}
+              "ldqp": dict(lat=5, to_int=5, fpside=None),
+              "aauld": dict(lat=13, to_int=13, fpside=None)}  # the L2 hit
+# v5 and later (the Elbrus-8C2 and 2C3): pfdivd and pfsqrttd take 16;
+# an AAU load 11 on the 8C2 (its L2 hit).
+V5_CLASSES = {"pfdivd": dict(lat=16, to_int=18, fpside=True),
+              "aauld": dict(lat=11, to_int=11, fpside=None)}
 V6_PRED_LAT = {"icmpp": (1, 3, 1), "plog": (1, 3, 1)}
 
 # Prepare -> transfer through a CTPR.
@@ -131,7 +141,41 @@ def bap_to_mova(op):
 # integer-side operation (ALU or load, not a store) issues in the same
 # channel PORT_DISTANCE cycles after it.
 PORT_DISTANCE = 2
-INT_SIDE = {"int", "cint", "getsp", "load", "ldqp", "rr", "rrfp"}
+INT_SIDE = {"int", "cint", "getsp", "load", "ldqp", "aauld", "rr", "rrfp"}
+
+# timing.md, "Formats": under setwd dbl = 0 a 32-bit integer operation
+# writes only the low half of its register, and an operation that reads
+# the whole register (addd, andd, shld, movtd, gettagd measured; an
+# address or store data inferred) gets the result DBL0_WIDE_READ cycles
+# after the producer issues instead of 1, from either cluster (the
+# crossing adds nothing); a slower producer is not delayed further
+# (muls -> addd 6).  A reader of the 32-bit operand (adds, sxt) gets it
+# in 1, and under dbl = 1 every reader does (2 from the other cluster)
+# [tools/isa-probes/tagx.c; 4C, 8C2 and 2C3 alike].  The producers are
+# the operations dbl governs (spec/abi/registers.md, dbl): the 32-bit
+# integer ALU operations and combined operations, the tag operations,
+# rrs; not loads (ldw zero-extends), sxt, or FP-unit operations
+# (fadds, fstois, movts).
+DBL0_WIDE_READ = 4
+DBL_CLASSES = {"int", "cint", "imul", "idiv", "imod", "rr"}
+DBL_NOT = ("movt",)          # movts and its forms: FP unit, dbl ignored
+
+# timing.md, "Elbrus-8C2": on v5 an FP operation's result reaches the
+# single or double operand of an 80-bit operation 2 cycles later than
+# on the 4C and 2C3 (faddd -> fxadddd 6, fxadddd -> fxadddd 7, fxtofd ->
+# fxadddx 7, fxdivdd -> fxdivdd 18), and a load in the same cluster
+# 1 later (4, as from the other cluster); an integer operation, a load
+# from the other cluster and edges into the 80-bit operand are unchanged
+# [tools/isa-probes/sregs.c latg, lp].  Modelled as a floor: such an
+# operand waits as if the value came from the other cluster (FP lat + 2,
+# load lat + 1).  An FP result from the other cluster (6 on the 4C) was
+# not measured on the 8C2; the floor leaves it at 6.  Integer multiplies
+# and divides, packed results and the fx compares and narrow-input
+# conversions (fdtofx) were not measured and are left alone.
+FX_NARROW_ISETS = {5}
+FX_NARROW_FP = 2
+FX_NARROW_LOAD = 1
+NOT_FP_OPS = {"imul", "idiv", "imod", "packed", "pmul", "pslow"}
 
 # timing.md, "Memory": a load of an aligned doubleword stored in the
 # instruction just before returns its value about 7.6 cycles late (two
@@ -185,6 +229,23 @@ def class_of(op):
     return CLASSES.get(op.cls)
 
 
+def latency_floor(p, c, key):
+    """The least latency from producer P to consumer C through register
+    KEY that the operand's width or format imposes: a 32-bit result read
+    as 64 bits under dbl = 0, and v5's narrow operand of an 80-bit
+    operation (0: no floor)."""
+    floor = 0
+    if p.half and p.dbl == 0 and key in c.wide:
+        floor = DBL0_WIDE_READ
+    if key in c.narrow and getattr(c, "iset", 3) in FX_NARROW_ISETS:
+        cl = class_of(p)
+        if p.cls == "load":
+            floor = max(floor, cl["lat"] + FX_NARROW_LOAD)
+        elif cl and cl["fpside"] and p.cls not in NOT_FP_OPS:
+            floor = max(floor, cl["lat"] + FX_NARROW_FP)
+    return floor
+
+
 def apb_area_bytes(iset):
     """Bytes one array-prefetch area delivers a cycle on ISET."""
     return V6_APB_AREA_BYTES if iset >= 6 else APB_AREA_BYTES
@@ -203,6 +264,10 @@ def classify(name):
     n = name
     if n == "getsp":
         return "getsp"
+    if n.startswith("popcnt"):
+        return "int"      # 1 to an integer op (timing.md), not packed
+    if n.startswith("ldaa"):
+        return "aauld"
     if re.match(r"(q?plog_|addcd|subcd)", n):
         return "int"      # one cycle (v5, measured on the 8C2)
     if n == "qpmpsadbh":
@@ -324,6 +389,41 @@ def regs_of(text):
     return out
 
 
+def wide_regs(texts):
+    """Register keys the operand TEXTS name as 64 bits or wider (%dr,
+    %db[], %dg and the q, qp and x forms): an operation reading them reads
+    the whole register."""
+    out = set()
+    for text in texts:
+        for m in REG.finditer(text):
+            if m.group(3) is not None and m.group(1):
+                n, k = int(m.group(3)), m.group(2)
+                out.add((k, n))
+                if m.group(1) == "q":
+                    out.add((k, n + 1))
+            elif m.group(5) is not None and m.group(4):
+                n = int(m.group(5))
+                out.add(("b", n))
+                if m.group(4) == "q":
+                    out.add(("b", n + 1))
+    return out
+
+
+def narrow_dst(text):
+    """Whether destination operand TEXT is a 32-bit register (%rN, %b[N],
+    %gN)."""
+    return any((m.group(3) is not None and not m.group(1))
+               or (m.group(5) is not None and not m.group(4))
+               for m in REG.finditer(text))
+
+
+# The single or double operand of an 80-bit operation (the rest are
+# 80-bit): src2 of fxadd/fxsub/fxrsub/fxmul/fxdiv<a><r>, src1 of
+# fxdivt<a><r> (spec/isa/semantics.md).
+FX_NARROW_SRC2 = re.compile(r"fx(add|sub|rsub|mul|div)[sd][sdx]$")
+FX_NARROW_SRC1 = re.compile(r"fxdivt[sd][sdx]$")
+
+
 LIT_LTS = {"_f16s": 0.5, "_f32s": 1, "_f64": 2, "_lit32": 1, "_lit64": 2}
 
 SIZE = {"b": 1, "h": 2, "w": 4, "d": 8, "q": 16, "qp": 16}
@@ -347,6 +447,10 @@ class Op:
     known: bool = True       # mnemonic understood
     data: list = field(default_factory=list)    # a store's data registers
     lits: list = field(default_factory=list)    # (syllables, literal text)
+    wide: set = field(default_factory=set)      # sources read as 64+ bits
+    narrow: set = field(default_factory=set)    # an fx op's narrow operand
+    half: bool = False       # a 32-bit integer result that dbl governs
+    dbl: int = None          # the function's setwd dbl (analysis.functions)
 
 
 ALU_STORE = re.compile(r"(st[bhwdq]|stq?p|stgd|stap|stcs|stds|stes|stfs|stgs|stss|staa)")
@@ -451,10 +555,12 @@ def parse_line(line, unknown):
         # 4C and 8C2; timing.md "Clusters"; lcc's `aaurw,2 %g, %aabf0`
         # after an `adds,3` ending its APB loops).
         op.data = list(op.srcs)
+        op.wide = wide_regs(operands[:1])
         return op
     if store:
         regs = [regs_of(o) for o in operands]
         op.srcs = [k for r in regs for k in r]
+        op.wide = wide_regs(operands)
         if regs:
             op.data = regs[0] if name.startswith("staa") else regs[-1]
         if name.startswith("staa"):
@@ -466,16 +572,28 @@ def parse_line(line, unknown):
             op.mem = ("st", base, off, SIZE.get(sz.group(1), 8) if sz else 8)
         return op
     if name.startswith("merge"):
+        # merged a, b, dst, pred; merge_addd a, b, c, dst, pred.
+        d = 3 if "_" in name else 2
         regs = [regs_of(o) for o in operands]
-        op.srcs = [k for r in regs[:2] + regs[3:] for k in r]
-        op.dsts = regs[2] if len(regs) > 2 else []
+        op.srcs = [k for r in regs[:d] + regs[d + 1:] for k in r]
+        op.dsts = regs[d] if len(regs) > d else []
+        op.wide = wide_regs(operands[:d] + operands[d + 1:])
+        op.half = op.cls in DBL_CLASSES and len(operands) > d \
+            and narrow_dst(operands[d])
         return op
     regs = [regs_of(o) for o in operands]
     if regs:
         op.dsts = regs[-1]
         op.srcs = [k for r in regs[:-1] for k in r]
-    if op.cls == "load":
-        sz = re.match(r"ld(qp|[bhwdq])", name)
+        op.wide = wide_regs(operands[:-1])
+        op.half = op.cls in DBL_CLASSES and not name.startswith(DBL_NOT) \
+            and narrow_dst(operands[-1])
+    if FX_NARROW_SRC2.match(name) and len(regs) > 2:
+        op.narrow = set(regs[1])
+    elif FX_NARROW_SRC1.match(name) and len(regs) > 2:
+        op.narrow = set(regs[0])
+    if op.cls in ("load", "aauld"):
+        sz = re.match(r"ld(?:aa)?(qp|[bhwdq])", name)
         base = regs[0][0] if regs and regs[0] else None
         off = _lit(operands[1]) if len(operands) > 1 else None
         op.mem = ("ld", base, off, SIZE.get(sz.group(1), 8) if sz else 8)

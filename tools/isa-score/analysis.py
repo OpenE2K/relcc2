@@ -17,6 +17,7 @@ max(ResMII, RecMII) under each model.
 
 import itertools
 import math
+import re
 from dataclasses import dataclass, field
 
 import model
@@ -81,7 +82,23 @@ def functions(elf, dec):
                 (syms[k + 1].addr if k + 1 < len(syms) else end)
             body = [i for i in instrs if s.addr <= i.addr < stop]
             if body:
+                mark_dbl(body)
                 yield s.name, body
+
+
+def mark_dbl(instrs):
+    """Give each operation of a function the dbl of the setwd before it
+    (in address order; its own instruction's counts), None before any:
+    under dbl = 0 a 32-bit integer result read as 64 bits waits
+    (model.DBL0_WIDE_READ)."""
+    dbl = None
+    for ins in instrs:
+        for op in ins.ops:
+            if op.name == "setwd":
+                m = re.search(r"\bdbl\s*=\s*(0x[0-9a-f]+|\d+)", op.text)
+                dbl = int(m.group(1), 0) if m else None
+        for op in ins.ops:
+            op.dbl = dbl
 
 
 def blocks(name, instrs):
@@ -160,6 +177,12 @@ def latency(p, c, key, pch=None, cch=None):
     cl = model.class_of(p)
     if cl is None:
         return 1
+    return max(_reg_latency(p, c, key, cl, pch, cch),
+               model.latency_floor(p, c, key))
+
+
+def _reg_latency(p, c, key, cl, pch, cch):
+    """latency() for a register value from P (latency class CL)."""
     # A store takes its data like an FP consumer: no FP-side -> integer
     # penalty, and an integer result from either cluster the next cycle;
     # an FP-side result from the other cluster 2 cycles later (timing.md,
@@ -374,6 +397,23 @@ def predecessors(blocks_):
     return preds
 
 
+def exit_shift(block):
+    """How far a single-block loop's %b[] names move when it exits:
+    `abn abnf=1` rotates on the iteration that leaves the loop too, so
+    afterwards the last iteration's %b[X] is %b[X + 2] (loops.md)."""
+    if not (block.rotates and block.succ_self):
+        return 0
+    for ins in block.instrs:
+        for op in ins.ops:
+            if op.name == "abn":
+                return 2 if re.search(r"abnf\s*=\s*1", op.text) else 0
+    return 0
+
+
+def _rotated(key, shift):
+    return ("b", key[1] + shift) if shift and key[0] == "b" else key
+
+
 def _seed_ready(seed, key, op, ch):
     """Cycle (from the block start) a value from SEED is usable by OP."""
     p, pch, rel = seed[key]
@@ -516,7 +556,9 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None):
         if block.ibranch and taken:
             t += 6
     starts.append(t)
-    out = {k: (p, ch, i - t) for k, (p, ch, i) in avail.items()}
+    shift = exit_shift(block)
+    out = {_rotated(k, shift): (p, ch, i - t)
+           for k, (p, ch, i) in avail.items()}
     return starts[-1] - starts[-2], starts[1] - starts[0], out
 
 
@@ -726,7 +768,8 @@ def possible(block, dec, mode, seed=None):
         for key in op.dsts:
             if key[0] != "lp":
                 out[key] = (op, chans[n], issue[n] - length)
-    return length, out
+    shift = exit_shift(block)
+    return length, {_rotated(k, shift): v for k, v in out.items()}
 
 
 # --- Loop bounds -----------------------------------------------------------

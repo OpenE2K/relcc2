@@ -473,7 +473,7 @@ groups:
     lat: "2"
     does: "Allocate (negative b) or release stack in the user stack and return the new stack pointer; `getsp 0` reads it. 2 cycles. The amount must be a window register or `%g16`+."
     use: "`allocate_stack`, frame setup."
-    see: spec/abi/stacks.md
+    see: spec/abi/stack-and-unwinding.md, "User stack"; spec/abi/kernel-interface.md, "The data stack"
 - title: Predicates
   rules:
   - ops: pass andp landp movep

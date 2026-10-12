@@ -391,6 +391,14 @@ current top):
 | `vfbgv a, b, dst` | SIGFPE `FPE_FLTINV` (an x87 stack fault) if a register in rot(b[7:0]) is full (overflow) or one in rot(b[15:8]) is empty (underflow); else writes 0 |
 | `mkfsw a, b, dst` | the x87 status word with TOP = b mod 8 (semantics.md, "v6 operations") |
 
+`abgc` and `rbgc` take effect for the next wide instruction: `rrs %bgr`
+or `vfbgv` in their own instruction sees the old `cur`, one instruction
+later the new one, and nothing stalls (a block of `abgc 1` + `rrs %bgr`,
+`abgc 1` + `vfbgv` or `abgc 1` + a read of `%dg24` takes one cycle per
+instruction, as with a `nop` in place of `abgc`) [hw: `ctlleft.c`
+`abgc_*`, `rbgc_*`, `t6_abgc*`, 2C3]. (On v3–v5 `abgd`/`abgi` also act
+on the next instruction, while `rws %bgr` needs 10 cycles; above.)
+
 **v6 doesn't rename the rotating globals any more**: after `abgc 1`, or
 `rws` of `%bgr` with `cur` 1, `%bgr` reads `cur` 1 but `%g24` still
 names physical register 24 (`%g25` 25), at any distance and after `wait

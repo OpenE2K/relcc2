@@ -360,7 +360,7 @@ v6 adds transfers through a register without a CTPR, run by
 | `ibranchd,0 %drN, %empty [? cond]` | jump to the address in `%drN` (ALC0; the condition is a ctcond, as for `ct`, not an ALU predicate) | 13 cycles for a one-instruction block: 12 beyond the instruction, however early the address is ready (`ibranch` 6, a `ct` prepared 5 ahead 0); a loaded address adds the load-to-use stall |
 | `icalld,0 wbs = N, %drN, %empty` | call the address in `%drN`, `wbs` as for `call`; the callee returns normally and the caller's registers below `wbs` survive | 23 cycles a call with a trivial leaf, against 14 for `disp` + `call` |
 | `disp %ctprN, L` and `ct %ctprN` in one instruction (gas allows it from v6) | **no transfer**: execution falls through; so does `movtd` + `ct` (timing.md) | 1 cycle |
-| `fillr`, `fillc` | run in user mode (after a `flushr`) and return normally | |
+| `fillr`, `fillc` | refill the register window or chain stack from memory (source); run in user mode and return normally | about 2 cycles with nothing flushed; right after a `flushr`, `fillr` adds about 63 cycles to a shallow call chain and saves 36 at 64 frames (`ctlleft.c` `fr_*`; operations-v6.md) |
 
 MCST's kernel lists an erratum for every E2C3, E12C and E16C:
 `ibranchd` and `rbranch` can corrupt an inactive CTPR (hwbugs.md,

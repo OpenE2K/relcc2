@@ -1089,7 +1089,8 @@ conflicts, the store bank rule (two stores agreeing in address bits
   1.38), and divider distances that conflicted: `fsqrttd` and
   `pfsqrttd` every 2 or 3 cycles take 2 and 3 (v3 4 and 5). The store
   bank rule stays. `qpcheckd` with equal operands issues two a cycle
-  (ALC0 and ALC3).
+  (ALC0 and ALC3) and delays no reader: a reader of its destination, or
+  a chain through it, issues the next cycle (`ctlleft.c` `t6_qpcheck*`).
 - **A store and a load in one 32-byte block** in one instruction still
   take 1 or 2 cycles, by run, as on the 4C: in four runs on 2026-10-12
   a pair in the cell's first block always took 2, one in the block at

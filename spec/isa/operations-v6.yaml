@@ -87,7 +87,7 @@ groups:
     does: "Into a predicate: true if the compare (signed for `gt`) holds in any lane (`op`) or in all lanes (`ap`). 4 cycles to a predicated operation or `merge`, 5 to `ct` (as FP compares); ALC0/3."
     use: "Vector loop exits (`any`/`all`) without `qpsgn2mskb` and a scalar compare; lcc's string functions."
   - ops: qpcheck{s,d,q}
-    does: "Nothing when a = b (32, 64 or 128 bits); SIGBUS `BUS_OBJERR` at the operation when they differ. The destination keeps its old value."
+    does: "Nothing when a = b (32, 64 or 128 bits); SIGBUS `BUS_OBJERR` at the operation when they differ. The destination keeps its old value, and nothing waits for it: a reader of the destination (or a chain through it) issues the next cycle, as after an integer operation (`ctlleft.c` `t6_qpcheck*`, 2C3); two a cycle (ALC0 and ALC3)."
     use: A one-operation "trap unless equal" (assertions); lcc doesn't use it.
   - ops: pmrgp qpmrgp
     does: "Merge by a predicate, as `merged`: a when it is false, b when true (64 or 128 bits). 1 cycle."
@@ -105,10 +105,11 @@ groups:
 - title: Control
   rules:
   - ops: abgc rbgc
-    does: "Replace `abg` (gas rejects it for v6): `abgc N [? %predN]` adds N (1-7) to `%bgr.cur`, `rbgc` sets it to 0; neither checks or changes `val`, neither traps."
+    does: "Replace `abg` (gas rejects it for v6): `abgc N [? %predN]` adds N (1-7) to `%bgr.cur`, `rbgc` sets it to 0; neither checks or changes `val`, neither traps. They take effect for the next wide instruction (`rrs %bgr` and `vfbgv` in their own see the old `cur`), and nothing stalls (`ctlleft.c`, 2C3)."
     use: Binary translation only (loops.md, "v6").
   - ops: fillr fillc
-    does: Fill the register window stack or the chain stack back from memory (the counterparts of `flushr`, `flushc`); they run in user mode and return normally.
+    does: "Refill the register window stack (`fillr`) or the chain stack (`fillc`) from memory, the counterparts of `flushr`/`flushc` (CS1 opcode 7, `param` bits 2 and 3; gas `parse_copf4_args`); presumably ahead of the returns that would otherwise refill frame by frame (inferred from the kernel's use and the timing; what they refill was not read back). The kernel runs `{fillc; fillr}` before returning to user mode when the CPU has both (v6+, but not `fillr` in hardware guests on E2C3, E12C, E16C, erratum #135233; kernel `asm/cpu_features.h:834-852`, `asm/e2k_api.h:6493-6519`, `ttable-inline.h:39-61,274-292`). They run in user mode and return normally: with nothing flushed each costs about 2 cycles. Right after a `flushr`, a `fillr` adds about 63 cycles to a call chain 0–4 frames deep, 16 at 16 frames, and saves 36 at 64 (1,593 against 1,629 cycles; the `flushr` and the 64 returns cost 193 over no flush). A `fillc` after `flushc` adds 1–11 cycles and saves 23 at 64 frames (1,526 against 1,549; the `flushc` and the returns cost 113) (`ctlleft.c` `fr_*`, 2C3)."
+    use: "None for a compiler: the hardware refills frames on return anyway."
   - ops: hcall icall
     does: "Hypercall and its kernel-entry sibling (binutils `parse_hicall_args`: a trap number and `wbs`; the kernel enables user hypercall numbers through `%hcem`)."
     status: "v6; not run (enters the hypervisor)"

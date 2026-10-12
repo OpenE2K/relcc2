@@ -98,7 +98,9 @@ differ from v6 (measured: timing.md, "Elbrus-2C3 (v6)").
 - **4C (v3)**: `tools/setup/e2k-ssh claude@ringo.lan` (key in untracked
   `secrets/id_ed25519`, never commit or copy it).
   4× E2S, 16 cores, 61 GiB DDR3 (two memory channels per processor
-  instead of three), ALT Linux, native lcc 1.29.16, gdb, perf.
+  instead of three), ALT Linux (kernel 6.1.158-alt1.9.1: MCST's older
+  6.1-1.9 tree; the 8C2 and 2C3 run 6.1-1.17 and 6.1-1.18), native lcc
+  1.29.16, gdb, perf.
   It is a shared machine, not a container: keep parallelism low (about
   `-j4`) and don't fill `/tmp` (tmpfs). **Several agents use the account
   at once**: work only in your own subdirectory `~/relcc2/<task>` (check
@@ -132,9 +134,11 @@ differ from v6 (measured: timing.md, "Elbrus-2C3 (v6)").
   `--cpu 0` (no core 2).
 - Nearly every Elbrus system ships MCST's lcc as the default compiler (OS
   Elbrus and ALT Linux), so tests may assume lcc on the target.
-- ALT Linux ships no 32-bit or protected-mode (`e2k128`) runtime. Keep those
-  modes in mind when generating code and tests, but leave them as an
-  intentionally untested branch; they are low priority.
+- The port targets 64-bit unprotected mode only. 32-bit (`-mptr32`) and
+  protected (`-mptr128`, `e2k128`) modes are documented for completeness
+  (spec/abi/mode32.md, protected-mode.md); Elbrus Linux ships their
+  runtimes (`/lib32`, `/lib128`), ALT Linux doesn't (the 4C runs them
+  static or with lcc's sysroot libraries).
 
 ## Repository layout
 
@@ -169,8 +173,11 @@ spec/abi/      ABI spec for e2k64: data layout, registers + DWARF, calling
                atomics, source-level conventions (macros, asm
                constraints, modifiers and clobbers, options),
                kernel-interface.md (system calls, auxv, contexts,
-               signals and their frames, hardware and data stacks,
-               address space, -pg, sanitizers, static PIE),
+               also shared between threads, signals and their frames,
+               hardware and data stacks, overflow signals, address
+               space, -pg, sanitizers, static PIE),
+               mode32.md and protected-mode.md (lcc's 32-bit and
+               protected modes, for completeness),
                lcc-builtins.md (lcc 1.31's builtins and <e2kintrin.h>:
                the spec for lcc-compatible builtins; lcc-builtins.yaml
                from lcc's manual, -names.yaml every name lcc knows,
@@ -317,8 +324,18 @@ tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     tagempty.c/.s (registers a window gains),
                     abileft.c/.s (signals in made contexts, switching
                     from handlers, data-stack overflow) and
-                    abileft-san.c (lcc's sanitizers) run on
-                    hardware; execstack.sh (GNU-stack census) and
+                    abileft-san.c (lcc's sanitizers), ctxthr.c
+                    (contexts shared between threads, fork, thread
+                    exits) and accerr.c with getsp.s (si_code and
+                    si_addr of stack overflows and bad accesses) run on
+                    hardware; ctxtls.c (TLS across a context switch) is
+                    read with -S; mode32/ (32-bit mode: layout32.c must
+                    compile with -mptr32, callconv32.c is read with -S,
+                    the rest runs on hardware through run.sh, with
+                    --ship-libs on the 4C) and protected/ (protected
+                    mode: pmcc.c and pm6464.c read with -S, pmrun.c,
+                    pmasm.c and pmcxx.cc run by run.sh, static on the
+                    4C); execstack.sh (GNU-stack census) and
                     prefrel.sh (R_E2K_PREF) link and read; sanitize.c
                     is read with -S);
                     find_builtins.py, gen_builtins.py and
@@ -940,6 +957,53 @@ registers read in user mode (layouts in stack-and-unwinding.md, "Stack
 registers"); no split stacks; an executable without a GNU-stack note
 gets a non-executable stack, and lcc rejects nested functions.
 
+Contexts shared between threads (kernel-interface.md, "Contexts and
+threads"; `ctxthr.c`, hw on all three): any thread may resume any
+suspended context, which keeps its stacks, FP mode and mask but runs
+with the resuming thread's `%g13`, so TLS addresses must not be kept
+across a switch (GCC folds `&tls` and `__errno_location` across
+`swapcontext`; only a value-returning or `noipa` accessor is safe:
+`ctxtls.c`). A switch reads the target `ucontext_t` before locking it,
+so a switch that lost a race can later resume an old state. A thread
+exiting in a context that was freed or remade frees its hardware stacks
+twice (and a `[signal stack]` is unmapped twice); on the 4C's 6.1-1.9
+kernel any exit after a switch does. Fiber libraries and libgo must
+keep their worker threads alive.
+
+Overflow signals (kernel-interface.md, `accerr.c`, hw on all three): a
+`getsp` the kernel won't grow the stack for is SIGSEGV at the
+interrupted `USD`'s bottom − 1, `SEGV_BNDERR` on the 8C2 and 2C3 and
+`SEGV_ACCERR` on the 4C, only because the 4C's ALT kernel is MCST's
+6.1-1.9 tree (OpenE2K/linux 6a2673970ea0; 6.1-1.17 changed that
+constant; ALT ships MCST's tree unchanged). The 4C's movable trampoline
+page has the same cause.
+
+32-bit mode (`spec/abi/mode32.md`, for completeness; hw on all three):
+ILP32 with 8-byte `long long` and `double`; every data access is
+`ldgd*`/`stgd*` (two 32-bit operands summed mod 2^32 within GD =
+[0, 0xf000_0000), beyond it `SEGV_BNDERR`) and indirect calls use
+`getpl`; argument slots as in 64-bit mode, but 32-bit values fill only
+the low half and lcc extends narrow integers neither as caller nor in
+results; ELFCLASS32 with the same `e_flags`, `/lib32/ld-linux.so.2`,
+`R_E2K_32_*` relocations, TLS at TP + 8; system calls through entries 1
+and 5 (the entry, not the task, picks the compat ABI), no time64 calls;
+the modes cannot be mixed in one process; lcc's 32-bit ASan stops at
+startup on the 8C2 and 2C3. MCST's qemu loads no ELF32; the community
+qemu-e2k32 runs it without entries 3/6 and the GD bound.
+
+Protected mode (`spec/abi/protected-mode.md`, for completeness; hw on
+all three, the 4C static): pointers are 16-byte tagged descriptors
+(base, size, curptr; a v6 procedure label carries the module index),
+checked on every access (`SEGV_BNDERR`, `ILL_ILLOPN`); every call hands
+over 8 pairs, `%qr0` is an AP to the argument area, slots are 16 bytes,
+slots 1–7 in registers, results up to 128 bytes in registers and larger
+ones through a hidden AP in slot 1; no stack-pointer check (the kernel
+sets `%core_mode.no_stack_prot` before v7); loads keep memory tags and
+empty values trap; the machines' lib128 reuses freed memory at once; a
+binutils built without `--enable-new-pm-abi` (the default, ours
+included) makes a PLT that breaks dynamic programs; lcc 1.31.05 makes
+`intptr_t` a descriptor. Neither emulator runs protected code.
+
 ### GCC port planning (doc/gcc-port-plan.md)
 
 A plan for the owner, written for someone new to GCC: pipeline and
@@ -982,7 +1046,8 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
    left: v4 timing (via the community) with `tools/isa-timing/bench.py`;
    the "Not checked yet" items still in spec/.
 3. Protected (`e2k128`) and 32-bit modes: documented for completeness
-   only; the port won't target them.
+   (mode32.md, protected-mode.md; their "Not checked yet" lists hold
+   the leftovers); the port won't target them.
 
 v7 is out of scope: it is not in silicon yet and we have no access
 (owner, 2026-10-12). What the spec says about v7 comes from binutils,

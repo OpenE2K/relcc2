@@ -167,6 +167,7 @@ groups:
     see: semantics.md, "FP min, max and combined operations"
   - match: 'merge_(and|andn|or|orn|xor|xorn|add|sub|rsub)[sd]'
     does: "Y(c, merge(a, b, pred)): select, then the second stage."
+    use: "Adding, subtracting or or-ing a select into a value; with arms 0 and 1 a condition held in a predicate (a 0/1 `cstore` combined into its user): `merge_addd 0, 1, x, dst, pred` = x + (pred ? 1 : 0), `merge_subd` x − pred, `merge_ord` x | pred. lcc uses them in unrolled and pipelined loops: carry and borrow chains (`mpn_add`: `cmpbdb`, then `merge_addd 0, 1` of the carry; `__quadmath_mpn_*`, `__divtf3`, glibc's `round_and_return`), counts (`n += a[i] < k`) and select-and-accumulate (a sum of absolute byte differences: `merge_adds` of `a − b` and `b − a` into the sum under `cmpssb`'s predicate). In straight-line code it keeps `merged` + `addd`, and `(c ? a : b) + d` becomes two predicated `addd`. 115 uses in its v3 libraries, 97 of them with arms `0x0, 0x1`."
     see: semantics.md, "Other scalar operations"
 
 - title: Floating point
@@ -326,6 +327,7 @@ groups:
     use: "`usad`, `sad` reductions."
   - ops: psign{b,h,w}
     does: "x86 `psign`: lane of a negated, kept or zeroed by the sign of b's lane."
+    use: "`abs<mode>2` on `V8QI`, `V4HI`, `V2SI` as `psign* a, a` (doc/gcc-port-plan.md, P32; the most negative value stays as it is, as `abs` wraps); x86 `psign` (lcc's `_mm_sign_epi8` is two `psignb`). lcc's own loops compute `abs` with `psrah`, `xord`, `psubh`."
   - ops: psll{h,w,d} psrl{h,w,d} psra{h,w}
     does: "Every lane shifted by the 64-bit count b: left, logical right, arithmetic right; counts at or beyond the lane width give 0 (arithmetic: the sign)."
     use: "`ashl`, `lshr`, `ashr` with a scalar count."
@@ -382,13 +384,16 @@ groups:
   - ops: pfdiv{s,d} pfsqrts pfsqrttd
     lat: "11 (`pfdivs`), 12 (`pfsqrts`), 14 (`pfdivd`, `pfsqrttd`; 16 on v5 and v6)"
     does: "`pfdivs`, `pfdivd`: IEEE values but **no flags**; `pfdivs` divides the low singles only (not packed, as `pfsqrts` = `fsqrts` of the low single); `pfsqrttd` = `fsqrttd`. From v5 `pfdivd` and `pfsqrttd` take 2 cycles more than `fdivd` and `fsqrttd`."
+    use: "Only where IEEE flags don't matter (`-fno-trapping-math`), one lane at a time. lcc divides a `V2SF` GNU vector with `getfd` (the high singles), two `pfdivs` and `insfd`, even without `-ffast-math`; its loops use scalar `fdivs`, `fdivd`, `fsqrts` and `fsqrtid` + `fsqrttd`, also under `-ffast`."
     see: semantics.md, "Packed operations of v3"
   - ops: pfcmp{eq,lt,le,uod,neq,nlt,nle,od}{s,d}
     does: All-ones lanes where the compare holds; eq, neq, od, uod quiet (also on qemu's error list), lt/le signal.
+    use: "`vec_cmpv2sfv2si` and `vcond_mask` with `pmerge y, x, mask`: lt, le, eq directly, gt, ge with the operands swapped, `!(a < b)` by swapping the select's arms, `!=` `pfcmpneqs`, unordered `pfcmpuods`. lcc's v3 vectorizer uses `pfcmplts`, `pfcmples`, `pfcmpeqs` + `pmerge` for masks and counts (`n += a[i] < k`, with `paddw`) at `-O3`, and for selects only under `-faligned` (or `-ffast`); it keeps `!=`, unordered and `isless` loops scalar. GNU vector `!=` is `pfcmpneqs`, and its `_mm_cmpnlt_ps`, `_mm_cmpunord_ps`, `_mm_cmpord_ps` are `pfcmpnlts`, `pfcmpuods`, `pfcmpods`. lt, le, nlt, nle signal on quiet NaNs, so a quiet relational vector compare (`isless`) is no single packed operation. The `d` forms are one double, as `fcmp*d`."
   - ops: pfhadds pfhsubs pfaddsubs
     does: "Horizontal add/subtract (a's pair low, b's high); `pfaddsubs` (a0 − b0, a1 + b1)."
   - ops: pfdtofs pfdtois pfdtoistr pfstofd pfdtoifd pfstoifs
     does: "One lane, as the scalar operation of the same name (`pfdtofs` = `fdtofs`, …): `pfdtofs`, `pfdtois`, `pfdtoistr` write one 32-bit result, `pfstofd` reads the low single, `pfdtoifd` rounds one double; only `pfstoifs` is packed, rounding both singles to integral with mode a."
+    use: "`pfstoifs`: `floor`, `ceil`, `btrunc`, `rint`, `nearbyint` on `V2SF` with a = 1, 2, 3, 4, 0xc, the values lcc gives scalar `fstoifs` (lcc's `_mm_floor_ps` on v3 is two `pfstoifs 0x1`; its vectorizer keeps these loops scalar). The rest convert one lane at a time: lcc's `__builtin_convertvector` from `V2SF` to `V2DF` is `getfd` (the high single) and two `pfstofd`, from `V2DF` to `V2SF` or `V2SI` two `pfdtofs` or `pfdtoistr` joined by `insfd`; it never uses `pfdtois` or `pfdtoifd` (its x86 headers emit `fdtois`, `fdtoifd`)."
 
 - title: Memory
   intro: >

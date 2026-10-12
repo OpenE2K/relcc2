@@ -11,7 +11,7 @@ that doesn't finish is rerun one test at a time to find the tests that
 crash.
 
 Usage:
-  run.py GENDIR [-o OUTDIR] [--target T] [--cc NAME=COMMAND]...
+  run.py GENDIR [-o OUTDIR] [--target T[,T...]] [--cc NAME[@T]=COMMAND]...
          [--cxx NAME=COMMAND]...
          [--runner COMMAND | --remote [USER@]HOST [--ssh-key FILE]
           [--ssh-port N] [--remote-dir DIR] [--remote-jobs N]]
@@ -24,14 +24,35 @@ status 1.
 --target picks lcc by the suffix of its installed directory,
 /opt/mcst/lcc-1.29.16.e2k-TARGET.linux-6.1 (default v5.8c2; use v3 for
 code that runs on every CPU). Without /opt/mcst the lcc unpacked by
-fetch-lcc.sh in toolchains/lcc-1.29.16-e2k-v5 is used, for v5 only. The
-ISA version in TARGET also sets Unipro's -march and qemu-e2k's -cpu.
+fetch-lcc.sh in toolchains/lcc-1.29.16-e2k-TARGET is used (for v5 also
+toolchains/lcc-1.29.16-e2k-v5). The ISA version in TARGET also sets
+Unipro's -march and qemu-e2k's -cpu.
 
 Default compilers: lcc at -O2 and, if toolchains/unipro is installed,
 unipro at -O2. --cc adds a compiler or replaces one of the same name;
 COMMAND is a shell-style command line that accepts -c FILE -o OUT. Use
 --pairs to limit the pairs, e.g.
 --cc gcc='...' --pairs lcc:gcc,gcc:lcc,gcc:gcc
+
+Mixed targets: with several targets, e.g. --target v3,v5.8c2, each
+target gets its own default compilers, lcc-TARGET (target TARGET) and
+unipro-vN (-march=elbrus-vN, target vN), and the default pairs are those
+whose caller and callee have different targets: for v3,v5.8c2 the 8
+pairs that mix v3 and v5 code, plus lcc-v5.8c2 with unipro-v5 both ways
+(targets v5.8c2 and v5). The last target is where the programs run: its
+lcc builds main.c and links every program, and it sets qemu-e2k's -cpu.
+Its startup files carry its target, so for a CPU target (v3.4c, v5.8c2,
+v6.2c3) the programs run only on that CPU; with --remote, give a host
+with it. Every other target's code must be able to run there, since the
+linker refuses inputs with no CPU in common (spec/abi/elf.md): code for
+a generic target vN runs on version N and later, code for a CPU only on
+that CPU.
+--cc NAME@T=COMMAND gives an added compiler its target (default: the
+last one). Examples:
+  run.py GENDIR --target v3,v5.8c2 --remote claude@geofront.lan
+  run.py GENDIR --target v3,v6.2c3 --remote USER@HOST --ssh-port N
+  run.py GENDIR --target v3,v5.8c2 --cc gcc-v3@v3='... -march=elbrus-v3'
+         --cc gcc-v5@v5='... -march=elbrus-v5'
 
 C++ units (gen.py writes them as .cc files) are built with each
 compiler's C++ command: lcc's l++ and Unipro's clang by default, others
@@ -74,36 +95,56 @@ def find_lcc(target):
     opt = Path(f"/opt/mcst/lcc-{LCC_VERSION}.e2k-{target}.linux-6.1")
     if opt.is_dir():
         return opt / "bin" / "lcc", opt / "fs"
-    local = ROOT / "toolchains" / f"lcc-{LCC_VERSION}-e2k-v5"
-    if isa_version(target) == 5 and (local / "lcc").exists():
-        found = sorted((local / "opt" / "mcst").glob("lcc-*/fs"))
-        return local / "lcc", found[0] if found else None
+    # Trees unpacked by tools/setup/fetch-lcc.sh (default target e2k-v5),
+    # run through its wrapper.
+    trees = [ROOT / "toolchains" / f"lcc-{LCC_VERSION}-e2k-{target}"]
+    if isa_version(target) == 5:
+        trees.append(ROOT / "toolchains" / f"lcc-{LCC_VERSION}-e2k-v5")
+    for local in trees:
+        if (local / "lcc").exists():
+            found = sorted((local / "opt" / "mcst").glob("lcc-*/fs"))
+            return local / "lcc", found[0] if found else None
     sys.exit(f"no lcc for target {target}: {opt} does not exist")
 
 
-def isa_version(target):
-    m = re.match(r"v(\d+)", target)
+def parse_target(target):
+    """Return (ISA version, CPU model or None) of a target such as v3,
+    v5.8c2 or v4.1c+."""
+    m = re.fullmatch(r"v(\d+)(?:\.([\w+]+))?", target)
     if not m:
         sys.exit(f"bad target {target}: expected vN[.MODEL]")
-    return int(m.group(1))
+    return int(m.group(1)), m.group(2)
 
 
-def default_compilers(target):
-    compilers = {"lcc": f"{LCC} -std=gnu11 -O2"}
+def isa_version(target):
+    return parse_target(target)[0]
+
+
+def runs_on(target, run_target):
+    """Can code for TARGET be linked into a program for RUN_TARGET? lcc
+    marks code for a CPU forward incompatible (EF_E2K_INCOMPAT), and ld
+    intersects the CPUs its inputs run on (spec/abi/elf.md)."""
+    v, model = parse_target(target)
+    rv, rmodel = parse_target(run_target)
+    if model is None:
+        return v <= rv
+    return v == rv and rmodel in (None, model)
+
+
+def default_compilers(target, named):
+    """Return {name: (target, C command, C++ command)}: lcc for TARGET and,
+    if installed, Unipro's clang for its ISA version. NAMED adds the
+    target to the names (lcc-v3, unipro-v3)."""
+    lcc, sysroot = find_lcc(target)
+    v = isa_version(target)
+    compilers = {f"lcc-{target}" if named else "lcc": (
+        target, f"{lcc} -std=gnu11 -O2", f"{lcc.parent / 'l++'} -O2")}
     if UNIPRO.exists():
         # Unipro's clang uses the host's headers unless given a sysroot.
-        compilers["unipro"] = (
-            f"{UNIPRO} --target=e2k64-linux "
-            f"-march=elbrus-v{isa_version(target)} --sysroot={SYSROOT} "
-            f"-Wno-bad-lcc -std=gnu11 -O2")
-    return compilers
-
-
-def default_cxx(target):
-    compilers = {"lcc": f"{LCC.parent / 'l++'} -O2"}
-    if UNIPRO.exists():
-        compilers["unipro"] = default_compilers(target)["unipro"].replace(
-            "-std=gnu11", "-std=gnu++17")
+        cmd = (f"{UNIPRO} --target=e2k64-linux -march=elbrus-v{v} "
+               f"--sysroot={sysroot} -Wno-bad-lcc -std=gnu11 -O2")
+        compilers[f"unipro-v{v}" if named else "unipro"] = (
+            f"v{v}", cmd, cmd.replace("-std=gnu11", "-std=gnu++17"))
     return compilers
 
 
@@ -257,8 +298,11 @@ def main():
     ap.add_argument("-o", "--outdir", type=Path,
                     default=ROOT / "toolchains" / "compat")
     ap.add_argument("--target", default="v5.8c2",
-                    help="lcc target directory suffix (default v5.8c2)")
-    ap.add_argument("--cc", action="append", metavar="NAME=COMMAND")
+                    help="lcc target directory suffix (default v5.8c2); "
+                    "several, comma-separated, mix targets and run "
+                    "on the last")
+    ap.add_argument("--cc", action="append",
+                    metavar="NAME[@TARGET]=COMMAND")
     ap.add_argument("--cxx", action="append", metavar="NAME=COMMAND")
     where = ap.add_mutually_exclusive_group()
     where.add_argument("--runner", default=None)
@@ -268,7 +312,8 @@ def main():
     ap.add_argument("--ssh-port", type=int)
     ap.add_argument("--remote-dir", default="relcc2/compat")
     ap.add_argument("--remote-jobs", type=int, default=4)
-    ap.add_argument("--pairs", help="CALLER:CALLEE,... (default: all)")
+    ap.add_argument("--pairs", help="CALLER:CALLEE,... (default: all; with "
+                    "several targets, those that mix targets)")
     ap.add_argument("--known", type=Path,
                     default=Path(__file__).resolve().parent / "known.txt")
     ap.add_argument("--timeout", type=int, default=60,
@@ -279,20 +324,44 @@ def main():
     args = ap.parse_args()
 
     global LCC, SYSROOT
-    LCC, SYSROOT = find_lcc(args.target)
+    targets = args.target.split(",")
+    run_target = targets[-1]
+    LCC, SYSROOT = find_lcc(run_target)
     # Unipro's clang runs "lcc" from PATH to find libraries; give it ours.
     ENV["PATH"] = f"{LCC.parent}:{ENV.get('PATH', '')}"
-    compilers = default_compilers(args.target)
-    compilers.update(c.split("=", 1) for c in args.cc or [])
-    cxx = {name: cmd for name, cmd in default_cxx(args.target).items()
-           if name in compilers}
+    compilers, cxx, cc_target = {}, {}, {}
+    for t in targets:
+        for name, (tt, cmd, xcmd) in default_compilers(
+                t, len(targets) > 1).items():
+            compilers[name], cxx[name], cc_target[name] = cmd, xcmd, tt
+    for c in args.cc or []:
+        name, cmd = c.split("=", 1)
+        name, _, t = name.partition("@")
+        if t or name not in cc_target:
+            cc_target[name] = t or run_target
+        compilers[name] = cmd
+    cxx = {name: cmd for name, cmd in cxx.items() if name in compilers}
     cxx.update(c.split("=", 1) for c in args.cxx or [])
     units = (args.gendir / "units").read_text().split()
     is_cxx = {u: (args.gendir / f"{u}_caller.cc").exists() for u in units}
     if args.pairs:
         pairs = [tuple(p.split(":")) for p in args.pairs.split(",")]
+    elif len(targets) > 1:
+        pairs = [(a, b) for a, b in itertools.product(compilers, repeat=2)
+                 if cc_target[a] != cc_target[b]]
     else:
         pairs = list(itertools.product(compilers, repeat=2))
+    if not pairs:
+        sys.exit("no pairs to run: every compiler has the same target")
+    used = {cc for pair in pairs for cc in pair}
+    for name in sorted(used):
+        if name not in compilers:
+            sys.exit(f"--pairs: no compiler named {name} "
+                     f"(have {', '.join(compilers)})")
+        if not runs_on(cc_target[name], run_target):
+            sys.exit(f"{name}: code for {cc_target[name]} can't run on "
+                     f"{run_target}, the last --target, so it can't be "
+                     f"linked with it")
     out = args.outdir.resolve()
     out.mkdir(parents=True, exist_ok=True)
     if args.remote:
@@ -300,7 +369,7 @@ def main():
                       args.ssh_port)
         run_jobs = args.remote_jobs
     else:
-        host = Local(args.runner or default_runner(args.target))
+        host = Local(args.runner or default_runner(run_target))
         run_jobs = args.jobs
 
     with cf.ThreadPoolExecutor(args.jobs) as pool:
@@ -309,8 +378,9 @@ def main():
         main_obj = out / "obj" / "main.o"
         jobs[pool.submit(compile_one, f"{LCC} -O2", args.gendir / "main.c",
                          main_obj)] = ("lcc", "main")
-        for cc, unit, side in itertools.product(compilers, units,
-                                                ("caller", "callee")):
+        for cc, unit, side in itertools.product(
+                [cc for cc in compilers if cc in used], units,
+                ("caller", "callee")):
             if is_cxx[unit] and cc not in cxx:
                 continue
             src = args.gendir / f"{unit}_{side}.{'cc' if is_cxx[unit] else 'c'}"
@@ -373,7 +443,8 @@ def main():
     report = {}
     unexpected = 0
     pair_names = [f"{a}->{b}" for a, b in pairs]
-    width = max(len(p) for p in pair_names) + 12
+    # Wide enough for the pair's name and a cell such as 325/325 (44 known).
+    width = max([len(p) for p in pair_names] + [18]) + 2
     print(f"{'unit':12}" + "".join(f"{p:>{width}}" for p in pair_names))
     for u in units:
         row = f"{u:12}"

@@ -272,9 +272,28 @@ run, operations per cycle rank the compilers as their measured speed
 does.
 
 On the Elbrus-2C3 (v6; `--target v6.2c3 --cpu 0 --period 40009
---ssh-port ...`) the model with the 2C3's latencies puts every kernel
-within 1% except the two APB loops (`copy -O3` 0.85, `sum -O3` 1.19, a
-few hundred samples each), and on the benchmarks built by the 2C3-tuned
+--ssh-port ...`, about 20,000 samples a kernel) the model with the
+2C3's latencies puts every kernel within 1% (`saxpy -O2` once 1.02;
+`k_empty`, about 1,000 samples, 0.92–1.08) except lcc's array-prefetch
+loops, alike at periods 30011, 40009 and 50021 (2026-10-12): `sum -O3`
+1.07–1.09 (11–15 cycles a call more than modelled), `copy -O3` and
+`saxpy -O3` 1.04–1.05 (6–9 and 11–14), `sum -O2` 1.02–1.04. The 0.85 and 1.19 recorded before came from a few
+hundred samples without the delay between calls (above); the samples
+now agree with `%clkr` (`sum -O3` 185 and 188 cycles a call, the second
+with the call and return). The loops run at the modelled iteration a
+cycle (`%clkr`: `sum -O3` 189 and 573 cycles a call for 512 and 2,048
+`long`s, a quarter cycle an element); the excess is a fixed cost a
+call, and much of it is the loop entry: lcc's v6 code starts these
+loops 17 (`sum`, `copy`) or 19 (`saxpy`) cycles after their `bap`, and
+the first iteration's `mova`s stall 8 and 4 cycles
+(`tools/isa-probes/bapent.py`, spec/isa/apb.md "v6"). The model applies
+`bap` → `mova` (`model.bap_to_mova`, 20 on v6) only within a block,
+and lcc's `mova`s are in the loop block after the `ct`, which the model
+enters with nothing in flight, so it charges none of it: that is all
+of `copy -O3`'s excess, 8 cycles of `sum -O3`'s and 4 of `saxpy
+-O3`'s. Carrying the `bap` into the loop block would fix that part
+(lcc's loops there need 19 cycles for one area and 21 for two). On the
+benchmarks built by the 2C3-tuned
 lcc at `-O3`: CoreMark 27.5 G cycles, measured / achieved 1.03;
 Linpack at size 200 (320 KB, in the 2 MiB L2) 0.99, at size 1000 (8 MB,
 from memory) 1.58. Unipro's clang (`-march=elbrus-v6 -O2`): CoreMark

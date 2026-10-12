@@ -11,11 +11,12 @@ and an Elbrus-2C3 (E2C3, elbrus-v6, 2 GHz; data in
 [timing-e2c3.yaml](timing-e2c3.yaml), section "Elbrus-2C3 (v6)").
 Every latency, hazard and control-transfer delay measured on the 4C and
 the 8C2 is the same, except that v5 made `pfdivd` and `pfsqrttd` 2
-cycles slower. **v6 changes the timing**: an L1 load takes 5
-cycles instead of 3, an integer compare reaches a predicated operation
-in 1 cycle instead of 2, `ldqp` goes through L1, and a few conflicts
-are gone; everything else is as on v3 and v5. The sections below
-describe v3 and v5; "Elbrus-2C3 (v6)" lists what differs.
+cycles slower, and an FP result 2 cycles later at the single or double
+operand of an 80-bit operation. **v6 changes the timing**: an L1 load
+takes 5 cycles instead of 3, an integer compare reaches a predicated
+operation in 1 cycle instead of 2, `ldqp` goes through L1, and a few
+conflicts are gone; everything else is as on v3 and v5. The sections
+below describe v3 and v5; "Elbrus-2C3 (v6)" lists what differs.
 
 ## Method
 
@@ -190,7 +191,7 @@ files (`v3op_*`, `v3st_*`).
 | 11 | 13 | integer divides with small quotients (`sdivs`, `sdivd`, `udivs`, `udivd`, `sdivx`, `udivx`; 11–18 by the quotient, above), `fsqrtid`, `pfdivs`; the 80-bit `fxsqrti*` (to an FP op only) |
 | 12 | 14 | `fsqrts`, `pfsqrts` |
 | 14 | 16 | `fdivd`, `fsqrttd`; `pfdivd` and `pfsqrttd` on v3 (16 and 18 on v5 and v6) |
-| 16 | 18 | 80-bit divides `fxdiv*` and `fxdivt*` (`fxdivt*`: `tools/isa-probes/sregs.c` `latg`, 16 on the 4C, 8C2 and 2C3, but 18 on the 8C2 through the single or double src1; their 18 to an integer op is taken from `fxdiv*`, inferred); the square root steps `fxsqrtu*` (`fxsqrtuxx` 16–17, 18 on v6) and `fxsqrtt*` (to an FP op only) |
+| 16 | 18 | 80-bit divides `fxdiv*` and `fxdivt*` (`fxdivt*`: `tools/isa-probes/sregs.c` `latg`, 16 on the 4C, 8C2 and 2C3, but 18 on the 8C2 through the single or double src1, "Elbrus-8C2 (v5)"; their 18 to an integer op is taken from `fxdiv*`, inferred); the square root steps `fxsqrtu*` (`fxsqrtuxx` 16–17, 18 on v6) and `fxsqrtt*` (to an FP op only) |
 
 What this adds to the table above:
 
@@ -799,7 +800,9 @@ way), so the governor doesn't affect cycle counts. All 80 scheduled latencies,
 branch costs equal the 4C's, and so do 164 of the 166 kernels of the
 monitor probe (`pmu.c`, cycles from `TICKS`), and of the v3 sweep's 807
 chains all but `pfdivd` and `pfsqrttd` ("Every v3 operation", above).
-So v3 latencies hold for v5, as lcc's documentation says for v1–v5.
+So v3 latencies hold for v5, as lcc's documentation says for v1–v5,
+except into the single or double operand of an 80-bit operation
+(below), which those chains don't reach.
 What v5 adds or changes:
 
 - **Six FP operations per cycle.** v4 added `faddd`, `fmuld`,
@@ -858,6 +861,26 @@ What v5 adds or changes:
   other cluster cost 4 on both machines (`paddw` → `paddw,3`, `qpaddd` →
   `qpaddd,3`), not latency + 2: an FP-side result in the other cluster
   costs at least what it costs an integer consumer.
+- **An FP operation's result reaches an 80-bit operation's single or
+  double operand 2 cycles later** [hw: `tools/isa-probes/sregs.c`
+  `latg` and `lp`, gap method; the 4C and 2C3 don't]: `faddd` →
+  `fxadddd`'s second operand 6 (4C 4), `fxadddd` → `fxadddd` 7 (5),
+  `fxtofd` → `fxadddx` 7 (5), `fxdivtss`/`fxdivtdd` → their own single
+  or double src1 18 (16), `fxdivdd` → `fxdivdd` 18 (16). Other
+  producers don't pay it. A load in the same cluster takes 4 instead of
+  3 (`ldd,0` → `fxadddd,0`, while `ldd,0` → `faddd` stays 3). A load
+  from the other cluster takes 4 as on the 4C (`ldd,3` → `fxadddd,0`,
+  `ldd,0` → `fxdivtdx,5`'s src1), and an integer operation 1 as
+  everywhere (`addd` → `fxadddd`). Edges into the 80-bit operand are
+  unchanged (`fxdivtsx`, `fxdivtdx`, `fxdivxx` chains 16; `fxadddx` →
+  `fxtofd` 5), and so are results of 80-bit operations going to
+  ordinary operations (`fxadddd` → `faddd` 5). Back to back, a chain
+  through the narrow operand costs 4 more per step (`fxadddd` 9 instead
+  of 5, `fxdivdd` 21 instead of 17), because stalls come in 4-cycle
+  steps. The v3 sweep missed this because its chains run through the
+  first (80-bit) operand. Conversions with a narrow input (`fdtofx`,
+  `fstofx`), the `fx*` compares and a load in ALC5 into the divider
+  were not measured.
 - **Divider:** `sdivd` and `udivd` every 2 cycles no longer conflict (2
   cycles; v3 3.4); `fxsqrtuxx` and `fxsqrttxx` every 3 cycles now do
   (4.4; v3 3), `pfdivd` every 2 cycles takes 2.5, and `pfsqrttd` has a

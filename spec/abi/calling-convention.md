@@ -81,44 +81,78 @@ aggregate larger than 8 bytes is passed in registers and its last slot
 holds only 1–4 bytes (sizes 9–12, 17–20, …, 57–60), lcc writes that slot
 with a 32-bit operation while `WD.dbl = 0`. That writes only the low half
 of the register and leaves the upper half, including its tag, as it was.
-If the upper half carries a diagnostic tag, a non-speculative operation
-that reads the whole 64-bit register (for example `std` to spill it)
-raises `exc_diag_operand`, which Linux delivers as `SIGILL`. A callee
-should access such a slot only at the width of the data in it, or with
-speculative operations: a speculative store `std,sm` of such a register
-does not trap and stores the low half intact (the upper half becomes an
-arbitrary diagnostic pattern, `4afafafa` on the 4C; hw,
+Each 32-bit half of a register has a tag, and a half tagged 1 is
+**diagnostic** when its bit 30 is set and **empty** when it is clear
+([speculation.md](../isa/speculation.md), "Diagnostic values"). If the
+upper half is diagnostic, a non-speculative operation that reads the
+whole 64-bit register (for example `std` to spill it) raises
+`exc_diag_operand`, which Linux delivers as `SIGILL`. An empty upper
+half does not trap: a plain `std` stores the register, and 64-bit
+operations read the half as a number [hw: `tools/abi/probes/tagempty.c`
+variants g, h, l; 4C, 8C2, 2C3]. A callee should access such a slot only
+at the width of the data in it, or with speculative operations: a
+speculative store `std,sm` of such a register does not trap and stores
+the low half intact (the upper half becomes an arbitrary diagnostic
+pattern, `4afafafa` on the 4C, 8C2 and 2C3; hw,
 `tools/abi/probes/tagtrap.c` variant d). MCST's libffi spills incoming
 argument registers this way (`std,sm` throughout `src/e2k/call.S`).
 
-The mechanism is confirmed on hardware by `tools/abi/probes/tagtrap.c`:
-on an Elbrus 4C (v3), a speculative load from a bad address leaves a
-diagnostic tag; a 32-bit `adds` into that register under `dbl = 0` keeps
-the old upper half, and a following `std` dies with `SIGILL`. Under
-`dbl = 1` the same `adds` zero-extends and the `std` succeeds.
+The mechanism is confirmed on hardware by `tools/abi/probes/tagtrap.c`
+(the 4C, 8C2 and 2C3 print the same): a speculative load from a bad
+address leaves a diagnostic value; a 32-bit `adds` into that register
+under `dbl = 0` keeps the old upper half, and a following `std` dies
+with `SIGILL`. Under `dbl = 1` the same `adds` zero-extends and the
+`std` succeeds.
 
 Whether a real call hits it depends on what the upper half last held.
-MCST's qemu-e2k fills every register that `setwd` newly allocates with a
-diagnostic "empty" value, so the compat suite fails for every such
-aggregate passed from lcc `-O2` to Unipro `-O0` (which spills incoming
-argument registers with `std`); qemu loops on the exception instead of
-delivering a signal, so these tests time out. lcc `-O0` callers and
-Unipro `-O2` callees are not affected. On the 4C the same programs pass:
-there the registers still hold whatever an earlier frame left, which in
-these tests was never tagged. qemu models the cleaning as a hardware
-feature that the `CU_HW0.rf_clean_dsbl` bit turns off, and MCST Linux
-declares that bit between a field marked "since iset v5" and the v6
-fields, so v5 and later machines might clean registers as qemu does.
-The Elbrus-8C2 (v5) doesn't: the whole compat suite, these tests
-included, passes there for every pair (`run.py --target v5.8c2
---remote`), and `tagtrap.c` behaves as on the 4C. Either way, a stale tag from an earlier
-speculative load can reach such a slot on any machine.
+A register that a window gains, the part of a callee's window beyond the
+parameter area or what a later `setwd` adds, holds an **empty** value on
+all three machines: 0 with tag 5 on the 8C2 and the 2C3, and on the 4C
+whatever an earlier frame left there with bit 30 of each half cleared,
+also with tag 5 (`5555555555555555` comes back as `1555555515555555`)
+[hw: `tagempty.c` variants n, o, p]. So when lcc fills the last slot
+of such an aggregate with a 32-bit write into a register the window has
+just gained, the upper half is empty, and a callee that spills it with
+`std` works. That is why lcc `-O2` callers and Unipro `-O0` callees,
+which spill incoming argument registers with `std`, pass every
+`structs`, `floats` and `layout` test of the compat suite on the 4C, the
+8C2 and the 2C3 (`run.py --pairs lcc:unipro-O0 --remote`; its other
+failures are Unipro's known ones). A diagnostic upper half needs a
+register the caller itself filled from a failed speculative operation,
+such as a `%b[N]` reused after one; nothing empties that, on any
+machine (inferred).
 
-Which operations trap on such a register (a speculative `ldd` from a bad
-address leaves the whole register tagged, then a 32-bit `adds` writes
-the low half under `dbl = 0`), Elbrus 4C. The operation rows come from
-the proof-of-concept backend's probe (`docs/spec-poc-findings.md`, A1),
-the copy rows from `tagtrap.c` variants e and f (hw):
+MCST's qemu-e2k also fills every register that `setwd` adds with 0,
+tag 5 (`e2k_greg_make_empty`, `target/e2k/cpu.h:806-817`, written by
+`helper_e2k_clear_rf_regs_on_setwd`,
+`target/e2k/tcg/translate-misc.c:647-657, 1206-1212`), as the 8C2 and
+the 2C3 do. It treats the cleaning as a feature that the
+`CU_HW0.rf_clean_dsbl` bit turns off (MCST Linux declares that bit right
+after a field marked "since iset v5", kernel
+`include/asm/cpu_regs_types.h:886-887`), and `-e2k-opt no-rf-clean`
+turns it off too. But qemu cannot store a register that has a tagged
+half that is not diagnostic: its non-speculative store tries an
+unchecked path that leaves for a slower translation when the data has a
+tag, and the slower translation takes the same path again, so the
+store's instruction runs forever and no exception is raised
+(`target/e2k/tcg/translate-mem.c:262-271, 1443-1458`) [qemu:
+`tagempty.c` variants g–k never finish; `-d exec` shows one translation
+block repeating]. So under qemu every such aggregate passed from lcc
+`-O2` to Unipro `-O0` times out (54 `structs`, 2 `floats` and 2 `layout`
+tests on v3, `tools/abi/compat/known.txt`); with `-e2k-opt no-rf-clean`
+in `run.py --runner` they all pass. lcc `-O0` callers and Unipro `-O2`
+callees are not affected. A diagnostic value in the stored register, by
+contrast, stops qemu with "exception handling is unimplemented"
+(`tagtrap.c` variants a, b, f). qemu's `gettagd` of an emptied register
+returns 1, not the hardware's 5 (`tagempty.c` variants n–p).
+
+Which operations trap on such a register when its upper half is
+diagnostic (a speculative `ldd` from a bad address leaves the whole
+register diagnostic, then a 32-bit `adds` writes the low half under
+`dbl = 0`), Elbrus 4C. The operation rows come from the
+proof-of-concept backend's probe (`docs/spec-poc-findings.md`, A1), the
+copy rows from `tagtrap.c` variants e and f (hw; the 8C2 and 2C3 give
+the same):
 
 | Operation reading the register | Result |
 |---|---|

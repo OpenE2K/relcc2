@@ -1029,11 +1029,13 @@ functions, and the ABI is the same either way. How to get there:
   74 with the pass; lcc 7).
 - Under either setting 32-bit FP operations (`fadds`) and `movts` keep
   the upper half, and signed values still need `sxt`.
-- Partly written registers can keep a diagnostic tag in the upper half,
-  and storing such a register with `std` traps (`calling-convention.md`,
-  "Unused parts of a slot", confirmed on the 4C). Spill and pass 32-bit
-  values with `stw`, or extend them first; `std,sm` does not trap on the
-  4C. lcc also zero-initialises locals that may be read uninitialised
+- Partly written registers can keep a diagnostic value in the upper
+  half, and storing such a register with `std` traps
+  (`calling-convention.md`, "Unused parts of a slot", confirmed on the
+  4C, 8C2 and 2C3; the empty value that registers a window gains hold
+  does not trap). Spill and pass 32-bit values with `stw`, or extend
+  them first; `std,sm` does not trap on any of the three. lcc also
+  zero-initialises locals that may be read uninitialised
   (`source-compat.md`).
 
 The ABI still requires callers to **sign**-extend signed narrow
@@ -2320,9 +2322,11 @@ Decided by the owner:
   1,853 tests) under MCST's qemu as v5, v6 and v7, and the suite
   passes on the Elbrus-8C2 (v5) for every pair; the community can test
   v4. The suite also passes on an Elbrus-2C3 (v6, lcc's 2C3 build,
-  every pair). The 8C2 does not fill fresh registers with tagged values
-  (only qemu does), and v6 has longer load latencies (performance
-  only).
+  every pair). Registers a window gains hold an empty value on all three
+  machines (0 with tag 5 on v5 and v6, as under qemu; on the 4C the
+  stale bits with bit 30 cleared, tag 5), which a plain `std` stores
+  without a trap (`spec/abi/calling-convention.md`, "Unused parts of a
+  slot"). v6 has longer load latencies (performance only).
 - `UPSR.fsm` is never changed (2026-10-11): with it set the FP predicate
   compares give x86 results for NaN operands (semantics.md), and code
   may assume it clear (registers.md).

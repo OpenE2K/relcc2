@@ -38,11 +38,12 @@ Where lcc and Unipro disagree, lcc is the reference: it built the system.
 
 The compatibility suite runs mixed lcc and Unipro programs under qemu-e2k
 and on an Elbrus 4C (v3). On the 4C every pair gives the same results as
-under qemu except the tag trap in "Unused parts of a slot", which needs a
-diagnostic tag that qemu puts in fresh registers and the 4C does not. Other
-rules are marked **compat** rather than **hw** until a hardware run is
-recorded against them. The suite also passes on the 8C2 (v5) and the 2C3
-(v6).
+under qemu except the tests in "Unused parts of a slot"
+(calling-convention.md) that time out under qemu: qemu hangs storing a
+register with an empty (not diagnostic) tagged half, which the hardware
+stores. Other rules are marked **compat** rather than **hw** until a
+hardware run is recorded against them. The suite also passes on the 8C2
+(v5) and the 2C3 (v6).
 
 ## Compatibility suite
 

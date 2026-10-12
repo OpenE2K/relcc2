@@ -286,7 +286,9 @@ Register names for `-ffixed-<reg>` and `-fcall-used-<reg>` (as in GCC):
   (`-ftrivial-auto-var-init=uninitialized`, its default). This avoids
   "very rare crashes on Elbrus caused by diagnostic tags in registers"
   (see the tag trap in [calling-convention.md](calling-convention.md)).
-  A compiler that leaves them alone can store a tagged register.
+  A compiler that leaves them alone can store a register holding a
+  diagnostic value (an empty one, as in registers a window gains, does
+  not trap).
 - **Signals**: a fault in a speculative operation only tags its result;
   the program gets `SIGILL` when a non-speculative operation (a store, a
   branch) uses the value, instead of `SIGSEGV`, `SIGBUS` or `SIGFPE`.

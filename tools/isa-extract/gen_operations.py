@@ -37,7 +37,7 @@ ISA = ROOT / "spec" / "isa"
 # (v3), "8C2" the Elbrus-8C2 (v5), "2C3" the Elbrus-2C3 (v6).
 MACHINE_ISET = {"4C": 3, "8C2": 5, "2C3": 6}
 PROBES = {
-    "semantics.s": ("semantics.c", "4C, 2C3"),
+    "semantics.s": ("semantics.c", "4C, 8C2, 2C3"),
     "semp.s": ("semp.c", "4C, 8C2, 2C3"),
     "sem5.s": ("sem5.c", "8C2, 2C3"),
     "semx.s": ("semx.c", "4C, 8C2, 2C3"),

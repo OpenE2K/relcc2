@@ -177,8 +177,10 @@ there and livelocks on hardware.
 | fence of any order, `__sync_synchronize` | `wait ld_c = 1, st_c = 1` |
 
 lcc's code for the 8C2 (v5) adds `sal = 1, sas = 1` (the v5+ `wait`
-bits, bundle.md) to the release and seq_cst stores' `wait`; its code for
-the 2C3 (v6) is the v3 code above, without them. Read-modify-writes
+bits, bundle.md) to the release and seq_cst stores' `wait`, and puts an
+empty instruction (`{ nop }`) before that `wait`, as the E8C2 soft-wait
+erratum asks (hwbugs.md); its code for the 2C3 (v6) is the v3 code
+above, without them. Read-modify-writes
 are the same on all three except for their empty cycles (above). v6 has MAS encodings for load-acquire and
 store-release (kernel `asm/mas.h`: `MAS_LOAD_ACQUIRE_V6`,
 `MAS_STORE_RELEASE_V6`, bit 4 set with `mod` 3), a "watch for
@@ -198,6 +200,52 @@ already keeps every order but store → load.
 `_write_barrier`, `_mem_barrier` and `_barrier`, each a compiler barrier
 plus a `wait` whose mask is the argument (the mask bits of `wait` for
 the target ISA) (**lcc-doc**).
+
+**What fences cost** [hw: `tools/isa-probes/memleft.c` `wait`,
+`timing`; cycles for the fence alone / after a store / after a load,
+4C / 8C2 / 2C3 where they differ; every field: timing.md, "Every v3
+operation"]:
+
+| Fence | Who uses it | Alone | After a store | After a load |
+|---|---|---|---|---|
+| `wait ld_c, st_c` | lcc's fences, every version | 7 | 15 / 15 / 16 | 8 / 8 / 11 |
+| `wait all_c, fl_c` | glibc's `pthread_spin_lock`, `_unlock`, `_trylock` | 8 | 15 / 15 / 16 | 9 / 9 / 11 |
+| `wait st_c, ma_c` | MCST's kernel around atomics on the NUMA 4C | 6 | 25 / 33 / 20 | 11 / 12 / 13 |
+| all six fields | glibc's `dl-machine.h`, around its I-cache line flushes | 8 | 25 / 33 / 20 | 11 / 12 / 13 |
+| `wait ld_c, st_c, sal, sas` (v5+) | lcc's v5 release store; the kernel's release store before v6 (`smp_store_release` adds `mt`, which v5 ignores) | 2 | 7 / 6 (8C2 / 2C3) | 7 / 3 (8C2 / 2C3) |
+| `wait ld_c, st_c, sas, sal, las, lal, mt` (v6) | the kernel's v6 `smp_mb` | 2 | 6 | 6 |
+
+So glibc's spinlock fence costs what lcc's does (a cycle more with
+nothing outstanding), and `ma_c` is the expensive field. Release stores
+back to back: lcc's v3 and v6 form (`wait ld_c, st_c` + `st` in one
+wide instruction) costs 13.8 cycles a store on the 4C and 8C2 and 14.8
+on the 2C3 (15.8 with the two in separate instructions, `mas6.c`, as
+above). Its v5 form
+costs 6.4 on the 8C2 (about half), 5.4 without the `nop`, and 4.7 on
+the 2C3 (a third), where lcc doesn't use it. A seq_cst store (+ `wait
+st_c`) costs 21, 21 and 22 cycles, 20 in the v5 form.
+
+The store-buffering test (`x = 1`, the `wait`, `r = y` on both
+threads; `memleft.c` `sb`) doesn't settle what the soft bits order. On
+the 2C3, with the `wait` in the load's own wide instruction (1,000,000
+tries each), `r1 = r2 = 0` came 260 times with no `wait`; `st_c, sas`
+gave 212, `ld_c, sal` 199 and `mt` 85; `st_c, las`, `ld_c, lal`, `ld_c,
+st_c, sal, sas`, the kernel's `smp_mb` and every hard `wait` gave 0.
+Those zeros don't show store → load ordering: the kernel calls `lal`
+the load-after-load modifier (`asm/e2k_api.h:5077-5080`), and the
+`sal, sas` pair gives 0 although neither half does. Nor are they plain
+delay: with a store before each, `st_c, sas` and `st_c, las` cost the
+same 6 cycles, yet give 212 and 0. MCST's kernel takes the soft bits
+to work on our 2C3: it drops them only on E2C3 revision 0, ours being
+revision 1 (`CPU_NO_HWBUG_SOFT_WAIT` in `asm/cpu_features.h`, used by
+`__E2K_WAIT` in `asm/e2k_api.h`; hwbugs.md) [source]. What the pattern
+means is open, and MP and LB with the soft bits were not run (the
+hardware keeps those orders anyway). On the 8C2 every `wait` gives 0
+(320 without one in 1,000,000 tries), the soft ones included,
+presumably because its reordering window is shorter than any `wait`
+(inferred; below). v5 ignores `las`, `lal` and `mt`, so the kernel's
+`rmb()` (`ld_c, lal`) is a full `ld_c` there, and the kernel keeps
+`smp_mb()` at `ld_c, st_c` before v6 (`asm/barrier.h`).
 
 ## Memory ordering on hardware (v3) [hw]
 
@@ -231,6 +279,17 @@ instruction. The Elbrus-2C3 (v6, its two cores, 200,000 tries, built for
 the 2C3) too: SB 326 and 263 (in one instruction), none with a `wait`,
 none for MP (including release/acquire) or LB; its 16-byte atomics
 (inline, lock-free) count exactly with no torn read.
+
+The reordering needs the load close behind the store [hw:
+`tools/isa-probes/memleft.c` `sb`]. On the 8C2, `r1 = r2 = 0` came 675
+times in 2,000,000 tries with the load in the next instruction and 604
+with one empty cycle between, but never with 2 or more empty cycles. On
+the 2C3 it came 260, 83, 34 and 19 times in 1,000,000 tries with 0 to 3
+empty cycles, and never with 4 or more (300,000 tries gave 59, 19, 7, 9
+and 0). So on these two machines the hard `wait`s (6 cycles or more)
+would show 0 even if they ordered nothing (inferred). It is no rule a
+compiler can use, since a store that misses the cache may stay
+buffered longer (inferred): seq_cst still needs the fence.
 
 For a compiler on v3 that means: seq_cst stores and fences need the
 `wait` (or a locked read-modify-write); acquire loads and release

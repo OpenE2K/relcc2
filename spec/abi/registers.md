@@ -112,8 +112,19 @@ measured 0.54% of xz -6's cycles in `BUB_B_RF_SPILLFILL` on the 8C2
 - **`nfx`**: the kernel's `WD.fx` is its inverse. With `nfx = 0` the
   hardware saves and restores the extended parts of the window's
   registers when spilling; with `nfx = 1` a spilled window comes back with
-  them cleared (hw, qemu: `tools/abi/probes/ldouble.c`). Both compilers
-  clear `nfx` only in functions that use `long double` (lcc, unipro).
+  them cleared (hw, qemu: `tools/abi/probes/ldouble.c`). On v5+ the
+  extended part is the high half of a 128-bit register: with `nfx = 1`
+  it read 0 after a signal handler had run while the function held it
+  (3 of 3 runs on each machine), and 0, stale data or, by chance, the
+  right value after a call deep enough to spill the window; with
+  `nfx = 0` it survived both (hw: `tools/isa-probes/isaleft.c`
+  `qspill`, 8C2 and 2C3). A signal can spill any window, so a function
+  that holds 128-bit values in window registers needs `nfx = 0` even if
+  it calls nothing. Both compilers clear `nfx` in functions that use
+  `long double` (lcc, unipro); lcc's v5 and v6 code also in every
+  function that uses a 128-bit register, leaves included, and across a
+  call it keeps a 128-bit value in its stack frame, not in a register
+  (lcc 1.29.16 `-O3`, small vector-type functions).
 - **`dbl`** (v3+): with `dbl = 1`, 32-bit integer ALU operations
   zero-extend their result into the whole 64-bit register; with
   `dbl = 0`, they write only the low half and leave the upper half
@@ -484,7 +495,9 @@ qemu as v3 and v5.
   16-bit part is lost when the window is spilled to the procedure stack
   (a deep call): it reads back as 0 on the Elbrus-8C2 and as 0 or stale
   data (`0x1f98` in one run) on the 4C, though it survives a call that
-  does not spill (hw, qemu). lcc sets `nfx = 0` in every function that touches
+  does not spill (hw, qemu). A signal handler spills the window too (the
+  same loss for the 128-bit high half, above; for the 16-bit part
+  inferred). lcc sets `nfx = 0` in every function that touches
   `long double` and keeps such values in window registers across calls.
   Global registers are not spilled.
 - The arithmetic is x87 extended precision exactly: 64-bit mantissa,

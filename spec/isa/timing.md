@@ -34,6 +34,22 @@ describe v3 and v5; "Elbrus-2C3 (v6)" lists what differs.
 - **Hazards**: a producer and a consumer `D` cycles apart (`D = 0`: same
   wide instruction), checking whether the consumer sees the new value.
   `.ignore strict_delay` keeps gas from inserting delays.
+- **`rrd %clkr` waits for nothing** [hw: `tools/isa-probes/sregs.c`
+  `clkr`, the three machines]. Two reads in consecutive instructions
+  differ by 1. A divide or a cache-missing load between two reads adds
+  only its own instruction, because the read does not wait for results
+  in flight, unlike x86 `rdtscp`. The counter is also read before the
+  interlock stalls of the two cycles in front of the read take effect:
+  in `fdivd`, `addd` of its result, read, the 16-cycle stall of the
+  `addd` is missing (3 cycles in all), and it shows only when the read
+  comes 3 or more cycles after the `addd` (two more instructions: 21; a
+  `nop 7` instruction counts its cycles: 27). Cycles count, not
+  instructions: `{addd; nop 1}` right before the read still misses the
+  stall (4), `{addd; nop 2}` (21) or the `addd` followed by an empty
+  `nop 1` instruction (21) shows it [`sregs.c` `clkr`, `fdiv_use_n1`,
+  `_n2`, `_e1`]. To time a single sequence, make an operation consume
+  the last result and put the second read at least 3 cycles after it.
+  The slope between two chain lengths, as used here, cancels this.
 
 The guide's numbers (chapter 6.1) are in the second column for comparison.
 

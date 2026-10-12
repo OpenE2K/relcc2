@@ -80,10 +80,15 @@ cycles after another 2, and anything within 9 cycles of an `smodx` or
 `umodx` until those 9 have passed (the fractional rates at distance 2
 are not modelled); two stores in one instruction with the same base
 whose offsets agree in bits 6–7 take a cycle more (the base is assumed
-256-byte aligned). The `stld.c` probe's 60 straight-line cases are
+256-byte aligned); an `aaurw` or `aaurwd` (an array-prefetch register
+write) takes its register like a store's data, an integer result from
+either cluster the next cycle (`tools/isa-probes/aaurwct.c` on the 4C
+and the 8C2).
+The `stld.c` probe's 60 straight-line cases are
 reproduced to within 0.4 cycles a step. A conditional transfer is assumed not taken
-unless it is a back edge: not taken, it needs its `disp` only 2 cycles
-before it, not 5 (measured with the monitors; on lcc's CoreMark this
+unless it is a back edge: not taken, it needs its `disp` or `return`
+only 2 cycles before it, not 5 or 6 (measured with the monitors, and
+for `return` with `aaurwct.c` on the 4C and the 8C2; on lcc's CoreMark this
 assumption took the model from 10% too slow to within 1%). A taken
 `ibranch` costs 6 cycles: unconditional ones and back edges are charged
 it. For a block ending in a conditional transfer `score.py` also
@@ -129,36 +134,68 @@ Preparations (`disp`) are assumed hoistable in the possible schedule.
 `validate/validate.py --remote claude@ringo.lan --remote-dir
 relcc2/<dir>` builds nine kernels (sum, dot product, saxpy, byte hash,
 branches, polynomial, list walk, copy, an empty function) with lcc at
-`-O0`, `-O2` and `-O3`; on the machine it runs each 20,000 times under
-`profile.py`'s sampling, and times each with `%clkr`. The prediction is
-the static per-block cycles weighted by the sampled counts. On the
-Elbrus 4C (about a minute):
+`-O0`, `-O2` and `-O3`; on the machine it times each with `%clkr`, then
+runs each under `profile.py`'s sampling, called often enough for about
+20,000 TICKS samples (`--samples`; `k_empty` at most 5,000,000 calls)
+with a pseudo-random delay of 0–31 loop iterations between the calls.
+The prediction is the static per-block cycles weighted by the sampled
+counts. On the Elbrus 4C (under two minutes):
 
 | Kernel | -O0 | -O2 | -O3 |
 |---|---|---|---|
-| sum | 6672 / 6688 / 6678 | 282 / 282 / 284 | 528 / 530 / 532 |
-| dot | 9231 / 9247 / 9237 | 2081 / 2076 / 2080 | 2071 / 2085 / 2074 |
-| saxpy | 12305 / 12315 / 12310 | 537 / 537 / 544 | 552 / 552 / 554 |
-| hash | 34831 / 34864 / 34838 | 5143 / 5150 / 5145 | 4111 / 4120 / 4116 |
-| branchy | 17167 / 17194 / 17174 | 1042 / 1046 / 1049 | 1042 / 1057 / 1049 |
-| poly | 27150 / 27186 / 27157 | 2097 / 2098 / 2104 | 2097 / 2104 / 2104 |
-| list | 6161 / 6171 / 6166 | 1551 / 1558 / 1563 | 1551 / 1564 / 1563 |
-| copy | 7183 / 7196 / 7190 | 538 / 541 / 539 | 177 / 183 / 181 |
+| sum | 6693 / 6682 / 6678 | 279 / 279 / 284 | 527 / 528 / 532 |
+| dot | 9230 / 9256 / 9238 | 2082 / 2078 / 2080 | 2071 / 2084 / 2074 |
+| saxpy | 12341 / 12340 / 12310 | 537 / 540 / 544 | 550 / 553 / 554 |
+| hash | 34818 / 34817 / 34838 | 5142 / 5156 / 5146 | 4112 / 4125 / 4116 |
+| branchy | 17233 / 17197 / 17174 | 1039 / 1050 / 1049 | 1041 / 1042 / 1049 |
+| poly | 27146 / 27203 / 27157 | 2095 / 2107 / 2104 | 2095 / 2104 / 2105 |
+| list | 6132 / 6176 / 6166 | 1550 / 1560 / 1563 | 1550 / 1568 / 1563 |
+| copy | 7166 / 7189 / 7190 | 537 / 535 / 539 | 175 / 175 / 181 |
 
 (predicted / sampled / `%clkr` cycles per call, lcc 1.29.16, data in
 L1; `%clkr` includes the call and return, about 6 cycles.) Every kernel
-is within 1%, `copy -O3` within 3% (a later run: `copy` within 6%, with a
-few hundred samples per kernel).
+is within 1%; `k_empty` (7 cycles, a few thousand samples) within 4%.
 
 On the Elbrus-8C2 (`--target v5.8c2 --period 30011`; the default
 period makes TICKS sampling exceed perf's limit of about 100,000
-samples a second at 1.5 GHz, which throttles it) every kernel is within
-3% (`sum -O2` 7%) once the model knows three v5 facts: `movaqp` writes
+samples a second at 1.5 GHz, which throttles it; about 80 seconds)
+every kernel is within 2% in four runs (all but two results within
+1%; `k_empty` 0.94–1.14 with about 1,250 samples), once the model
+knows three v5 facts: `movaqp` writes
 one 128-bit register (the disassembly names it like a pair), `ldqp`
 takes 11 cycles (served by L2), and an array-prefetch area delivers 16
 bytes a cycle (lcc's v5 `sum -O3` reads 32 an iteration). Built with
 the 4C-tuned lcc (`--target v3.4c`) the 4C results are the same as
 with the generic one.
+
+The delay matters. Until 2026-10-12 every kernel was called 20,000
+times back to back, so each kernel's run was strictly periodic (a few
+hundred cycles a call for the short ones), and with a fixed sampling
+period the TICKS samples lock to it and land unevenly in the call: on
+the 8C2, `sum -O2` (an APB loop of one instruction, one cycle an
+iteration, 256 iterations) measured 0.92–0.93 in every run, its loop
+0.88 cycles an iteration, which is impossible. Called back to back on
+its own it measured 0.35, 0.40, 0.98, 1.06, 1.08, 1.09 and 1.25 cycles an
+iteration at periods 50021, 29989, 30089, 20011, 30059, 10007 and
+30011; built without APB (`-fno-loop-apb`) it locked too (0.34 at
+30059), while the EXEC samples gave 256 iterations a call at every
+period and `%clkr` the modelled cycles. More samples alone don't
+help: called back to back for about 20,000 samples each, `sum -O2`
+read 1.02 (its blocks still far off) but `saxpy -O3` 0.71, `sum -O3`
+0.90 and `copy -O3` 0.94, while the EXEC samples gave every block
+exactly once a call. A plausible mechanism: the kernel
+(arch/e2k/kernel/perf_event/perf_event.c) restarts the counter at
+−period, so each sampling interval is the period plus the cycles
+counted between the overflow and the trap, which depend on where the
+overflow falls (EXEC overflows at an instruction and doesn't lock);
+before v7 it also takes the sample's IP from the trap, not from
+`%dimar`. `branchy -O2` (1,050 cycles a call) locked in one run of four
+(0.90) and at none of eight periods on its own; the `-O0` kernels
+(6,000 cycles and more) never did. With the
+delay the samples fall at random, so each column of a kernel is off
+by about 1/√samples (0.7% for 20,000). Whole programs are rarely that
+periodic, but a run dominated by one short call repeated many times
+can lock the same way: compare two `--period` values.
 
 On whole benchmarks (`profile.py`, the 4C, CoreMark with 2,000
 iterations, Linpack at size 200 with `--period 10007`; lcc 1.29.16,

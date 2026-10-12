@@ -3,7 +3,12 @@
    prints the median %clkr cycles of one call, minus the cost of reading
    the clock.  The measured cycles include the call and the return
    (k_empty shows how much).  With an argument R it calls each kernel R
-   times and prints nothing, for profile.py to sample.  */
+   times and prints nothing, for profile.py to sample; with one argument
+   per kernel (in the order this prints them) it calls each kernel that
+   many times.  Between the repeated calls it waits a pseudo-random 0-31
+   loop iterations: a kernel called back to back is strictly periodic,
+   and the monitors' samples then lock to its period (a few hundred
+   cycles) and land unevenly in it (validate.py).  */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +37,20 @@ static unsigned char s[4 * N];
 static int ia[N], ib[N];
 static struct node list[N];
 static unsigned long t[CALLS], clk;
-static long repeat;
+static long repeat, *repeats;
+static int sampling, kernel, nrepeats;
+static unsigned rnd = 1;
+static volatile unsigned spin;
+
+/* Waste 0-31 loop iterations, chosen by a linear congruential
+   generator.  */
+static void
+dither (void)
+{
+  rnd = rnd * 1103515245u + 12345u;
+  for (unsigned j = (rnd >> 16) & 31; j; j--)
+    spin = j;
+}
 
 static int
 cmp (const void *p, const void *q)
@@ -51,9 +69,15 @@ median (void)
 #define TIME(name, level, call) \
   do \
     { \
-      for (long r = 0; r < repeat; r++) \
-        call; \
-      if (repeat) \
+      long n = !repeats ? repeat \
+               : kernel < nrepeats ? repeats[kernel] : 0; \
+      kernel++; \
+      for (long r = 0; r < n; r++) \
+        { \
+          call; \
+          dither (); \
+        } \
+      if (sampling) \
         break; \
       for (int c = 0; c < CALLS; c++) \
         { \
@@ -79,8 +103,16 @@ median (void)
 int
 main (int argc, char **argv)
 {
-  if (argc > 1)
+  sampling = argc > 1;
+  if (argc == 2)
     repeat = atol (argv[1]);
+  if (argc > 2)
+    {
+      nrepeats = argc - 1;
+      repeats = calloc (nrepeats, sizeof *repeats);
+      for (int i = 0; i < nrepeats; i++)
+        repeats[i] = atol (argv[i + 1]);
+    }
   for (int i = 0; i < N; i++)
     {
       a[i] = i * 7;
@@ -99,7 +131,7 @@ main (int argc, char **argv)
     }
   clk = median ();
   LEVEL (O0) LEVEL (O2) LEVEL (O3)
-  if (!repeat)
+  if (!sampling)
     printf ("calls %d\n", CALLS);
   return 0;
 }

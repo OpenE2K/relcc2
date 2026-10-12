@@ -53,8 +53,18 @@ benchmarks.
   counter of the CPU the thread runs on, so pin the thread
   (`taskset`).
 - Sampling (`perf record -e cpu/event=0x313/u -c PERIOD`) records the
-  IP of the instruction that overflowed the counter (the kernel takes it
-  from the monitor, `dim_ip`). The kernel throttles to
+  IP at which the overflow trap was taken: the kernel uses the monitor's
+  own address (`dim_ip`, read from `%dimar`) only on CPUs with
+  `CPU_FEAT_PRECISE_DIMAR`, v7 and later (kernel
+  `arch/e2k/kernel/perf_event/perf_event.c:393-406`) [source]. It
+  restarts the counter at −PERIOD, so each interval is the period plus
+  what was counted between the overflow and the trap. **Samples lock
+  onto short code repeated strictly periodically**: `TICKS` samples of a
+  kernel of a few hundred cycles called back to back land unevenly in
+  it (isa-score's `validate`: a one-cycle loop read 0.35 to 1.25 cycles
+  an iteration depending on the period, while EXEC counts and `%clkr`
+  were exact; more samples don't help). A random delay between calls
+  removes it (`tools/isa-score/validate/main.c`) [hw: 8C2, 4C]. The kernel throttles to
   `perf_event_max_sample_rate` (100,000 per second on the 4C): a period
   of 1 records 668 of 142,000 instructions, so exact per-instruction
   counts can't come from sampling.

@@ -775,10 +775,10 @@ user code gets:
 | `invtc` | a value that differs between the 4C, the 8C2 and the 2C3 (not decoded) |
 | `movtcd`, `movtcs`, `movtcq`, `movtrd`, `movtrs`, `movtrq`, `movtrcd`, `movtrcs`, `movtrcq` | copy the value (untagged operands; what they do to tags isn't visible to the ordinary store that reads the result back) |
 | `gettc`, `puttc`, `puttst`, `getsap` | SIGILL `ILL_ILLOPC` |
-| `getpl a, dst` into a register | SIGILL `ILL_ILLOPN` (its use is `getpl a, %ctprN`). This probe runs in a 64-bit process; in a 32-bit one `getpl` writes a procedure label: on v3–v5 the address with tag 0xA, on v6 a 128-bit label in an even register pair, an odd destination being SIGILL `ILL_ILLOPC` ([mode32.md](../abi/mode32.md)) |
+| `getpl a, dst` into a register | SIGILL `ILL_ILLOPN` (its use is `getpl a, %ctprN`). This probe runs in a 64-bit process; in a 32-bit one `getpl` writes a procedure label: on v3–v5 the address with tag 0xA, on v6 a 128-bit label in an even register pair, an odd destination being SIGILL `ILL_ILLOPC` ([mode32.md](../abi/mode32.md)); in a protected one as well, with the module's index in the v6 label's high word ([protected-mode.md](../abi/protected-mode.md)) |
 | `getva ap, off, dst` | the low 48 bits of the pointer plus off: (0x0123456789abcdef, 0x10) and 0x10 give 0x456789abcdff |
 | `vfsi` | SIGBUS `BUS_ADRALN` |
-| `aptoap`, `aptoapb`, `ldap*`, `stap*` | SIGILL `ILL_ILLOPN` (protected-mode descriptors) |
+| `aptoap`, `aptoapb`, `ldap*`, `stap*` | SIGILL `ILL_ILLOPN` (protected-mode descriptors; what they do in a protected process: [protected-mode.md](../abi/protected-mode.md), "Operations") |
 | `cudtoap`, `gdtoap`, `ldgd*`, `stgd*`, `ldcud*` | SIGSEGV `SEGV_BNDERR` (the kernel's bounds trap) |
 | `ldrd`, `strd`, `ldrqp`, `strqp` | SIGILL `ILL_PRVOPC` (privileged) |
 | segment loads and stores `ld{c,d,e,f,g,s}s*`, `st{c,d,e,f,g,s}s*` (with `q`, `qp`, `mqp`) | a fault in every case, its kind (SIGILL `ILL_ILLOPN`, SIGSEGV, SIGBUS) varying with the operation and the machine: they use the segment registers a binary translator sets up |

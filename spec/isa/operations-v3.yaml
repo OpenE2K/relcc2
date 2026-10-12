@@ -420,9 +420,10 @@ groups:
     does: Loads and stores through x86-style segment registers set up by a binary translator; **fault in user mode** (SIGILL, SIGSEGV or SIGBUS).
     see: semantics.md, "Memory, tag and descriptor operations"
   - ops: ldgd{b,h,w,d,q} stgd{b,h,w,d,q} ldcud{b,h,w,d,q}
-    does: "Loads/stores relative to the global (GD) or compilation-unit (CUD) descriptor; SIGSEGV `SEGV_BNDERR` in an ordinary 64-bit process, but lcc's 32-bit code (`-mptr32`) makes every memory access with `ldgd*`/`stgd*`: the two 32-bit operands are summed modulo 2³², and past `0xf000_0000` they are `SEGV_BNDERR` (x86-support.md; spec/abi/mode32.md)."
+    does: "Loads/stores relative to the global (GD) or compilation-unit (CUD) descriptor; SIGSEGV `SEGV_BNDERR` in an ordinary 64-bit process, but lcc's 32-bit code (`-mptr32`) makes every memory access with `ldgd*`/`stgd*`: the two 32-bit operands are summed modulo 2³², and past `0xf000_0000` they are `SEGV_BNDERR` (x86-support.md; spec/abi/mode32.md); lcc's protected code (`-mptr128`) reads globals with them, checked against the module's `GD` (spec/abi/protected-mode.md)."
   - ops: ldap{b,h,w,d,q} stap{b,h,w,d,q}
-    does: Loads/stores through a protected-mode array pointer; SIGILL `ILL_ILLOPN` in ordinary user mode.
+    does: "Loads/stores through a protected-mode array pointer plus an index, checked against its bounds (SIGSEGV `SEGV_BNDERR`): every pointer access of lcc's protected code (`-mptr128`); SIGILL `ILL_ILLOPN` in a 64-bit process."
+    see: spec/abi/protected-mode.md
   - ops: ldrd strd
     does: Privileged register-space access; SIGILL `ILL_PRVOPC` in user mode.
   - ops: ldod{p,r,w}{b,h,w,d,q} stod{p,r,w}{b,h,w,d,q}
@@ -469,11 +470,12 @@ groups:
   - ops: gettc gettst invtc puttc puttst
     does: "Tag/trap-cell state: `gettc`, `puttc`, `puttst` SIGILL `ILL_ILLOPC` in user mode, `gettst` leaves its destination, `invtc` returns an undecoded value."
   - ops: getpl
-    does: "Prepare a transfer to the offset a from the compilation unit's start (`getpl a, %ctprN`, ALC0) (guide 10.9.2). Into a register: SIGILL `ILL_ILLOPN` with semc's operand in a 64-bit process; in a 32-bit process a procedure label (v3–v5: the address with tag 0xA; v6: a 128-bit label in an even pair, an odd destination SIGILL `ILL_ILLOPC`)."
-    use: "lcc's indirect calls in 32-bit mode (`-mptr32`), 9 cycles before the `call`."
-    see: control-transfer.md; spec/abi/mode32.md
+    does: "Prepare a transfer to the offset a from the compilation unit's start (`getpl a, %ctprN`, ALC0) (guide 10.9.2). Into a register: SIGILL `ILL_ILLOPN` with semc's operand in a 64-bit process; in a 32-bit or protected process a procedure label (v3–v5: the address with tag 0xA; v6: a 128-bit label in an even pair with the module's index in the high word, an odd destination SIGILL `ILL_ILLOPC`)."
+    use: "lcc's indirect calls in 32-bit mode (`-mptr32`), 9 cycles before the `call`; function addresses in protected mode (`-mptr128`)."
+    see: control-transfer.md; spec/abi/mode32.md; spec/abi/protected-mode.md
   - ops: aptoap aptoapb cudtoap gdtoap getsap getva vfsi
-    does: "Protected-mode pointer conversions and checks (v2–v6). In ordinary user mode `aptoap`, `aptoapb` are SIGILL `ILL_ILLOPN`, `cudtoap`, `gdtoap` SIGSEGV `SEGV_BNDERR`, `getsap` SIGILL `ILL_ILLOPC`, `vfsi` SIGBUS `BUS_ADRALN`; `getva a, b` returns the low 48 bits of the pointer a plus b (a = (0x0123456789abcdef, 0x10), b = 0x10 gives 0x456789abcdff)."
+    does: "Protected-mode pointer conversions and checks (v2–v6). In ordinary user mode `aptoap`, `aptoapb` are SIGILL `ILL_ILLOPN`, `cudtoap`, `gdtoap` SIGSEGV `SEGV_BNDERR`, `getsap` SIGILL `ILL_ILLOPC`, `vfsi` SIGBUS `BUS_ADRALN`; `getva a, b` returns the low 48 bits of the pointer a plus b (a = (0x0123456789abcdef, 0x10), b = 0x10 gives 0x456789abcdff). In a protected process (`-mptr128`) they make and narrow pointers: `getsap` allocates stack, `aptoap`/`aptoapb` narrow, `gdtoap` points into the globals, `getva` gives an address."
+    see: spec/abi/protected-mode.md, "Operations"
   - ops: cast odtoap tdtomp gettd getsod
     does: "Object-descriptor operations of v2's protected mode; SIGILL `ILL_ILLOPC` on v3 and v5 (`v2ops.c`)."
 - title: Registers and state

@@ -28,7 +28,7 @@ write the low half of the destination and keep the upper half
 | `andnd a, b, dst` | a & ~b (the **second** operand is inverted) |
 | `ornd a, b, dst` | a \| ~b |
 | `xornd a, b, dst` | a ^ ~b |
-| `merged a, b, dst, pred` | **a when pred is false**, b when true: the reverse of `pred ? a : b`. `~%predN` is accepted. |
+| `merged a, b, dst, pred` | **a when pred is false**, b when true: the reverse of `pred ? a : b`. `~%predN` is accepted. `merges` alike (both model-checked by `tagx.c`, "Other scalar operations") |
 | `sxt n, src, dst` | n = 0, 1, 2: sign-extend 8, 16, 32 bits; n = 4, 5, 6: **zero**-extend 8, 16, 32 bits; 3 = 2, 7 = 6. The guide (10.3.8) has the sign bit the other way round; lcc emits `sxt 0x1` for `short`, `0x5` for `unsigned short` |
 | `smulhd a, b`, `umulhd a, b` | high 64 bits of the signed / unsigned 128-bit product |
 | `popcntd`, `popcnts` | number of set bits |
@@ -373,7 +373,15 @@ below (taking its MXCSR flags, the same layout as `%pfpfr`), the integer
 ones from the rules below. **All 6,880 lines of the 4C and 6,960 of the
 Elbrus-8C2 match** (value, flags and signal); the two machines agree
 except in the v4 operations the 4C lacks. So each rule below is exact on
-those inputs:
+those inputs.
+
+`tools/isa-probes/tagx.c` (`model` section, `gen_tagx.py`) checks
+`muls`, `muld`, `merges`, `merged`, `movts`, `movtd`, `movtq` and
+`fstoistr` the same way, on semx's 40 sets, 140 edge pairs and 2,000
+random inputs each, with `check_tagx.c` on an x86 host: **all 17,440
+lines match on the 4C, the Elbrus-8C2 and the 2C3**, which print the
+same lines. (`fstois`, `fdtois`, `fdtoistr` and `fadds` are also checked
+by `fpenv.c`, below.)
 
 | Operations | Result |
 |---|---|
@@ -382,22 +390,29 @@ those inputs:
 | `fsubs`, `fsubd`, `fmuls` | a − b, a × b, as `subss`/`subsd`/`mulss` |
 | `fmaxs`, `fmins` | `maxss`/`minss`: b if either is a NaN or both are zeros, as `fmaxd` |
 | `fstoid`, `fdtoid` | single or double → 64-bit integer in the current rounding mode (`cvtss2si`, `cvtsd2si`) |
-| `fstoidtr`, `fdtoidtr`, `fdtoistr` | truncating single → 64-bit, double → 64-bit, double → 32-bit (`cvttss2si`, `cvttsd2si`) |
+| `fstoidtr`, `fdtoidtr`, `fdtoistr`, `fstoistr` | truncating single → 64-bit, double → 64-bit, double → 32-bit, single → 32-bit (`cvttss2si`, `cvttsd2si`; `fstoistr`: `tagx.c`) |
 | `idtofs`, `idtofd`, `istofs`, `istofd` | 64-bit integer → single or double, 32-bit → single or double (`cvtsi2ss`, `cvtsi2sd`) |
 | `fstofd`, `fdtofs` | single → double (exact), double → single (`cvtss2sd`, `cvtsd2ss`) |
 | `fdtoifd a, b`, `fstoifs a, b` | **round b to an integral value**, a giving the mode as x86 `roundsd`/`roundss`' immediate: bits 0–1 the rounding mode, bit 2 "use `%pfpfr`'s", bit 3 suppresses inexact (also the `qp` forms of v5, below) |
 | `fscaled a, b`, `fscales a, b` (v4+) | a × 2^b, b a signed 32-bit integer, rounded once, with IEEE flags (C's `ldexp`/`scalbn` in one operation) |
+| `muls a, b`, `muld a, b` | the low 32 bits of the product of the low halves; the low 64 bits of the product (`tagx.c`) |
 | `smulx a, b`, `umulx a, b` | the 64-bit product of two 32-bit operands, signed or unsigned |
 | `sdivx a, b`, `udivx a, b` | 64-bit a ÷ 32-bit b, truncated, into 32 bits; **SIGFPE** when b = 0 or the quotient doesn't fit 32 bits (signed or unsigned) |
 | `smodx a, b`, `umodx a, b` | the remainder of the same division (sign of a); SIGFPE when b = 0 or when a × 2^z, z the number of leading zeros of \|b\| as a 32-bit value, is 2^64 or more (unsigned) or outside [−2^64, 2^64) (signed) |
 | `insfs a, b, c`, `insfd a, b, c` | rotate a right by b's bits 0–4 (`d`: 0–5), then replace its low *n* bits by c's, *n* = b's bits 6–10 (`d`: 6–11); higher bits of b are ignored (in `insfd` bits 13 and 15 choose tags [source: community qemu]) |
 | `mpsadbh a, b` | four 16-bit sums: lane *i* = Σ\_j \|a.byte[i + j] − b.byte[j]\|, j = 0..3 (x86 `mpsadbw` on 64 bits) |
+| `movts`, `movtd`, `movtq` | a copy (`movtq`: both registers of the pair); their tags: "Tag operations" (`tagx.c`) |
 | `merge_<y> a, b, c, dst, pred` | y(c, merge(a, b, pred)): **a when the predicate is false**, b when true (as `merged`), then the combined operation's second stage, `rsub` included |
 
 A conversion out of range or of a NaN gives x86's integer indefinite
 (0x8000000000000000, 0x80000000) and invalid. FP flags include the
-denormal flag for a denormal operand (as for every FP operation,
-below). The modulo operations are the odd ones: they trap
+denormal flag for a denormal operand ("The denormal flag", below),
+except in the conversions to an integer and the round-to-integral
+operations (`fstoid`, `fstoidtr`, `fstoistr`, `fdtoid`, `fdtoidtr`,
+`fdtoistr`, `fdtoifd`, `fstoifs`), which raise only inexact for a
+denormal input, as x86's `cvt*2si` and `round*` do (semx's denormal set
+on the 4C and the 8C2; `tagx.c` on all three). The modulo operations
+are the odd ones: they trap
 where their quotient wouldn't fit only through that leading-zero shift,
 so `umodx 0xffffffffffffffff, 0x80000000` gives 0x7fffffff (a 33-bit
 quotient) while `umodx 0xfedcba9876543210, 0x7fc00000` traps
@@ -736,6 +751,8 @@ glibc) when an operand is denormal, as x86 does: `1 + 4.9e-324`
 (`faddd`) gives flags 0x22 (denormal and inexact), `fmuld` and the
 compare `fcmpltd` with a denormal operand 0x02, and `fadds` the same, on
 the 4C and the Elbrus-8C2 alike; so do the v5 packed operations (below).
+The conversions to an integer and round to integral don't, as on x86
+("Other scalar operations").
 Neither qemu ever sets it. Under `daz` (below) a denormal operand counts
 as zero and sets no flag.
 

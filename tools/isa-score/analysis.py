@@ -11,8 +11,9 @@ possible: the same operations list-scheduled on the chosen ISA version's
             flow  only true register dependences, and memory order only
                   where accesses provably overlap.
 For a single-block loop the measure is the initiation interval: the
-achieved one from simulating two iterations, the possible one
-max(ResMII, RecMII) under each model.
+achieved one the mean of the last LOOP_AVERAGE of LOOP_ITERATIONS
+simulated iterations, the possible one max(ResMII, RecMII) under each
+model.
 """
 
 import itertools
@@ -425,19 +426,29 @@ def _seed_ready(seed, key, op, ch):
 
 # --- Achieved schedule -----------------------------------------------------
 
-def achieved(block, seed=None, iterations=1, trace=None, taken=None):
+# A loop's achieved initiation interval: the mean of the last LOOP_AVERAGE
+# of LOOP_ITERATIONS simulated iterations, since stalls can come every
+# other iteration or every third (a write-back conflict in a pipelined
+# loop stalls every other one: timing.md, "Write-back conflicts").
+LOOP_ITERATIONS = 10
+LOOP_AVERAGE = 6
+
+def achieved(block, seed=None, iterations=1, trace=None, taken=None,
+             average=1):
     """Simulate BLOCK as scheduled, with interlock stalls.  Returns
-    (cycles of the last iteration, cycles of the first, out).  TRACE, a
-    list, receives (iteration, instr, issue, stall, reason).  TAKEN says
-    whether a conditional last transfer is taken; by default a back edge
-    is and other exits are not."""
+    (cycles of an iteration: the mean of the last AVERAGE, cycles of the
+    first, out).  TRACE, a list, receives (iteration, instr, issue,
+    stall, reason).  TAKEN says whether a conditional last transfer is
+    taken; by default a back edge is and other exits are not."""
     if taken is None:
         taken = block.back_edge if block.cond else True
     seed = seed or {}
     t = 0
+    st = 0                         # the same without stalls: as written
     avail = {}                     # key -> (op, chan, issue)
-    fpside, intside = [], []       # recent issues, for write-back conflicts
+    fpside = []                    # (op, chan, issue, st) of recent FP-side
     late = set()                   # (op, issue) whose result arrives late
+    stored = set()                 # (base, off, off) of same-bank store pairs
     slow = {}                      # (op, issue) -> extra cycles (reload)
     last_store = []                # (base, doubleword, issue) of stores
     last_div = None                # (name, issue) of the last divide
@@ -449,9 +460,23 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None):
         if it and block.rotates:
             avail = {((k[0], k[1] + 2) if k[0] == "b" else k): v
                      for k, v in avail.items()}
+            stored = {(((b[0], b[1] + 2) if b[0] == "b" else b), x, y)
+                      for b, x, y in stored}
         for ins in block.instrs:
             issue = t
             wait, why = 0, None
+            # Write-back conflicts (timing.md): an integer-side operation
+            # (ALU or load, not a store) written PORT_DISTANCE cycles after
+            # an FP-side one in its channel delays that one's result.  The
+            # schedule as written decides it (nops count, stalls between
+            # don't), and a consumer in the integer operation's own
+            # instruction waits for the late result too (stbase.c wb_*).
+            for op in ins.ops:
+                if (op.cls in model.INT_SIDE and op.unit == "alc"
+                        and not (op.mem and op.mem[0] == "st")):
+                    for (p, ch, pis, pst) in fpside:
+                        if ch == op.chan and pst + model.PORT_DISTANCE == st:
+                            late.add((id(p), pis))
             for op in ins.ops:
                 for key in op.srcs + op.preds:
                     if key not in avail:
@@ -513,19 +538,26 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None):
                     if w > wait:
                         wait, why = w, f"divider ({op.name} {dist} after {last_div[0]})"
             # Two stores in one instruction to the same bank (address bits
-            # 6-7, base assumed 256-byte aligned) take a cycle more.
+            # 6-7, base assumed 256-byte aligned) take a cycle more, but
+            # only when they store to the same addresses again: the same
+            # base register, not written since, and the same offsets.  In
+            # a stream (the base advancing) they cost nothing (timing.md,
+            # "Throughput"; stbase.c).
             sts = [op.mem for op in ins.ops if op.mem and op.mem[0] == "st"
                    and op.mem[1] is not None and op.mem[2] is not None]
-            bank = 1 if any(a[1] == b[1] and
-                            (a[2] & model.STORE_BANK_MASK)
-                            == (b[2] & model.STORE_BANK_MASK)
-                            for i, a in enumerate(sts) for b in sts[i + 1:]) \
-                else 0
+            pairs = {(a[1], min(a[2], b[2]), max(a[2], b[2]))
+                     for i, a in enumerate(sts) for b in sts[i + 1:]
+                     if a[1] == b[1] and (a[2] & model.STORE_BANK_MASK)
+                     == (b[2] & model.STORE_BANK_MASK)}
+            bank = 1 if pairs & stored else 0
             if bank > wait:
                 wait, why = bank, "two stores to one L1 bank"
             if trace is not None:
                 trace.append((it, ins, issue, wait, why))
             issue += wait
+            stored |= pairs
+            written = {key for op in ins.ops for key in op.dsts}
+            stored = {s for s in stored if s[0] not in written}
             for op in ins.ops:
                 # A load of the doubleword stored in the previous cycle
                 # gets its value STORE_RELOAD_DELAY late (timing.md).
@@ -540,10 +572,7 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None):
                         avail[key] = (op, op.chan, issue)
                 if model.CLASSES.get(op.cls, {}).get("fpside") \
                         and op.unit == "alc":
-                    fpside.append((op, op.chan, issue))
-                if (op.cls in model.INT_SIDE and op.unit == "alc"
-                        and not (op.mem and op.mem[0] == "st")):
-                    intside.append((op.chan, issue))
+                    fpside.append((op, op.chan, issue, st))
             last_store = [x for x in last_store if x[2] >= issue - 1]
             for op in ins.ops:
                 if op.mem and op.mem[0] == "st" and op.mem[1] is not None \
@@ -551,18 +580,19 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None):
                     last_store.append((op.mem[1], op.mem[2] // 8, issue))
                 if model.is_divider(op.name):
                     last_div = (op.name, issue)
-            fpside[:] = [f for f in fpside if f[2] >= issue - 8]
-            for (p, ch, pis) in fpside:
-                if (ch, pis + model.PORT_DISTANCE) in intside:
-                    late.add((id(p), pis))
+            fpside[:] = [f for f in fpside if f[3] >= st - 8]
             t = issue + ins.cycles()
+            st += ins.cycles()
         if block.ibranch and taken:
             t += 6
     starts.append(t)
     shift = exit_shift(block)
     out = {_rotated(k, shift): (p, ch, i - t)
            for k, (p, ch, i) in avail.items()}
-    return starts[-1] - starts[-2], starts[1] - starts[0], out
+    n = max(1, min(average, iterations - 1))
+    ii = (starts[-1] - starts[-1 - n]) / n
+    ii = int(ii) if ii == int(ii) else round(ii, 2)
+    return ii, starts[1] - starts[0], out
 
 
 # --- List scheduling (possible) --------------------------------------------

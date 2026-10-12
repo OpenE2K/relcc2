@@ -69,8 +69,13 @@ ready. A wait costs whole 4-cycle steps (`ceil(early / 4) × 4`), which
 matches every gap measured on the 4C (`selftest.py`). It also models the
 write-back conflict found while validating: an FP-side result going to
 an integer operation, or to an FP operation in the other cluster, is a
-cycle late when an integer operation or load issues in the same channel
-2 cycles after its producer (`spec/isa/timing.md`). Also from
+cycle late when an integer operation or load is written in the same
+channel 2 cycles after its producer. The schedule as written decides it
+(instructions and their `nop`s: a stall between the two, or one holding
+the integer operation's instruction, doesn't remove the conflict), and
+a consumer in the integer operation's own instruction waits for the
+late result too (`spec/isa/timing.md`, `tools/isa-probes/stbase.c`
+`wb_*`). Also from
 `timing.md`: a load of the aligned doubleword stored in the instruction
 just before gets its value 8 cycles late (same base register, offsets
 in one doubleword); a divide 1 cycle after another waits 4 (every
@@ -80,9 +85,14 @@ cycles after another 2, and anything within 9 cycles of an `smodx` or
 `umodx` until those 9 have passed (the fractional rates at distance 2
 are not modelled); two stores in one instruction with the same base
 whose offsets agree in bits 6–7 take a cycle more (the base is assumed
-256-byte aligned); an `aaurw` or `aaurwd` (an array-prefetch register
-write) takes its register like a store's data, an integer result from
-either cluster the next cycle (`tools/isa-probes/aaurwct.c` on the 4C
+256-byte aligned), but only when the same two addresses were stored
+before: the same base register, not written since, and the same offsets
+(in a stream, the base advancing, they cost nothing; until 2026-10-13
+the model charged every such pair, which hid the write-back conflict of
+the proof-of-concept back end's daxpy kernel, its finding I35); an
+`aaurw` or `aaurwd` (an array-prefetch register write) takes its
+register like a store's data, an integer result from either cluster
+the next cycle (`tools/isa-probes/aaurwct.c` on the 4C
 and the 8C2). Under `setwd dbl = 0`, which the model reads from each
 function's `setwd`, a 32-bit integer result (`adds`, `ands`, `shls`,
 `muls`, `merges`, `gettagd`, `rrs`, the combined 32-bit operations;
@@ -115,7 +125,10 @@ it. For a block ending in a conditional transfer `score.py` also
 computes both outcomes (`achieved_taken`, `achieved_fall` in `--json`),
 which `profile.py` weights by measured taken fractions. A loop's
 achieved cost is its initiation
-interval, from simulating three iterations, plus a one-time entry cost.
+interval, the mean of the last 6 of 10 simulated iterations (a
+write-back conflict in a pipelined loop stalls every other iteration;
+until 2026-10-13 the model took the third of three, which reads 4 or 8
+for a loop that alternates), plus a one-time entry cost.
 
 **Possible** list-schedules the block's operations: the ALU channels each
 operation may use on the ISA version (`spec/isa/binutils-ops.yaml`),
@@ -198,7 +211,13 @@ one 128-bit register (the disassembly names it like a pair), `ldqp`
 takes 11 cycles (served by L2), and an array-prefetch area delivers 16
 bytes a cycle (lcc's v5 `sum -O3` reads 32 an iteration). Built with
 the 4C-tuned lcc (`--target v3.4c`) the 4C results are the same as
-with the generic one.
+with the generic one. The rules of 2026-10-13 (write-back conflicts as
+written, the store-bank cycle only for repeated addresses, loops
+averaged) change no block of these kernels: rerun on the 8C2, every
+kernel within 2% (`k_empty` up to 1.12), the same prediction as the
+model before them on the same samples. They take
+`tools/isa-probes/stbase.c`'s 103 pipelined and straight kernels from
+36 to 103 matching on each of the three machines.
 
 The delay matters. Until 2026-10-12 every kernel was called 20,000
 times back to back, so each kernel's run was strictly periodic (a few

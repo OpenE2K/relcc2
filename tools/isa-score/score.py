@@ -60,7 +60,8 @@ def analyse(path, iset, only=None):
             out = {}
             if b.succ_self:
                 ii, first, out["achieved"] = analysis.achieved(
-                    b, seed("achieved"), iterations=3)
+                    b, seed("achieved"), iterations=analysis.LOOP_ITERATIONS,
+                    average=analysis.LOOP_AVERAGE)
                 row["achieved"] = ii
                 row["entry_achieved"] = max(0, first - ii)
                 resmii = analysis.res_mii(b, dec)
@@ -120,6 +121,11 @@ def fmt_ratio(a, b):
     return f"{a / b:5.2f}" if b else "    -"
 
 
+def fmt_cycles(c, width):
+    """C (an int, or a loop's mean initiation interval) in WIDTH columns."""
+    return f"{c:{width}d}" if isinstance(c, int) else f"{c:{width}.2f}"
+
+
 def report(rows, iset, top, out):
     p = lambda *a: print(*a, file=out)  # noqa: E731
     p(f"ISA version: elbrus-v{iset}"
@@ -170,8 +176,9 @@ def report(rows, iset, top, out):
         tag = " loop" if r["loop"] else ""
         extra = f"  (ResMII {r['resmii']})" if r["loop"] else ""
         p(f"  {r['addr']:#10x} {r['func'][:24]:24s} {r['ops']:4d}"
-          f" {cost(r, 'achieved'):8d} {cost(r, 'regs'):5d}"
-          f" {cost(r, 'flow'):5d}{tag}{extra}")
+          f" {fmt_cycles(cost(r, 'achieved'), 8)}"
+          f" {fmt_cycles(cost(r, 'regs'), 5)}"
+          f" {fmt_cycles(cost(r, 'flow'), 5)}{tag}{extra}")
 
 
 def explain(path, iset, addrs):

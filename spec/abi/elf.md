@@ -24,7 +24,7 @@ only lcc's sequences are run.
 | `e_machine` | `EM_MCST_ELBRUS` = 175 |
 | `e_flags` bits 24–31 | Machine: the ISA version or a CPU model (below) |
 | `e_flags` & `0x10` | `EF_E2K_INCOMPAT`: code runs only on that machine, not on later ones |
-| `e_flags` & `0x20` | `EF_E2K_PM`: protected mode (not this document) |
+| `e_flags` & `0x20` | `EF_E2K_PM`: protected mode ([protected-mode.md](protected-mode.md)) |
 | `e_flags` & `0x40` | `EF_E2K_PACK_SEGMENTS` (protected mode) |
 | `e_flags` & `0x3` | `EF_E2K_IPD`: instruction prefetch depth; 0 is the default (readelf: "default ipd") |
 | `e_flags` & `0x4`, `0x8` | `EF_E2K_X86APP`, `EF_E2K_4MB_PAGES` (binary compiler, kernel; not used by a compiler) |
@@ -165,7 +165,7 @@ Dynamic tags (binutils, glibc):
 | `DT_E2K_LAZY` | `DT_LOPROC + 1` | Lazy binding that patches a literal in each PLT entry; not produced |
 | `DT_E2K_LAZY_GOT` | `DT_LOPROC + 3` | Lazy binding through `.got.plt` (current; below). ld.so binds a module lazily only if one of these tags is present |
 | `DT_PLTGOTSZ` | `DT_LOPROC + 0x101b` | Size of `.got` |
-| `DT_INIT_GOT`, `DT_EXPORT_PL`, `DT_EXPORT_PLSZ`, `DT_REAL_PLTGOT`, `DT_E2K_NO_SELFINIT` | following values | Protected mode |
+| `DT_INIT_GOT`, `DT_EXPORT_PL`, `DT_EXPORT_PLSZ`, `DT_REAL_PLTGOT`, `DT_E2K_NO_SELFINIT` | following values | Protected mode ([protected-mode.md](protected-mode.md), "ELF and linking") |
 
 ## Executable stack: `.note.GNU-stack` and `PT_GNU_STACK` (lcc, binutils, glibc, kernel, hw)
 
@@ -632,7 +632,8 @@ same again built for the Elbrus-2C3 (v6, `run.sh v6.2c3 --ssh-port
   `DT_E2K_LAZY_GOT`, so ld.so would bind it eagerly. `ld.bfd` is the only
   usable linker.
 
-## Not covered yet
+## Other modes
 
-- Protected mode (separate relocation types, `%g12`). 32-bit mode is in
-  [mode32.md](mode32.md).
+32-bit mode is in [mode32.md](mode32.md), protected mode (its own
+relocation types, `%g12` as the thread pointer, a PLT that hands over 8
+register pairs) in [protected-mode.md](protected-mode.md).

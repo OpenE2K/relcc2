@@ -55,7 +55,8 @@ these entries for a 64-bit task (`%osem`; kernel
 | 7, 8 | fast and ordinary calls of protected mode: protected tasks only |
 
 32-bit code uses entries 1 and 5 ([mode32.md](mode32.md), "Kernel"),
-protected code 8 and 7; both are out of scope here.
+protected code 8 and 7 ([protected-mode.md](protected-mode.md), "System
+calls"); both are out of scope here.
 
 ```
 { sdisp %ctpr1, 0x3              ; entry 3

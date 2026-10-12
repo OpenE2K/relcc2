@@ -4,7 +4,8 @@
 This document records how lcc's 32-bit mode differs from the 64-bit ABI
 of the other documents in this directory; anything it doesn't mention
 is as there ([README.md](README.md)). Protected mode (`-mptr128`) is a
-different mode. v7 is out of scope.
+different mode ([protected-mode.md](protected-mode.md)). v7 is out of
+scope.
 
 Marks as in [README.md](README.md). **kernel** paths are relative to
 `OpenE2K/linux/arch/e2k/` (generic files start with `linux/`), **glibc**

@@ -15,7 +15,7 @@ procedures); macros from `lcc -dM -E -xc /dev/null`.
 | `__iset__` | ISA version: 3..7 | same | glibc (142 files: ISA-specific code) | define, from `-march` |
 | x86 feature macros: `__MMX__`, `__SSE__` … `__SSE4_2__`, `__SSSE3__`, `__AVX__`, `__AVX2__`, `__FMA__`, `__AES__`, `__SHA__`, `__BMI2__`, `__POPCNT__` and more (lcc-builtins.md) | 1 on every target, no option needed | ? | programs choosing an x86 SIMD path; lcc's `<immintrin.h>` emulates the intrinsics | don't define (owner's decision: no x86 intrinsics in the GCC port; lcc-builtins.md) |
 | `__elbrus_4c__`, `__elbrus_8c__`, `__elbrus_1cplus__`, `__elbrus_8c2__`, `__elbrus_12c__`, `__elbrus_16c__`, `__elbrus_2c3__`, `__elbrus_48c__`, `__elbrus_8v7__` | with `-mtune=<cpu>` (or a CPU-specific lcc such as `e2k-v3.4c`) | no | glibc (14 files) | define with `-mtune` |
-| `__ptr64__` (`__ptr32__`, `__ptr128__` in the other modes) | 1 | `__ptr64__` | glibc (`__ptr128__`: 137 files), Linux | define |
+| `__ptr64__` (`__ptr32__`, `__ptr128__` in the other modes; `__PROTECTED__` is a deprecated alias of `__ptr128__`: [protected-mode.md](protected-mode.md)) | 1 | `__ptr64__` | glibc (`__ptr128__`: 137 files), Linux | define |
 | `_LP64`, `__LP64__` | 1 | 1 | everything | define |
 | `__LCC__` (version: 129, 131), `__LCC_MINOR__`, `__MCST__` | yes | no | glibc's installed headers: see below | **do not define** |
 | `_REENTRANT` 1 with `-pthread` (the only macro `-pthread` adds) | yes | ? | configure scripts: autoconf's `AX_PTHREAD` rejects `-pthread` without it (xz) | define with `-pthread` (`CPP_SPEC "%{pthread:-D_REENTRANT}"`, as GCC's aarch64 and riscv Linux targets) |

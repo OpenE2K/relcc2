@@ -220,8 +220,10 @@ for `__cpu_info`. The builtins:
 
 The 20 descriptor and tag builtins exist only with `-mptr128`; four
 (`get_ap_color`, `create_ap_subarray_color`, `apincr_color`,
-`size_to_align`) only for v7. lcc-builtins-misc.yaml has their code;
-protected mode is untested here (ALT Linux has no `e2k128` runtime).
+`size_to_align`) only for v7. lcc-builtins-misc.yaml has their code.
+The protected-mode probes ([protected-mode.md](protected-mode.md)) ran
+`is_ptr_ap`, `is_ptr_pl`, `is_ptr_nv`, `get_ap_base`, `get_ap_size` and
+`get_ap_curptr` on the 4C, 8C2 and 2C3; the others are untested.
 
 ### `<e2kintrin.h>` helpers [lcc, hw]
 

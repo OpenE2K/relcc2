@@ -27,7 +27,29 @@ callee:
 - The C convention's parameter area is **4 pairs = 8 registers** (kernel
   `C_ABI_PSIZE_UNPROT`).
 - Tail calls: `ct` to a function without `call` keeps the current window, so
-  arguments are placed in the caller's own `%dr0..` (unipro).
+  arguments are placed in the caller's own `%dr0..` (unipro). lcc does
+  the same at `-O2` and `-O3`: `return g (x + 1)` is `disp %ctpr1, g`,
+  `addd %r0, 0x1, %r0` and `ct %ctpr1`, also from a function with a
+  frame or with stack arguments [lcc 1.29.16 v3.4c, v5.8c2, v6.2c3 and
+  1.31.05; `tools/abi/probes/pocplan.c` `tail1`, `tail_frame`,
+  `tail10`]. It passes the stack slots in an area of its own frame, even
+  where the incoming area would do (a `getsp` of 16 bytes for one
+  argument in `tail1`, 0x50 for ten in `tail10`, slots 8 and 9 stored
+  there; `tail_frame` reuses the outgoing area of its earlier call), and
+  releases neither that area nor the rest of its frame before the `ct`.
+  So the data stack grows at each tail call until the last callee
+  returns (its return restores `USD` from the chain stack): against a
+  direct call, the callee's locals sit 16 bytes lower after `tail1`, 48
+  after `tail_frame` (its whole frame), 80 after `tail10`, and 16 bytes
+  lower for each of 10 or 20 mutually recursive tail calls [hw:
+  `tools/abi/probes/pocplan_tail.c`, 4C, 8C2, 2C3, and MCST's qemu].
+  GCC's `gcc.dg/sibcall-3.c` and `sibcall-9.c`, which check that a
+  local's address stays the same across sibling calls of a one-argument
+  function, therefore abort with lcc's code; `sibcall-4.c` and `-10.c`
+  (no arguments, no area) pass [hw: lcc 1.29.16 `e2k-v3` `-O2
+  -fno-inline`, 4C, 8C2, 2C3]. Releasing the frame before the jump, as
+  GCC's sibling calls do, is compatible with this: a callee sees only
+  the `USD` it is entered with (inferred).
 
 ## Argument slots (guide 9.5.1; lcc, unipro, libffi)
 

@@ -1087,6 +1087,38 @@ M3; lcc's model costs `nfx = 0` and two-part spills (`std` + `sth` of
 `movfi`'s result), the pair model costs a `movif`/`movfi` (4 cycles)
 around every operation.
 
+The port's programs link MCST's libm, which misbehaves once a program
+clears the sticky FP flags or rounds down (`spec/abi/registers.md`,
+"MCST glibc's FP bugs"). This matters when `sqrt` is expanded inline
+with `-fmath-errno`, GCC's default: `sqrt` of a negative number must
+then set `errno` to `EDOM`, which only the library call does.
+
+Compute the root on every path with plain `fsqrtid`/`fsqrttd` (not
+`,sm`, unless FP speculation is allowed; section 7.6), and call `sqrt`
+after it for errno only, ignoring its result. The root then raises
+invalid before the call, so libm's own 0/0 is an ordinary NaN and the
+call returns; the root's NaN for −1.0 is the one libm returns [hw:
+`tools/abi/probes/libmchk.c` `rootfirst`, 4C, 8C2, 2C3].
+
+GCC's default is the other shape. The pass that makes it is call DCE
+(`tree-call-cdce.cc`; its header comment, :96-102, shows the result:
+`if (x < 0) y = sqrt (x); else y = IFN_SQRT (x);`). `use_internal_fn`
+(:1185-1260) adds the internal function `.SQRT` (only when the port
+has a `sqrt<mode>2` pattern, which then expands it:
+`internal-fn.def:408`, `builtins.cc:2304`) and keeps the libm call for
+out-of-range operands only; `shrink_wrap_one_built_in_call_with_conds`
+(:918; its `bi_newcall` part, :1050-1088) moves `.SQRT` into the
+in-range arm and joins the two results with a PHI. On the error path nothing raises invalid before the
+call, so with `FE_INVALID` clear `sqrt (-1.0)` dies with SIGILL inside
+libm (`libmchk.c` `rootlast`). The pass reads no target hook, so the
+shape above needs a change to it (inferred).
+
+lcc's own expansion has the same problem. Its call path traps the same
+way, and at `-O3` its root is `fsqrttd,sm`, which returns a diagnostic
+for `sqrt (2.0)` when `FE_INEXACT` is clear [lcc 1.29.16 `-O3`, v3.4c:
+`fsqrtid,5,sm`, then `fsqrttd,5,sm … ? %pred0` and `call … ? ~%pred0`
+for `return sqrt (x);`].
+
 ### D9. Assembly output conventions
 
 Owner's decision: emit what lcc emits.
@@ -1508,7 +1540,9 @@ load needs no `BEGIN_CONTROL` check. The exceptions, all measured:
   if-converts some straight-line FP code; a program that clears the
   flags with `feclearexcept` then dies with SIGILL in lcc's loops
   (spec/isa/speculation.md, "What lcc speculates", 4C/8C2/2C3), and
-  lcc users build such code with `-fno-spec-fp`. A checked form is
+  lcc users build such code with `-fno-spec-fp`. MCST's libm is built
+  that way too, so such a program can also die inside libm, whatever
+  the port does (D8). A checked form is
   possible (item 5): a speculative operation reading the result, with
   `rbranch ? %dt_alN`, catches the diagnostic.
 - Integer division: `sdivd,sm` by zero gives a diagnostic; safe to
@@ -2280,6 +2314,17 @@ and Blackfin (`bfin_gen_bundles`, bfin.cc:3989).
 5. **Hardware** for anything involving tags, speculation, or timing:
    qemu differs from the 4C (see the tag-trap note in
    `calling-convention.md`).
+6. **Failures that come from MCST's libm**, not from the port
+   (`spec/abi/registers.md`, "MCST glibc's FP bugs"):
+   - A test that clears the FP flags and then calls libm can die with
+     SIGILL inside it. `gcc.dg/torture/pr68264.c` dies in `acos`, also
+     when lcc builds it [hw: 8C2].
+   - A test that calls `fmod` or `remainder` in `FE_DOWNWARD` can hang
+     (mainline's `gcc/testsuite` has none).
+   - A test that checks the flags libm raises for domain errors fails
+     (inferred).
+
+   Build such a test with lcc too before debugging the port.
 
 ---
 

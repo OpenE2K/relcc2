@@ -112,7 +112,8 @@ C++ exceptions use MCST's E2K `libgcc_s`:
   the intermediate returns with the `set_backtrace` system call.
 - The layout of saved registers in the procedure stack differs between
   v1–v4 and v5+ (32 bytes per register pair vs. 16 bytes per register), so
-  libgcc checks the CPU at run time.
+  libgcc checks the CPU at run time (the layout: "Scanning for roots"
+  below).
 - glibc's unwinder interface also looks up `_Unwind_GetPCSP`, an E2K
   extension returning the chain stack position of a frame, exported by
   libgcc_s as `_Unwind_GetPCSP@GCC_3.0` (MCST's `libgcc-std.ver.in`).
@@ -244,6 +245,106 @@ cross the signal frame as `siglongjmp` does, so the C thread survives
 (glibc `nptl/unwind.c`; inferred). A port that uses MCST's unwinder inherits all of
 this; it needs no `MD_FALLBACK_FRAME_STATE_FOR` (signal frames have no
 FDE and are skipped like any other frame without one).
+
+## Scanning for roots [hw: `tools/abi/probes/hwscan.c` with `hwscan.s`, lcc 1.29.16 `-O2`; 4C, 8C2 and 2C3 unless marked]
+
+On E2K the registers of every caller are in the procedure stack, not on
+the data stack. So a conservative collector that scans only the data
+stack, as on x86, misses pointers that live only in registers. In
+`hwscan` a `malloc`ed pointer is kept in a register of a function,
+where an `asm` barrier holds it, with 4 and with 41 frames between it
+and the scanner. It is in none of the data stack's words between the
+scanner and the top of the main stack. In the procedure stack it is in
+that function's `%r2` and `%r3`. There are also stale copies in unused
+registers of the frames between: in one frame on the 8C2 and 2C3, and
+in three on the 4C, two of them tagged. The collector must read the
+procedure stack:
+
+1. Call `access_hw_stacks (E2K_GET_PROCEDURE_STACK_SIZE, 0, 0, 0,
+   &size)`, then `E2K_READ_PROCEDURE_STACK_EX` from offset 0 for `size`
+   bytes. Make both calls from one function, since the size changes with
+   every call ([kernel-interface.md](kernel-interface.md), "Access").
+   The read costs about 100 to 130 cycles per chain frame of the stack
+   (kernel-interface.md, "What a call costs"). The kernel has spilled
+   everything. The copy ends with the registers below the call (`wbs`
+   pairs) of the function that made the system call. Through glibc
+   these are `syscall ()`'s 5 pairs. For an assembly function that calls
+   the kernel itself, they are its `%r0`–`%r15` (`wbs` = 8), in the last
+   256 bytes. That function's registers above `wbs` (the system call's
+   arguments) are not in the copy. No part of any window stays only in
+   registers.
+2. To tell the frames apart, also read the chain stack (modes 4 and 6).
+   Walk down from the top chain frame; mode 4 counts one frame for the
+   current function. Each frame's area is its `wbs` × 32 bytes, just
+   below the previous one's, as in MCST's unwinder. A collector that
+   scans every word needs no frame map.
+3. The layout of a frame's area, for register N (an assembly frame with
+   known values in `%r0`–`%r15`; `setwd nfx = 0` and `nfx = 1` alike):
+
+   | | v1–v4 (4C) | v5+ (8C2, 2C3) |
+   |---|---|---|
+   | `%rN`, the low 64 bits | 32 × ⌊N / 2⌋ + 8 × (N mod 2) | 16 × N |
+   | the rest of the register: on v1–v4 the 16-bit extension (an 80-bit value's high part); on v5+ the upper 64 bits (also a 128-bit value's high half, `hwscan.c` section 7) | 32 × ⌊N / 2⌋ + 16 + 8 × (N mod 2) | 16 × N + 8 |
+   | that slot after an ordinary 64-bit write | stale bits, tag 0 (seen: up to 16 bits) | 0, tag 5 |
+
+   On v1–v4 only the value slots, half of the words, can hold a pointer.
+   On v5+ the second slot can hold one too. lcc's v5 code moves 16-byte
+   data, such as a structure with two pointers, through 128-bit
+   registers (`qppackdl` + `stqp`, [operations-v5.md](../isa/operations-v5.md)),
+   so a collector there must scan every word.
+4. The copy keeps the tags, but an ordinary load reads a tagged word as
+   a plain number without trapping ([speculation.md](../isa/speculation.md),
+   "Spill and fill"). A C mark loop over the copy ran over a diagnostic
+   value without trapping, and so did Boehm GC (below). A scanner must
+   not read the copy with the fill MAS.
+5. A thread stopped by a signal (Boehm GC stops threads with SIGPWR)
+   reads its stacks inside the handler. Its copy has the interrupted
+   function's whole window as an ordinary frame (`wbs` = its `wsz`: all
+   4 pairs of the probe's assembly loop). Then comes the trampoline
+   frame (`[trampolines]+0x100`, `wbs` 0, `cr1.pm` 1), then the
+   handler's frames. `uc_extra.proc_stack_offset` is where the
+   interrupted thread's part ends, and `uc_extra.chain_stack_offset` is
+   the trampoline frame's offset (480 and 128 in the probe).
+   `%g16`–`%g31` are in the signal frame on the data stack
+   (`uc_extra.g`; `%g20` at `ucontext` + 1,880), so a data-stack scan
+   from the handler's stack pointer covers them. `%g0`–`%g15` are in
+   neither stack: they stay in the registers, and the handler read the
+   interrupted `%g4` at entry. Code that follows the register convention
+   keeps no pointer there ([registers.md](registers.md): temporaries
+   only in `%g16`–`%g31`). No global survives a call, so the collecting
+   thread itself holds nothing in globals.
+6. Boehm GC 8.2.2 (`libgc.so.1` of Elbrus Linux on the 8C2 and 2C3; ALT
+   Linux on the 4C ships none). Its `gc.h` gives E2K a `reg_base` ("the
+   bottom of the register stack") in `struct GC_stack_base`, as for
+   IA-64 [source: the installed header; the library's source is not
+   installed]. It reads the procedure stack through glibc's `syscall
+   ()`: mode 5 twice, then mode 7 from offset 0 for the size returned,
+   into a buffer on the data stack. It does this in the collecting
+   thread and in each stopped thread's SIGPWR handler, and it never
+   reads the chain stack [hw, 8C2: `strace -f` and an `LD_PRELOAD`
+   logger of `syscall ()`; every one of its 43 reads in a run was the
+   whole stack from offset 0, and all mode 4 and 6 calls were the
+   probe's own]. So each collection copies every thread's whole
+   procedure stack onto that thread's data stack. Results (`hwscan.c`
+   built with `-DHWSCAN_LIBGC`), at least two runs on each machine, all
+   the same:
+
+   | Object referenced only from | Result |
+   |---|---|
+   | a register of a function 6 or 43 calls above `GC_gcollect` | kept |
+   | nothing (control) | finalized |
+   | `%r1`, `%r4` or `%r7` of a thread stopped in an assembly loop | kept |
+   | a register of the frame below the stopped one, or a local on its data stack | kept |
+   | `%g20` of the stopped thread, also as an interior pointer | kept |
+   | **`%g4` of the stopped thread** | **finalized while still referenced** |
+   | (`GC_gcollect` called below a frame that holds a diagnostic value) | no trap |
+
+   The first row's object also survived one more collection after its
+   function had returned. A leftover copy somewhere kept it; the probe
+   did not find where. Stale stack slots do the same on other targets.
+   So code compiled under the register convention is scanned correctly.
+   A program that keeps a heap pointer only in `%g0`–`%g15` (a global
+   register variable) must also keep it in a root the collector sees.
 
 ## Debug information (gdb, lcc)
 

@@ -14,9 +14,10 @@ and the 2C3 (Elbrus Linux 9.5.5, kernels `6.1.0-1.17-e8c2` and
 `6.1.0-1.18-e2c3`) agree, unless a row names one of them. The probes are
 `tools/abi/probes/sysabi.c` (sections 1–10; `./sysabi maps` for the PIE
 and static builds), `sigeh.cc` with `sigeh-c.c` (exceptions and
-cancellation), `pgprof.c` (`-pg`), `sanitize.c` (`lcc -S`) and
-`ctlcost.cc` (what the calls on the hardware stacks cost), built by each
-machine's own lcc 1.29.16.
+cancellation), `pgprof.c` (`-pg`), `sanitize.c` (`lcc -S`), `ctlcost.cc`
+(what the calls on the hardware stacks cost) and `hwscan.c` with
+`hwscan.s` (what the copies of the stacks hold), built by each machine's
+own lcc 1.29.16.
 
 ## System calls
 
@@ -235,7 +236,7 @@ assume where it is:
 (except +0x600), and chain-stack reads through `access_hw_stacks` set
 `cr1.pm` in their copy of such frames, "useful for JITs to distinguish
 frames with actual user data" (kernel `kernel/backtrace.c:43,176`,
-`kernel/e2k_syswork.c:2581-2584`).
+`kernel/e2k_syswork.c:2581-2584`; hw: "Access" below).
 
 ## Signals
 
@@ -408,10 +409,25 @@ void *real_size)` (254):
 | 3 `E2K_GET_CHAIN_STACK_OFFSET`, 10 `E2K_READ_CHAIN_STACK_NATIVE` | offset of a chain address (also in a moved area); chain stack in the CPU's format |
 | 0, 1, 2 | deprecated reads (EPERM on v7), write from the base |
 
+Chain frames read with mode 6 carry only the predicates (`pf`), the IP,
+`ss`, `wbs`, `wpsz`, `ic`, `br`, `wdbl` and `ussz`. `wfx` always reads
+0 [source: kernel `kernel/e2k_syswork.c:2560-2590`; hw: frames of
+functions with `setwd nfx = 0` and `nfx = 1` both read 0]. A frame that
+returns into the trampoline page reads `pm` = 1 and `wbs` = 0 [hw:
+`tools/abi/probes/hwscan.c` section 5, the frame below a signal
+handler]. Mode 7 copies keep the memory tags [hw: `hwscan.c`, read back
+with the fill MAS]. A diagnostic register's slot has tag 5 in the
+user's buffer, and on v5+ the second slot (the upper 64 bits) of every
+register written by an ordinary 64-bit operation reads 0 with tag 5. An ordinary load returns a
+tagged word as a plain number ([speculation.md](../isa/speculation.md),
+"Spill and fill"), so C code can scan the copy without trapping.
+
 The kernel spills the stacks itself (no `flushr`/`flushc` needed). A
-conservative garbage collector (Boehm, libgo, druntime) finds callers'
-register values only through modes 5 and 7 (inferred); the layout differs
-between v1–v4 and v5+ ([stack-and-unwinding.md](stack-and-unwinding.md)).
+conservative garbage collector finds callers' register values only
+through modes 5 and 7, and Boehm GC does exactly this; the layout
+differs between v1–v4 and v5+ [hw:
+[stack-and-unwinding.md](stack-and-unwinding.md), "Scanning for
+roots"].
 `long get_backtrace (unsigned long *buf, size_t count, size_t skip,
 unsigned long flags)` (253) returns the return addresses of the caller's
 callers, skipping `skip` more and the trampoline frames ("just return"
@@ -569,7 +585,6 @@ drivers expect anyway. A static link with an ifunc crashes ld
   `uc_link`, reuse by key, switch cost.
 - What `%g16`–`%g31` read as in a handler before it writes them; what
   `sigreturn` takes from a modified frame.
-- Signal frames as `access_hw_stacks` shows them (`cr1.pm`), and
-  `get_backtrace` across a handler.
+- `get_backtrace` across a handler.
 - lcc's sanitizers on hardware (MCST's map predates the 6.1 layout,
   above).

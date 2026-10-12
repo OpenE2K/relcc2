@@ -15,9 +15,11 @@ and the 2C3 (Elbrus Linux 9.5.5, kernels `6.1.0-1.17-e8c2` and
 `tools/abi/probes/sysabi.c` (sections 1–10; `./sysabi maps` for the PIE
 and static builds), `sigeh.cc` with `sigeh-c.c` (exceptions and
 cancellation), `pgprof.c` (`-pg`), `sanitize.c` (`lcc -S`), `ctlcost.cc`
-(what the calls on the hardware stacks cost) and `hwscan.c` with
-`hwscan.s` (what the copies of the stacks hold), built by each machine's
-own lcc 1.29.16.
+(what the calls on the hardware stacks cost), `hwscan.c` with
+`hwscan.s` (what the copies of the stacks hold) and `ctxsig.c` with
+`ctxsig.s` (user contexts, edited signal frames, globals across system
+calls and in handlers, the chain stack seen from a handler), built by
+each machine's own lcc 1.29.16.
 
 ## System calls
 
@@ -178,44 +180,149 @@ there. Resolvers, `target_clones` and `__builtin_cpu_supports` must call
 `__builtin_cpu_init` first or read `%idr`
 ([semantics.md](../isa/semantics.md)) (inferred).
 
-## User contexts [source]
+## User contexts [source; hw: `ctxsig.c` section 1]
 
 Context switching is done by the kernel, which owns the hardware stacks
 (glibc `ucontext.h:51-56` and the `*context.c` files; kernel
 `kernel/proc_context.c`). There is **no `makecontext`**
 (`stdlib/makecontext.c` is the ENOSYS stub; lcc's sysroot exports none).
+[hw] in this section means `tools/abi/probes/ctxsig.c` section 1, on
+which the 4C, 8C2 and 2C3 agree apart from addresses.
 
 | Function | Implementation |
 |---|---|
 | `int getcontext (ucontext_t *)` | glibc stores `%cr0`, `%cr1`, `%usd` with `rrd`; fast call 4 stores the signal mask, the caller frame's stack pointers, `sbr`, `%fpcr`/`%fpsr`/`%pfpfr` and the context key (`fast_syscalls.h:370-412`) |
 | `int setcontext (const ucontext_t *)` | system call 369 `(ucp, 8)` |
 | `int swapcontext (ucontext_t *, const ucontext_t *)` | system call 371 `(oucp, ucp, 8)`: saves and loads the signal mask, `%cr0`/`%cr1`, the stack registers and the three FP control registers (`proc_context.c:1515-1548, 1828`) |
-| `int makecontext_e2k (ucontext_t *, void (*)(void), int argc, ...)` | system call 370 `(ucp, makecontext_helper, 8 * (argc + 4), buf, 8)`; allocates a procedure and a chain stack, so it can fail (−1, errno ENOMEM, EINVAL or EFAULT) |
-| `int freecontext_e2k (ucontext_t *)` | system call 372 `(ucp)`: frees them; ENOENT for an unknown context, EBUSY for the running one (`proc_context.c:1264-1295`) |
+| `int makecontext_e2k (ucontext_t *, void (*)(void), int argc, ...)` | system call 370 `(ucp, makecontext_helper, 8 * (argc + 4), buf, 8)`; allocates a procedure and a chain stack, so it can fail (−1, errno ENOMEM, EINVAL or EFAULT; `EINVAL` for a 0- or 16-byte stack [hw]) |
+| `int freecontext_e2k (ucontext_t *)` | system call 372 `(ucp)`: frees them; `ENOENT` for an unknown context, `EBUSY` only for the calling thread's own running context (`proc_context.c:1264-1295`) [hw: a made context freeing itself and the main context freed from main both gave `EBUSY`. The main context freed from inside a made context while it was suspended gave 0, and the later return through `uc_link` to it failed with `ESRCH`. A finished context gave 0 and a second free `ENOENT`. A made context that never ran, freed through a `memcpy` copy, gave 0, and freeing the original then gave `ENOENT`] |
 
 - The context runs on `uc_stack` (base and size aligned to 256,
-  `proc_context.c:1132-1138`), whose top is its **key**, kept in
-  `uc_mcontext.nr_TIRs` (kernel `include/asm/ucontext.h:38-55`): copies of
-  a `ucontext_t` name one context. An unused context with the same key is
-  reused, a busy one silently dropped (`proc_context.c:1143-1222`; the
-  comment names gccgo). Its hardware stacks start at 16 and 4 KiB
-  (`kernel/process.c:714-718`); `uc_sigmask` is cleared and the FP fields
-  get the defaults (`proc_context.c:972-1013`).
+  `proc_context.c:1132-1138`). Its top is the context's **key**, which
+  `makecontext_e2k` writes to `uc_mcontext.nr_TIRs` (kernel
+  `include/asm/ucontext.h:38-55`) [hw]. A switch looks the target up by
+  the key in the `ucontext_t` it is given (`ESRCH` if no context has it,
+  `EBUSY` if that context is running; `proc_context.c:804-822`,
+  `311-330`), so every copy of a `ucontext_t` names the same context.
+  From that `ucontext_t`, as it is at the time of the switch, the switch
+  also loads the signal mask, `%fpcr`/`%fpsr`/`%pfpfr`, `cr0_hi`, `cr1`
+  and the chain-stack position (`proc_context.c:1515-1527`).
 - glibc passes the arguments as 8-byte slots copied from its `va_list`
   (so no 16-byte arguments) after `ucp`, the function, `argc` and a
-  zero; the kernel loads the first 8 slots into `makecontext_helper`'s
-  registers and copies the rest to the new stack, and the helper calls the
+  zero. The kernel loads the first 8 slots into `makecontext_helper`'s
+  registers and copies the rest to the new stack. The helper calls the
   function with them in `%b[0]`–`%b[7]` (glibc `makecontext.c`,
-  `makecontext_helper.S`; `proc_context.c:686-765`).
-- On return the helper calls `exit (0)` if `uc_link` is null, else returns
-  into `[trampolines]+0x400`, which calls `setcontext (uc_link)` (and
-  `exit` if that fails).
-- Switching to a frame on the same hardware stacks is a kernel `longjmp`
-  that assumes the frame was called with 4 pairs handed over
-  (`proc_context.c:1842-1852`).
+  `makecontext_helper.S`; `proc_context.c:686-765`). [hw: with 0, 3, 8
+  and 12 `long` arguments every one arrived, the 9th to 12th included.]
+- **`uc_link` is read twice** [hw, source]. When the function returns,
+  glibc's `makecontext_helper` loads `uc_link` from the `ucontext_t` that
+  was passed to `makecontext_e2k`, as the field is at that moment, not
+  from a copy the context was started through. **It loads only the low
+  32 bits** (`ldw` at offset 8, then `cmpedb` with 0; glibc
+  `makecontext_helper.S`, where `LDP` is `ldw` for 64-bit code). If they
+  are zero, the helper calls glibc's `exit (0)`, which runs atexit
+  handlers and ends the process. That also happens for a non-null
+  `uc_link` whose low 32 bits are zero, such as an object at a 4 GiB
+  boundary. Otherwise the helper returns into `[trampolines]+0x400`. The
+  trampoline tests and uses the full 64-bit `uc_link` that the kernel
+  **copied at `makecontext_e2k` time** (`proc_context.c:735-753`,
+  `proc_context_stacks.c:46-51`) and calls `setcontext` on it. If the
+  copied value was null, or that `setcontext` fails, it makes the `exit`
+  system call (number 1, not `exit_group`), which **ends only the calling
+  thread**: no atexit handlers, no stdio flush. The status is 0 for a
+  null value and the error number for a failed `setcontext` (kernel
+  `kernel/trap_table.S:1297-1328`). Hardware results:
+  - A `uc_link` at 0x7_0000_0000 ran the atexit handler and exited 0.
+    The control at 0x7_0000_0100 returned to the main context.
+  - Changing `uc_link` from the main context to null after
+    `makecontext_e2k` ran the atexit handler and exited 0.
+  - Changing it from null to the main context exited 0 without running
+    the handler. In a second thread the same change ended only that
+    thread: `pthread_join` returned 0 and the process went on.
+  - Changing it to another context B, starting from a copy whose
+    `uc_link` is B, or starting from a copy whose `uc_link` is null,
+    returned to the main context.
+  - A `uc_link` naming an unknown key exited with status 3 (`ESRCH`), as
+    did one naming a main context freed while it was suspended.
 
-Every switch is a system call; a context's stacks live until
-`freecontext_e2k` or exit.
+  So set `uc_link` before `makecontext_e2k`, leave it unchanged, and
+  never let the context it names lie at an address whose low 32 bits are
+  zero.
+- **Each context has its own FP control registers and signal mask**
+  [hw]. `makecontext_e2k` clears `uc_sigmask` and writes the process
+  defaults to `uc_extra` (`fpcr` 0x33f, `fpsr` 0x3f, `pfpfr` 0x1fbf;
+  `proc_context.c:954-1035`). A switch loads both from the target
+  `ucontext_t` and saves the current ones into `oucp`. The new context
+  started with rounding to nearest and all flags set (`%fpcr` read back
+  as 0x37f). It set rounding toward zero and overflow, then switched
+  back. The main context's upward rounding and inexact flag were
+  unchanged, and the context found its own settings again when resumed.
+  `getcontext` followed by `setcontext` on one stack also restores the
+  FP state saved by `getcontext`. Unlike a signal handler ("Signals"), a
+  context switch does keep the FP environment. The signal mask works the
+  same way. With USR1 blocked in the main context, a context whose
+  `uc_sigmask` got TERM after `makecontext_e2k` started with only TERM
+  blocked. It blocked USR2 and switched back, and the main context still
+  had only USR1 blocked. The resumed context had USR2 and TERM.
+
+Contexts and their keys [hw]:
+
+| Case | Result |
+|---|---|
+| Starting a made context through a `memcpy` of its `ucontext_t`; resuming a suspended context through a copy of the state `swapcontext` saved | works |
+| `makecontext_e2k` again on a suspended context's stack (same key) | returns 0 and reuses the context; switching to it starts the function again from the top. The state saved at the suspension now names the new context: **switching to that state kills the process (SIGKILL)** |
+| `makecontext_e2k` on the running context's own stack, from inside it | returns 0. The new context takes the key (the kernel drops the running one from its table; the comment names gccgo, `proc_context.c:1143-1222`) and runs when switched to. Switching back to the old context's saved state kills the process (SIGKILL) |
+| A switch to a context that is running in another thread | −1, `EBUSY` |
+| `setcontext` or `swapcontext` to a key that no context has | −1, `ESRCH`. The same for a context freed with `freecontext_e2k`: after the suspended main context was freed, the return through `uc_link` to it ended with the trampoline's exit status 3 (`ESRCH`) |
+| `getcontext` before the thread's first switch | the key is the top of the thread's data stack (the end of `[stack]`). `freecontext_e2k` of it gives `ENOENT`: the kernel creates the main context at the first switch (`save_main_coroutine`, `proc_context.c:1736-1746`) |
+
+A switch whose saved chain-stack position or IP is not the target
+context's top frame is finished by a kernel `longjmp` on the target's
+stacks, which assumes the frame was called with 4 pairs handed over
+(`proc_context.c:1832-1852`). If the saved position is not on those
+stacks, as for a state saved before the context was made again,
+`do_longjmp` does not find the frame and **kills the process instead of
+returning an error** (kernel `kernel/signal.c:1504-1545`,
+`unwind_stack`, `force_sig (SIGKILL)`). So a program may remake a
+context only when it no longer needs any saved state of the context's
+earlier run.
+
+A context's hardware stacks, a 16 KiB `[procedure stack]` and a 4 KiB
+`[chain stack]`, are mapped by `makecontext_e2k` itself, before the
+first switch (kernel `kernel/process.c:714-718`) [hw:
+`/proc/self/maps`]. **`freecontext_e2k` does not unmap them**: the
+kernel keeps freed hardware stacks in a per-process cache of up to
+1 MiB and gives them to the next context or thread (kernel
+`kernel/process.c:479-576`; the free itself waits for an RCU grace
+period, `proc_context.c:351-405`) [hw: 200 ms after `freecontext_e2k`
+the stacks were still mapped, and the next `makecontext_e2k` with a new
+key mapped nothing new]. Every switch is a system call.
+
+**What a switch costs** [hw, `ctxsig.c` `cost`; `%clkr` cycles per
+iteration over 20,000 iterations (2,000 for the `makecontext_e2k` row),
+pinned to the last CPU, min–max of three runs under the shared timing
+lock]:
+
+| Operation | 4C | 8C2 | 2C3 |
+|---|---|---|---|
+| `swapcontext` round trip (two switches between two contexts) | 3,195–3,197 | 3,277–3,308 | 3,293–3,337 |
+| `getcontext` (fast call 4) | 146–147 | 146–175 | 158–165 |
+| `getcontext` + `setcontext` back to it (same stack) | 2,645–2,649 | 3,209–3,217 | 3,205–3,266 |
+| `setjmp` + `longjmp` from one call down | 2,949–2,957 | 3,308–3,314 | 3,349–3,358 |
+| `sigsetjmp (b, 0)` + `siglongjmp` | 2,988–2,993 | 3,309–3,312 | 3,347–3,354 |
+| `sigsetjmp (b, 1)` + `siglongjmp` | 3,105–3,115 | 3,497–3,502 | 3,474–3,484 |
+| `makecontext_e2k` (key reused) + switch + return through `uc_link` | 6,262–6,310 | 6,420–6,433 | 7,025–7,049 |
+| `getppid` (for scale) | 513–516 | 454–455 | 431–432 |
+
+A switch costs about 1,600 cycles, three to four plain system calls.
+`longjmp` is the `e2k_longjmp2` system call, and a `setjmp` + `longjmp`
+costs about as much as a `swapcontext` round trip (glibc's `setjmp` is
+the macro `_setjmp` and `_longjmp` an alias of `longjmp`, so `_setjmp` +
+`_longjmp` measured the same; more in
+[stack-and-unwinding.md](stack-and-unwinding.md), "setjmp/longjmp,
+contexts"). Saving and restoring the signal mask adds about 120 cycles
+on the 4C and 2C3 and 190 on the 8C2. A coroutine library pays a kernel
+entry for every transfer.
 
 **The trampoline page.** The kernel maps one read-execute page,
 `[trampolines]` (kernel `kernel/trampolines.c`, `include/asm/stacks.h:36-38`;
@@ -365,7 +472,7 @@ mapped privileged from `USER_HW_STACKS_BASE` up (kernel
 |---|---|---|---|
 | Limit (glibc / kernel number) | `RLIMIT_P_STACK` 10001 / 16 | `RLIMIT_PC_STACK` 10002 / 17 | glibc `bits/resource.h:117-120`; kernel `include/asm/rlimits.h:15-16`, `kernel/sys_e2k.c:81-118` |
 | Default soft / hard limit | 128 MiB / 128 GiB | 8 MiB / 128 GiB | kernel `include/asm/rlimits.h:9-10`, `kernel/setup.c:503-508`; hw (`/proc/self/limits` lists them as "Max procedure stack size" and "Max chain stack size") |
-| Initial size | 16 KiB | 4 KiB | hw (`/proc/self/maps`: `[procedure stack]`, `[chain stack]`, also a 4 KiB `[signal stack]`) |
+| Initial size | 16 KiB | 4 KiB | hw (`/proc/self/maps`: `[procedure stack]`, `[chain stack]`, also a 4 KiB `[signal stack]`); also each context's (`makecontext_e2k`, "User contexts") [hw] |
 | Per call | 32 bytes × `wbs` (the caller's pairs below the callee) | 32 bytes | hw: with a 1 MiB limit, 8,208 nested calls at `wbs = 4` (128 bytes each) and 32,784 by the chain stack |
 
 `getrlimit`/`setrlimit`/`prlimit64` map 10001/10002 to 16/17.
@@ -581,10 +688,12 @@ drivers expect anyway. A static link with an ifunc crashes ld
 ## Not checked yet
 
 - Disabled entries and entry 4; fast call 5.
-- `makecontext_e2k`/`swapcontext`/`freecontext_e2k` round trip,
-  `uc_link`, reuse by key, switch cost.
 - What `%g16`–`%g31` read as in a handler before it writes them; what
   `sigreturn` takes from a modified frame.
 - `get_backtrace` across a handler.
+- Signals delivered while a made context runs; switching to a context
+  suspended in another thread; `freecontext_e2k` of a context running in
+  another thread (the kernel checks only the calling thread's context,
+  so presumably it is freed: source).
 - lcc's sanitizers on hardware (MCST's map predates the 6.1 layout,
   above).

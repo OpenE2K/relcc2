@@ -383,7 +383,9 @@ the context and can fail) and `freecontext_e2k` (372, which frees them)
 instead (glibc `ucontext.h`, `makecontext.c`, `Versions`; lcc
 1.29.16's sysroot has no `makecontext`). Code written for
 `makecontext` (coroutine libraries, gccgo's goroutines) needs porting,
-and every switch is a system call [source]. A compiler only needs to
+and every switch is a system call [source] of about 1,600 cycles [hw:
+[kernel-interface.md](kernel-interface.md), "User contexts", which also
+has what `uc_link`, keys and `freecontext_e2k` do]. A compiler only needs to
 treat `setjmp` as returning twice. The compat suite (`longjmp` unit)
 checks `longjmp` across frames built by another compiler, from recursion
 depths up to 200 (enough to spill register windows to the procedure
@@ -449,4 +451,7 @@ Saving the mask costs `sigsetjmp` one fast `siggetmask` call (fast call
 Restoring it costs `siglongjmp` less than 100 cycles more than
 `longjmp`: 50 to 85 on the 4C and 8C2, 15 to 75 on the 2C3. A `longjmp`
 out of one frame costs as much as 6 or 7 `getppid` calls, or about as
-much as returning normally through 100 frames.
+much as returning normally through 100 frames, or as a `swapcontext`
+round trip, two context switches (3,200 to 3,300 cycles;
+`tools/abi/probes/ctxsig.c` measured both in one harness:
+[kernel-interface.md](kernel-interface.md), "User contexts") [hw].

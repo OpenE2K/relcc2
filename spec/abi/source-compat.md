@@ -302,6 +302,18 @@ Register names for `-ffixed-<reg>` and `-fcall-used-<reg>` (as in GCC):
   without that it "could cause runtime errors". GCC marks only `setjmp`,
   `sigsetjmp`, `savectx`, `vfork` and `getcontext` (`gcc/calls.cc`,
   `special_function_p`).
+- **`setcontext`** is treated as a function that never returns: lcc
+  1.29.16 at `-O1` to `-O4` and `-Os`, and 1.31.05 at `-O1` and `-O3`.
+  `-fno-builtin`, `-fno-builtin-setcontext` and `-ffreestanding` don't
+  change it, and glibc's declaration says only `__THROWNL`. lcc emits
+  nothing after the call except the `ct %ctpr3` it prepared before it. A
+  call empties `%ctpr1`–`%ctpr3`, so when `setcontext` fails (`ESRCH`
+  for an unknown key) and returns, that `ct` traps and the process dies
+  with SIGILL [lcc, hw: `tools/abi/probes/ctxsig.c` section 1 on the 4C,
+  8C2 and 2C3]. At `-O0`, or when the function is called through another
+  name with `__asm__ ("setcontext")`, lcc keeps the code after the call.
+  A compiler that wants lcc's behaviour can mark `setcontext` noreturn
+  by name; one that doesn't is correct in both cases.
 - **`__attribute__((cleanup))`**: lcc runs the cleanup only on a normal
   exit from the scope, not while a C++ exception unwinds through a C
   function (GCC runs it in both cases).

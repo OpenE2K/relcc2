@@ -84,8 +84,19 @@ Hardware: the owner has an Elbrus 4C (v3) and 8CB (v5); a contact lends an
 Elbrus-2C3 (v6). v7 is in development. Timings are the same for v1..v5 and
 differ from v6 (measured: timing.md, "Elbrus-2C3 (v6)").
 
-- **4C (v3)**: `ssh -i secrets/id_ed25519 -o IdentitiesOnly=yes
-  claude@ringo.lan` (key in untracked `secrets/`, never commit or copy it).
+- **Connect only with relcc2's key.** Use `tools/setup/e2k-ssh` and
+  `tools/setup/e2k-scp` (ssh/scp with `-i <key> -o IdentitiesOnly=yes
+  -o BatchMode=yes`; they find the key from any directory and from git
+  worktrees, or take `RELCC2_SSH_KEY`, and refuse to run without it).
+  A plain `ssh claude@...` offers the owner's personal keys, which the
+  machines log as failed logins; so does an `-i` whose path doesn't
+  resolve (a relative `secrets/...` outside the repository root, a
+  worktree without `secrets/`) or options kept in a shell variable
+  (the Bash tool is zsh: `ssh $opts` passes one word). The Python tools
+  (`sshkey.py`), the `run.sh` probes and the DejaGnu boards all refuse
+  to connect without the key.
+- **4C (v3)**: `tools/setup/e2k-ssh claude@ringo.lan` (key in untracked
+  `secrets/id_ed25519`, never commit or copy it).
   4× E2S, 16 cores, 61 GiB DDR3 (two memory channels per processor
   instead of three), ALT Linux, native lcc 1.29.16, gdb, perf.
   It is a shared machine, not a container: keep parallelism low (about
@@ -95,8 +106,8 @@ differ from v6 (measured: timing.md, "Elbrus-2C3 (v6)").
   Never remove `~/relcc2` itself or other agents' subdirectories; the
   account's dotfiles stay. `bench.py --remote-dir` and `run.py
   --remote-dir` choose the subdirectory.
-- **8C2 (v5)**: `ssh -i secrets/id_ed25519 -o IdentitiesOnly=yes
-  claude@geofront.lan` (the same key). Elbrus-8C2 (E8C2, cpu family 5),
+- **8C2 (v5)**: `tools/setup/e2k-ssh claude@geofront.lan` (the same
+  key). Elbrus-8C2 (E8C2, cpu family 5),
   8 cores, one socket, 1500 MHz (`performance` governor since
   2026-10-04; `%clkr` counts 1500 MHz), 125 GiB
   DDR4 (all four memory channels populated), Elbrus Linux 9.5.5 (OS Elbrus, kernel 6.1), native lcc 1.29.16
@@ -169,7 +180,9 @@ spec/NOTICE.md attribution and licence of spec/
 doc/           plans for the owner: gcc-port-plan.md (how to write the GCC port)
 docs/          spec-poc-findings.md: spec problems found by toolchains/gcc-claude
                (kept by the agent working there)
-tools/setup/   install reference toolchains into toolchains/
+tools/setup/   install reference toolchains into toolchains/; e2k-ssh and
+               e2k-scp (and sshkey.py for Python tools): ssh/scp to the
+               Elbrus machines with relcc2's key only
 tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas;
                     count_lcc_ops.py (lcc-usage.yaml), gen_operations.py
                     (operations-v{3,5,6,7}.md), count_lcc_preds.py

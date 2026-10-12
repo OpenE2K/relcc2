@@ -1033,7 +1033,9 @@ arrays in areas it keeps 4 cycles from L1, L2 and memory (apb.md,
 | `rws %fpcr` → `rrs %fpcr` | yes | |
 | `rws %pfpfr` (rounding mode) → FP operation | yes | |
 | FP operation → `rrs %pfpfr` (exception flags) | yes | |
-| **`rwd %lsr` → `rrd %lsr`** | **no** | old value at distance 1–3, new from 4 |
+| **`rwd %lsr` → `rrd %lsr`**; v5+ also `rwd %lsr1` → `rrd %lsr1` or `rrd %lsr`, and `rwd %lsr` → `rrd %lsr1` | **no** | old value at distance 1–3, new from 4 (`loops.c`, `lsrw.c`; 4C, 8C2, 2C3) |
+| `rwd %lsr`, `%lsr1` or `%ilcr` → `rrd %ilcr` or `%ilcr1` | **no** | old value at distance 1–4, new from 5 (`lsrw.c`) |
+| **`rwd %lsr` or `%lsr1` → the loop's `alc`** | **no** | iterations issued 1–3 cycles after the write count down the old `%lsr`, the new count applies from 4 ([loops.md](loops.md), "Registers") |
 | anything in the same wide instruction | — | every operation reads the state from before the wide instruction (distance 0 sees the old value) |
 
 gas, for operations written outside braces (its `strict_delay` mode,
@@ -1306,9 +1308,6 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
 ## Not measured yet
 
 - v4, v7; v6 on the Elbrus-16C (the 2C3 is the v6 machine measured).
-- How soon a write of a loop-mode register other than `%lsr` takes
-  effect (`%lsr1`, `%ilcr`; a `%lsr` write also sets `%ilcr`,
-  loops.md).
 - Throughput of the pipelined 64-bit packed FP operations (`pfadd*`,
   `pfmul*`, `pfcmp*` …; the packed divides and square roots are in
   "Every v3 operation", "The divider") and of byte and halfword loads

@@ -1327,7 +1327,8 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
 
 ## Not measured yet
 
-- v4, v7; v6 on the Elbrus-16C (the 2C3 is the v6 machine measured).
+- v4; v6 on the Elbrus-16C (the 2C3 is the v6 machine measured). v7
+  is out of scope (not in silicon).
 - Throughput of byte and halfword loads and stores; whether the store
   bank rule involves physical address bits. (Measured on this page:
   128-bit operations, "Elbrus-8C2 (v5)" (`v5tp_*`); 64-bit packed FP

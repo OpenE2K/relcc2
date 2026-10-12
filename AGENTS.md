@@ -605,8 +605,8 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   `mas6.c`): acquire/release forms 0x13/0x53 run (acquire load 10.4
   cycles in a chain, release store ~4 against 15.8 for `wait` + store),
   0x12 `,sm` is the fully speculative load, 0x11/0x13 `,sm` the lock
-  loads. lcc's v6 code uses `fmad` only under `-ffast-math`. v4 and v7
-  are not measured.
+  loads. lcc's v6 code uses `fmad` only under `-ffast-math`. v4 is not
+  measured; v7 is out of scope (no silicon).
 
   Every v3 operation's latency (`bench.py --only v3op`, 807 chains,
   timing.md "Every v3 operation"; the three machines agree except as
@@ -966,11 +966,14 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
    tag-trap tests, which pass on the 4C and on the 8C2 (v5, `--target
    v5.8c2 --remote claude@geofront.lan`).
 2. The relcc2 work listed in `doc/gcc-port-plan.md` section 11 that is
-   left: timing on other generations (v4 via the community, v7) with
-   `tools/isa-timing/bench.py`; the "Not checked yet" items still in
-   spec/ (contexts across threads, the 4C's `SEGV_ACCERR`, v7).
-3. APB leftovers: v7 only (`spec/isa/apb.md`). Protected
-   (`e2k128`) and 32-bit modes.
+   left: v4 timing (via the community) with `tools/isa-timing/bench.py`;
+   the "Not checked yet" items still in spec/.
+3. Protected (`e2k128`) and 32-bit modes: documented for completeness
+   only; the port won't target them.
+
+v7 is out of scope: it is not in silicon yet and we have no access
+(owner, 2026-10-12). What the spec says about v7 comes from binutils,
+the kernel and the community qemu; don't plan work on it.
 4. ELF leftovers: none known (`R_E2K_PREF` is checked by
    `tools/abi/probes/prefrel.sh`).
 

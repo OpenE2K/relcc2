@@ -3017,8 +3017,8 @@ Useful next pieces of relcc2 work for the port, in rough order:
    `tools/dejagnu` (a smoke suite checks each board).
 2. **Timing tables** for more generations with
    `tools/isa-timing/bench.py`: the 4C (v3), 8C2 (v5) and 2C3 (v6)
-   tables are in `spec/isa/timing.md`; v4 (via the community) and v7
-   are left.
+   tables are in `spec/isa/timing.md`; v4 (via the community) is left
+   (v7 is out of scope: not in silicon, no access).
 3. **Channel/resource data** from `binutils-ops.yaml` in a form easy to
    turn into reservations (data only; the generator that writes `.md`
    belongs in the port). Done: `spec/isa/reservations.yaml`, written by
@@ -3036,10 +3036,10 @@ Useful next pieces of relcc2 work for the port, in rough order:
    prepare and `setwd` in one instruction about 19,800 times in its v3
    code, a prepare and a `ct` 16,000, two MAS accesses 20,300.
 4. **Speculation leftovers** (`spec/isa/speculation.md`): done for v3,
-   v5 and v6 (the 2C3, including its MAS forms); v7 is left.
+   v5 and v6 (the 2C3, including its MAS forms).
 5. **Loop mode leftovers** (`spec/isa/loops.md`): `ldovl` and the
    loop-register write timing are done on all three machines, `abg`
-   on v5 and v3 (lcc never emits it); v7 is left.
+   on v5 and v3 (lcc never emits it).
 6. Review of the port's output against `spec/` and lcc, and test
    triage.
 

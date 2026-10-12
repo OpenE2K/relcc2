@@ -554,4 +554,4 @@ only. A C compiler still has no use for them.
 
 ## Not checked yet
 
-- v7.
+(v7 is out of scope: not in silicon.)

@@ -810,5 +810,5 @@ where the guard is false.
 
 - Quad lock and check loads on v3 (`ldq` exists only in protected
   mode there).
-- Partial speculative loads across pages on v7 (kernel
-  `cpu_features.h`).
+- (v7, with its partial speculative loads across pages, kernel
+  `cpu_features.h`, is out of scope: not in silicon.)

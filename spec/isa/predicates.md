@@ -677,6 +677,6 @@ Neither qemu can be trusted on predicates beyond the basics:
 ## Not checked yet
 
 - `%bgrpred`; `%lcntex` as an RLP or MRGC condition (no gas syntax);
-  ctcond type 11 (v7; no hardware); type 9 with `ibranchd`, and with no
+  type 9 with `ibranchd`, and with no
   integer compare in ALC N or an FP compare or `cctop*` there (gas
   rejects all three, so a test needs hand encoding).

@@ -814,7 +814,7 @@ dot product 7× faster on a 64 MiB array there.
 
 ## Not checked yet
 
-- v6 on the Elbrus-16C; v7.
+- v6 on the Elbrus-16C. (v7 is out of scope: not in silicon.)
 - Why two areas in one half walk columns more slowly with 4 KiB pages
   ("Which half an area is in"; TLB misses handled per half is a guess,
   no TLB events were counted), and why plain loads that miss L1 slow

@@ -77,7 +77,9 @@ Ranked by how directly a compiler or a JIT can use them.
    predicate: `__builtin_add_overflow`, `__builtin_sub_overflow` and
    32-bit `__builtin_mul_overflow` (`smulx_fw`, `umulx_fw`) in two
    operations, where lcc emits ten (an add, three compares, four
-   predicated moves and two extensions; lcc never
+   predicated moves and two extensions; for a multiply it divides the
+   product by each operand, two `sdivs` or `sdivd` of 11-18 cycles
+   each [lcc 1.29.16 `-O3`, v3-v6; 1.31.05, v6 and v7]; lcc never
    uses the flag operations except through its four
    `__builtin_e2k_*_f*` builtins). The `_fd` forms (v3+) do 64-bit add
    and subtract; there are no 64-bit multiply flags. Both run only in

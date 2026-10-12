@@ -71,7 +71,9 @@ a shift and an `and` (or two shifts) elsewhere:
 `tools/isa-probes/getf.c` runs every offset, length, sign bit and BYTE
 value with five values of src1 (368,640 cases a machine) against the
 community qemu's two helpers, and the 4C follows its v1 rule, the
-Elbrus-8C2 its v5 rule, in every case:
+Elbrus-8C2 its v5 rule, in every case; the 2C3 follows the v5 rule too
+(327,680 `getfd` and 40,960 `getfs` cases, none differing from the v5
+model):
 
 - **The sign bit.** v5 sign-extends from the field's top bit, bit
   (offset + *len* − 1) mod width of src1. v1–v4 take it from bit
@@ -103,7 +105,15 @@ x, 0x1d4`; `(x >> 37) & 1` → `getfd x, 0x65`; sign-extending shifts
 `(long) (x << 52) >> 52` → `getfd x, 0x3300`; bit-field reads
 (`s.b`, a signed 22-bit field at bit 13: `getfd w, 0x958d`, a 32-bit
 literal because BYTE 4 sets bit 15); `x >> k` and `x & 0xfff` stay
-`shrd` and `andd`. Where it doesn't use `getf` and could:
+`shrd` and `andd`. On 32-bit values it uses `getfs` where the field
+stays 32-bit (inside a computation, CoreMark's `crcu16`), and `getfd`
+only on a whole 64-bit register: after `sxt 6` (zero-extension) under
+`dbl = 0`, after a load, or on a result that `dbl = 1` zero-extended
+(`((x ^ y) >> 3) & 0x1ff` returned: `setwd dbl = 1`, `xors`, `getfd`)
+[lcc 1.29.16 `-O3`, v3 and v5]. So it never reads a 32-bit result's
+upper half, which under `dbl = 0` arrives 4 cycles after the producer
+instead of 1 (timing.md, "Formats") and may be diagnostic. Where it
+doesn't use `getf` and could:
 
 - **Low masks wider than 32 bits**: `x & 0xffffffffff` is `andd` with a
   64-bit literal (two literal syllables of the four an instruction
@@ -196,9 +206,15 @@ when true (64 bits, or the low 32 for `s`), else 0, with the exceptions
 of the table above; they are x86 `cmpsd`/`cmpss` (`semx.c`, below).
 
 `fcmpud*f` is the quiet compare that C's `isless` family needs; lcc
-writes `isless (a, b)` as `fcmpuddf` then `r == 1`, `isgreaterequal`
-as `r == 0 || r == 0x40` [lcc]. **MCST's qemu raises invalid for
-`fcmpud*f` on a quiet NaN** (it treats it like `fcmpod*f`).
+writes `isless (a, b)` as `fcmpuddf` then `r == 1` (`cmpesb`),
+`isgreater` as `r == 0`, `islessequal` and `isgreaterequal` as two
+`cmpesb` (`r == 1` or `0`, and `r == 0x40`) joined by `landp`;
+`islessgreater` as the quiet predicate compares `fcmpoddb` and
+`fcmpneqdb` joined by `andp`, `isunordered` as `fcmpuoddb`, and `long
+double` with `fxcmpudxf`. `a < b || a > b` is two signalling
+`fcmpltdb` [lcc 1.29.16 `-O3`, v3 and v5]. **MCST's qemu raises
+invalid for `fcmpud*f` on a quiet NaN** (it treats it like
+`fcmpod*f`).
 
 ## FP min, max and combined operations [hw]
 
@@ -207,7 +223,12 @@ as `r == 0 || r == 0x40` [lcc]. **MCST's qemu raises invalid for
   is **b**. (`fmaxd NaN, 1` = 1, `fmaxd 1, NaN` = NaN, `fmaxd 0, −0` =
   −0.) They implement `a > b ? a : b`, so a compiler may use them only
   where that is the source's semantics (or under `-ffinite-math-only`
-  with no signed-zero concerns).
+  with no signed-zero concerns). lcc `-O3` (1.29.16 and 1.31.05) also
+  uses them for `a >= b ? a : b` and `a <= b ? a : b`, which is wrong
+  for signed zeros: `+0 >= −0 ? +0 : −0` gives −0 and
+  `−0 <= +0 ? −0 : +0` gives +0, where `-O2` and below keep a compare
+  and a select and give C's +0 and −0 [lcc, v3 and v5; hw: 4C, the two
+  selects built at `-O3` and at `-O2`].
 - **Combined operations** `X_Y a, b, c, dst` (gas operand order)
   compute **`Y(c, X(a, b))`**: the second stage takes `c` as its
   *first* operand. So `_sub` is **c − (a X b)** and `_rsub` is
@@ -480,11 +501,13 @@ small tests at `-O3`): **`insfs`/`insfd` for bit-field stores**
 (`p->y = v` for a 7-bit field at bit 5 is `insfs word, 0x1c5, v` then
 `scls 5` to rotate the word back), about 2,800 times in those three
 libraries; **`smulx`/`umulx` for `(long) a * b`** of two 32-bit values;
-`fscales` for `scalbnf` under `-ffast` on v4+ (`ldexp` stays a call).
-It computes `int % int` as `sdivs`, `muls`, `subs`, and `smodx` appears
-once in its C library, on a sign-extended 32-bit dividend (where the
-limit can't be reached); it never uses `sdivx`/`udivx`, `mpsadbh` or the
-flag operations below.
+`fscales` for `scalbnf` on v4+, already at `-O2` and `-O3` without
+`-ffast` (lcc 1.29.16 for v4.8c, v5.8c2 and v6.2c3; 1.31.05 for
+v5.8c2), but never for `scalbn`, `ldexp` or `ldexpf`, which stay calls
+even with `-ffast` or `-fno-math-errno`. It computes `int % int` as
+`sdivs`, `muls`, `subs`, and `smodx` appears once in its C library, on
+a sign-extended 32-bit dividend (where the limit can't be reached); it
+never uses `sdivx`/`udivx`, `mpsadbh` or the flag operations below.
 
 ### x86 flag operations
 
@@ -508,13 +531,17 @@ as a 32-bit result; the suffix gives the x86 operand width (`_fb` 8,
 Neither qemu implements the flag forms (both stop at them), and the
 community qemu evaluates `cctopl` as true when SF and OF are both set.
 lcc doesn't emit any of them for C: its `__builtin_add_overflow` on
-`int` is ten operations of compares and selects, where `adds_fw` then
-`cctopo` give the overflow predicate (and `cmposb a, b` alone gives
-subtraction's). A flag form's result reaches an integer operation or
-`cctop` in its own cluster in 2 cycles and one in the other cluster in
-4, so the `cctop` in its own channel in 2 and the other `cctop` in 4.
-The multiplies' result reaches `cctop` or any integer operation in 6.
-`cctop*` reaches a predicated operation in 2 (1 on v6) and a `ct` in 3
+`int` is ten operations of compares and selects (6 wide instructions
+with the store and the return), and its `__builtin_mul_overflow`
+divides the product by each operand, two `sdivs,sm` (`sdivd,sm` for
+`long`) in 12 wide instructions [lcc 1.29.16 `-O3` for v3, v5 and v6,
+1.31.05 for v6 and v7 alike], where `adds_fw` then `cctopo` give the
+overflow predicate (`smulx_fw` a 32-bit multiply's, and `cmposb a, b`
+alone subtraction's). A flag form's result reaches an integer operation
+or `cctop` in its own cluster in 2 cycles and one in the other cluster
+in 4, so the `cctop` in its own channel in 2 and the other `cctop` in
+4. The multiplies' result reaches `cctop` or any integer operation in
+6. `cctop*` reaches a predicated operation in 2 (1 on v6) and a `ct` in 3
 (timing.md). `cctopo x` is bit 11 of x's low half for any register
 value, so a compiler can model it as `(x & 0x800) != 0` [hw:
 `tools/isa-probes/pocchk4.c` `cc`: 2^20 values per condition with

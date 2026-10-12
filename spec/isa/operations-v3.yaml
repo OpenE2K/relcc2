@@ -198,7 +198,7 @@ groups:
     see: semantics.md, "Square root and reciprocals"
   - ops: fmax{s,d} fmin{s,d}
     does: x86 `maxsd`/`minsd`, **b** if either is a NaN or both are zeros. 2 cycles, 4 to an integer op.
-    use: "`smax`, `smin` only under `-ffinite-math-only` or for `a > b ? a : b`."
+    use: "`smax`, `smin` only under `-ffinite-math-only` (and no signed zeros), or for `a > b ? a : b` and `a < b ? a : b`; not for `>=` or `<=`, which lcc `-O3` maps to them too, wrongly for signed zeros."
     see: semantics.md, "FP min, max and combined operations"
   - ops: fcmp{eq,lt,le,uod,neq,nlt,nle,od}{s,d}b
     lat: "4; 5 to `ct`"
@@ -212,7 +212,7 @@ groups:
   - ops: fcmp{ud,od}{s,d}f
     lat: "4 to an integer op or `cctop`, in either cluster"
     does: "x86 `ucomisd`/`comisd` flags into a register: less 0x01, equal 0x40, greater 0, unordered 0x45; `ud` quiet, `od` signalling."
-    use: "C's `isless` family: `fcmpuddf` then a `cmpand*`."
+    use: "C's `isless` family: `fcmpuddf`, then an integer test of the flags (lcc: `cmpesb r, 1` for `isless`, two `cmpesb` and `landp` for `islessequal`); pipelined like any FP operation (lcc's `c += isless (a[i], b[i])` is a one-instruction kernel on v5)."
     see: semantics.md, "Floating-point compares"
   - ops: fstois fstoistr fstoid fstoidtr fdtois fdtoistr fdtoid fdtoidtr
     lat: "4; 6 to an integer op"

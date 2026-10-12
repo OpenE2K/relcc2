@@ -139,7 +139,7 @@ groups:
     see: semantics.md, "Field extract"
   - ops: fscale{s,d}
     does: "a × 2^b, b a signed 32-bit integer, rounded once with IEEE flags. v4+; ALC1/4."
-    use: "`ldexp<mode>3` with `-fno-math-errno` (lcc's libm: `ldexpf`, `scalbnf`, `__kernel_rem_pio2`)."
+    use: "`ldexp<mode>3` with `-fno-math-errno` (lcc's libm: `ldexpf`, `scalbnf`, `__kernel_rem_pio2`). lcc inlines `scalbnf` as `fscales` at `-O2` and up, but keeps `ldexp`, `ldexpf` and `scalbn` calls even with `-ffast`."
     see: semantics.md, "Other scalar operations"
   - ops: fxscalesx
     does: "80-bit a × 2^b (b a 32-bit integer), **rounded to the precision control** unlike x87 `fscale`. v4+."

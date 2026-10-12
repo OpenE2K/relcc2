@@ -296,9 +296,9 @@ not global** (`.L` labels and plain local labels alike), gas emits it
 against `*ABS*` plus the label's section offset, and after linking the
 `pref` points at that offset taken as an absolute address (0x1000 for a
 label at `.text`+0x1000); a `pref` of a global symbol is right. So use a
-global symbol (`tools/isa-probes/gen_ctlleft.py` does) [source; checked
-with gas and ld of lcc 1.29.16 on a scratch file]. `pref` runs in user
-mode and works ([control-transfer.md](../isa/control-transfer.md), "Code
+global symbol (`tools/isa-probes/gen_ctlleft.py` does) [source; lcc
+1.29.16's gas and ld: `tools/abi/probes/prefrel.sh`]. `pref` runs in
+user mode and works ([control-transfer.md](../isa/control-transfer.md), "Code
 not in the instruction cache"); no compiler we have emits it.
 
 ## Assembler syntax (gas, lcc)

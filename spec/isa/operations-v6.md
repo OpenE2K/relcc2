@@ -62,14 +62,14 @@ six it doesn't implement.
 | `fmas`, `fmad`, `fmss`, `fmsd`, `fnmas`, `fnmad`, `fnmss`, `fnmsd` | 6–8 | 0–5 | Fused a × b + c, a × b − c, −(a × b) + c, −(a × b) − c, rounded once (matches C `fma()` on every input). 5 cycles through any operand, 7 to an integer consumer or the other cluster; six a cycle. **Use:** `fma`, `fms`, `fnma`, `fnms<mode>4`; `fma()`; contraction (the combined `fmul_add*` round twice). | 5 (v6) |  | fpenv, sem6 (2C3) |
 | `ibranchd`, `icalld` | 6–8 | 0 | Branch (`ibranchd,0 %drN, %empty [? cond]`) or call (`icalld,0 wbs = N, %drN, %empty`) to the address in a register, without a CTPR. A taken `ibranchd` costs 12 cycles beyond its instruction however early the address is ready; `icalld` + return 23 a call (`disp` + `call` 14). **Use:** Code size only: `movtd` 9 cycles ahead + `ct`/`call` is faster for indirect jumps and calls (control-transfer.md, "v6"). binutils uses `ibranchd` in v7 PLT entries, and lcc 1.31.05 for v7 jump tables, indirect tail calls and calls (not for v6). | 12 (taken) |  | ctl6 (2C3) |
 | `mkfsw` | 6–8 | 1,4 | An x87 status word from a and b: C0, C2, C3 = bits 0, 2, 6 (CF, PF, ZF) of a, TOP = b mod 8, other bits 0 (what `fnstsw` returns after an `fcmpud*f`-style compare). **Use:** x87 code on the `%bgr` stack (binary translation); none in C. | 2 (v6) |  | sem6 (2C3) |
-| `modbgv`, `vfbgv` | 6–8 | 1,4 | `%bgr` (x87 register stack) helpers, masks rotated by the stack top: `modbgv a` sets `val` = (`val` & ~a[7:0]) \| a[15:8] (marks registers empty or full); `vfbgv a, b` raises SIGFPE `FPE_FLTINV` if a register in b[7:0] is full or one in b[15:8] is empty. Both write 0. **Use:** Binary translation only (loops.md, "v6"). | 2 (v6) |  | ctl6, sem6 (2C3) |
+| `modbgv`, `vfbgv` | 6–8 | 1,4 | `%bgr` (x87 register stack) helpers, masks rotated by the stack top: `modbgv a` sets `val` = (`val` & ~a[7:0]) \| a[15:8] (marks registers empty or full); `vfbgv a, b` raises SIGFPE `FPE_FLTINV` if a register in b[7:0] is full or one in b[15:8] is empty. Both write 0. **Use:** Binary translation only (loops.md, "v6"). | 2 (v6) |  | ctl6, ctlleft, sem6 (2C3) |
 
 ## Packed
 
 | Operations | ISA | ALC | Does | Lat | lcc v3 / v5 | Run on hardware |
 |---|---|---|---|---|---|---|
 | `pcmpeqbop`, `pcmpeqbap`, `pcmpeqhop`, `pcmpeqhap`, `pcmpeqwop`, `pcmpeqwap`, … (32 operations) | 6–8 | 0,3 | Into a predicate: true if the compare (signed for `gt`) holds in any lane (`op`) or in all lanes (`ap`). 4 cycles to a predicated operation or `merge`, 5 to `ct` (as FP compares); ALC0/3. **Use:** Vector loop exits (`any`/`all`) without `qpsgn2mskb` and a scalar compare; lcc's string functions. | 4 (v6) |  | sem6 (2C3) |
-| `qpchecks`, `qpcheckd`, `qpcheckq` | 6–8 | 0,3 | Nothing when a = b (32, 64 or 128 bits); SIGBUS `BUS_OBJERR` at the operation when they differ. The destination keeps its old value. **Use:** A one-operation "trap unless equal" (assertions); lcc doesn't use it. |  |  | sem6 (2C3) |
+| `qpchecks`, `qpcheckd`, `qpcheckq` | 6–8 | 0,3 | Nothing when a = b (32, 64 or 128 bits); SIGBUS `BUS_OBJERR` at the operation when they differ. The destination keeps its old value. **Use:** A one-operation "trap unless equal" (assertions); lcc doesn't use it. |  |  | ctlleft, sem6 (2C3) |
 | `pmrgp`, `qpmrgp` | 6–8 | 0,1,3,4 | Merge by a predicate, as `merged`: a when it is false, b when true (64 or 128 bits). 1 cycle. **Use:** `vcond`/`vec_select` on a predicate (lcc: `qpmrgp` 30 times). | 1 (v6) |  | sem6 (2C3) |
 | `qpsrad` | 6–8 | 0,1,3,4 | Arithmetic right shift of both 64-bit lanes by the count b. 1 cycle. **Use:** `ashr` of `V2DI`, which v5 lacks (`qpsraw` stops at 32-bit lanes). | 1 (v6) |  | sem6 (2C3) |
 | `qpcext_0x00`, `qpcext_0x7f`, `qpcext_0x80`, `qpcext_0xff` | 6–8 | 0,1,3,4 | 128 bits with b in the low half and the high half filled with the byte in the name. 1 cycle. **Use:** Widening a 64-bit value to 128 bits (zero, sign-style fills). | 1 (v6) |  | sem6 (2C3) |
@@ -79,8 +79,8 @@ six it doesn't implement.
 
 | Operations | ISA | ALC | Does | Lat | lcc v3 / v5 | Run on hardware |
 |---|---|---|---|---|---|---|
-| `abgc`, `rbgc` | 6–7 |  | Replace `abg` (gas rejects it for v6): `abgc N [? %predN]` adds N (1-7) to `%bgr.cur`, `rbgc` sets it to 0; neither checks or changes `val`, neither traps. **Use:** Binary translation only (loops.md, "v6"). |  |  | ctl6, native (2C3) |
-| `fillr`, `fillc` | 6–7 |  | Fill the register window stack or the chain stack back from memory (the counterparts of `flushr`, `flushc`); they run in user mode and return normally. |  |  | ctl6 (2C3) |
+| `abgc`, `rbgc` | 6–7 |  | Replace `abg` (gas rejects it for v6): `abgc N [? %predN]` adds N (1-7) to `%bgr.cur`, `rbgc` sets it to 0; neither checks or changes `val`, neither traps. **Use:** Binary translation only (loops.md, "v6"). |  |  | ctl6, ctlleft, native (2C3) |
+| `fillr`, `fillc` | 6–7 |  | Fill the register window stack or the chain stack back from memory (the counterparts of `flushr`, `flushc`); they run in user mode and return normally. |  |  | ctl6, ctlleft (2C3) |
 | `hcall`, `icall` | 6–7 |  | Hypercall and its kernel-entry sibling (binutils `parse_hicall_args`: a trap number and `wbs`; the kernel enables user hypercall numbers through `%hcem`). |  |  | v6; not run (enters the hypervisor) |
 | `iret`, `hret`, `glaunch` | 6–7 |  | Privileged returns from traps and the hypervisor, guest launch. |  |  | v6; not run (privileged) |
 

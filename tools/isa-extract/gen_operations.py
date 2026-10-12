@@ -96,6 +96,8 @@ PROBES = {
     "memleft.s": ("memleft.c", "4C, 8C2, 2C3"),
     "memleft-v5.s": ("memleft.c", "8C2, 2C3"),
     "memleft-v6.s": ("memleft.c", "2C3"),
+    "ctlleft.s": ("ctlleft.c", "4C, 8C2, 2C3"),
+    "ctlleft6.s": ("ctlleft.c", "2C3"),
 }
 ABI_PROBES = "tools/abi/probes"
 

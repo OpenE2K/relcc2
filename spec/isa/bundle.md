@@ -296,7 +296,14 @@ Bits 0–9, 30 and 31 are common to both types. `type` is bit 20.
 | 30–31 | `ipd` | Instruction prefetch depth |
 
 Without an SS, `ipd` takes a default value other than 0 (binutils MCSTBug
-#163454).
+#163454). On the 4C, 8C2 and 2C3 a prepare without SS fetches as deep as
+one with `ipd 3` (the value gas writes in an SS it makes for a `ct`).
+Both fetch all of a cold 768-byte target given about 640 cycles from
+memory, where `ipd 2` loses 50–130 cycles, and both lose as much as
+`ipd 2` on a 1.5 KiB target ([control-transfer.md](control-transfer.md),
+"Code not in the instruction cache"; `tools/isa-probes/ctlleft.c`
+`f_fardiv48l3_*`, `f_fardiv48l6_*`) [hw; that the default is 3 is
+inferred from timing].
 
 **Type 1 (SF2) [source; run]:** used from v6 for `abgc`/`rbgc`, which replace
 `abg`. `abgc NUM` (1–7) puts NUM in bits 13–15 (the `aa1`–`aa3` positions of

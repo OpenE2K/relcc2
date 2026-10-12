@@ -50,17 +50,22 @@ A wide instruction holds at most one prepare (in CS0) and one transfer
 | `return %ctpr3` | 3 only | the caller's IP from the chain stack | return | function return |
 | `sdisp %ctprN, n` | 1–3 | system call entry `n` (5 bits) | system call (`call` becomes `scall`) | glibc: `sdisp %ctpr1, __SYSCALL_TRAPNUM` then `call %ctpr1, wbs = N` |
 | `ldisp %ctpr2, label` | 2 only | an array-prefetch (APB) program | not transferable | APB setup; any later write to `%ctpr2`, a call or a return stops the program ([apb.md](apb.md)) |
-| `pref %iprN, label` | `%ipr0–7` | code to prefetch | none | prefetch into the instruction cache; lcc does not emit it |
+| `pref %iprN, label [, ipd=1]` | `%ipr0–7` | code to prefetch | none | starts fetching `label` into the instruction cache, as an early `disp` would, without a CTPR ("Code not in the instruction cache", below); lcc does not emit it |
 
-`disp`, `movtd`, `return` and `pref` take an optional `; ipd N` (prefetch
-depth in instruction-cache lines: 0, 1, 2). lcc writes `ipd 2` on
+`disp`, `movtd`, `return` and `pref` take an optional `; ipd N` (the
+SS's prefetch depth, 0–3; gas rejects larger values). lcc writes `ipd 2` on
 every prepare for v3 targets (`e2k-v3`, `e2k-v3.4c`, or
 `-march=elbrus-v3` with any lcc) and none for v4 and later (`v4.8c`,
 `v5.8c2`, `v6.*`, or `-march`/`-mtune` for a later CPU); gas then
 encodes no SS for a prepare alone (default depth) and `ipd 3` in an SS
 it makes for a `ct`. With the code in the instruction cache it makes no
 measurable difference (zlib on the 8C2, the PoC; docs/spec-poc-findings
-I25) [lcc, hw].
+I25) [lcc, hw]. For code that is not in the instruction cache it does:
+given enough lead, a prepare with `ipd 3` or with no SS fetches all of a
+cold three-line (768-byte) target, lcc's v3 `ipd 2` loses 50 (4C) to
+about 130 (8C2, 2C3) cycles there, and `ipd 0` fetches nothing ahead
+([hw] `tools/isa-probes/ctlleft.c`; Instruction fetch, "Code not in the
+instruction cache").
 `gettsd`, `puttsd`, `done`, `iret`, `hret`, `glaunch` are for protected
 mode or the kernel.
 
@@ -89,7 +94,7 @@ v7 widens the register to 128 bits and moves the fields):
 | 0–47 | `ta_base` | target address |
 | 54–56 | `ta_tag` | 0 empty, 1 diagnostic, 2 procedure label, 3 local label, 4 numeric label, 5 system label |
 | 57–58 | `opc` | 0 `disp`, 1 `ldisp`, 3 `return` |
-| 59–60 | `ipd` | 0 no prefetch, 1 the target instruction, 2 the target and the next |
+| 59–60 | `ipd` | the kernel names 0 no prefetch, 1 the target instruction, 2 the target and the next (`cpu_regs_types.h:733-735`). Measured, it is how much of the target the prepare fetches ahead: 0 nothing; 1 and 2 part of a cold three-line (768-byte) target (from L2, `ipd 2` is enough); 3 all of a 768-byte target but not of a 1.5 KiB one; a prepare in an instruction without SS behaves as 3 [hw: `ctlleft.c`, 4C, 8C2, 2C3; the depths in 256-byte lines are inferred from timing] |
 
 ## Lifetime and validity [hw, source]
 
@@ -217,8 +222,9 @@ buffer (`tools/isa-probes/pmu.c`, `fetch_*`, `cmpib_*`, `wide*`,
 Free: a not-taken `ibranch` (it only waits, exactly, for its condition:
 compare → `ibranch` 3), a not-taken `ct`, any prepare (`disp` with `ipd`
 0, 1 or 2, `return`), the `ipd` of the transfer's own instruction, and
-straight-line code of wide instructions (up to 40 bytes each, one per
-cycle, also right after a taken branch).
+straight-line code from the instruction cache: wide instructions of up
+to 64 bytes issue one a cycle (`tools/isa-probes/ctlleft.c` `s_*`, 4C,
+8C2, 2C3; 40 bytes measured right after a taken branch).
 
 Whole programs agree (the 4C, CoreMark, `tools/isa-score/profile.py`):
 gcc-claude's code branches with conditional `ibranch`; 6 cycles per
@@ -231,8 +237,104 @@ early and loses 1.3%. So: prepare every transfer that may be taken at
 least its delay ahead, `movtd` 9 cycles ahead, and keep `ibranch` for
 transfers that are rarely taken.
 
-Not measured: targets that are not in the instruction cache (the effect
-of `ipd` and `pref` there), v4 and v7, the 48C's different delays (lcc's
+#### Code not in the instruction cache [hw]
+
+`tools/isa-probes/ctlleft.c` (`fetch`, on the 4C, 8C2 and 2C3) times a
+transfer to a target that is not in the 128 KiB instruction cache
+(timing.md, "Cache geometry"), from the window's first instruction to
+the target's first. In mode 1 the target was pushed out by 256 KiB of
+other code (it is in L2). In mode 3 a 64 MiB data stream and 512 KiB of
+code ran first, and the target is on a page of its own (in memory, and
+probably out of the TLB too: inferred). The 4C runs pinned to one node
+(`numactl`); remote memory adds about 130 cycles. Targets on the
+window's own page come out at L2 cost even in mode 3, because the
+function's entry code fetched them (inferred), so only targets on
+separate pages give memory figures. Cycles lost against the cached
+case:
+
+| Transfer | 4C | 8C2 | 2C3 |
+|---|---|---|---|
+| L2: `ibranch`, or `disp` 5 cycles ahead | 10 | 12 | 12 |
+| L2: `disp` 10 / 20 ahead | 5 / 0 | 7 / 0 | 7 / 0 |
+| L2: `movtd` 9 / 40 ahead | 10 / 0 | 12 / 0 | 12 / 0 |
+| L2: `pref` 10 / 20 ahead (with `disp` 5 ahead) | 6 / 0 | 8 / 0 | 8 / 0 |
+| memory: `ibranch` | 144–156 | 152–173 | 172–220 |
+| memory: `disp` 5 / 40 ahead | 161 / 130 | 171 / 133 | 220 / 155 |
+| memory: `disp` or `pref` about 155 ahead | 24–26 | 47–48 | 45–51 |
+| memory: `disp` / `pref` 200 ahead | 0 / 0 | 0 / 0 | 25 / 0 |
+| memory: `disp` or `pref` 255–340 ahead | 0 | 0 | 0 |
+
+So a `disp` or `pref` starts fetching its target at once, and a `movtd`
+when its CTPR is written (about 4 cycles later: `movtd` 9 ahead loses as
+much as `disp` 5 ahead). The target's first instruction can issue about
+16–17 cycles (4C) or 18–19 (8C2, 2C3) after the prepare when the code is
+in L2. From memory it is about 155–170 (4C), 175–195 (8C2) or 195–225
+(2C3) cycles. A transfer prepared that far ahead loses nothing; an
+`ibranch` or a late prepare pays the whole miss. (The 8C2's L2 figures
+move by tens of cycles with code layout: its 512 KiB L2 keeps the
+256 KiB eviction run only partly.)
+
+**Prefetch depth.** The `ipd` of the prepare's instruction (Prepare
+operations, above) decides how much of a longer target comes with it. A
+768-byte (three-line) target, cycles lost against the cached case:
+
+| `ipd` | in L2, `disp` 40 ahead: 4C / 8C2 / 2C3 | in memory, `disp` 200 ahead | in memory, `disp` ~640 ahead |
+|---|---|---|---|
+| 0 | 19 / 23 / 23 | 241 / 373 / 376 | 219 / 324–345 / 353 |
+| 1 | 6 / 8 / 8 | 82 / 165 / 216 | 58–59 / 141–144 / 163–191 |
+| 2 | 0 / 0 / 0 | 73 / 177 / 179 | 50 / 129–132 / 123–124 |
+| 3 | 0 / 0 / 0 | 0–48 / 172 / 147 | 0 / 0 / 0 |
+| none (no SS) | 0 / 0 / 0 | 49 / 134 / 147 | 0 / 0 / 0 |
+| an `ibranch` instead | 14 / 18–72 / 18 | 177 / 371 / 371 | 159–222 / 301–313 / 325–355 |
+
+So, given enough lead, a prepare without `ipd` (gas's default when
+nothing else needs an SS) or with `ipd 3` fetches all of a three-line
+target on v3, v5 and v6, and lcc's v3 `ipd 2` loses 50 (4C) to about
+130 (8C2, 2C3) cycles. With a 200-cycle lead nothing hides a three-line
+target from memory on the 8C2 and 2C3, and `ipd 2` loses 24–43 cycles
+more than the default. On a six-line (1.5 KiB) target `ipd 2`, `ipd 3`
+and the default lose the same (152 / 300–303 / 301–304 cycles,
+`f_fardiv48l6_*`). `ipd 0` makes the prepare fetch nothing ahead. That
+a prepare without SS behaves as `ipd 3` (bundle.md, "SS") and the
+depths in 256-byte lines are inferred from timing; the CTPR was not
+read back.
+
+**`pref`** needs the same lead as a prepare (about 20 cycles for code
+in L2, 200–255 for code in memory) and then hides the miss completely,
+also for an `ibranch`: `pref` 257 cycles ahead of a taken `ibranch` to a
+cold page loses nothing, against 156 / 173 / 172 cycles without
+(`f_fardiv20_prefib`, `f_fardiv20_ib`). Its prefetch survives a call. In
+a window with a call to a cold leaf between the prefetch and the
+transfer, the window (the leaf's own miss included) loses 236 / 334 /
+384 cycles with no early prefetch (4C / 8C2 / 2C3), 93 / 169 / 214 with
+a `pref` before the call, and 251 / 187 / 258 with a `disp` before it.
+A CTPR's prefetch saved nothing across the call on the 4C, but most of
+what `pref` saved on the 8C2 and 2C3 (not explained). `pref` fetches
+about as deep as `disp … ; ipd 2`: a cold 768-byte target about 640
+cycles ahead loses 48–49 / 146–153 / 123 cycles, against 50 / 129–132 /
+123–124 for `ipd 2` and 0 for a prepare with no SS or `ipd 3`. Its own
+`ipd=1` fetches a little less (+3 / +5 / +5 cycles on a three-line
+target from L2). So `pref` is for cold code that a function reaches
+through a call or an `ibranch`, issued a few hundred cycles ahead. It
+needs a global symbol: gas gets the relocation wrong for a local label
+([elf.md](../abi/elf.md), `R_E2K_PREF`).
+
+**Straight-line code** that is not in the instruction cache is limited
+by bytes, not by instructions (`ctlleft.c` `straight`, 1,024 wide
+instructions of 8–64 bytes):
+
+| Code in | 4C | 8C2 | 2C3 |
+|---|---|---|---|
+| instruction cache, 8–64 bytes | 1 instruction a cycle | 1 | 1 |
+| L2: bytes per cycle | 25.6 (256 bytes per 10 cycles; 32-byte instructions 1.25 cycles, 64-byte 2.5) | 15–21 (varies with layout) | 23.3 (32-byte 1.38, 64-byte 2.75; 16- and 56-byte runs were slower, unexplained) |
+| memory: bytes per cycle | 4.5–5.1 (node-local; about 2 from another node) | 2.7–3.2 | 2.7–3.0 |
+
+So wide instructions of any length up to 64 bytes cost nothing extra in
+hot code; in code that streams from L2, those longer than about 24
+bytes cost a cycle per 23–26 bytes (4C, 2C3; the 8C2 is slower).
+
+Not measured: fetch of 48–64-byte wide instructions right after a taken
+branch (40 bytes: above); v4 and v7; the 48C's different delays (lcc's
 `-mset-prepare-ct-delays-e48c`, timing.md).
 
 ## v6 [hw: Elbrus-2C3]

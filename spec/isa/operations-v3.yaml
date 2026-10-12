@@ -506,9 +506,11 @@ groups:
     use: "`jump`, `cbranch`, `call`, `return`, check-recovery."
     see: control-transfer.md, speculation.md
   - ops: pref
-    does: "Prefetch code at a label into the instruction cache, `pref %iprN, label` (guide 10.9.6); runs in user mode."
+    does: "Prefetch code at a label into the instruction cache, `pref %iprN, label` (guide 10.9.6); runs in user mode. It starts fetching at once, like an early `disp` without a CTPR, and given about 20 cycles' lead (code in L2) or 200–255 (code in memory) hides the miss, also before an `ibranch` and across a call; it fetches about as deep as `ipd 2` (`ctlleft.c`, 4C, 8C2, 2C3)."
+    use: "Cold code reached through a call or an `ibranch`, a few hundred cycles ahead; only with a global symbol (gas relocates a local label wrongly: elf.md, `R_E2K_PREF`). lcc doesn't emit it."
+    see: control-transfer.md, "Code not in the instruction cache"
   - ops: ipd nop wait
-    does: "`ipd N` instruction prefetch depth of a preparation; `nop N` N empty cycles after the instruction; `wait` orders memory (`ld_c`, `st_c`, …: atomics.md, fences; the v5+ and v6+ fields: bundle.md, CS1): 6–7 cycles with nothing outstanding, about 14 after a store, 20–33 with `ma_c`, 2 and 6–7 with a v5+ soft modifier (timing.md, \"Every v3 operation\"); `wait trap = 1` never returns in user mode."
+    does: "`ipd N` instruction prefetch depth of a preparation (0–3; it matters only for code not in the instruction cache: control-transfer.md); `nop N` N empty cycles after the instruction; `wait` orders memory (`ld_c`, `st_c`, …: atomics.md, fences; the v5+ and v6+ fields: bundle.md, CS1): 6–7 cycles with nothing outstanding, about 14 after a store, 20–33 with `ma_c`, 2 and 6–7 with a v5+ soft modifier (timing.md, \"Every v3 operation\"); `wait trap = 1` never returns in user mode."
     use: "`ipd` as lcc; `wait st_c` for C11 seq_cst stores; `nop` for delays under `.ignore strict_delay`."
   - ops: setwd setbn setbp vfrpsz
     does: "`setwd` sets the window size, `nfx` and `dbl`; `setbn`/`setbp` the rotating register and predicate areas; `vfrpsz rpsz = N` checks the parameter area size (`rpsz = 0` in a plain function is SIGILL `ILL_ILLOPC`)."

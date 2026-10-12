@@ -128,7 +128,7 @@ DTP0 = start of the module's TLS segment.
 | 108 | `R_E2K_GOT` | 32 literal | G − GOT | load of a GOT entry |
 | 114 | `R_E2K_GOTPLT` | 32 literal | as `R_E2K_GOT`, or the `.got.plt` slot | `@GOTPLT` |
 | 110 | `R_E2K_DISP` | CS0 `disp`, 28 bits | (S + A − P) >> 3; to the PLT entry if the symbol has one | `disp %ctprN, sym` |
-| 111 | `R_E2K_PREF` | CS0 | prefetch hint, cache-line relative | `@PREF` |
+| 111 | `R_E2K_PREF` | CS0 `pref`, bits 4–27 | (((S + A) & ~0x7f) − (B & ~0x7f)) >> 7: 128-byte blocks | `pref %iprN, sym` (below) |
 | 70 | `R_E2K_TLS_GDMOD` | 32 literal | (GOT entry holding the module ID) − GOT | GD |
 | 71 | `R_E2K_TLS_GDREL` | 32 literal | (GOT entry holding the DTP offset) − GOT | GD |
 | 74 | `R_E2K_TLS_IE` | 32 literal | (GOT entry holding the TP offset) − GOT | IE |
@@ -158,6 +158,21 @@ symbol, or `R_E2K_64_RELATIVE` for local ones (lcc output). There is no
 TLS relaxation: the linker never rewrites GD or IE code, it only resolves
 the GOT entries at link time when it can (below).
 
+`R_E2K_PREF` is what gas emits for the label of `pref %iprN, label`;
+there is no `@PREF` operator (gas `tc-e2k.c:6165-6170`). It fills CS0
+bits 4–27 with the distance in 128-byte units, from the 128-byte block
+holding the `pref`'s wide instruction to the target's 128-byte block
+(bfd `elfxx-e2k.c:384-387,5593-5612`). Its HOWTO carries the name
+`R_E2K_DISP`, so `objdump -r` prints that name. **For a label that is
+not global** (`.L` labels and plain local labels alike), gas emits it
+against `*ABS*` plus the label's section offset, and after linking the
+`pref` points at that offset taken as an absolute address (0x1000 for a
+label at `.text`+0x1000); a `pref` of a global symbol is right. So use a
+global symbol (`tools/isa-probes/gen_ctlleft.py` does) [source; checked
+with gas and ld of lcc 1.29.16 on a scratch file]. `pref` runs in user
+mode and works ([control-transfer.md](../isa/control-transfer.md), "Code
+not in the instruction cache"); no compiler we have emits it.
+
 ## Assembler syntax (gas, lcc)
 
 Relocation operators are written after the symbol inside a literal
@@ -170,7 +185,8 @@ operand of a compare: `cmpedb,0 [ sym@ISLOCAL ], 0x1, %pred0`),
 `@DYNOPT` (data directives only). A bare symbol in a 64-bit literal gives
 `R_E2K_64_ABS_LIT`, except `_GLOBAL_OFFSET_TABLE_`, which gives
 `R_E2K_64_PC_LIT` (PC-relative to the bundle) unless written
-`_GLOBAL_OFFSET_TABLE_@ABS`. `disp %ctprN, sym` gives `R_E2K_DISP`.
+`_GLOBAL_OFFSET_TABLE_@ABS`. `disp %ctprN, sym` gives `R_E2K_DISP`,
+`pref %iprN, sym` `R_E2K_PREF`.
 
 ## Code sequences (lcc; Unipro the same unless noted)
 
@@ -406,8 +422,4 @@ same again built for the Elbrus-2C3 (v6, `run.sh v6.2c3 --ssh-port
 
 ## Not covered yet
 
-- `@PREF` is read from the source only: it is not an operator but the
-  relocation (`R_E2K_PREF`) gas emits for a symbol in `pref %iprN,
-  sym` (instruction prefetch into a prefetch register, CS0); no
-  compiler we have emits `pref`.
 - 32-bit and protected modes (separate relocation types, `ldgd`, `%g12`).

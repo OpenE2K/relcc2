@@ -242,6 +242,16 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     denormal costs (fpcost.c, gen_fpcost.py),
                     and software prefetch, cache fill levels and line
                     sizes (pf.c, gen_pf.py; pf-lcc.c for lcc's loops),
+                    and tag operations and the last unchecked ALU
+                    operations (tagx.c, gen_tagx.py, check_tagx.c), the
+                    user state registers and 80-bit status bits
+                    (sregs.c, sregs.s, check_sregs.c), AAU and v6 MAS
+                    leftovers, UPSR.ac and wait fields (memleft.c,
+                    gen_memleft.py), control leftovers: vfrpsz, ipd and
+                    pref, ctcond type 9, v6 qpcheck/abgc/fill
+                    (ctlleft.c, gen_ctlleft.py), aaurw operands and
+                    not-taken ct after return (aaurwct.c,
+                    gen_aaurwct.py),
                     and rechecks of the PoC's findings (pocchk.c;
                     gen_pocchk.py writes pocchk.s and pocchk-cases.h:
                     divide latency by quotient, two writes of one
@@ -266,8 +276,15 @@ tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     system call costs), sigeh.cc with sigeh-c.c
                     (exceptions and cancellation across signal frames),
                     pgprof.c (-pg with gprof) and lockloss.c
-                    (gen_lockloss.py: what breaks an atomic's lock) run
-                    on hardware; sanitize.c is read with -S);
+                    (gen_lockloss.py: what breaks an atomic's lock),
+                    ctxsig.c/.s (contexts, edited signal frames, globals
+                    across system calls), ctlcost.cc (what longjmp,
+                    exceptions and backtraces cost), hwscan.c/.s (GC
+                    root scanning), stackregs.c/.s (the stack registers),
+                    tagempty.c/.s (registers a window gains) run on
+                    hardware; execstack.sh (GNU-stack census) and
+                    prefrel.sh (R_E2K_PREF) link and read; sanitize.c
+                    is read with -S);
                     find_builtins.py, gen_builtins.py and
                     gen_builtins_misc.py ask lcc 1.31.05 about its builtins;
                     asmconv.py asks lcc about inline-asm constraints,
@@ -340,7 +357,8 @@ python3 tools/isa-extract/gen_operations.py --check
                                                   # every operation has one rule
 tools/isa-decode/build_corpus.sh toolchains/corpus
 python3 tools/isa-decode/compare_objdump.py toolchains/corpus/*.o
-                                                  # 6,826 match, 10 known objdump bug
+                                                  # 6,890 match, 45 known objdump bug
+                                                  # (21 checked with gas)
 /opt/mcst/lcc-1.29.16.e2k-v5.8c2.linux-6.1/bin/lcc -c tools/abi/probes/layout.c -o /dev/null
                                                   # or toolchains/lcc-1.29.16-e2k-v5/lcc
 python3 tools/abi/compat/gen.py toolchains/compat/gen
@@ -354,10 +372,12 @@ python3 tools/abi/compat/run.py toolchains/compat/gen --target v3 \
                                                   # (also on the 2C3: --target
                                                   # v6.2c3 --ssh-port ...)
 python3 tools/isa-extract/compare_sheet.py <csv>  # 14 documented disagreements
-python3 tools/isa-score/selftest.py               # stall rule vs timing-e2s.yaml: ok
+python3 tools/isa-score/selftest.py               # stall rule: ok, latency rules: ok
 python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
     --remote-dir relcc2/<task>                    # isa-score vs the 4C,
-                                                  # ~1 min: within 1% (one 3%)
+                                                  # ~2 min: within 1% (k_empty aside;
+                                                  # the 8C2: --target v5.8c2
+                                                  # --period 30011, within 2%)
 ```
 
 ## Current state
@@ -478,7 +498,9 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   32-byte block, can take 2 cycles, but only when instructions store
   to the same addresses again: in a stream they cost nothing). The Elbrus-8C2 (v5,
   `timing-e8c2.yaml`, timing.md "Elbrus-8C2") has every v3 latency,
-  hazard and control delay except `pfdivd`/`pfsqrttd` (16, v3 14); v5 adds 6 FP ops per cycle (ALC2/5),
+  hazard and control delay except `pfdivd`/`pfsqrttd` (16, v3 14) and an
+  FP result reaching an 80-bit operation's single or double operand
+  (2 cycles later; a same-cluster load 1); v5 adds 6 FP ops per cycle (ALC2/5),
   128-bit `qp*` ops with scalar latencies; `ldqp` bypasses L1 (served
   by L2: latency 11, one per cycle; `ldq` into a pair goes through L1,
   latency 3; lcc loads 128-bit data as two `ldd`); an APB area delivers
@@ -488,10 +510,15 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   pipelined; FP min/max is 2 cycles (also v3); a 64-bit FP-side result
   feeding a `qp` operation pays the crossing cost; L2 11, L3 about 32,
   memory about 180 cycles. isa-score models these
-  and is within 3% on the 8C2's kernels and 1.00 on CoreMark
-  (`validate.py --target v5.8c2 --period 30011`). Other v5 hardware results: `%lsr1` is the 64-bit loop
+  and is within 2% on the 8C2's kernels and 1.00 on CoreMark
+  (`validate.py --target v5.8c2 --period 30011`; until 2026-10-12
+  `sum -O2` read 0.92 because perf's TICKS samples lock to a short call
+  repeated back to back: validate now puts a random delay between
+  calls; monitors.md). Other v5 hardware results: `%lsr1` is the 64-bit loop
   count (write it after `%lsr`); misaligned APB areas give data; the
-  compat suite passes for every pair (no register cleaning); Elbrus
+  compat suite passes for every pair (the registers a window gains are
+  empty: 0 with tag 5 on the 8C2 and 2C3, stale bits with tag 5 on the
+  4C; `tagempty.c`); Elbrus
   Linux's libatomic is built for v5, so v3 and v5 code can share
   16-byte atomics there; quad lock/check loads work like doubleword
   ones (entries per register, 32); `stqp`/`staaqp` count as one store
@@ -586,6 +613,27 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   the kernel returns a trap inside a registered region to the
   translator's recovery IP. Nothing for a compiler.
 
+  Leftovers measured on 2026-10-12 (all three machines unless noted):
+  a 32-bit half with tag 1 is **diagnostic only with bit 30 set**, else
+  empty (a plain use of an empty value doesn't trap); `puttagd`/`puttags`
+  refuse to make a diagnostic or pointer tag (SIGILL `ILL_PRVOPC`), their
+  `,sm` forms make a diagnostic value, and lcc's `puttagd` only ever
+  clears tags; `fxdivt<a><r>` is the single/double src1 ÷ the 80-bit src2
+  (semfx.c had them swapped), 16 cycles (8C2 18 through src1); FP traps
+  are precise at the operation (`%pfpfr` masks for ordinary ops, `%fpcr`
+  for 80-bit), `%pfpfr` bits 26–31 do nothing, only divides and the
+  square root write `%fpsr.c1`; `rrs` of a 32-bit register keeps the
+  upper half under `dbl = 0`, `%idr` gives the Linux CPU (= sched_getcpu,
+  2 cycles), `rrd %clkr` waits for nothing; under `dbl = 0` a 64-bit read
+  of a 32-bit result waits 4; AAU loads take 9/11/13 cycles (v3/v5/v6);
+  `UPSR.ac` traps every misaligned access, stores included; `wait`
+  fields beyond bit 8 (v6/v7) and their costs, `wait trap`; ctcond type
+  9 (`%MLOCK || %cmpN`) runs on v3–v6 and can end a test-and-set loop;
+  `vfrpsz` checks the handed-over pairs (a system call takes 1 to 4);
+  `ipd` and `pref` matter only for cold code; v6 `qpcheck` delays
+  nothing, `abgc` acts on the next instruction (timing.md, semantics.md,
+  speculation.md, control-transfer.md, atomics.md, x86-support.md).
+
   The translator's facilities for native code (x86-support.md,
   `native.c`): every x86 flag operation takes 2 cycles (32×32
   multiplies 4) and `cctop*` reaches a predicated op in 2 (v6 1), so an
@@ -625,8 +673,7 @@ channels, the measured latencies, lcc's use (`count_lcc_ops.py` counts
 mnemonics in lcc 1.29.16's v3 and v5 sysroot libraries: about 360
 operations) and the probes whose assembly runs each operation, and
 fails if an operation has no rule or two. Every v3–v5 user-mode
-operation has run on hardware except `movaq` (apb.md) and `mmurr`
-(monitors.md), and every v6 ALU operation but `ibranchd`/`icalld` ran
+operation has run on hardware except `mmurr` (monitors.md), and every v6 ALU operation but `ibranchd`/`icalld` ran
 on the 2C3; v7 ones come from the community qemu or are known by
 name only. The v1–v2-only operations are SIGILL on v3 and v5 (except two
 reused encodings); `setsft` is a software trap (SIGTRAP).
@@ -646,8 +693,12 @@ cycles, and it reports measured against modelled cycles per block plus
 a stall breakdown. To compare schedulers use operations per cycle of
 the achieved schedule, static or weighted by the run: on CoreMark and
 Linpack it ranks lcc > Unipro clang > gcc-claude, as the 4C does; the
-possible/achieved score does not. `validate/` (about a minute on the
-4C) puts every kernel within 1% (one within 3%); on the benchmarks the
+possible/achieved score does not. `validate/` (under two minutes)
+puts every kernel within 1% on the 4C and 2% on the 8C2 (`k_empty`, a
+few cycles of call, aside); the model also knows the `dbl = 0` 64-bit
+read wait (which explains gcc-claude's `matrix_mul_matrix` step), the
+8C2's late narrow 80-bit operand, AAU load latencies, `aaurw` taking its
+operand like store data and a not-taken `ct` after `return`; on the benchmarks the
 model is within 6% once `profile.py` measures which transfers were
 taken (a second sampled run, EXEC − `NO_CT_TAKEN`): fetch bubbles are
 taken `ibranch`es (6 cycles) and taken `ct`s waiting for a late
@@ -687,8 +738,11 @@ linked, an ifunc referenced with `@GOTOFF` in a PIE fails silently, a
 static link with an ifunc crashes ld; gold (not shipped) breaks dynamic
 links. A `getsp` amount must be a window register or `%g16`+ (the
 kernel can't read `%g0`–`%g15` when the stack grows: SIGSEGV for large
-allocations); after a signal handler the kernel restores only
-`%g16`–`%g31` (the guide says all globals; registers.md); a `jmp_buf`'s IP (byte 8) can be replaced by a label to
+allocations); after a signal handler the kernel restores `%g16`–`%g31`
+(only those; the guide says all globals; registers.md) and only to code
+interrupted outside a system call, while a system call through entry 3
+returns them empty (0, tag 5), so they can't hold values across one
+(kernel-interface.md; a port's `"call"` clobber must cover them); a `jmp_buf`'s IP (byte 8) can be replaced by a label to
 re-enter a frame (nonlocal goto); lcc's `&&label` is an index, not an
 address. No stack protector is needed (return addresses live in the
 chain stack); lcc 1.31's `-fstack-protector` uses a constant canary
@@ -745,10 +799,11 @@ the acceptance test for the owner's GCC port:
 as v5, v6 and v7 (`--runner`). Found so far
 (in `known.txt` and calling-convention.md): Unipro's unprototyped calls,
 Unipro callees not re-extending narrow arguments, Unipro's
-`va_arg(__int128)` at odd slots, and a tag trap when a callee spills a
-partly written slot (the trap is confirmed on the 4C by
-`tools/abi/probes/tagtrap.c`; the suite only hits it under qemu, which
-fills fresh registers with tagged values). The `valist` unit showed that
+`va_arg(__int128)` at odd slots, and timeouts of Unipro `-O0` callees
+under qemu only: they spill a partly written slot whose upper half is
+qemu's empty value, and qemu loops forever on that store (hardware
+stores it without trapping; a real tag trap needs a diagnostic half,
+`tools/abi/probes/tagtrap.c`). The `valist` unit showed that
 `va_arg` must align 16-byte values by address, because lcc's `static`
 variadic functions have an 8-byte-aligned slot area; probes made while
 studying it showed that lcc callers store only the last fixed and the
@@ -780,6 +835,22 @@ work), so the port needs no `linux-unwind.h`
 asm (`source-compat.md`, `asmconv.py`): `%#`, `%=`, `%c`, `%n`, `%H`
 modifiers, `"call"`/`"b[N]"`/`"ctprN"`/`"predN"` clobbers, constants
 printed unsigned at the C type's width.
+
+Second half of the 2026-10-12 audit (kernel-interface.md,
+stack-and-unwinding.md, elf.md; hw on all three): `makecontext_e2k`
+passes every argument, a switch costs about 3,200 cycles round trip,
+contexts keep their own FP state and signal mask, `freecontext_e2k`
+fails only for the running context, and lcc treats any function named
+`setcontext` as never returning; every `longjmp` is a system call
+(about 3,000 cycles + 130–175 a frame); a C++ throw costs 26,000–30,000
+cycles one frame up and about 3,000 more a frame (7–13 system calls);
+glibc's `backtrace` always reads the whole chain stack; a conservative
+GC finds callers' register values only in the procedure stack (32-byte
+pairs on v3, 16 bytes a register on v5+), and Elbrus Linux's Boehm GC
+misses pointers a stopped thread holds only in `%g0`–`%g15`; the stack
+registers read in user mode (layouts in stack-and-unwinding.md, "Stack
+registers"); no split stacks; an executable without a GNU-stack note
+gets a non-executable stack, and lcc rejects nested functions.
 
 ### GCC port planning (doc/gcc-port-plan.md)
 
@@ -825,7 +896,8 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
    checked yet").
 3. APB leftovers: v7 only (`spec/isa/apb.md`). Protected
    (`e2k128`) and 32-bit modes.
-4. ELF leftovers: `@PREF` (`pref %iprN, sym`; source only so far).
+4. ELF leftovers: none known (`R_E2K_PREF` is checked by
+   `tools/abi/probes/prefrel.sh`).
 
 ## Open questions for the owner
 

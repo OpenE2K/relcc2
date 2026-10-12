@@ -488,7 +488,23 @@ produce slow code: correctness first, then the VLIW work.
   (immediate, no preparation register). Correct and simple.
 - **Prologue/epilogue**: `setwd` in the first wide instruction with a
   window size from a fixed maximum (e.g. 32 pairs) at first; `getsp` for
-  the stack frame; epilogue `return %ctpr3` … `ct %ctpr3`.
+  the stack frame; epilogue `return %ctpr3` … `ct %ctpr3`. Once the
+  scheduler runs (M4), fill that first instruction as lcc does (P73;
+  lcc 1.29.16 `-O3`, Lua 5.4.7's 724 functions, v3 and v6 alike;
+  registers.md). Besides `setwd` it holds `setbn`/`setbp`, `getsp`
+  (ALC0 only), a prepare (a `disp` to the first callee or `return
+  %ctpr3`, in 706 of the 724), loads through the argument registers (up
+  to three beside `getsp`, four without it) and constants needed later
+  (up to five `adds`/`addd`). Operations beside `setwd` already use the
+  new window; none can read `getsp`'s result, which reaches an integer
+  operation 2 cycles later (timing.md). Leaf functions prepare `return
+  %ctpr3` in the first or second instruction (67 of Lua's 88). The
+  proof of concept put nothing beside `setwd`/`getsp`, and with one
+  prepare a cycle its prepares all started two cycles late (Lua's
+  `luaH_get`: first compare in the sixth instruction instead of the
+  fourth); packing as lcc does gave Lua 0.4–1.3% fewer cycles on the
+  2C3. What stops a scheduler from doing it: 7.3, "The frame setup is
+  no scheduling barrier".
 - Goal: small programs compiled with GCC, linked by lcc, run correctly
   under qemu-e2k and on the 4C.
 
@@ -877,6 +893,54 @@ recurrence): lcc's lead on branchy code comes from whole loops turned
 into predicated blocks and pipelined (7.7, "Branchy loops"), not from
 diamonds.
 
+**Predicated calls** (P67; lcc 1.29.16 `-O3`, control-transfer.md,
+"How lcc uses it"). lcc predicates most calls: 12,999 of 20,519 in
+SQLite for v5 and 2,592 of 5,921 in Lua for v3. Its `sqrt` with
+`errno` is `fsqrtid,sm` plus `fsqrttd,sm ? p`, with `call %ctpr2 ? ~p`
+to libm's `sqrt` (the `disp` sits in the function's first instruction).
+Its `if (f == 2) lng (l); else dbl (d)` prepares `lng` and `dbl` in two
+CTPRs before the compare, then does `call %ctpr2 ? p` and `call %ctpr1
+? ~p` in consecutive instructions. A call under a false predicate leaves
+the CTPRs (D4), and a prepare takes no predicate (CS0 has no condition
+field, bundle.md), so preparing unconditionally is harmless. ce3
+predicates call insns once their patterns are predicable
+(`cond_exec_process_insns` accepts `CALL_P`, ifcvt.cc:374, and adds a
+`REG_BR_PROB` note, :429), so give `call` and `call_value` the
+`predicable` attribute. Three things follow:
+
+1. ce3 leaves identical tails of the two arms unconditional
+   (`flow_find_cross_jump`, ifcvt.cc:550). Two calls through `%ctpr1`
+   are identical RTL, so they become one unconditional call after both
+   arms' prepares, and since prepares stay unconditional, the second
+   prepare wins: the proof of concept called `dbl` on both arms. Prepare
+   each arm's callee in its own CTPR, as lcc does, or reject such a
+   prepare in `IFCVT_MODIFY_INSN` (ifcvt.cc:422), as the proof of
+   concept does.
+2. GCC's dataflow makes a predicated call's clobbers conditional
+   definitions (`DF_REF_CONDITIONAL`, df-scan.cc:3216), each with a use
+   (`df_get_conditional_uses`, df-scan.cc:3070, called at :3233), and
+   LR treats every conditional definition as a use as well
+   (`df_lr_bb_local_compute`, df-problems.cc:888; `df_simulate_defs`,
+   :3898). So every call-clobbered register (globals, `%b[]`, the CTPRs)
+   is live up to such a call. In NPB CG a predicated `sqrt` at the end
+   of `conj_grad` kept `%ctpr2` live around six loops, which lost their
+   array prefetch (7.7, "Keep `%ctpr2` free"). The uses aren't needed:
+   where the call runs, the values are gone, and where it doesn't,
+   later reads keep them live anyway (inferred). The proof of concept
+   drops them for call clobbers in df-scan.cc and df-problems.cc.
+3. A CTPR prepared before a predicated call is usable after it only
+   under a predicate that excludes the call's, because a taken call
+   empties all three. lcc relies on that, and a pass that deletes
+   repeated prepares (D4, "In functions that call") must count a
+   predicated call as a call. sched-deps already treats a predicated
+   call's clobbers as unconditional (`deps_analyze_insn`,
+   sched-deps.cc:3870), which is safe.
+
+In the proof of concept this made NPB EP.W 1.5–1.8% faster (8C2 7.28 →
+7.17 s, 4C 14.36 → 14.10, 2C3 5.47 → 5.37; lcc 6.29, 12.49 and 4.77,
+which also predicates its `log` calls and unrolls the loop by two), and
+SQLite got 879 predicated calls and 3.6% fewer wide instructions.
+
 ### D4. Control transfers
 
 | Stage | Jumps | Calls | Returns |
@@ -910,6 +974,33 @@ a stall (timing.md, "Hazards"; branches and calls wait), so the bundler
 must keep 2 cycles there and not rely on the interlock.
 
 Indirect calls: `movtd %reg, %ctprN` (latency 9) then `call`.
+
+**Switches** (P65, P72; lcc 1.29.16 `-O3`, v3, v5 and v6 alike, and lcc
+1.31.05 for v3; control-transfer.md, "How lcc uses it"). A jump table
+costs a bound check, a load of the target (3 cycles, 5 on v6) and 9
+cycles from `movtd` to the `ct`: about 14 cycles before the arm's first
+instruction (16 on v6). lcc uses a table only for 18 arms or more
+(consecutive values with one target count as one arm), or from 6 arms
+when 6 or more of them end in a tail call. A smaller switch becomes
+predicated code: the selector is compared against the values into
+predicates, `landp` trees form each arm's condition, the arms' loads and
+arithmetic run speculatively, and stores, calls and returns go under the
+arms' predicates (range compares first split a switch of 14 arms or
+more, or one with calls, into a few such blocks). SQLite's
+`sqlite3VdbeSerialGet` (12 case values in 9 arms) is 34 wide
+instructions there; the proof of concept, with a table, made it 84. GCC
+makes a table from 5 case labels when the target has no `casesi` pattern
+(`default_case_values_threshold`, targhooks.cc:1946;
+`jump_table_cluster::is_beneficial`, tree-switch-conversion.cc:1787;
+`--param case-values-threshold` overrides the hook,
+tree-switch-conversion.h:520), and below that a tree of compares and
+branches. Raising `TARGET_CASE_VALUES_THRESHOLD` (target.def:6485)
+toward lcc's 18 alone gains nothing, because the tree stays branches:
+the proof of concept measured SQLite's speedtest1 0.3–0.4% faster (with
+16 or 32) and Lua's queen and k-nucleotide 0.7–1.1% slower. Take lcc's
+rule only together with a pass that turns the whole compare tree into
+one predicated block (the target pass of 7.7, "Branchy loops", fits).
+Until then keep GCC's default.
 
 **Conditional returns** (`ct %ctpr3 ? p`, lcc's early exits from leaf
 functions, bzip2's `mainGtU`; the proof-of-concept back end, P27,
@@ -1196,9 +1287,16 @@ each one cost it a debugging session:
   `get_object_alignment_2 (MEM_EXPR, …, addr_p = true)` proves it, not by
   `MEM_ALIGN`, which under `STRICT_ALIGNMENT` is the pointer type's, so
   `*(uint32_t *) (buf + 1)` would pass and SIGBUS (P34; lcc folds only
-  under `-ffast`, and then also traps there). A MAS needs CS1, which
-  `setwd`, `wait` and `call` also use (bundle.md), so the DFA must
-  reserve CS1 for MAS accesses.
+  under `-ffast`, and then also traps there). A MAS goes in CS1, which
+  `setwd`, `setbn`, `setbp`, `wait` and `call` also use (bundle.md).
+  But CS1 has one MAS field for each of ALC0, 2, 3 and 5, so MAS
+  accesses never exclude each other, only those control operations.
+  Model a `cs1` unit that the control operations reserve, with an
+  `exclusion_set` between it and the MAS accesses (7.2), not one CS1
+  unit that every MAS access reserves. That single unit held the proof
+  of concept's NPB IS histogram kernel to II 4, where lcc's runs at II 2
+  with a lock load, a check and an `rbranch` in one instruction (P69;
+  7.6, item 4).
 - **Costs** (P37): price a division by a constant as `expand_divmod`'s
   sequence (a high-part multiply and shifts, about 6; a remainder 11;
   powers of two 1–4), not as a divide: doloop rejects a loop whose
@@ -1300,7 +1398,10 @@ Written in `.md` with `define_automaton`, `define_cpu_unit`,
   slots; a 64-bit literal takes two), `ct` (control transfer), `ctp`
   (preparation), `pl0`…`pl2` (predicate logic), plus the store/load pair
   restrictions from `bundle.md` "Bundling restrictions" as
-  `exclusion_set`s.
+  `exclusion_set`s. Add a `cs1` unit for `setwd`/`setbn`/`setbp`, `wait`
+  and `call`, excluded with every load or store that carries a MAS, and
+  let `ibranch` and `rbranch` take both `ctp` (CS0 holds their
+  displacement) and `ct` (D10; bundle.md).
 - **Reservations**: one per class of operation, e.g. "simple integer op in
   any of ALC0–5", "load in ALC0, 2, 3, 5", "store in ALC2 or 5", "divide in
   ALC5", "128-bit op in a channel pair". Which channels each operation may
@@ -1392,6 +1493,20 @@ output:
   the next cycle), and make output dependences cost at least 1 in
   `TARGET_SCHED_ADJUST_COST` (two writes of one register can't share a
   wide instruction).
+- **The frame setup is no scheduling barrier** (P73). sched-deps makes
+  an `unspec_volatile` a `TRUE_BARRIER` (`sched_analyze_2`,
+  sched-deps.cc:2758–2774), and every later insn gets a true dependence
+  on it (`sched_analyze_insn`, sched-deps.cc:3388). A volatile `getsp`,
+  or a `blockage` after it, makes the whole body wait `getsp`'s 2
+  cycles and keeps prepares and argument loads out of the first
+  instructions; the proof of concept also had a rule that kept CTPR
+  operations a cycle after `setwd`. Describe `getsp` as setting the
+  stack pointer register (plus its result), so that only accesses
+  through the new stack pointer depend on it, and let a `disp` or
+  `return` share `setwd`'s wide instruction (CS0 against CS1). If
+  `setwd` stays volatile, as ia64's `alloc` is (D2), give its
+  dependences latency 0 in `TARGET_SCHED_ADJUST_COST`. lcc's first
+  instructions are in M1, "Prologue/epilogue".
 - **A taken transfer's whole wide instruction runs.** On ia64 and C6x a
   taken branch skips the rest of its group; on E2K every operation of
   the instruction holding a taken `ct` executes (control-transfer.md;
@@ -1483,6 +1598,37 @@ whole 4-cycle step, **pad 1–3 empty cycles after channel assignment**
 where an operand would still be early (after a wide instruction that
 falls through, with no label between): zlib's crc32 braid block 46 → 26
 cycles, CoreMark +3.4% on the 4C (P36).
+
+Size the assignment for a whole wide instruction (P80). lcc's pipelined
+kernels fill all six ALU channels and add `mova`s, predicate logic and
+the loop's transfer. In lcc 1.29.16's SQLite for v5 at `-O3` the
+fullest instruction holds 12 operations, counted as a port's insns: 6
+ALU, 3 `mova`, 2 `landp` and a `ct` with `alc`/`abn`/`abp`. 0.35% of
+the instructions hold more than 8, nearly all in loop kernels. The
+proof of concept's assigner gave up above 8 insns and left exactly
+those instructions to gas, which put consumers in the wrong cluster, so
+the modulo scheduler's crossing costs didn't hold where they matter
+most. Only the ALU operations (at most 6) and the `mova`s (at most 4,
+in the AAS) have a channel to choose; prepares, transfers,
+`set*`/`wait`/`call` and predicate logic have fixed syllables
+(bundle.md). Search over those two groups only (at most 9 operations in
+that SQLite build, 10 by the encoding), and treat an instruction the
+search can't assign as a bug to report, not a case to leave to gas.
+
+Check write-back conflicts per issue cycle (P81; timing.md, "Write-back
+conflicts"). An integer operation that writes a register, or a load,
+placed in channel N at cycle t makes the FP-side result issued in
+channel N at t − 2 a cycle late, when its consumer is an integer
+operation or an FP one in the other cluster: with the consumer at the
+producer's latency, a 4-cycle stall step. FP-side here means FP
+arithmetic, integer multiplies and the multiply flag forms (`smulx_fw`,
+`umulx_fw`). The delay holds whatever channel N issued at t − 1
+(measured on all three machines with `damwb.c`), so keep, per channel,
+the FP-side operations of the last two cycles. Keeping only the
+channel's latest one missed the conflict in the proof of concept: with
+two `smulx_fw` back to back in ALC0, an `addd` placed in ALC0 two cycles
+after the first stalled every iteration 4 cycles, 1.5 instead of 1 cycle
+an element.
 
 ### 7.6 Speculation
 
@@ -1618,6 +1764,41 @@ load needs no `BEGIN_CONTROL` check. The exceptions, all measured:
   (as call-saved registers they are live at the function's end), honour
   a call's `CALL_INSN_FUNCTION_USAGE` (argument registers aren't in its
   pattern), and stop at a later use of the register as half of a pair.
+- *Interpreter dispatch* (P72; Lua 5.4's `vmfetch`, the proof of concept
+  on the 2C3). A handler that ends in `if (trap) {...} i = *pc++; goto
+  *disptab[op]` reaches the shared dispatch block by a conditional
+  branch after cross-jumping. GCC's `duplicate_computed_gotos` copies a
+  computed goto's block only into predecessors with a single successor
+  that fall through or end in a simple jump
+  (`maybe_duplicate_computed_goto`, bb-reorder.cc:2733–2736), and only a
+  block no longer than 8 unconditional jumps (`uncond_jump_length` ×
+  `max-goto-duplication-insns`, bb-reorder.cc:2783, params.opt:618). It
+  runs after register allocation, just before ce3 (passes.def:535, 538),
+  which is where a port's own copy fits (inferred). So every interpreted
+  instruction waits after the branch for the fetch (5 cycles on v6), the
+  opcode, the table load (5) and `movtd` (9). Copy the block into the
+  conditional predecessors as well, and start the fetch, the opcode
+  arithmetic and the table load above the branch, speculatively; only
+  `movtd` and `ct` then stay after it. That gave the proof of concept
+  2–7% fewer cycles, putting Lua at 0.97–1.06 of lcc's cycles. lcc's own
+  dispatch is slower, because its `&&label` is an index
+  (spec/abi/source-compat.md, "Labels as values"): each handler loads
+  the index and branches to one block that range-checks it, loads the
+  address from a second table and does `movtd`, about 28 cycles from the
+  instruction word's load to the transfer on v6, against the proof of
+  concept's 21. When two blocks hoist into one predecessor, the second
+  must see the first's hoisted registers as live into it: with liveness
+  computed once, the proof of concept miscompiled Lua's `luaO_tostring`
+  and gcc.dg/vect's vect-cond-7/8.
+- *What pays to move above a branch* (P72, the proof of concept's
+  measurements). Independent operations pay their way along any branch:
+  bzip2's compression was 3.4% slower without them. A chain, in which a
+  moved operation reads another moved one's result, holds the branch
+  until it issues, on the other way too, so move chains only along
+  likely branches (80% or more, such as `if (l_unlikely (trap))`); along
+  any branch they made CoreMark 1% slower. Move nothing along a branch
+  taken less than a fifth of the time: CoreMark's list search, with a
+  load moved for its 11% "not found" arm, was 0.4% slower.
 - *Selective scheduling* (sel-sched) has a mode without checks,
   `SEL_SCHED_SPEC_DONT_CHECK_CONTROL` (sel-sched.cc:3208), used by ia64
   with `-msel-sched-dont-check-control-spec`; hooks as ia64's
@@ -1693,6 +1874,20 @@ patterns must express:
 - Keep stores out of a check's instruction: a check in ALC5 that
   reloads sees a store in ALC2 of the same instruction
   (`spec/isa/bundle.md`).
+- A lock load and the check of an earlier lock may share a wide
+  instruction, and so may two locks and two checks with one `rbranch`
+  (speculation.md, "Distances"; `damwb.c` on the 4C, 8C2 and 2C3). lcc
+  does this when the initiation interval needs it: NPB IS's histogram
+  runs at II 2 with the lock in ALC3, the check in ALC5 and both stores
+  in the other instruction. The check's `rbranch` takes CS0 and the SS
+  transfer (bundle.md), so neither a prepare nor the loop's `ct` fits
+  in the check's instruction. In a two-instruction kernel the check's
+  row is therefore fixed, and a greedy placer must not fill it with a
+  store first (the proof of concept did, P69). Where the II leaves
+  room, the proof of concept keeps the check apart from its lock:
+  CoreMark's list reversal ran 2.9% slower on the 8C2 with lock and
+  check in one instruction and the store in the next (its finding I45,
+  not reproduced in isolation; low confidence).
 - The table holds exactly 32 entries and evicts the oldest; keep fewer
   pairs outstanding.
 - Traps clear it (a failed check, so correct but slow), and so does a
@@ -1998,7 +2193,19 @@ check-free semi-speculative form works.
   runs after that whole instruction, its writes included
   (speculation.md; P30, `vect-alias-check-18.c` gave wrong bytes when a
   redone add's operand was overwritten there; possibly also P28's GMP
-  failure).
+  failure). Only the iterations between a lock and its check hold an
+  entry: count those against the 32, not all the kernel's stages. lcc's
+  NPB IS lock runs 28 iterations ahead of its check (`? %pcnt28`), at
+  the distance of the loop's other far loads, so the histogram's cache
+  misses overlap (lcc 1.29.16 `-O3`, v3, v5 and v6; speculation.md).
+  Combine DAM with array prefetch as lcc does: return from the
+  compensation code with `ibranch`, which writes no CTPR, where a
+  `disp %ctpr2` + `ct` back would stop the APB program (apb.md; "Keep
+  `%ctpr2` free" below). With CS1 modelled per channel (D10), the lock
+  far ahead and APB, the proof of concept's IS.A timed part took 0.17 s
+  on the 8C2 (lcc 0.18), 0.32–0.35 s on the 2C3 (lcc 0.30–0.32) and
+  0.61 s on the 4C (lcc 0.53–0.61), against 0.74 s on the 8C2 at II 2
+  without the last two (P69).
 - **Several lock/check pairs in one loop** (P58; lcc's PolyBench
   floyd-warshall at `-O3`, v3, v5 and v6 alike): in `path[i][j] = min
   (path[i][j], path[i][k] + path[k][j])` the store may hit `path[i][k]`

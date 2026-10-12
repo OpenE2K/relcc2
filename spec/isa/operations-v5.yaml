@@ -51,8 +51,10 @@ header: |
     `pshufb` applies mask bits 4–6 (invert, bit-reverse, sign) that v3
     ignores (semantics.md, "Packed operations of v3"); `sdivd` every 2
     cycles no longer conflicts in the divider.
-  - **Unchanged**: every v3 latency, hazard and control delay
-    (timing.md, "Elbrus-8C2"), and the ABI.
+  - **Unchanged**: the ABI, and every v3 latency, hazard and control
+    delay (timing.md, "Elbrus-8C2") but two: `pfdivd` and `pfsqrttd`
+    take 2 cycles more, and an FP operation's result reaches the single
+    or double operand of an 80-bit operation 2 cycles later.
 
   ## How lcc uses them
 

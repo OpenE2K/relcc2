@@ -28,10 +28,11 @@ Status markers, in addition to bundle.md's:
   proof-of-concept back end's I47–I49), on the 4C, the 8C2 and the
   2C3; `UPSR.ac`, movas wider than their area's format and `%aabfN` by
   `tools/isa-probes/isaleft.c` (`gen_isaleft.py`) on all three; the
-  narrow and misaligned AAU loads and stores and what misaligned AAU
-  accesses cost by `tools/isa-probes/apbleft.c` (`gen_apbleft.py`),
-  also on all three. The emulators model almost none of this; see the
-  end of the page.
+  narrow and misaligned AAU loads and stores, what misaligned AAU
+  accesses cost, and the monitor counts behind the two slowdowns in
+  "Timing" by `tools/isa-probes/apbleft.c` (`gen_apbleft.py`), also on
+  all three. The emulators model almost none of this; see the end of
+  the page.
 - **[guide]**: MCST programming guide, 6.6 (prefetch), 6.3.6 and
   10.9.5, 10.11.6–9, 10.12.3–4
 - **[lcc]**: observed in lcc 1.29.16 and 1.31.05 `-O2`/`-O3` output
@@ -428,22 +429,71 @@ within 5%, so one figure each; consecutive elements: best of five; the
 | Consecutive elements from memory, 1 KiB areas | 4 KiB | 1.17 / 1.26 / 1.24 | 1.21 / 1.28 / 1.27 | 1.13 / 1.21 / 1.21 |
 | The same, 2 KiB areas | 4 KiB | 1.05 / — / 1.10 | 1.21 / — / 1.27 | 1.13 / — / 1.22 |
 
-- With 4 KiB pages the column walks are bound by TLB misses (inferred):
-  2 MiB pages make them 7–46 times faster. The exception is one array
-  of 500 rows (2.3 MiB, 586 pages, presumably few enough for the TLB),
-  which the 4C and the 8C2 walk as fast either way and the 2C3 1.4
-  times slower.
+- With 4 KiB pages the column walks are bound by DTLB misses
+  (`apbleft.c` `col`: a table walk an element, below): 2 MiB pages make
+  them 7–46 times faster. The exception is one array of 500 rows
+  (2.3 MiB, 586 pages, few enough for the DTLB: below), which the 4C
+  and the 8C2 walk as fast either way and the 2C3 1.4 times slower.
 - With 4 KiB pages, two areas in one half run 9–40% slower than one in
   each half, on all three machines, **at any area size**. Areas of
   512 B, 1 KiB and 2 KiB give the same times within 5%, so a deeper
-  prefetch doesn't hide the misses. Each half presumably handles its
-  own misses (inferred).
+  prefetch doesn't hide the misses. Each half takes its areas' DTLB
+  misses one at a time (below).
 - With 2 MiB pages the half doesn't matter on the 4C and the 8C2. On
   the 2C3 one area in each half stays faster (1.9–2.0 against 2.8
   cycles), presumably v6's line rate per half ("v6", below).
 - Consecutive elements from memory don't depend on the half. They
   depend on the area size, and only on the 4C, where 2 KiB areas are
   5–13% faster than 1 KiB ones (as the single-area table above shows).
+
+**Why** [hw: `tools/isa-probes/apbleft.c` `col`, cases from
+`gen_apbleft.py`: the same loops with 1 KiB areas, the core's monitors
+counted in-process (monitors.md); per iteration, 4 KiB pages, R = 4,000
+unless marked; two runs a machine, within 2%]:
+
+| | 4C | 8C2 | 2C3 |
+|---|---|---|---|
+| table walks an element (`DTLB_TLU_QUERY`) | 1.0 | 1.0 | 1.0 |
+| cycles the walker is busy a walk (`TLU_BUSY`) | 11.1 | 14.0 | 40.1 |
+| one area: cycles | 17.3 | 20.1 | 47.3 |
+| LR: cycles / walker busy | 32.6 / 23.4 | 39.9 / 30.8 | 88.0 / 81.6 |
+| LL: cycles / walker busy | 35.8 / 23.3 | 47.0 / 30.9 | 95.8 / 81.6 |
+| both areas on one page every step (b is a's next column): LR / LL | 17.4 / 20.4 | 20.3 / 23.2 | 47.6 / 48.6 |
+| a column walk and a consecutive stream: one half / both halves | 18.0 / 17.4 | 21.0 / 20.3 | 46.0 / 47.5 |
+| R = 500: table walks an iteration, one area / LL / LR | 0.01 / 1.57 / 1.19 | 0.01 / 1.57 / 1.19 | 0.01 / 1.54 / 1.18 |
+
+- The DTLB has 256 lines of 4 entries (the kernel's "sets"), the fourth
+  kept for large pages [source: kernel
+  `arch/e2k/include/asm/tlb_regs_types.h:45-50`], so 768 entries hold
+  4 KiB pages. One area walking a 500-row matrix (586 pages) makes
+  almost no table walks; two such matrices (1,172 pages) make 0.6–0.8 an
+  element, and at R = 4,000 (4,688 pages a matrix) every element is a
+  table walk. With 2 MiB pages there are none (`DTLB_TLU_QUERY` 0).
+- Two areas keep the walker busy twice as long as one, whichever half
+  they are in. The walks don't overlap (inferred: LR takes longer than
+  its two walks end to end, where overlapping walks would let it run
+  near one area's time).
+- One half takes its areas' misses in turn, so LL costs about twice one
+  area (4C 35.8 against 2 × 17.3). LR costs the walker's time plus about
+  9 cycles (2C3 6), where one area costs its walk plus 6 (2C3 7): the
+  halves overlap the rest.
+- When both areas need the same page every step, one walk serves both
+  (`DTLB_TLU_QUERY` 1.0 an iteration) and LR runs as fast as one area.
+  In LL the second area's lookup comes after the walk and hits the DTLB
+  (`DTLB_HIT` 2.0 against 1.0 an iteration on the 4C and 8C2), yet costs
+  3 more cycles (2C3 1).
+- A consecutive stream, which never misses, slows a walking area in its
+  own half by about 4% and in the other half by about 1% on the 4C and
+  8C2, and not at all on the 2C3.
+- At R = 500, where the DTLB holds part of the two matrices, LL also
+  makes a third more table walks than LR, on all three machines, which
+  adds to its cost. Why the order of the lookups changes what the DTLB
+  keeps is not known.
+- Every lost cycle is a 4-cycle E2 stall step (`BUB_E2`), all of them
+  counted as `STALL_AAU` ("decode blocked by the AAU" in the kernel's
+  Events.json).
+- On the 2C3, `DTLB_HIT` stays about 0 for walking areas, where the 4C
+  and 8C2 count one hit an element.
 
 So spread a few areas over both halves, as lcc does. It costs nothing,
 lets each area be 2 KiB, and avoids the slowdown of two column walks in
@@ -509,9 +559,10 @@ covering 4 KiB and 2 MiB pages; every sum checked:
 
 - From L1 every variant runs at II 4 (4.01).
 - On the 4C, an area streaming beside plain loads that miss L1 costs
-  those loads 1.25 cycles an iteration in L2 (about 10 for each 64-byte
-  line they miss, inferred). This holds whichever way either stream
-  runs, for a 512 B or a 2 KiB area, and with the load in ALC2, 3 or 5.
+  those loads 1.25 cycles an iteration in L2 (10 for each 64 bytes of
+  the plain stream: the monitors below). This holds whichever way
+  either stream runs, for a 512 B or a 2 KiB area, and with the load in
+  ALC2, 3 or 5.
   Plain loads that hit L1 pay nothing. From memory such a loop runs no
   faster than its plain stream alone (A, P 7.2–7.3 against 6.7), and
   with the plain loads 24 iterations ahead it is still 10% slower than
@@ -521,6 +572,53 @@ covering 4 KiB and 2 MiB pages; every sum checked:
 - With every stream in an area, the backward one included, the loop
   keeps II 4 from L1, L2 and memory on all three machines. From memory
   that is 1.4–4 times faster than any variant with a plain stream.
+
+**What the monitors show** [hw: `tools/isa-probes/apbleft.c` `bk`, cases
+from `gen_apbleft.py`: these loops and variants, counted in-process;
+2 MiB pages; cycles an iteration / `STALL_AAU` stall steps an iteration;
+arrays in L2 unless marked; two runs a machine]:
+
+| a, b | 4C | 8C2 | 2C3 |
+|---|---|---|---|
+| —, P (b alone) | 4.00 / 0 | 4.00 / 0 | 4.00 / 0 |
+| A, P | 5.25 / 0.31 | 4.00 / 0.04 | 4.50 / 0.125 |
+| A, P forward | 5.25 / 0.31 | 4.00 / 0.04 | 5.25 / 0.31 |
+| an area of step 0 (every `mova` reads a[0]), P | 5.24 / 0.31 | 4.00 / 0.02 | 4.50 / 0.125 |
+| an area the loop never reads (the program runs, no `mova`), P | 4.00 / 0 | 4.00 / 0 | 4.00 / 0 |
+| A from memory, P | 5.24 / 0.32 | 4.02 / 0.05 | 4.48 / 0.13 |
+| A, P with `mas=0x20` (no L1 fill: timing.md, "Memory") | 4.79 / 0.21 | 4.00 / 0.04 | 4.79 / 0.21 |
+| A, a backward stream of `ldaad` | 5.00 / 0.25 | 4.00 / 0.04–0.06 | 5.00 / 0.25 |
+| —, the `ldaad` stream; A, an `ldd` that hits L1 | 4.00 / 0 | 4.00 / 0 | 4.00 / 0 |
+| A with `dcd` 2 or 3, or `asz` 0 | 5.25 / 0.31 | 4.00 / ≤ 0.05 | 4.50 / 0.125 |
+| both from memory (n = 4 Mi): —, P / A, P / an area of step 0, P | 6.69 / 7.32 / 7.27 | 11.0 / 11.5 / 11.0 | 12.0 / 13.1–13.3 / 12.1 |
+
+- Every lost cycle is a 4-cycle E2 stall step (`BUB_E2`) that the core
+  counts as `STALL_AAU` (0x113, "decode blocked by the AAU" in the
+  kernel's Events.json); in L2 none is a wait for load data
+  (`BUB_E2_MEM` 0).
+- It takes an area that is fetching and loads that go to L2. Plain
+  loads that miss L1, loads with `mas=0x20` and AAU loads all suffer it;
+  loads that hit L1 don't. An area the loop never reads fills once and
+  stops fetching (`DTLB_AAU_QUERY` 0, against 0.25 an iteration for a
+  streaming area), and costs nothing.
+- What the area fetches doesn't matter: an area of step 0, which
+  fetches a[0] again at every step (`DTLB_AAU_QUERY` 1 an iteration),
+  costs the same as one streaming from L2 or from memory, and `dcd` 2
+  or 3 or a 64-byte area change nothing.
+- For each 32 bytes of the plain stream the 4C loses 1.25 stall steps
+  (5 cycles), 1 with AAU loads and 0.85 with `mas=0x20`; the 2C3 0.5
+  steps for a backward stream and 1.25 for a forward one. Three of every
+  four of the stream's 8-byte loads go to L2 (2C3 `L1_LD_MISS` 0.75 an
+  iteration).
+- So the area's requests and the L2-bound loads share something that
+  the AAU holds (inferred; the monitors don't name it).
+- From memory, on the 4C the stall takes the place of part of the
+  memory wait (`STALL_AAU` 0.46 and `BUB_E2_MEM` 0.42 an iteration,
+  against 0.65 of memory wait alone: 7.3 against 6.7 cycles), and an
+  area of step 0 costs the same. On the 2C3 the stall stays small
+  (0.09) and the extra time is longer memory waits (`BUB_E2_MEM` 2.25
+  against 1.98), which an area of step 0 doesn't cause (12.1 against
+  12.0): there the area's stream competes for memory (inferred).
 
 So read all of a loop's streams through areas where possible. On v3,
 when a loop must keep one stream in plain loads (alignment unknown, a
@@ -858,8 +956,8 @@ dot product 7× faster on a 64 MiB array there.
 ## Not checked yet
 
 - v6 on the Elbrus-16C. (v7 is out of scope: not in silicon.)
-- Why two areas in one half walk columns more slowly with 4 KiB pages
-  ("Which half an area is in"; TLB misses handled per half is a guess,
-  no TLB events were counted), and why plain loads that miss L1 slow
-  down beside an area on the 4C and the 2C3 ("Plain loads beside an
-  area").
+- Why two areas in one half make a third more DTLB misses than one in
+  each half when the DTLB holds only part of their pages ("Which half
+  an area is in", R = 500), and what the AAU holds that loads going to
+  L2 wait for beside an area ("Plain loads beside an area"; the
+  monitors name only the AAU).

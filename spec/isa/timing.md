@@ -1076,18 +1076,24 @@ reach 23 (v3 code) to 30 bytes a cycle (v5 code). So reading more than
 16 bytes from one area in one instruction costs a cycle per extra 16
 bytes (isa-score models this).
 
-Where the areas sit matters for column walks. With 4 KiB pages (bound
-by TLB misses, inferred), two areas in one half of the buffer are
-9–40% slower than one area in each half, on all three machines and at
-any area size; with 2 MiB pages the half matters only on the 2C3
-(apb.md, "Which half an area is in"; `pocchk3.c` `col`).
+Where the areas sit matters for column walks. With 4 KiB pages every
+element of a long column walk is a table walk; the walker does one at
+a time (11, 14 and 40 cycles on the 4C, 8C2 and 2C3, inferred from the
+monitors), and each half of the buffer takes its areas' misses in
+turn. So two areas in one half are 9–40% slower than one area in each
+half, on all three machines and at any area size; with 2 MiB pages the
+half matters only on the 2C3 (apb.md, "Which half an area is in";
+`pocchk3.c` `col`, `apbleft.c` `col`).
 
-On the 4C, an area streaming beside plain loads that miss L1 slows
-those loads. A loop at II 4 that reads one array through an area and
-another with `ldd` runs at 5.25 cycles an iteration from L2 (2C3
-4.5–5.25, 8C2 at most 4.2), whichever way either array runs. With both
-arrays in areas it keeps 4 cycles from L1, L2 and memory (apb.md,
-"Plain loads beside an area"; `pocchk3.c` `bk`).
+On the 4C and the 2C3, an area streaming beside loads that go to L2
+stalls the loop. A loop at II 4 that reads one array through an area
+and another with `ldd` runs at 5.25 cycles an iteration from L2 on the
+4C (2C3 4.5–5.25, 8C2 at most 4.2), whichever way either array runs.
+The core counts the stall as the AAU's (`STALL_AAU`); it needs a
+fetching area and loads that miss L1 (or AAU loads), whatever the area
+fetches. With both arrays in areas the loop keeps 4 cycles from L1, L2
+and memory (apb.md, "Plain loads beside an area"; `pocchk3.c` `bk`,
+`apbleft.c` `bk`).
 
 ## Hazards (interlocking)
 

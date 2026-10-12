@@ -115,6 +115,23 @@ Facts these gave about the core (also in the other spec files):
   shallow call keeps them (speculation.md).
 - Register-file and chain-stack spills happen without traps.
 
+## DTLB and AAU events [hw]
+
+Checked by `tools/isa-probes/apbleft.c` `col` and `bk` on the 4C, 8C2
+and 2C3: APB loops counted per iteration (apb.md, "Which half an area is
+in" and "Plain loads beside an area"); the descriptions are
+Events.json's.
+
+| Event (config) | Counts | Evidence |
+|---|---|---|
+| `DTLB_TLU_QUERY` (0x012) | "DTLB accesses from the TLU" (the table-walk unit): one per table walk (inferred) | 1.0 an element of a column walk with a new 4 KiB page each step; 0.01 when the DTLB holds the pages; 0 with 2 MiB pages |
+| `TLU_BUSY` (0x112) | cycles the TLU is busy | 11.1, 14.0 and 40.1 a walk on the 4C, 8C2 and 2C3; two walking areas give twice one area's, in either half of the buffer |
+| `DTLB_AAU_QUERY` (0x013) | the AAU's DTLB lookups | one per 32-byte line an area fetches (0.25 an iteration for 8-byte elements, 1 an element for a column walk); an area of step 0 one at every step; an area that has stopped fetching 0 |
+| `STALL_AAU` (0x113) | stall steps while "decode is blocked by the AAU" | every `BUB_E2` step of a column walk, and of plain loads beside an area |
+| `DTLB_HIT` (0x110) | DTLB hits, first pass of each request only | 4C, 8C2: 1 an element of a walking area; 2C3: 0 |
+| `DTLB_3_HIT` (0x016) | hits in the large-page entries for the secondary (x86) space's 2/4 MB pages | 0 with native 2 MiB pages, as its description implies |
+| `L1_LD_MISS` (0x105, v6) | L1 load misses | 2C3: 0.75 for each 8-byte load of a stream from L2 at II 4; 1 for each AAU load |
+
 ## v5 (Elbrus-8C2) [hw]
 
 The events checked on the 4C keep their numbers on v5 (`TICKS` 0x572,

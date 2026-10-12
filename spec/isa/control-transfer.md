@@ -187,6 +187,8 @@ about 0.4 per block):
 | `nop` | 1.38 | — |
 | `ibranch` not taken | 1.38 | 0 |
 | `ibranch` taken, with or without a true condition | 7.38 | **+6** |
+| `ibranch L ? %MLOCK \|\| %cmpN` (or `%clpN`, ctcond type 9), its compare in the same instruction, not taken | — | 0, and no wait for the compare (a compare and `ibranch ? %pred` in the next instruction: 4 cycles for the two) |
+| the same, taken | — | **+12** (a taken `ibranch`: +6; a compare and a taken `ibranch ? %pred`: 10 cycles for the two) |
 | `disp`, `nop 5`, `nop` | 8.44 | — |
 | `disp`, `nop 5`, `ct` taken / `ct ? true` / `ct ? false` | 8.38–8.44 | 0 |
 | the same with `disp …; ipd 0` | 8.38 | 0 (the target is cached) |
@@ -196,6 +198,16 @@ So a prepared transfer issued at least its delay after the prepare costs
 nothing, calls and returns included, while a taken `ibranch` always
 costs 6 cycles, forward or backward (monitors: `ibranch_fwd` 1
 instruction in 7 cycles, a forward and a backward one 2 in 14).
+
+The type-9 rows come from another harness [hw: `ctlleft.c` `t_t9_*`,
+`t_cmpib_*`, `t_ib_tk`, 4C, 8C2, 2C3 identical], in which a
+one-instruction block costs 1 cycle, a taken `ibranch` block 7 and a
+taken type-9 block 13, from ALC0 or ALC3 and for `%clpN` alike. So the
+type-9 form ([predicates.md](predicates.md), "Control transfers") suits
+rarely taken branches on a fresh compare. Not taken it is free (the
+branch and the instruction after it take 2 cycles, `t_t9_skip_nt`).
+Taken, it costs as much as `ibranchd` (+12, v6) and 3 cycles more than
+a separate compare and `ibranch`.
 
 A taken `ibranch` **hides an interlock stall in its own instruction**:
 a load used one instruction later stalls 4 cycles (2 instructions, 6

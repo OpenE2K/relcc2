@@ -414,9 +414,16 @@ conditional `abgc` cannot share an instruction with any `ct`.
 | 6, 14 | `[~]%predN \|\| %LOOP_END` | **while `pcnt` ≠ 0 the predicate is ignored** (the condition is `%LOOP_END`), unless `%lsr.semc` (`le_*`: `pcnt` 1 and 3, both predicate values, with and without `loop_mode`) [hw] |
 | 7, 15 | `[~]%predN && %NOT_LOOP_END` | likewise (`%NOT_LOOP_END` alone while `pcnt` ≠ 0) [hw] |
 | 8 | `%MLOCK [\|\| %dt_al{0,1,3,4}…]` | `ibranch` (`rbranch`) and `ibranchd` only ([speculation.md](speculation.md), [atomics.md](../abi/atomics.md)) |
-| 9 | `%MLOCK \|\| [~]%cmpN`, `%MLOCK \|\| %cmp0 \|\| %cmp1` (or `%cmp3 \|\| %cmp4`), `%MLOCK \|\| [~]%clpN` | v3+, `ibranch`/`rbranch`, and `ibranchd` (v6+); `%cmpN` is the integer compare (`cmp*`, `cmpand*`, written with `,N`) in ALC N of the same instruction, `%clpN` that instruction's CLP N; not probed |
+| 9 | `%MLOCK \|\| [~]%cmpN` (N = 0, 1, 3, 4), `%MLOCK \|\| [~]%cmp0 \|\| [~]%cmp1`, `%MLOCK \|\| [~]%cmp3 \|\| [~]%cmp4`, `%MLOCK \|\| [~]%clpN` (N = 0–2); `rbranch L ? %cmpN` is the same | v3+, `ibranch`/`rbranch` and (v6+) `ibranchd` only. True when the instruction's wait-unlock store failed or the named condition holds. `%cmpN` is the result of the integer compare written `cmp*,N` or `cmpand*,N` in the same instruction, whatever predicate it writes; a compare under a false predicate counts as false (also when its destination predicate was true); `%clpN` is the instruction's CLP N (`@p(4 + N)`); `~` negates one term [hw: `ctlleft.c` `t9_*`, including `t9_cmpandb1` and `t9_predf0_p0t`, 4C, 8C2, 2C3]. gas rejects `%cmpN` unless such a compare, with its channel written, is in ALC N (an FP compare or `cctop*` doesn't count: "no integer comparison with an explicitly specified ALC matches %cmpN") |
 | 11 | the same without `%MLOCK` | v7 only (`ibranch`, `ibranchd`) |
 
+- Outside a lock sequence `%MLOCK` is false ([atomics.md](../abi/atomics.md):
+  it holds only in the store's instruction), so on v3–v6 type 9 is a
+  branch on a compare of its own instruction, v7's type 11: `ibranch L
+  ? %MLOCK || %cmp0` is taken exactly when the ALC0 compare is true
+  [hw]. Not taken it costs nothing and doesn't wait for the compare;
+  taken, 12 cycles ([control-transfer.md](control-transfer.md),
+  "Costs"). lcc never uses it (below).
 - The masking in types 6, 7, 14 and 15 keeps a pipelined while-loop's
   exit test from acting on predicates its prologue stages haven't
   computed yet: `ct %ctpr1 ? ~%pred3 && %NOT_LOOP_END` (lcc's search
@@ -633,10 +640,12 @@ Rules a compiler must follow:
 - A `call` under a false predicate still costs a chain-stack spill.
 
 `%spred` (proceed without waiting for late operands) and `%rndpred`
-(sampling) are for special code; `%MLOCK`, `%dt_al` and `ibranch`
-conditions on same-instruction compares (`%cmpN`, `%clpN`) belong to
+(sampling) are for special code; `%MLOCK` and `%dt_al` belong to
 speculation and atomics ([speculation.md](speculation.md),
-[atomics.md](../abi/atomics.md)).
+[atomics.md](../abi/atomics.md)). An `ibranch` on a compare of its own
+instruction (ctcond 9, `%cmpN`, `%clpN`) suits rarely taken branches on
+a fresh compare: free when not taken, 12 cycles when taken
+([control-transfer.md](control-transfer.md), "Costs").
 
 ## Emulators
 
@@ -651,7 +660,7 @@ Neither qemu can be trusted on predicates beyond the basics:
 | `%bgrpred` | not probed | always false | decoded as `%pcnt0` |
 | RLP `%lcntex` (CDS `0xxxxxx`) | not probed | `%lcntex` | ignored (the operation always runs) |
 | `cctop*` | x86 conditions (semantics.md) | aborts | implemented |
-| ctcond 9 (`%cmpN`, `%clpN`) | not probed | reduced to `%MLOCK` | not implemented |
+| ctcond 9 (`%cmpN`, `%clpN`) | as above [hw] | reduced to `%MLOCK` | not implemented |
 | `,sm` store under a diagnostic predicate | data with bit 30 set | data replaced by `0x40000000` per half | data with bit 30 set |
 | a `,sm` compare under a diagnostic predicate | diagnostic result | diagnostic | clean result |
 | a predicated write to a CTPR (`movtd`) | — | conditional | SIGILL |
@@ -660,7 +669,9 @@ Neither qemu can be trusted on predicates beyond the basics:
 ## Not checked yet
 
 - `%bgrpred`; `%lcntex` as an RLP or MRGC condition (no gas syntax);
-  ctcond types 9 and 11 (`%cmpN`, `%clpN`).
+  ctcond type 11 (v7; no hardware); type 9 with `ibranchd`, and with no
+  integer compare in ALC N or an FP compare or `cctop*` there (gas
+  rejects all three, so a test needs hand encoding).
 - The callee's initial predicate **tags** (only clean predicates were
   passed).
 - Whether a `,sm` load under a diagnostic predicate reads memory.

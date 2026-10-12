@@ -312,7 +312,7 @@ can't be checked by decoding, but gas's encoding does what it should on
 the Elbrus-2C3 (`ctl6.c`: `abgc N` adds N to `%bgr.cur`, also under a
 predicate; loops.md, "v6").
 
-### ctcond [decoded for types 0–9, 14, 15; type 11 source]
+### ctcond [decoded for types 0–9, 14, 15; type 9 run; type 11 source]
 
 Bits 0–4 are `psrc`; bits 5–8 are the condition type:
 
@@ -326,7 +326,7 @@ Bits 0–4 are `psrc`; bits 5–8 are the condition type:
 | 6 | `%predN \|\| %LOOP_END` |
 | 7 | `~%predN && %NOT_LOOP_END` |
 | 8 | `%MLOCK`, optionally `\|\| %dt_al…` (psrc bits 0–3) |
-| 9 | `%MLOCK \|\| ` a compare or CLP result (psrc encodes which) |
+| 9 | `%MLOCK \|\| ` a compare or CLP result: `psrc` = (compare index 0–3 for ALC 0, 1, 3, 4) << 1 \| negation; or 8 \| (0 for `%cmp0 \|\| %cmp1`, 1 for `%cmp3 \|\| %cmp4`) << 2 \| first negated << 1 \| second negated; or 16 \| N << 1 \| negation for `%clpN` (gas `parse_pl_ctcond`). v3+ |
 | 11 | Same as 9 without `%MLOCK` (v7 only) |
 | 14 | `~%predN \|\| %LOOP_END` |
 | 15 | `%predN && %NOT_LOOP_END` |
@@ -336,7 +336,12 @@ gas accepts conditions involving `%MLOCK` only on `ibranch` (and `rbranch`) and,
 and 11, `%dt_alN`, `%cmpN` and `%clpN` refer to operations in the same
 bundle: a speculative operation in ALC N (true when it has a diagnostic
 operand; [speculation.md](speculation.md)), a compare in ALC N, and the
-CLP that produces `@p(4 + N)`.
+CLP that produces `@p(4 + N)`. gas accepts type 9 only from v3
+(`rbranch L ? %cmpN` too) and only when an integer compare with its
+channel written (`cmpedb,1 …`) is in each ALC named; FP compares and
+`cctop*` don't count (`check_for_cmp`, `tc-e2k.c:9935-9941`, MCST bug
+148965). On the 4C, 8C2 and 2C3 type 9 does what it says
+([predicates.md](predicates.md), "Control transfers"; `ctlleft.c`).
 
 ## CS0: control syllable 0 [decoded, except `puttsd`, which gas does not accept]
 

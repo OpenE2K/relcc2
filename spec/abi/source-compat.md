@@ -249,8 +249,19 @@ uapi's clobber list names them ([kernel-interface.md](kernel-interface.md),
 The uapi system call macros list neither `"memory"` nor `"call"`, so they
 rely on this (inferred). GCC does not treat `asm volatile` as a memory clobber and may
 move it relative to other code (`gcc/doc/extend.texi:11797-11801`,
-`12423-12434`), so with GCC, values loaded before such a call may be
-reused after a system call that wrote them (inferred).
+`12423-12434`), so with GCC, values loaded before such a call are
+reused after a system call that wrote them. GCC's tree optimizers see
+an asm write memory other than its own `m` outputs only when its
+clobbers include the literal `"memory"` or it is a non-empty basic asm
+(`gimple_asm_clobbers_memory_p`, `gcc/gimple.cc:3058-3074`, which
+`gcc/tree-ssa-operands.cc:753-755` asks), volatile or not, and no target
+hook changes that: a memory clobber added in `TARGET_MD_ASM_ADJUST`
+reaches only RTL [source]. Host GCC 16.2.1 `-O2` (x86-64) reads
+`buf[0]` once across `asm volatile ("..." : : "r" (buf))`, after the
+asm, and before and after it with `"memory"`. lcc reads it again after a
+uapi-style `read` (`tools/abi/probes/pocplan.c` `sys_read_twice`: `ldb`
+before and after the asm) [lcc 1.29.16 `-O2` and `-O3`, v3.4c, v5.8c2,
+v6.2c3; 1.31.05 `-O3`, v3, v6.2c3].
 
 lcc also has `#pragma asm_inline`, `#pragma no_asm_inline` and
 `#pragma asm_length (N)` (the asm's length in cycles, 0–14, E2K only)

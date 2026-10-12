@@ -154,22 +154,27 @@ groups:
     use: "`vec_cmp`; byte search (`qpcmpeqb` then `qpsgn2mskb`)."
   - ops: qpmullh qpmulhh qpmulhuh qpmulhrsh qpmullw qpmaddh qpmaddubsh qpsign{b,h,w}
     does: "Multiplies (low, high signed or unsigned, rounded high, 32-bit low), `pmaddwd`-style and signed × unsigned byte dot steps, `psign`."
+    use: "`mulv8hi3` `qpmullh`, `mulv4si3` `qpmullw`, `smulv8hi3_highpart` `qpmulhh`, `umulv8hi3_highpart` `qpmulhuh`, `smulhrsv8hi3` `qpmulhrsh`, `sdot_prodv4siv8hi` `qpmaddh` + `qpaddw`, `abs` as `qpsign* a, a`; `qpmaddubsh` saturates its pair sums to 16 bits, so it is no exact `usdot_prod`. lcc's vectorizer uses only `qpmullh` and `qpmullw` (under `-faligned`; a `V16QI` multiply is `qpmullh` + `qpmulhh` with `qpand` masks and a `qppermb` merge, also at `-O3`); its high-half and dot-product loops stay scalar or use the 64-bit `pmaddh`. Its x86 headers map `_mm_mulhi_epi16`, `_mm_mulhi_epu16`, `_mm_mulhrs_epi16`, `_mm_madd_epi16`, `_mm_maddubs_epi16` (operands swapped) and `_mm_sign_epi8` one to one. Its v5 libraries: `qpmullw` 95 (libgfortran's `matmul_i4`)."
   - ops: qphadd{h,w} qphaddsh qphsub{h,w} qphsubsh
     does: Horizontal pairs over 128 bits, a's pairs into the low half, b's into the high half.
   - ops: qpsadbw qpmpsadbh qpmulubhh
     does: "`psadbw` per 64-bit half; `mpsadbh` per half with the same 32-bit b; `qpmulubhh`: `pmulubhh` per half, bytes 0–3 of the 64-bit a for the low half and 4–7 for the high half."
+    use: "`usadv16qi` (one sum per 64-bit half, as x86 `psadbw`) and, against zero, the byte sums of each half (inferred); `qpmpsadbh` is x86 `mpsadbw` (lcc's `_mm_mpsadbw_epu8`: `qppermb`, then `qpmpsadbh`); `qpmulubhh` has no C idiom. lcc emits no `qpsadbw`: its SAD and byte-sum loops stay scalar even with `-ffast`, its `_mm_sad_epu8` is two 64-bit `psadbw` on v5 too, and its libraries have none."
   - ops: qpand qpandn qpor qpxor
     does: 128-bit and, a & ~b, or, xor.
+    use: "`and`, `ior`, `xor<mode>3` on 128-bit modes, `one_cmpl` as `qpxor` with all ones, `(and (not b) a)` as `qpandn a, b` (so `~a & b`, x86 `andnot (a, b)`, is `qpandn b, a`). lcc's v5 libraries: `qpor` 425 (string functions merging 16-byte blocks: `strlen`, `strcat`, `strncpy`, `memccpy`), `qpand` 45 (`strcasecmp`, libatomic's 16-byte routines); its vectorizer uses all four under `-faligned` (`qpor`, `qpxor` in byte loops at `-O3` too), and for GNU vector `a & ~b` and `~a` lcc 1.29 works on the 64-bit halves with `xornd`."
   - match: 'qplog_0x[0-9a-f]{2}'
     does: "`plog` on 128 bits (the table in the name). lcc's `strcasecmp` folds case with `qplog_0xf8` = a | (b & c)."
   - ops: qpsll{h,w,d} qpsrl{h,w,d} qpsra{h,w} qpsrc{w,d}
     does: "Every lane shifted (or rotated: `qpsrc`) by the 64-bit count b; counts ≥ the lane width give 0 (the sign for `qpsra*`). MCST's qemu takes `qpslld`/`qpsrld` counts modulo 64; the hardware doesn't."
+    use: "`ashl`, `lshr`, `ashr<mode>3` with one count for all lanes in a 64-bit register (`V8HI`, `V4SI`; `V2DI` for the logical ones), `rotr` `qpsrcw`, `qpsrcd`. lcc's vectorizer emits them under `-faligned` (rotates included) for a constant or loop-invariant count, and `qpsllh` with a byte mask (`qpand`, `qplog`) for `V16QI`; `V2DI` arithmetic shifts (no `qpsrad` before v6) and per-lane counts (`vashl`) have no operation, and lcc keeps them scalar. Mask a count held in a vector register to the lane, as for the 64-bit shifts (doc/gcc-port-plan.md, D10). Its v5 libraries: 48 (`_ufc_setup_salt_r`)."
     see: semantics.md, "v5 operations"
   - ops: qpacksshb qpackushb qpacksswh qpackuswh
     does: "Narrow with saturation: a's lanes into the high 64 bits, b's into the low 64."
     use: "`vec_pack_ssat`, `vec_pack_usat` (operands swapped)."
   - ops: qpshufb
     does: "Low 64 bits of the result = `pshufb` (b.high, b.low, c.low), high = `pshufb` (a.high, a.low, c.high), with v5's byte rules."
+    use: "One-source `vec_perm` on `V16QI`: `qpshufb x, x, m` takes each result byte from any of x's 16 bytes, with m `qpand`ed with 0x0f0f… (GCC's selector is taken modulo 16; bit 7 would give a constant and bits 4–6 invert, reverse or sign-replicate the byte); with m `qpand`ed with 0x8f8f… it is x86 `pshufb` (lcc's `_mm_shuffle_epi8`). Two-source permutes and lcc's own (byte reversal, at `-O3`) use `qppermb`; its libraries have no `qpshufb`."
   - ops: qppermb
     does: "Byte i: c's byte selects byte (bits 0–3) of a (bit 4 set) or b, then optionally inverts it (bit 5), reverses its bits (bit 6) or replicates its sign (bit 7)."
     use: "`vec_perm` on 128 bits; realigning two 16-byte chunks (lcc's `memcpy`)."
@@ -196,6 +201,7 @@ groups:
     use: "`V4SF`, `V2DF` patterns (lcc: `qpfmuld` + `qpfaddd`)."
   - ops: qpfcmp{eq,lt,le,uod,neq,nlt,nle,od}{s,d}
     does: All-ones lanes where the compare holds; eq, neq, od, uod quiet (MCST's and the community qemu both raise invalid wrongly).
+    use: "`vec_cmpv4sfv4si`, `vec_cmpv2dfv2di` and `vcond_mask` with `qpmerge`, as `pfcmp*` (operations-v3.md): lt, le, eq directly, gt, ge with the operands swapped, `!(a < b)` by swapping the `qpmerge` arms, `!=` `qpfcmpneq*`, unordered `qpfcmpuod*`; `qpfcmplts a, b, m` then `qpmerge y, x, m` (2 cycles apart). lcc's v5 vectorizer does this for selects and counts at `-O3` and for masks too under `-faligned`, and keeps `!=`, unordered and `isless` loops scalar; GNU vector `!=` is `qpfcmpneqs`, and its `_mm_cmpnlt_ps`, `_mm_cmpunord_ps`, `_mm_cmpord_ps` are `qpfcmpnlts`, `qpfcmpuods`, `qpfcmpods`."
   - match: 'qpf(add|sub|mul|hadd|hsub|addsub)_(add|sub|rsub|hadd|hsub|addsub)[sd]'
     does: "Combined: Y(c, X(a, b)) lane by lane, two roundings, 8 cycles; `qpfmul_add*` in all six channels."
     use: "Multiply-add under `-ffp-contract=fast` (not `fma()`)."
@@ -203,9 +209,11 @@ groups:
   - ops: qpidtof{s,d} qpistof{s,d} qpfdtoi{d,s,dtr,str} qpfstoi{d,s,dtr,str} qpfstofd qpfdtofs
     lat: "4 (v5)"
     does: "Conversions between 32/64-bit integers, singles and doubles (widening ones read 64 bits, narrowing ones write 64). 4 cycles to a consumer of their format."
+    use: "Same lane width: `floatv4siv4sf2` `qpistofs`, `fix_truncv4sfv4si2` `qpfstoistr`, `lrintv4sfv4si2` `qpfstois`, `floatv2div2df2` `qpidtofd`, `fix_truncv2dfv2di2` `qpfdtoidtr`, `lrintv2dfv2di2` `qpfdtoid` (lcc's vectorizer uses all but `qpfstois`, under `-faligned`). Widening from a 64-bit register (two lanes to two doubles or longs) and narrowing into one are the halves of the unpack and pack patterns, the other half taken with `qpswitchd` or joined with `qppackdl` (inferred): `qpfstofd` `vec_unpacks_lo/hi` (`V4SF`), `qpistofd` `vec_unpacks_float_lo/hi` (`V4SI`), `qpfstoidtr` `vec_unpack_sfix_trunc_lo/hi` (`V4SF`), `qpfdtofs` `vec_pack_trunc` (`V2DF`), `qpidtofs` `vec_packs_float` (`V2DI`), `qpfdtoistr` `vec_pack_sfix_trunc` (`V2DF`); `qpfstoid`, `qpfdtois` round in the current mode (lrint). lcc emits these for `__builtin_convertvector` and its `_mm_cvt*` headers but keeps such loops scalar, and converts unsigned lanes one by one."
     see: timing.md, "Formats"
   - ops: qpfdtoifd qpfstoifs
     does: Round every lane to integral, a giving the mode as x86 `roundpd`'s immediate (bit 3 suppresses inexact; MCST's qemu ignores it).
+    use: "`floor`, `ceil`, `btrunc`, `rint`, `nearbyint<mode>2` on `V4SF`, `V2DF` with a = 1, 2, 3, 4, 0xc, the values lcc gives scalar `fstoifs`/`fdtoifd` (so its floor, ceil and trunc raise inexact; 9, 0xa, 0xb would not); `roundeven` 8 (inferred). lcc's vectorizer keeps these loops scalar even with `-ffast`; its `_mm_floor_ps`, `_mm_ceil_pd`, `_mm_round_ps` headers pass the x86 immediate (`qpfstoifs 0x1`, `qpfdtoifd 0x2`, `qpfstoifs 0x8`). C `round` has no mode: lcc truncates (3) and corrects."
 
 - title: Memory
   intro: >
@@ -214,6 +222,7 @@ groups:
   rules:
   - ops: ldq stq
     does: Load or store a register pair (16 bytes at a + b, the low register at the lower address).
+    use: "`movti` (and other 16-byte modes kept in a register pair `%qrN`) to and from memory in one operation instead of two `ldd`/`std`, at any address (off a multiple of 8, about 4 times slower for `ldq` and 7 for `stq` on the 8C2, no slower on v6: semantics.md, \"Memory, tag and descriptor operations\"); `ldq` takes two load channels (ALC0+2 or 3+5), `stq` both store channels, so they free no channels. lcc never emits them: `__int128`, 16-byte struct, `_Complex double` and `__float128` copies are two `ldd`/`std` on v5 and, when 16-byte aligned, `ldqp`/`stqp` on v6."
   - ops: ldqp stqp
     does: "128-bit load/store of a `%qpr` register; with the lock and unlock MAS the inline 16-byte atomics (v3 code calls libatomic)."
     use: "Block copies and 16-byte atomics; lcc's `memcpy` combines aligned `ldqp` with `qppermb`."

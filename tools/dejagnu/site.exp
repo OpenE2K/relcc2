@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Global DejaGnu configuration for relcc2's E2K boards. Point DEJAGNU at
+# this file (or a copy of it) and name a board:
+#
+#   export DEJAGNU=/path/to/relcc2/tools/dejagnu/site.exp
+#   runtest --target_board=e2k-qemu ...
+#   make -C BUILD/gcc check-gcc RUNTESTFLAGS="--target_board=e2k-qemu execute.exp"
+#
+# runtest reads it as the global config file, after the tool's own
+# site.exp (GCC's build tree writes one in BUILD/gcc). The boards are in
+# boards/ next to this file; see README.md for the boards and settings.
+
+lappend boards_dir [file join [file dirname [file normalize [info script]]] boards]
+
+# Board settings may also be fixed here instead of in the environment
+# (a Tcl variable wins over the environment variable of the same name).
+# Uncomment what you need:
+#
+# qemu (e2k-qemu):
+#   set E2K_CPU elbrus-v5
+#   set E2K_LCC /opt/mcst/lcc-1.29.16.e2k-v5.8c2.linux-6.1
+#   set E2K_SYSROOT /opt/mcst/lcc-1.29.16.e2k-v3.linux-6.1/fs
+#   set E2K_QEMU /path/to/relcc2/toolchains/qemu-mcst/bin/qemu-e2k
+#
+# SSH (e2k-ssh, e2k-4c, e2k-8c2, e2k-2c3):
+#   set E2K_SSH_KEY /path/to/relcc2/secrets/id_ed25519
+#   set E2K_REMOTE_DIR relcc2/dejagnu
+#   (never put the 2C3's address or port here: E2K_2C3_HOST and
+#   E2K_2C3_PORT come from the environment)
+#
+# Any board:
+#   set E2K_TIMEOUT 120

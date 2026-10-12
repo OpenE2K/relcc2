@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# DejaGnu board: the Elbrus 4C (v3, ALT Linux) over SSH; e2k-ssh.exp with
+# this machine's defaults.
+#
+# Usage (with DEJAGNU pointing at tools/dejagnu/site.exp):
+#   runtest --target_board=e2k-4c ...
+#
+# Settings besides e2k-ssh.exp's (Tcl variable, else environment):
+#   E2K_4C_HOST  [user@]host (default claude@ringo.lan)
+#   E2K_4C_PORT  ssh port (default: ssh's)
+# E2K_LCC defaults to lcc's 4C build, e2k-v3.4c.
+#
+# A shared machine (16 cores): keep make -j at 4 or less.
+
+source [file join [file dirname [info script]] e2k-common.tcl]
+
+set_board_info e2k,host [e2k_setting E2K_4C_HOST claude@ringo.lan]
+set_board_info e2k,port [e2k_setting E2K_4C_PORT]
+set_board_info e2k,lcc [e2k_setting E2K_LCC [e2k_lcc_dir e2k-v3.4c]]
+
+source [file join [file dirname [info script]] e2k-ssh.exp]

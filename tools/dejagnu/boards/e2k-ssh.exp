@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# DejaGnu board: run E2K test programs on an Elbrus machine over SSH. The
+# machine boards e2k-4c.exp, e2k-8c2.exp and e2k-2c3.exp set its defaults
+# and source this file.
+#
+# Usage (with DEJAGNU pointing at tools/dejagnu/site.exp):
+#   E2K_SSH_HOST=user@host runtest --target_board=e2k-ssh ...
+#
+# Each test program is copied to E2K_REMOTE_DIR/run-HOST-PID on the remote,
+# run there under timeout(1) with its output and exit status returned,
+# and deleted; the run directory is removed when the run ends.
+#
+# Settings (Tcl variable, else environment, else default; ../README.md):
+#   E2K_SSH_HOST    [user@]host (required)
+#   E2K_SSH_PORT    ssh port (default: ssh's)
+#   E2K_SSH_KEY     identity file (default secrets/id_ed25519 of this
+#                   checkout if present, else ssh's own keys)
+#   E2K_SSH_OPTS    more ssh options (a Tcl list)
+#   E2K_REMOTE_DIR  directory on the remote, relative to its home
+#                   (default relcc2/dejagnu)
+#   E2K_LCC         lcc 1.29.16 for the machine (the smoke suite's
+#                   compiler; default /opt/mcst/lcc-1.29.16.e2k-v3.linux-6.1)
+#   E2K_TIMEOUT     execution time limit in seconds (gcc,timeout; GCC's
+#                   default is 300)
+
+if {[info procs e2k_setting] eq ""} {
+    source [file join [file dirname [info script]] e2k-common.tcl]
+}
+
+set_board_info e2k,host [e2k_setting E2K_SSH_HOST]
+set_board_info e2k,port [e2k_setting E2K_SSH_PORT]
+if {[file readable "$e2k_repo_root/secrets/id_ed25519"]} {
+    set_board_info e2k,key [e2k_setting E2K_SSH_KEY \
+				"$e2k_repo_root/secrets/id_ed25519"]
+} else {
+    set_board_info e2k,key [e2k_setting E2K_SSH_KEY]
+}
+set_board_info e2k,ssh_opts [e2k_setting E2K_SSH_OPTS]
+set_board_info e2k,remote_dir [e2k_setting E2K_REMOTE_DIR relcc2/dejagnu]
+set_board_info e2k,lcc [e2k_setting E2K_LCC [e2k_lcc_dir e2k-v3]]
+if {[e2k_setting E2K_TIMEOUT] ne ""} {
+    set_board_info gcc,timeout [e2k_setting E2K_TIMEOUT]
+}
+
+if {[board_info $board e2k,host] eq ""} {
+    perror "e2k board $board: no host (set E2K_SSH_HOST or the machine's\
+	    variable, see tools/dejagnu/README.md)"
+    exit 1
+}
+e2k_need_program ssh ssh
+
+set_board_info protocol e2kssh
+# The tool's config/default.exp (GCC's loads standard.exp, which defines
+# gcc_load) is read only for boards with a generic name.
+set_board_info generic_name e2kssh
+set_board_info isremote 1
+set_board_info is_simulator 0
+# The board reports the real exit status; no wrapper around main.
+set_board_info needs_status_wrapper 0

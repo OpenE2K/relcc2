@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# DejaGnu board: the Elbrus-2C3 (v6, Elbrus Linux) over SSH; e2k-ssh.exp
+# with this machine's defaults. The machine is a contact's: its address
+# and port are not recorded in the repository, so they must be set.
+#
+# Usage (with DEJAGNU pointing at tools/dejagnu/site.exp):
+#   E2K_2C3_HOST=claude@ADDRESS E2K_2C3_PORT=PORT runtest --target_board=e2k-2c3 ...
+#
+# Settings besides e2k-ssh.exp's (Tcl variable, else environment):
+#   E2K_2C3_HOST  [user@]host (required)
+#   E2K_2C3_PORT  ssh port
+# E2K_LCC defaults to lcc's 2C3 build, e2k-v6.2c3.
+#
+# Two cores, shared: run one test at a time (make -j1, at most -j2).
+
+source [file join [file dirname [info script]] e2k-common.tcl]
+
+if {[e2k_setting E2K_2C3_HOST] eq ""} {
+    perror "e2k board e2k-2c3: set E2K_2C3_HOST (and E2K_2C3_PORT)"
+    exit 1
+}
+set_board_info e2k,host [e2k_setting E2K_2C3_HOST]
+set_board_info e2k,port [e2k_setting E2K_2C3_PORT]
+set_board_info e2k,lcc [e2k_setting E2K_LCC [e2k_lcc_dir e2k-v6.2c3]]
+
+source [file join [file dirname [info script]] e2k-ssh.exp]

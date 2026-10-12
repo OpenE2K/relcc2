@@ -1,0 +1,68 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# DejaGnu board: run E2K test programs under MCST's qemu-e2k user mode on
+# the build machine.
+#
+# Usage (with DEJAGNU pointing at tools/dejagnu/site.exp):
+#   runtest --target_board=e2k-qemu ...
+#   make check-gcc RUNTESTFLAGS="--target_board=e2k-qemu execute.exp"
+#
+# Settings (Tcl variable, else environment, else default; ../README.md):
+#   E2K_CPU        qemu -cpu: elbrus-v2 .. elbrus-v7 (default elbrus-v3)
+#   E2K_LCC        lcc 1.29.16 for that CPU (the smoke suite's compiler and
+#                  the default sysroot): /opt/mcst/lcc-1.29.16.e2k-v3.linux-6.1
+#                  for v3 and v7, e2k-v4.8c, e2k-v5.8c2, e2k-v6.2c3 for v4-v6
+#                  (the models MCST's qemu emulates: 8C, 8C2, 2C3; the
+#                  community qemu's v6 is the 16C, e2k-v6.16c)
+#   E2K_SYSROOT    qemu -L (default: the compiler under test's
+#                  -print-sysroot, else $E2K_LCC/fs)
+#   E2K_QEMU       qemu-e2k (default toolchains/qemu-mcst/bin/qemu-e2k of
+#                  this checkout if built, else qemu-e2k in PATH)
+#   E2K_QEMU_OPTS  more qemu options (a Tcl list, e.g. "-d unimp")
+#   E2K_TIMEOUT    execution time limit in seconds (gcc,timeout; GCC's
+#                  default is 300)
+#
+# MCST's qemu can't deliver hardware exceptions as signals: a memory fault
+# or a division by zero stops qemu ("exception handling is unimplemented")
+# with SIGKILL, so tests that catch SIGSEGV, SIGFPE or SIGILL fail here.
+# Run them on hardware (e2k-4c, e2k-8c2, e2k-2c3).
+
+source [file join [file dirname [info script]] e2k-common.tcl]
+
+set_board_info e2k,cpu [e2k_setting E2K_CPU elbrus-v3]
+switch -glob -- [board_info $board e2k,cpu] {
+    elbrus-v4 { set e2k_lcc_target e2k-v4.8c }
+    elbrus-v5 { set e2k_lcc_target e2k-v5.8c2 }
+    elbrus-v6 { set e2k_lcc_target e2k-v6.2c3 }
+    default   { set e2k_lcc_target e2k-v3 }
+}
+set_board_info e2k,lcc [e2k_setting E2K_LCC [e2k_lcc_dir $e2k_lcc_target]]
+if {[e2k_setting E2K_SYSROOT] ne ""} {
+    set_board_info e2k,sysroot [e2k_setting E2K_SYSROOT]
+}
+set e2k_qemu_built "$e2k_repo_root/toolchains/qemu-mcst/bin/qemu-e2k"
+if {[file executable $e2k_qemu_built]} {
+    set_board_info e2k,qemu [e2k_setting E2K_QEMU $e2k_qemu_built]
+} else {
+    set_board_info e2k,qemu [e2k_setting E2K_QEMU qemu-e2k]
+}
+set_board_info e2k,qemu_opts [e2k_setting E2K_QEMU_OPTS ""]
+e2k_need_program qemu [board_info $board e2k,qemu]
+e2k_need_program timeout timeout
+if {[e2k_setting E2K_TIMEOUT] ne ""} {
+    set_board_info gcc,timeout [e2k_setting E2K_TIMEOUT]
+}
+
+set_board_info protocol e2kqemu
+# The tool's config/default.exp (GCC's loads standard.exp, which defines
+# gcc_load) is read only for boards with a generic name.
+set_board_info generic_name e2kqemu
+# Local: qemu shares the build machine's files and environment.
+# (load_board_description presets isremote to 1.)
+unset_board_info isremote
+set_board_info isremote 0
+# GCC: guality and simulate-thread need gdb on the target; skip them.
+set_board_info is_simulator 1
+set_board_info slow_simulator 0
+# The board reports the real exit status; no wrapper around main.
+set_board_info needs_status_wrapper 0

@@ -1,0 +1,279 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Smoke suite for relcc2's E2K DejaGnu boards: builds small programs with
+# lcc and checks that the board runs them and reports what happened: exit
+# status, signals, output, the time limit, arguments, stdin, files copied
+# to and from the target, remote commands. Every check PASSes when the
+# board works; a FAIL is a problem of the board (or of the target).
+#
+# Usage, from a scratch directory (tools/dejagnu/run-smoke.sh does this):
+#   DEJAGNU=RELCC2/tools/dejagnu/site.exp runtest --tool smoke \
+#       --srcdir RELCC2/tools/dejagnu/smoke --target_board=e2k-qemu
+#
+# The compiler is the board's lcc (E2K_LCC; SMOKE_CC overrides it).
+# SMOKE_TIMEOUT is the time limit for the endless loop (default 10 s).
+
+if {[info procs e2k_setting] eq ""} {
+    perror "smoke: the target board is not one of relcc2's E2K boards"
+    return
+}
+
+set smoke_dir [file dirname [file normalize [info script]]]
+set smoke_cc [e2k_setting SMOKE_CC "[target_info e2k,lcc]/bin/lcc"]
+set smoke_limit [e2k_setting SMOKE_TIMEOUT 10]
+set smoke_qemu [expr {[target_info protocol] eq "e2kqemu"}]
+# Unique program names, so that the timeout check can look for leftover
+# processes of this run only.
+set smoke_tag [pid]
+
+verbose -log "smoke: compiler $smoke_cc, board [target_info name],\
+	      qemu $smoke_qemu"
+
+# Build NAME.c into NAME-TAG.exe in the current directory. Returns the
+# program's path, or "" after an UNRESOLVED.
+proc smoke_build {name} {
+    global smoke_dir smoke_cc smoke_tag
+    set exe "[pwd]/$name-$smoke_tag.exe"
+    file delete $exe
+    set out [target_compile $smoke_dir/$name.c $exe executable \
+		 [list compiler=$smoke_cc additional_flags=-O3]]
+    if {![file exists $exe]} {
+	verbose -log "smoke: building $name.c failed: $out"
+	unresolved "$name.c: build with lcc"
+	return ""
+    }
+    return $exe
+}
+
+# Check run result R against the expected result (pass/fail) and status
+# (a string match pattern for e2k_last_status). Records one PASS or FAIL.
+proc smoke_check {test r want_result want_status} {
+    global e2k_last_status
+    lassign $r got output
+    if {$got eq $want_result && [string match $want_status $e2k_last_status]} {
+	pass "$test: $want_result, $want_status"
+	return 1
+    }
+    verbose -log "smoke: $test: board said $got, $e2k_last_status;\
+		  want $want_result, $want_status; output:\n$output"
+    fail "$test: $want_result, $want_status"
+    return 0
+}
+
+# Build NAME.c, run it with arguments PARGS and stdin INP, check the
+# result and status, delete the program. Returns the run's output.
+proc smoke_run {name want_result want_status {pargs ""} {inp ""}} {
+    set exe [smoke_build $name]
+    if {$exe eq ""} {
+	return ""
+    }
+    set r [remote_load target $exe $pargs $inp]
+    smoke_check "$name.c" $r $want_result $want_status
+    file delete $exe
+    return [lindex $r 1]
+}
+
+# qemu writes a guest core file (qemu_PROG_DATE.core) into the current
+# directory when a program dies of a signal, unless core files are off.
+proc smoke_no_cores {test} {
+    global smoke_qemu
+    if {!$smoke_qemu} {
+	return
+    }
+    set cores [glob -nocomplain qemu_*.core]
+    if {$cores eq ""} {
+	pass "$test: no qemu core file"
+    } else {
+	verbose -log "smoke: core files: $cores"
+	file delete {*}$cores
+	fail "$test: no qemu core file"
+    }
+}
+
+# --- Exit status and signals ------------------------------------------------
+
+smoke_run pass pass "exit 0"
+smoke_run exit3 fail "exit 3"
+smoke_run abort fail "signal 6"
+smoke_no_cores abort.c
+
+# Hardware exceptions: signals on hardware, qemu kills itself.
+if {$smoke_qemu} {
+    smoke_run segv fail "signal 9 (qemu stopped on a hardware exception)"
+    smoke_run divzero fail "signal 9 (qemu stopped on a hardware exception)"
+} else {
+    smoke_run segv fail "signal 11"
+    smoke_run divzero fail "signal 8"
+}
+smoke_no_cores segv.c
+
+# --- Output, arguments, stdin -------------------------------------------------
+
+set out [smoke_run output pass "exit 0"]
+if {$out eq "out 1\nerr 2\nout 3"} {
+    pass "output.c: exact output"
+} else {
+    verbose -log "smoke: output.c printed [list $out]"
+    fail "output.c: exact output"
+}
+
+set out [smoke_run io pass "exit 0" "alpha beta" $smoke_dir/io-input.txt]
+if {$out eq "argc=3 \[alpha\] \[beta\] stdin=49/2\n"} {
+    pass "io.c: arguments and stdin"
+} else {
+    verbose -log "smoke: io.c printed [list $out]"
+    fail "io.c: arguments and stdin"
+}
+
+set out [smoke_run bigout pass "exit 0"]
+set want [expr {16384 * 64 + 3}]
+if {[string length $out] == $want && [string match "00000 0*" $out]
+    && [string match "*\n16383 0*0\nend" $out]} {
+    pass "bigout.c: 1 MiB of output"
+} else {
+    verbose -log "smoke: bigout.c printed [string length $out] bytes, want $want"
+    fail "bigout.c: 1 MiB of output"
+}
+
+# The environment reaches a local target's programs (GCC sets
+# dg-set-target-env-var variables in runtest's environment; it marks such
+# tests UNSUPPORTED on remote targets).
+if {![isremote target]} {
+    set env(E2K_SMOKE_VAR) "smoke $smoke_tag"
+    set out [smoke_run env pass "exit 0"]
+    unset env(E2K_SMOKE_VAR)
+    if {$out eq "E2K_SMOKE_VAR=smoke $smoke_tag\n"} {
+	pass "env.c: environment passed on"
+    } else {
+	verbose -log "smoke: env.c printed [list $out]"
+	fail "env.c: environment passed on"
+    }
+}
+
+# --- Files on the target ------------------------------------------------------
+
+set exe [smoke_build datafile]
+if {$exe ne ""} {
+    remote_file target delete smoke-data.txt smoke-copy.txt
+    if {[remote_download target $smoke_dir/data.txt smoke-data.txt] eq ""} {
+	fail "datafile.c: remote_download"
+    } elseif {![remote_file target exists smoke-data.txt]} {
+	fail "datafile.c: remote_file exists after remote_download"
+    } else {
+	pass "datafile.c: remote_download"
+	set r [remote_load target $exe]
+	if {[smoke_check datafile.c $r pass "exit 0"]} {
+	    if {[lindex $r 1] eq "alpha\nbeta\ngamma\n"} {
+		pass "datafile.c: reads the downloaded file"
+	    } else {
+		verbose -log "smoke: datafile.c printed [list [lindex $r 1]]"
+		fail "datafile.c: reads the downloaded file"
+	    }
+	    set copy "[pwd]/smoke-copy-$smoke_tag.txt"
+	    file delete $copy
+	    set got ""
+	    if {[remote_upload target smoke-copy.txt $copy] ne ""
+		&& [file exists $copy]} {
+		set f [open $copy]
+		set got [read $f]
+		close $f
+		file delete $copy
+	    }
+	    if {$got eq "gamma\nbeta\nalpha\n"} {
+		pass "datafile.c: remote_upload of the file it wrote"
+	    } else {
+		verbose -log "smoke: smoke-copy.txt held [list $got]"
+		fail "datafile.c: remote_upload of the file it wrote"
+	    }
+	    # GCC's gcov and profile tests name the target's files by their
+	    # absolute paths on the build machine.
+	    set abs "[pwd]/smoke-copy.txt"
+	    set got ""
+	    if {[remote_upload target $abs $copy] ne "" && [file exists $copy]} {
+		set f [open $copy]
+		set got [read $f]
+		close $f
+		file delete $copy
+	    }
+	    if {$got eq "gamma\nbeta\nalpha\n"} {
+		pass "datafile.c: remote_upload by the build machine's path"
+	    } else {
+		verbose -log "smoke: $abs held [list $got]"
+		fail "datafile.c: remote_upload by the build machine's path"
+	    }
+	    remote_file target delete $abs
+	    if {[remote_file target exists $abs]} {
+		fail "datafile.c: remote_file delete by the build machine's path"
+	    } else {
+		pass "datafile.c: remote_file delete by the build machine's path"
+	    }
+	}
+	remote_file target delete smoke-data.txt smoke-copy.txt
+	if {[remote_file target exists smoke-data.txt]} {
+	    fail "datafile.c: remote_file delete"
+	} else {
+	    pass "datafile.c: remote_file delete"
+	}
+    }
+    file delete $exe
+}
+
+# --- Commands on a remote target ----------------------------------------------
+
+if {[isremote target]} {
+    set r [remote_exec target "echo" "hello world"]
+    if {[lindex $r 0] == 0 && [lindex $r 1] eq "hello world\n"} {
+	pass "remote_exec: output and status 0"
+    } else {
+	verbose -log "smoke: remote_exec echo gave [list $r]"
+	fail "remote_exec: output and status 0"
+    }
+    set r [remote_exec target "sh" "-c 'exit 5'"]
+    if {[lindex $r 0] == 5} {
+	pass "remote_exec: status 5"
+    } else {
+	verbose -log "smoke: remote_exec exit 5 gave [list $r]"
+	fail "remote_exec: status 5"
+    }
+}
+
+# --- The time limit -----------------------------------------------------------
+
+set exe [smoke_build loop]
+if {$exe ne ""} {
+    if {[info exists test_timeout]} {
+	set smoke_saved_timeout $test_timeout
+    }
+    set test_timeout $smoke_limit
+    set t0 [clock milliseconds]
+    set r [remote_load target $exe]
+    set dt [expr {([clock milliseconds] - $t0) / 1000.0}]
+    if {[info exists smoke_saved_timeout]} {
+	set test_timeout $smoke_saved_timeout
+    } else {
+	unset test_timeout
+    }
+    smoke_check loop.c $r fail timeout
+    verbose -log "smoke: loop.c ran ${dt}s with a limit of ${smoke_limit}s"
+    if {$dt >= $smoke_limit && $dt < $smoke_limit + 20} {
+	pass "loop.c: stopped at the time limit"
+    } else {
+	fail "loop.c: stopped at the time limit"
+    }
+    # A pattern that matches the program's name but not itself.
+    set pat "loop-[string range $smoke_tag 0 end-1]\[[string index $smoke_tag end]\]\\.exe"
+    if {$smoke_qemu} {
+	set left [expr {![catch {exec pgrep -f $pat} pids]}]
+    } else {
+	set r [remote_exec target "pgrep" "-f '$pat'"]
+	set left [expr {[lindex $r 0] == 0}]
+	set pids [lindex $r 1]
+    }
+    if {$left} {
+	verbose -log "smoke: loop.c still running: $pids"
+	fail "loop.c: no process left"
+    } else {
+	pass "loop.c: no process left"
+    }
+    file delete $exe
+}

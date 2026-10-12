@@ -46,7 +46,7 @@ A wide instruction holds at most one prepare (in CS0) and one transfer
 |---|---|---|---|---|
 | `disp %ctprN, label` | 1–3 | IP-relative, signed 28 bits × 8 bytes (±1 GiB) [bundle.md] | branch or call | direct jumps and calls (`R_E2K_DISP`, elf.md) |
 | `movtd %drN, %ctprN` | 1–3 | 64-bit address in a register | branch or call | indirect calls, `switch` jump tables, PLT |
-| `getpl %rN, %ctprN` | 1–3 | offset from the compilation-unit descriptor | branch or call | 32-bit mode only [guide] |
+| `getpl %rN, %ctprN` | 1–3 | offset from the compilation-unit descriptor | branch or call | 32-bit mode only [guide]: lcc's indirect calls there, 9 cycles before the `call` [lcc; hw: [mode32.md](../abi/mode32.md)] |
 | `return %ctpr3` | 3 only | the caller's IP from the chain stack | return | function return |
 | `sdisp %ctprN, n` | 1–3 | system call entry `n` (5 bits) | system call (`call` becomes `scall`) | glibc: `sdisp %ctpr1, __SYSCALL_TRAPNUM` then `call %ctpr1, wbs = N`; the `call` may hand over at most 4 pairs, 5 or more is SIGKILL ([kernel-interface.md](../abi/kernel-interface.md), "System calls") [hw] |
 | `ldisp %ctpr2, label` | 2 only | an array-prefetch (APB) program | not transferable | APB setup; any later write to `%ctpr2`, a call or a return stops the program ([apb.md](apb.md)) |

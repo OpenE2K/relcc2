@@ -553,22 +553,88 @@ produce slow code: correctness first, then the VLIW work.
   64-bit literal); the descriptor's BYTE field must be ((offset + len −
   1) mod width) / 8 or v3 sign-extends from the wrong bit, and on v5
   `getfz` also covers masks with up to 7 low zeros
-  (`spec/isa/semantics.md`, "Field extract"); `fscales`/`fscaled`
-  for `ldexp<mode>3` on v4+ with `-fno-math-errno` (lcc: `scalbnf`
-  under `-ffast`). The 64 ÷ 32 `sdivx`/`udivx`/`smodx`/`umodx` trap on
-  quotients that don't fit, so they suit only proven ranges; lcc
-  computes `%` as divide, multiply, subtract. `__builtin_add_overflow`
-  could be `adds_fw` + `cctopo` (`addv<mode>4`; subtraction `cmpo*b`
-  alone) where lcc spends ten operations. Put the `cctopo` in the flag
-  operation's channel: it gets the flags in 2 cycles there and in 4 in
-  the other one, and a multiply's (`smulx_fw`) in 6. A predicated use
-  then comes 4 cycles after the operands, 8 for a multiply
-  (`spec/isa/x86-support.md`, `spec/isa/timing.md`). The 80-bit
-  operations with a narrower operand or result
-  (`fxadddd`, `fxmulxs`, ...) round as x87 code does (to 64 bits, then
-  to the result's format), so `(float_truncate:DF (plus:XF ...
-  (float_extend:XF ...)))` may be one `fxadddd` without fast-math, as
-  lcc does at `-O3`.
+  (`spec/isa/semantics.md`, "Field extract"). Use `getfs` for fields
+  of SImode values: its descriptor has offset and *len* in 5 bits each
+  and BYTE in bits 13–14, so it covers fields of up to 31 bits, while
+  `getfd` reads all 64 bits of the register, which under `dbl = 0`
+  arrive 4 cycles after a 32-bit producer instead of 1 and can hold a
+  diagnostic upper half that traps (D7). lcc does this: `getfs` where
+  the field stays 32-bit, `getfd` only after `sxt 6` under `dbl = 0`,
+  after a load, or on a result that `dbl = 1` zero-extended [lcc
+  1.29.16 `-O3`, v3 and v5]. The proof of concept printed `getfd` for
+  SImode fields until P83. `fscales`/`fscaled` serve `ldexp<mode>3` on
+  v4+, and `scalbn` and `scalbln` reach the same pattern
+  (builtins.cc:2226-2229). Under the default `-fmath-errno`, though,
+  `ldexp` is not const (`ATTR_MATHFN_FPROUNDING_ERRNO`,
+  builtins.def:287-289, 514), so expand keeps the call (it uses an
+  internal function only for a call without side effects,
+  cfgexpand.cc:3155-3163) and tree-call-cdce has no range test for it:
+  the pattern serves `-fno-math-errno` code (P79). lcc likewise keeps
+  `ldexp`, `ldexpf` and `scalbn` as calls even with `-ffast`; it
+  inlines only `scalbnf`, at `-O2` and up [lcc 1.29.16, v4+]. The 64 ÷
+  32 `sdivx`/`udivx`/`smodx`/`umodx` trap on quotients that don't fit,
+  so they suit only proven ranges; lcc computes `%` as divide,
+  multiply, subtract. The 80-bit operations with a narrower operand or
+  result (`fxadddd`, `fxmulxs`, ...) round as x87 code does (to 64
+  bits, then to the result's format), so `(float_truncate:DF (plus:XF
+  ... (float_extend:XF ...)))` may be one `fxadddd` without fast-math,
+  as lcc does at `-O3`.
+- **Round to integral** (P76): `fdtoifd`/`fstoifs` serve `floor`,
+  `ceil`, `btrunc`, `roundeven`, `nearbyint` and `rint<mode>2` with
+  immediates 9, 0xa, 0xb, 8, 0xc and 4; use `pfstoifs` for `V2SF`, and
+  v5's `qpfdtoifd`/`qpfstoifs` once 128-bit vector modes exist. Bit 3
+  keeps inexact off [hw: `tools/isa-probes/pocchk5.c`, all three
+  machines; `spec/isa/semantics.md`, "Other scalar operations"]. C23
+  requires that, and GCC asks for it by default in C:
+  `-fno-fp-int-builtin-inexact` (set for C23, c-opts.cc:941-945)
+  means these patterns may not raise inexact (md.texi:5616-5621), as
+  i386's SSE4.1 forms don't (`ROUND_NO_EXC`, i386.md:26366-26388).
+  lcc and MCST's libm use 1, 2, 3, which raise inexact
+  (`spec/abi/registers.md`, "MCST glibc's FP bugs"), so don't take
+  libm as the reference for flags. `round<mode>2` (halfway cases away
+  from zero) has no immediate: expand it only under
+  `-fno-trapping-math`, as i386 does (i386.md:26177-26186,
+  `ix86_expand_round_sse4`: `trunc (x + copysign (nextafter (0.5, 0),
+  x))`). In the proof of concept a `floor` loop went from 16.9 ns an
+  element (libm calls) to 0.70 on the 8C2 (lcc 0.43).
+- **Overflow builtins** (P78, I50): `__builtin_add_overflow`, `_sub_`
+  and `_mul_` (and ubsan's checks) expand through `addv<mode>4`,
+  `subv<mode>4`, `mulv<mode>4` and the unsigned `uaddv`, `usubv`,
+  `umulv<mode>4`, whose operand 3 is the label to jump to on overflow
+  (internal-fn.cc:1497, 1275, 2096; optabs.def:312-317); `-ftrapv`
+  goes through `addv<mode>3` and its relatives or libgcc's `__addvsi3`
+  (optabs.def:124-139). On E2K `addv` is `adds_fw`/`addd_fd` beside
+  the `adds`/`addd` (ALC0 or ALC3; the two can share an instruction),
+  then a branch on OF; `uaddv` the same on CF. `subv` is `cmpo<s,d>b`
+  alone and `usubv` `cmpb<s,d>b` (`spec/isa/semantics.md`, "Integer
+  compares"). SImode `mulv`/`umulv` are `smulx_fw`/`umulx_fw`, which
+  set OF together with CF. There are no 64-bit multiply flags, and
+  GCC's DImode expansion already uses `smulhd`/`umulhd` and a compare
+  (internal-fn.cc:2189-2240). Write the overflow test as an ordinary
+  RTL bit test, `(ne (and f (const_int 0x800)) 0)`, with the AND in
+  its own insn and the mask in a register, and let a splitter turn it
+  into `cctopo`: OF is bit 11 of the flags word, which is what
+  `cctopo` tests (semantics.md, "x86 flag operations"). If-conversion
+  handles a jump on a register compared with zero, but an unspec
+  condition is "complex" and is only tried as a store-flag pattern
+  without clobbers (ifcvt.cc:951-1010), so `ovf +=
+  __builtin_add_overflow (…)` would rebuild its 0 and 1 every
+  iteration and the loop would not pipeline. Let the expanders FAIL
+  for a constant operand: GCC's own code then needs a single compare
+  (internal-fn.cc:1530-1545). Put the `cctopo` in the flag operation's
+  channel: it gets the flags in 2 cycles there and in 4 in the other
+  one, and a multiply's (`smulx_fw`) in 6. A predicated use then comes
+  4 cycles after the operands, 8 for a multiply
+  (`spec/isa/x86-support.md`, `spec/isa/timing.md`); `smulx_fw` is an
+  FP-side result for the write-back conflict (7.5). With `,sm` the flag
+  forms and `cctop` speculate like compares: a diagnostic operand gives
+  a diagnostic flags word or predicate [hw: `tools/isa-probes/pocchk5.c`
+  `dg`]. Neither qemu runs the flag operations or `cctop`
+  (semantics.md), so keep them behind an option for emulator runs. lcc
+  uses none of this: its `int` add check is ten operations in 6 wide
+  instructions, and it checks a multiply by dividing the product by
+  each operand, two `sdivs` (`sdivd` for `long`) in 12 instructions
+  [lcc 1.29.16 `-O3`, v3–v6; 1.31.05 for v6 and v7 alike].
 - PIC/PIE and TLS exactly as `spec/abi/elf.md` (GOT base via `rrd %ip` +
   `_GLOBAL_OFFSET_TABLE_` literal in the same wide instruction). In PIC
   code reach ifunc symbols through `@GOT`: MCST ld cannot link a
@@ -973,7 +1039,17 @@ written one instruction earlier as it was before the compare, without
 a stall (timing.md, "Hazards"; branches and calls wait), so the bundler
 must keep 2 cycles there and not rely on the interlock.
 
-Indirect calls: `movtd %reg, %ctprN` (latency 9) then `call`.
+Indirect calls: `movtd %reg, %ctprN` (latency 9) then `call`. v6 adds
+`ibranchd` and `icalld`, a jump or call through a register with no
+CTPR, but a taken `ibranchd` costs 12 cycles however early its register
+is ready, and `icalld` plus a return 23 cycles against 14 for `disp` +
+`call` (`spec/isa/control-transfer.md`, "v6"). So `movtd` (or `disp`)
+ahead plus `ct`/`call` stays the choice for v6, as in lcc's v6 code.
+lcc 1.31.05 uses the new forms only for v7 (`-march=elbrus-v7`): jump
+tables as `ldd` + `ibranchd`, indirect calls as `icalld`, indirect tail
+calls as `ibranchd`, and direct calls and tail calls as `icall f` and
+`ibranch f`, without `disp` [lcc; `spec/isa/operations-v6.md`,
+`icall`]. Decide v7's transfers when a v7 machine can time them (P79).
 
 **Switches** (P65, P72; lcc 1.29.16 `-O3`, v3, v5 and v6 alike, and lcc
 1.31.05 for v3; control-transfer.md, "How lcc uses it"). A jump table
@@ -1189,7 +1265,17 @@ Compute the root on every path with plain `fsqrtid`/`fsqrttd` (not
 after it for errno only, ignoring its result. The root then raises
 invalid before the call, so libm's own 0/0 is an ordinary NaN and the
 call returns; the root's NaN for −1.0 is the one libm returns [hw:
-`tools/abi/probes/libmchk.c` `rootfirst`, 4C, 8C2, 2C3].
+`tools/abi/probes/libmchk.c` `rootfirst`, 4C, 8C2, 2C3]. The inline
+root is right on every path: `fsqrtid` + `fsqrttd` and `fsqrts` give
+MCST glibc's results bit for bit in all four rounding modes, NaNs
+included, and raise invalid exactly for a negative operand or a
+signalling NaN [hw: `tools/isa-probes/pocchk5.c` `sqrt`, 4C, 8C2,
+2C3], so the call is there for `errno` alone. The shape is also faster
+than GCC's (below), in which if-conversion makes the root wait for the
+operand test (`fcmpuddf` and an integer compare, 6 cycles before
+`fsqrtid` can issue): the proof of concept, keeping `.SQRT`
+unconditional through a target macro it reads in tree-call-cdce.cc, ran
+NPB EP class A about 1% faster on all three machines (P85).
 
 GCC's default is the other shape. The pass that makes it is call DCE
 (`tree-call-cdce.cc`; its header comment, :96-102, shows the result:
@@ -1334,7 +1420,37 @@ each one cost it a debugging session:
   mode, as CC-mode ports do, or lower UNLT/UNLE/UNGT/UNGE/UNEQ/LTGT at
   expand time to `fcmpud*f`/`fcmpod*f` into a register plus an integer
   test of its flags, as the proof of concept does (then
-  gcc.dg/torture/pr91323 passes).
+  gcc.dg/torture/pr91323 passes). The register compares' flags reach an
+  integer consumer in 4 cycles in either cluster
+  (`spec/isa/timing.md`, "Clusters"): unlike other FP-side results
+  they pay no crossing cost, so don't pad after them (the proof of
+  concept's channel assigner had padded 2 cycles after every quiet
+  compare), and pipeline them like any FP operation (P82). lcc's `c +=
+  isless (a[i], b[i])` is a one-instruction kernel on v5 (`fcmpuddf,sm`,
+  `cmpesb,sm r, 1`, `merged,sm`, the `addd` and two `movad`); its
+  `isunordered` count runs two elements a cycle with `fcmpuoddb` into
+  predicates; in `x = isless (x, a[i]) ? b[i] : x` it loads `b[i]`
+  speculatively and selects with predicated moves [lcc 1.29.16 `-O3`,
+  v5.8c2].
+- **FP min and max from conditional moves** (P77): `fmaxd a, b` and
+  `fmind a, b` are exactly `a > b ? a : b` and `a < b ? a : b` (they
+  return b for a NaN or two zeros; `spec/isa/semantics.md`). Recognise
+  those selects, in either arm order and for GT/LT only, in the
+  `mov<mode>cc` expander and emit them as unspecs, as i386 does
+  (`ix86_expand_sse_fp_minmax`, i386-expand.cc:4166: LT, UNGE with the
+  arms swapped, LE only without NaNs). Use plain `smax`/`smin` only
+  under `-ffinite-math-only -fno-signed-zeros`. lcc `-O3` also makes
+  `a >= b ? a : b` and `a <= b ? a : b` into `fmaxd`/`fmind`, which
+  gives −0 for `+0 >= −0 ? +0 : −0` where C gives +0 [hw: 4C; lcc
+  1.29.16 and 1.31.05; `-O2` and below keep a compare and a select]:
+  don't copy that. C99's `isless` … `isunordered` reach the back end
+  as UN* codes (`islessgreater` as an inverted UNEQ,
+  builtins.cc:11018-11020) and take the quiet compares (above). lcc's
+  forms: `isless (a, b)` is `fcmpuddf` and `r == 1`, `islessequal` two
+  compares of r and `landp`, `islessgreater` the quiet predicate
+  compares `fcmpoddb` and `fcmpneqdb` with `andp`, `isunordered`
+  `fcmpuoddb`, and `long double` uses `fxcmpudxf` (semantics.md,
+  "Floating-point compares") [lcc 1.29.16 `-O3`, v3 and v5].
 - **`getsp` amounts** (alloca, VLAs) must be in a window register or
   `%g16`–`%g31`, never `%g0`–`%g15`: the kernel cannot read those when
   the stack must grow, and the program gets SIGSEGV, but only for
@@ -1764,6 +1880,18 @@ load needs no `BEGIN_CONTROL` check. The exceptions, all measured:
   (as call-saved registers they are live at the function's end), honour
   a call's `CALL_INSN_FUNCTION_USAGE` (argument registers aren't in its
   pattern), and stop at a later use of the register as half of a pair.
+- *Loads at the head of a branch's target* (P71): sched-ebb grows an
+  extended block only through a fall-through edge into a block without
+  a label (sched-ebb.cc:640-650), so it never moves a load from a
+  branch's target into the branch's block. lcc does: Lua's
+  `luaH_getshortstr` loads a node's key value (`ldd,sm`) in the block
+  that tests the key's type, so the compare follows the type test by 3
+  cycles instead of a load latency after the branch (9 cycles with the
+  2C3's 5-cycle loads) [lcc 1.29.16 `-O3`, v5.8c2 and v6.2c3]. The
+  proof of concept copies the loads that start a block reached by
+  conditional branches into those branches' blocks as `,sm` loads,
+  where their register is dead on the other edge: Lua's k-nucleotide
+  2% and spectral-norm 1.3% faster on the 2C3.
 - *Interpreter dispatch* (P72; Lua 5.4's `vmfetch`, the proof of concept
   on the 2C3). A handler that ends in `if (trap) {...} i = *pc++; goto
   *disptab[op]` reaches the shared dispatch block by a conditional
@@ -2070,6 +2198,25 @@ check-free semi-speculative form works.
   11.3). Relating the planes in RTL (registers a constant apart) works
   only for pointers set from one base (PolyBench's seidel-2d), not for
   SP's offsets, which multiply loop counters.
+- **Two rows of one array at an unknown distance** (P70; NPB FT's
+  butterfly, `fftz2`): the stores go to `y[i21 + k][j]` and
+  `y[i22 + k][j]`, with `i22 = i21 + lk` and `lk` computed from a
+  parameter, so expanding the SSA definitions (P46) gives no constant
+  difference. GCC sees two row objects that are either the same or
+  disjoint, and gives the pair a "could be independent" relation
+  (`DDR_COULD_BE_INDEPENDENT_P`, tree-data-ref.cc:3481-3510,
+  tree-data-ref.h:430-487) whose distance vector (0) holds only if the
+  rows coincide. The vectorizer can live with that, since a distance
+  of 0 needs no check (tree-vect-data-refs.cc:3938-3970; host GCC
+  16.2.1's vect dump of the butterfly). A modulo scheduler that treats
+  the same-row case as possible, however, chains every store to the
+  one before. Version such a loop on a run-time check of the two rows'
+  address ranges, as for two arrays, instead of refusing the pair as
+  dependent. lcc keeps `fftz2` out of line and has DAM versions of it
+  (lock loads `mas=0x4,sm`, checks `mas=0x3` with `rbranch`) beside the
+  array-prefetch one [lcc 1.29.16 `-O3`, NPB FT, v5.8c2]. With the
+  versioning and combined operations (P61, below) the PoC runs the
+  butterfly at II 2 instead of 5.
 - **Where alias information goes in the pass pipeline** (P50; the PoC on
   the 8C2 and 2C3):
   - *Tag loops where they are innermost, twice.* `cunroll` runs after
@@ -2200,7 +2347,20 @@ check-free semi-speculative form works.
   pipelined. lcc pipelines no walk with a second exit, bucket or list
   alike (it peels the first nodes with speculative loads, then runs a
   plain loop), but does pipeline one-exit walks such as `for (; p; p =
-  p->next) n++` (lcc `-O3`, v3–v6).
+  p->next) n++` (lcc `-O3`, v3–v6). Chains linked by offsets are the
+  same (P71). Lua 5.4's `luaH_getshortstr` walks `n += gnext (n)`, and
+  GCC's static profile gives its loop header 13.8 executions a call
+  (two exits at 5.5% each; host GCC 16.2.1 `-O2`, profile_estimate
+  dump), so neither the guessed trip count nor a pointer-only pattern
+  (`p = p->next`) keeps it from the pipeliner. lcc doesn't pipeline it:
+  it loads the first node's key type, next offset and key value (the
+  last two `,sm`), and the second node's, before the first type test,
+  then runs a plain loop [lcc 1.29.16 `-O3`, v5.8c2 and v6.2c3]. The
+  PoC pipelined it at II 10 with 3 stages until it treated offset walks
+  from a hashed array element as chains too: Lua k-nucleotide 1.6%
+  faster on the 2C3. Don't pipeline a while loop whose expected trip
+  count is below its stage count, and since GCC's guess won't tell you
+  that for a chain walk, recognise the walk.
 - **Copies in the latch lose the count** (P43): out-of-SSA leaves a
   rotation of loop state (`ym2 = ym1; ym1 = y`, PolyBench's deriche) as
   register copies in the latch after the exit test, and
@@ -2340,11 +2500,17 @@ check-free semi-speculative form works.
   the combined operation takes 8 cycles to the add's 4, so on a
   recurrence it lengthens the II (the PoC's bicg: 12 cycles for two
   elements instead of 8). The PoC forms them in its pipeliner, in loops
-  known to run 64 times or more, for a product that one add or subtract
-  alone reads and an addend not carried or derived from a carried value:
-  heat-3d 5.84 → 4.96 s on the 8C2; formed everywhere, Linpack's short
-  daxpy loops lost. Give the pattern an insn condition that is false
-  outside the pass that forms them.
+  known to run 64 times or more and in any other loop where combining
+  lowers the II, for a product that one add or subtract alone reads and
+  an addend not carried or derived from a carried value: heat-3d 5.84 →
+  4.96 s on the 8C2; formed everywhere, Linpack's short daxpy loops
+  lost. Give the pattern an insn condition that is false outside the
+  pass that forms them. The trip count alone is the wrong test. NPB
+  FT's butterfly runs 16 elements at a time: kept apart, its 10 FP
+  operations and an address add held the PoC to II 3; with two
+  combined operations and AAU stores (`staad` with `incr`, no address
+  arithmetic) it reaches II 2, as lcc's kernel does. Decide AAU stores
+  the same way, by what they do to the II (P70).
 - **Keep `%ctpr2` free across a loop that may use array prefetch**
   (P42): only `%ctpr2` can hold the APB program, so a branch prepared in
   `%ctpr2` and live through an inner counted loop costs that loop its
@@ -2363,7 +2529,19 @@ check-free semi-speculative form works.
   combined) filling all six channels of both instructions, where the
   PoC, its outer back edge in `%ctpr2`, takes II 5. lcc keeps an outer
   branch prepared in `%ctpr3` across that loop and prepares the back
-  edge in `%ctpr1` again after it.
+  edge in `%ctpr1` again after it. The way into such a short loop
+  matters as much as its kernel. lcc sets the butterfly's nine AAU
+  registers two per wide instruction, in ALC2 and ALC5, beside
+  compares, adds, `insfd` and the `%lsr`/`%lsr1` writes: five
+  instructions before the peeled loads and `bap`. The nine are three
+  descriptors (one per output row, one for the loads), two store
+  indices, two increments, and two index registers, `%aaind1` and
+  `%aaind2`, for the two prefetch areas that read the two input rows
+  through the one descriptor `%aad0` [lcc 1.29.16 `-O3`, v5.8c2]. Don't
+  make AAU writes scheduling barriers: the PoC wrote one descriptor
+  every two instructions and took 66–77 cycles to enter the loop,
+  against lcc's 33–46, and letting ALU operations share an AAU write's
+  instruction made FT.W 3–5% faster (P70).
 - **APB areas: `disp` at 0 or more, backward areas based at their
   lowest element** (I41): `disp` is zero-extended, so a negative offset
   goes into the descriptor's base or `%aaind`; on v3 an area may not go

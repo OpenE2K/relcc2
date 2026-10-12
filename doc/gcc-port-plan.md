@@ -543,8 +543,12 @@ produce slow code: correctness first, then the VLIW work.
   quotients that don't fit, so they suit only proven ranges; lcc
   computes `%` as divide, multiply, subtract. `__builtin_add_overflow`
   could be `adds_fw` + `cctopo` (`addv<mode>4`; subtraction `cmpo*b`
-  alone) where lcc spends ten operations; their latencies are not
-  measured. The 80-bit operations with a narrower operand or result
+  alone) where lcc spends ten operations. Put the `cctopo` in the flag
+  operation's channel: it gets the flags in 2 cycles there and in 4 in
+  the other one, and a multiply's (`smulx_fw`) in 6. A predicated use
+  then comes 4 cycles after the operands, 8 for a multiply
+  (`spec/isa/x86-support.md`, `spec/isa/timing.md`). The 80-bit
+  operations with a narrower operand or result
   (`fxadddd`, `fxmulxs`, ...) round as x87 code does (to 64 bits, then
   to the result's format), so `(float_truncate:DF (plus:XF ...
   (float_extend:XF ...)))` may be one `fxadddd` without fast-math, as
@@ -1005,7 +1009,16 @@ functions, and the ABI is the same either way. How to get there:
 - Under `dbl = 0`, after a 32-bit integer operation the upper half of the
   register is unknown (old value and tag). Don't tell GCC that SImode
   operations extend; emit `sxt` (or a 64-bit operation) whenever a 64-bit
-  value is needed, as lcc does. That alone is not enough: GCC forms
+  value is needed, as lcc does. That is also the fast way: under
+  `dbl = 0` a 64-bit reader of an unextended 32-bit result waits 4
+  cycles, whether it is `addd`, `getfd`, `cmpedb`, `merged`, `faddd`,
+  an address or `std`'s data, while `sxt` takes 1 and a 32-bit reader
+  (`getfs`, `cmp*sb`, `stw`) waits nothing extra
+  (`spec/isa/timing.md`, "Formats"). So use the 32-bit forms on SImode
+  values: `getfs`, not `getfd`, for a field of one (the
+  proof-of-concept back end, I51: a pipelined loop taking `getfd` of an
+  `xors` result ran at 3 cycles an iteration, with `getfs` at 1). That
+  alone is not enough: GCC forms
   **paradoxical subregs** by itself, which read the upper half anyway
   (combine's `force_to_mode`, combine.cc:8754–9024, turns a masked
   `(zero_extend:DI (subreg:HI (ashift:SI x 1)))` into
@@ -1273,9 +1286,11 @@ Written in `.md` with `define_automaton`, `define_cpu_unit`,
   multiply or divide (integer divides too) → integer +2; every other v3
   operation is in timing.md, "Every v3 operation", by latency class.
   Crossing between the channel clusters ALC0–2 and ALC3–5 costs +1 for
-  integer and load results and +2 for FP-class ones (the guide's
-  "integer → FP +1" is this crossing); model it with `define_bypass` or
-  by tracking the cluster.
+  1-cycle integer and load results and +2 for FP-class ones and for
+  the 2-cycle integer ones (x86 flag forms, combined integer
+  operations; timing.md, "Clusters"); the guide's "integer → FP +1" is
+  this crossing. Model it with `define_bypass` or by tracking the
+  cluster.
   These match guide 6.1. Where the guide is wrong or silent: packed
   integer ops take 1 cycle (multiply 2) to packed/FP consumers and 4 to
   integer ones; conversions 4 (6 to integer), but an FP-side result

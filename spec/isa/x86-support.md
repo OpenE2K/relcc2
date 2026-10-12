@@ -64,7 +64,7 @@ ordinary programs.
 | global-descriptor-relative loads and stores | `ldgd*`, `stgd*` | v1+ | lcc's 32-bit (`-mptr32`) code makes every memory access with them; in 64-bit processes they fault [lcc, hw] | operations-v3.md |
 | a cache line flush that also drops the instruction cache | a store with MAS 0xf (`mod` 7, opc 1); MAS 0x17 is the I-cache-only line flush | v3+ | yes: libgcc's `__clear_cache` runs 0xf stores, and `ld.so` 0x17 stores, in user mode [source, lcc]; about 140 cycles for one line, 7 a line in bulk [hw] | below |
 | what the trap left behind | `sigcontext`: `tir_*` (exception and channel), `trap_cell_*` (the trapped wide instruction's pending memory operations), `sbbp` (32-entry branch history); `UC_HANDLE_SIGRETURN_CELLAR` | — | these are filled for every task; `upsr`, `rpr_*` and `mlt` only for binco tasks, and `dam` stays zero unless the task is traced [source] | below |
-| wait for a memory location to change (v6) | a load with MAS 0x11 ("watch for modification", ALC0), then `wait mem_mod = 1, int = 1` | v6+ | **yes** [hw: 2C3]: returns when the line changes or on any interrupt (every few ms), so a waiter loops; a ping-pong of two waiting threads has the round trip of two spinning ones (394 against 395 cycles) | below |
+| wait for a memory location to change (v6) | a load with MAS 0x11 ("watch for modification", ALC0; also `ldqp`, the `ldq` pair and MAS 0x31), then `wait mem_mod = 1, int = 1` | v6+ | **yes** [hw: 2C3]: returns when the 64-byte line changes or on any interrupt (every few ms), so a waiter loops; a ping-pong of two waiting threads has the round trip of two spinning ones (394 against 395 cycles) | below |
 | x86 paging registers (`%cr3_rg`, MTRRs, `%pat`, …) | MMU registers | — | privileged | — |
 
 ## What native code can take
@@ -139,8 +139,16 @@ Ranked by how directly a compiler or a JIT can use them.
    loops in runtimes, garbage collectors and lock slow paths. It wakes
    as fast as spinning (the ping-pong above) but also on every
    interrupt, and v6's erratum `WAIT_INT` adds spurious wakeups, so it
-   always sits in a loop that re-checks the word; it watches a whole
-   cache line, so keep unrelated data off it.
+   always sits in a loop that re-checks the word. It watches the 64-byte
+   line of the loaded address, so keep unrelated data off it [hw: 2C3,
+   `tools/isa-probes/memleft.c` `watch`]: a store by another core at
+   +0, +8, +16, +32 or +48 ends the wait within about 0.6 µs, as fast as
+   spinning notices it, and a store at +64 only at the next interrupt (a
+   median of 2.7 ms later there). The quad watch loads (`ldqp,0` and
+   the `ldq` pair with MAS 0x11) and `ldd … mas=0x31` behave exactly as
+   `ldd … mas=0x11` (speculation.md, "v6 encodings"). Without a watch
+   load, `wait mem_mod = 1, int = 1` returns at once (the waiting loop
+   then spins).
 10. **Only for a dedicated host process** (linked with
     `--e2k-x86app`): segment-relative accesses take a base and a limit
     from a descriptor and two 32-bit address parts, which fits a

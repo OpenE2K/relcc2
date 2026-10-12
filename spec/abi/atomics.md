@@ -181,8 +181,10 @@ bits, bundle.md) to the release and seq_cst stores' `wait`; its code for
 the 2C3 (v6) is the v3 code above, without them. Read-modify-writes
 are the same on all three except for their empty cycles (above). v6 has MAS encodings for load-acquire and
 store-release (kernel `asm/mas.h`: `MAS_LOAD_ACQUIRE_V6`,
-`MAS_STORE_RELEASE_V6`, bit 4 set with `mod` 3) and a "watch for
-modification" load, but lcc 1.29.16 doesn't use them. On the 2C3 a
+`MAS_STORE_RELEASE_V6`, bit 4 set with `mod` 3), a "watch for
+modification" load, and second encodings of the check-and-unlock load
+and the wait-unlock store (0x33, 0x73: speculation.md, "v6
+encodings"), but lcc 1.29.16 doesn't use them. On the 2C3 a
 release store by MAS costs 3.5–4.8 cycles back to back against 15.8 for
 lcc's `wait` + store (but MCST's kernel lists the MAS store-release as
 broken on E2C3 up to revision 2, ours included, and the E12C/E16C,

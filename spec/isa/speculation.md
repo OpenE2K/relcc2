@@ -454,28 +454,61 @@ Other MAS kinds [hw; qemu `mas-format.h`]. For data speculation lcc
 | `ld` | 2, 3 or 6 in ALC0 (reserved) | ALC0 | SIGILL `ILL_ILLOPC` |
 | `ld`, `st` | 0 with `m1` (bit 4, 0x10) set | any | an ordinary access: `m1` is ignored |
 
-**v6 encodings** [hw: Elbrus-2C3, `mas6.c` (`gen_mas6.py`); source:
-kernel `asm/mas.h`, `trap_cellar.h`]. v6 gives bit 4 (`m1`) a meaning:
-with `mod` 3 it is the load-acquire / store-release form (bit 6 `mt`),
-otherwise bits 0–1 (`m2`) choose the kind:
+**v6 encodings** [hw: Elbrus-2C3, `mas6.c` (`gen_mas6.py`) and
+`memleft.c` (`gen_memleft.py`); source: kernel `asm/mas.h`,
+`trap_cellar.h`]. v6 gives bit 4 (`m1`) a meaning. With `mod` 3 or 7,
+bits 5 and 6 become `m3` and `mt` (the kernel's `masf3`): `mod` 3
+without `m3` is the load-acquire / store-release form, with `m3` the
+check-and-unlock load and the wait-unlock store, `mt` either way. With
+the other `mod`s, bits 0–1 (`m2`) choose the kind and bits 5–6 stay
+`dc_ch` (`masf4`):
 
 | MAS | Operation | Channels | Effect on the 2C3 |
 |---|---|---|---|
 | 0x13, 0x53 | `ld` (load-acquire, `MAS_LOAD_ACQUIRE_V6`) | ALC0, 2, 3, 5 | an ordinary load that faults normally; a dependent chain takes **10.4 cycles a load** (4.8 plain) |
 | 0x13, 0x53 | `st` (store-release, `MAS_STORE_RELEASE_V6`) | ALC2, 5 | stores; back to back 3.5–4.8 cycles a store (plain 1.0; lcc's release, `wait ld_c, st_c` + `st`, 15.8). **Under an erratum on E2C3 up to rev 2, ours included**: MCST's kernel uses `wait` + store there instead (hwbugs.md, `STORE_RELEASE`) |
+| 0x13 | `st` (release) after a lock-wait load | ALC2 | an ordinary store as far as the lock goes: writes with or without the lock and never sets `%MLOCK`; like any access it ends a held lock, so a second lock-wait load after it works (atomics.md, "What breaks the lock"; `memleft.c` `nolock_st13`, `lockw_again_st13`) |
+| 0x1b, 0x5b | `ld` (`be` with acquire) | ALC0, 2, 3, 5 | byte-swapped, and faults as a plain load; 10.4 cycles a load in a dependent chain, as the load-acquire 0x13 (plain and `be` alone: 4.8) (`ld_1b_*`, `t_chase_1b`) |
+| 0x1b, 0x5b | `st` (`be` with release) | ALC2, 5 | byte-swapped; 3.4 and 3.7 cycles a store back to back (0x13: 4.3, plain 1.0). The store-release erratum presumably applies to these too (inferred; hwbugs.md, `STORE_RELEASE`) |
+| 0x33, 0x73 | `ld` (`m3`) | ALC2, 5 (ALC0, 3: SIGILL `ILL_ILLOPC`) | **the check-and-unlock load**, as `mas=0x3`: keeps a locked register's early value; reloads and sets `%MLOCK` when the entry was lost or there is none; a page it may not read is SIGSEGV; a dependent chain 4.7 cycles a load, as `mas=0x3` (`dam_ld33_*`, `dam_nl_ld33`, `t_chase_33_c2`) |
+| 0x33, 0x73 | `st` (`m3`) | ALC2, 5 | **the wait-unlock store**, as `mas=0x2`: writes only where a lock-wait load holds the lock on that address, and ends the lock; otherwise writes nothing and sets `%MLOCK`. It leaves DAM entries alone. A failed one costs 4.5 cycles back to back (`nolock_st33`, `lockw_*_st33`, `dam_st33`) |
 | 0x10 | `ld,sm` | ALC0 | semi-speculative, as `mas=0x0`: pages in an untouched page, diagnostic for a page it may not read |
 | 0x12 | `ld,sm` | ALC0, 2 | **fully speculative**, as `mas=0x3`: diagnostic also for an untouched valid page; without `,sm` SIGILL `ILL_ILLOPC` |
-| 0x11 | `ld` ("watch for modification", `MAS_WATCH_FOR_MODIFICATION_V6`) | ALC0 only (ALC2: SIGILL) | an ordinary load; a store by the same thread to the watched word doesn't trap |
+| 0x11 | `ld` ("watch for modification", `MAS_WATCH_FOR_MODIFICATION_V6`) | ALC0 only (ALC2: SIGILL) | an ordinary load; a store by the same thread to the watched word doesn't trap; it arms `wait mem_mod` for its 64-byte line (x86-support.md) |
+| 0x11 | `ldqp` (the quad watch load) | ALC0 only (ALC2, 3, 5: SIGILL `ILL_ILLOPC`) | loads all 16 bytes and faults normally; arms the watch as the doubleword form does (`watch_ldqp11_c0`). The register pair `ldq … mas=0x11` works in ALC0+2 and is SIGILL in ALC3+5: the kernel's "ALC0/ALC2 for quadro" (`asm/mas.h:128`) |
 | 0x11 | `ld,sm` | ALC0 | **the lock load**, exactly as `mas=0x4` (`spec.c` `lk11*`, `k11_*` against `lk4*`, `k4_*`: values, `%MLOCK`, faults and untouched pages alike) |
 | 0x13 | `ld,sm` | ALC0 | **the speculative lock**, exactly as `mas=0x7` (`lk13*`, `k13_*`) |
-
+| 0x17 | `ld` (`m1` with `mod` 7) | ALC0 | SIGILL `ILL_ILLOPC`: not a lock-wait load (`ld_17_c0`, `lock_17`). `ld,sm`: **the speculative lock**, as `mas=0x7`: diagnostic for an untouched page, and records a DAM entry (`ld_17sm_c0`, `dam_lk17_*`) |
+| 0x37, 0x57, 0x77 | `ld` | ALC0 | SIGILL `ILL_ILLOPC` (`ld_37_c0` …): there is no lock-wait form with `m1`, `m3` or `mt` |
 | 0x14, 0x15, 0x16 | `ld`, `st`, `ld,sm` with bit 2 (`ch1`) | ALC0, 2 | as 0x10, 0x11, 0x12 without it (ordinary, lock-style semi-speculative, fully speculative), same timing; no visible effect from user mode on L1-resident data |
+| 0x30–0x32, 0x34–0x36; 0x50–0x52, 0x54–0x56; 0x70–0x72, 0x74–0x76 | `ld`, `st` (`dc_ch` 1, 2, 3 with `m1`; with `mod` 3 or 7 these bits are `m3` and `mt`, rows above) | ALC0, 2 (0x31: ALC0 only, ALC2 SIGILL) | the kinds of 0x10–0x16 (`dc_ch` doesn't change them): 0x30 and 0x34 ordinary; 0x31 the watch load (it arms `wait mem_mod` for its 64-byte line, `watch_ldd31`), and with `,sm` the lock load (records a DAM entry); 0x32 and 0x36 `,sm` fully speculative; 0x35 `,sm` semi-speculative. L1 hits cost what plain loads do (4.8 cycles a chain) and stores take 1 cycle, but the cache hint is not the one `dc_ch` gives without `m1` (below) |
 
-The old lock encodings (`mas=0x4`, `0x7`) keep working on v6. That the
-acquire and release forms order memory can't be told on hardware that
-already keeps every order but store → load (atomics.md); lcc 1.29.16
-uses none of the v6 forms. Not tried, on purpose (a contact's machine):
-0x17 (`m1` with `mod` 7) and `mt` beyond the acquire/release forms.
+The old lock encodings (`mas=0x4`, `0x7`) keep working on v6. Every
+lock form tried records a DAM entry: 0x11, 0x13, 0x17 and 0x31 with
+`,sm` in ALC0, followed by a check (`mas=0x3`) of another address, keep
+the early value (`memleft.c` `dam_lk*`).
+
+The cache effect of `dc_ch` with `m1` [hw: 2C3, `memleft.c` `hint` and
+`fill`; ns per line of a 256 KiB / 1 MiB hot set before → after a
+stream, as in timing.md, "Cache hints in the MAS"]:
+
+| MAS | an `ldd` stream leaves its lines in | effect on a hot set | `std` stream: lines left in; hot set |
+|---|---|---|---|
+| 0x20 (for comparison) | L2 | evicted | L2; evicted (48 KiB kept) |
+| 0x30 | partly L2, the rest nowhere: 97.5 cycles a load at a line every 4 cycles, 135.5 at four loads a wide instruction (L2 is 14.9, memory 175) | **kept** (3.8 → 3.8, 6.4 → 7.7) | nowhere; kept |
+| 0x50 | L2 | evicted (3.8 → 48.3, 6.3 → 49.5) | L2; evicted, 48 KiB too (1.9 → 23.9) |
+| 0x70 | L2 | mostly kept (3.8 → 4.5, 6.3 → 8.5) | L2; mostly kept (4.9, 11.6) |
+
+So with `m1`, 0x50 loads act as 0x20 and 0x30 nearly as 0x60. 0x70 puts
+lines in L2 without displacing much, as if they were inserted to be
+replaced first (inferred). The kernel defines no `dc_ch` value with
+`m1` and lcc uses none: a compiler should keep to 0x20, 0x40 and 0x60.
+
+That the acquire and release forms order memory can't be told on
+hardware that already keeps every order but store → load (atomics.md);
+lcc 1.29.16 uses none of the v6 forms. Not tried: 0x37, 0x57 and 0x77
+with `,sm`. Not measured: the cost of 0x17 with `,sm` and of a
+successful 0x33/0x73 store.
 
 Not tried, on purpose, on the shared machines: mod 1 (no address
 translation), mod 7 in ALC2/5 and stores with mod 7 (MMU, cache and TLB
@@ -732,5 +765,4 @@ where the guard is false.
 - Quad lock and check loads on v3 (`ldq` exists only in protected
   mode there).
 - Partial speculative loads across pages on v7 (kernel
-  `cpu_features.h`); the v6 MAS bits `mas6.c` didn't try (`m3`, `be`
-  with acquire/release, `dc_ch` with `m1`, a quad watch load).
+  `cpu_features.h`).

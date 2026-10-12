@@ -503,6 +503,21 @@ gas rejects these combinations within one wide instruction:
   [checked, v3, v5, v6]. So the instruction of a DAM check with its
   `rbranch` holds neither a prepare nor a loop's `ct`.
 
+The same rules as data for a scheduler's pipeline description are in
+[reservations.yaml](reservations.yaml), written by
+`tools/isa-extract/gen_reservations.py`: per operation and ISA version
+the channels, channel pairs, ALES use, literal sizes and load, store and
+MAS class; which syllable or field each control operation takes (CS0,
+SS, the CS1 groups, PLS, CDS, AAS, LTS); these restrictions with their
+sources; and the ALC5 divider's measured issue distances.
+`tools/isa-extract/check_reservations.py` checks every wide instruction
+of compiled code against it, and its `--selftest` that each rule it
+checks catches an instruction composed to break it. No violation in 7.6
+million wide instructions: lcc 1.29.16's v3, v5 and v6 system
+libraries, its `libc.so.6` for v3.4c, v4 (1c+, 8c), v6.16c and the v3
+protected mode, its CoreMark builds, Unipro's CoreMark and the decoder
+corpus (v3–v7) [decoded].
+
 ### Two writes of one register [hw]
 
 Two operations of one wide instruction may write the same register when

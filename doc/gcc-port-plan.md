@@ -1530,9 +1530,12 @@ Written in `.md` with `define_automaton`, `define_cpu_unit`,
 - **Reservations**: one per class of operation, e.g. "simple integer op in
   any of ALC0–5", "load in ALC0, 2, 3, 5", "store in ALC2 or 5", "divide in
   ALC5", "128-bit op in a channel pair". Which channels each operation may
-  use, per ISA version, is in `spec/isa/binutils-ops.yaml` (`channels`).
-  That table is large and mechanical: generate the reservations from it
-  with a script in the port, as C6x does with `gensched.sh`
+  use, per ISA version, with its channel pairs, ALES, literal slots and
+  load/store/MAS class, and which syllable or field each control
+  operation takes, is in `spec/isa/reservations.yaml` (section 11, item
+  3; generated from `binutils-ops.yaml`'s `channels` and bundle.md's
+  rules). That table is large and mechanical: generate the reservations
+  from it with a script in the port, as C6x does with `gensched.sh`
   (`c6x/t-c6x:21–37`).
 - **Latencies** (`define_insn_reservation` latency and `define_bypass`):
   use the measured table in `spec/isa/timing.md` (data in
@@ -3009,7 +3012,20 @@ Useful next pieces of relcc2 work for the port, in rough order:
    are in `spec/isa/timing.md`.
 3. **Channel/resource data** from `binutils-ops.yaml` in a form easy to
    turn into reservations (data only; the generator that writes `.md`
-   belongs in the port).
+   belongs in the port). Done: `spec/isa/reservations.yaml`, written by
+   `tools/isa-extract/gen_reservations.py`: per operation and ISA
+   version (v2–v7) the channels, channel pairs, ALES use, literal sizes,
+   load/store and MAS class; the syllables and fields of every control
+   operation (CS0, SS, CS1 groups, PLS, CDS, AAS, LTS); the restrictions
+   of bundle.md and gas with their sources; and the ALC5 divider's
+   measured issue distances on v3, v5 and v6.
+   `tools/isa-extract/check_reservations.py` checks it against every
+   wide instruction of compiled code: none of the 7.6 million in lcc
+   1.29.16's system libraries (all for v3, v5 and v6, `libc.so.6` for
+   v4), its CoreMark builds and the decoder corpus breaks it (bundle.md,
+   "Bundling restrictions"). It also counts what lcc puts together: a
+   prepare and `setwd` in one instruction about 19,800 times in its v3
+   code, a prepare and a `ct` 16,000, two MAS accesses 20,300.
 4. **Speculation leftovers** (`spec/isa/speculation.md`, done for v3
    and v5): v6+.
 5. **Loop mode leftovers** (`spec/isa/loops.md`, "Not checked yet"):

@@ -19,7 +19,7 @@ and 6.1-1.18 (`/proc/config.gz`). `OpenE2K/linux` is at 6.1-1.19-open,
 and its history holds 6.1-1.9 (commit 6a2673970ea0) and 6.1-1.17-open
 (d639a5da9813); line numbers here are 6.1-1.19's unless a commit is
 named. Where the 4C differs, the older tree is the reason ("Overflow
-signals"). The probes are
+signals", the trampoline page). The probes are
 `tools/abi/probes/sysabi.c` (sections 1–10; `./sysabi maps` for the PIE
 and static builds), `sigeh.cc` with `sigeh-c.c` (exceptions and
 cancellation), `pgprof.c` (`-pg`), `sanitize.c` (`lcc -S`), `ctlcost.cc`
@@ -459,10 +459,12 @@ must give each goroutine a full-size context:
 `[trampolines]` (kernel `kernel/trampolines.c`, `include/asm/stacks.h:36-38`;
 code `kernel/trap_table.S:1192-1394`; offsets
 `include/asm/process.h:36-70`). On the 8C2 and the 2C3 it is the page
-below `[cut]` (0xc2ff_ffff_d000, 0xc27f_ffff_d000); the 4C's newer ALT
-kernel (6.1.158) maps it at a random address in the `mmap` area
-(0x45dc_6594_3000 in one run) [hw: `/proc/self/maps`]. Code must not
-assume where it is:
+below `[cut]` (0xc2ff_ffff_d000, 0xc27f_ffff_d000; `USER_TRAMPOLINES_BASE`,
+`include/asm/stacks.h:38`, `kernel/trampolines.c:47`); the 4C's older
+kernel (MCST's 6.1-1.9, commit 6a2673970ea0) maps it wherever
+`get_unmapped_area` puts it in the `mmap` area
+(`kernel/trampolines.c:50` there; 0x45dc_6594_3000 in one run) [hw:
+`/proc/self/maps`]. Code must not assume where it is:
 
 | Offset | Code | Return address of |
 |---|---|---|

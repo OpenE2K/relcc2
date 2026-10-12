@@ -8,7 +8,7 @@ code.
 | Document | Contents |
 |---|---|
 | [data-layout.md](data-layout.md) | Sizes and alignment of types, aggregates, bit-fields |
-| [registers.md](registers.md) | Register files, windows, conventions, DWARF numbering |
+| [registers.md](registers.md) | Register files, windows, conventions, FP control and status (and MCST glibc's FP bugs: `fesetenv`, `fmod` in `FE_DOWNWARD`, libm after `feclearexcept`), DWARF numbering |
 | [calling-convention.md](calling-convention.md) | Calls, argument passing, results, varargs |
 | [stack-and-unwinding.md](stack-and-unwinding.md) | User stack, hardware stacks, the stack registers and why split stacks are impossible, exceptions, backtraces, `setjmp`/`longjmp`, what they cost, scanning for roots (garbage collectors) |
 | [elf.md](elf.md) | ELF header, sections, the executable-stack note, relocations, PIC and PLT, TLS |

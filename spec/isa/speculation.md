@@ -679,7 +679,13 @@ runs correctly and sets `FE_INEXACT`. While the flags stay set, as the
 kernel starts processes, speculation is invisible, and speculative
 operations never set a flag, so `fetestexcept` reports only what
 non-speculative operations raised. lcc users know `-fno-spec-fp` as the
-fix for FP code that expects exceptions (owner).
+fix for FP code that expects exceptions (owner). lcc builds MCST's
+glibc the same way, so its libm returns diagnostic values or dies after
+`feclearexcept`, whatever options the program itself was built with:
+`sqrt (2.0)` with `FE_INEXACT` clear, `sqrt (-1.0)` with `FE_INVALID`
+clear, `sin (1.0)` with all flags clear
+([registers.md](../abi/registers.md), "MCST glibc's FP bugs";
+`tools/abi/probes/libmchk.c`, 4C, 8C2, 2C3).
 
 A compiler can speculate FP as lcc does (fast, but code that clears or
 unmasks FP exceptions breaks) or keep FP operations non-speculative

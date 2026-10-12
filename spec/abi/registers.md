@@ -258,6 +258,12 @@ constructor sets `%pfpfr` bits 6 and 15 ("mcstbug #149583"); lcc links
 environment keep both bits; `fesetenv (FE_DFL_ENV)` and `fesetenv
 (FE_NOMASK_ENV)` clear them.
 
+### MCST glibc's FP bugs
+
+MCST's glibc, which lcc's sysroot and the machines ship, has these
+bugs. A port's programs and tests meet them through the C library,
+whatever code the port generates.
+
 **glibc's `fesetenv (FE_DFL_ENV)` is wrong** [hw, glibc
 `sysdeps/e2k/fpu/fesetenv.c`]: it means to mask every exception
 (`/* … все их маскируем */`) but writes `FE_ALL_EXCEPT << 7` to
@@ -272,6 +278,133 @@ environment is restored (processes start with `%fpcr` 0x37f). A test
 suite that calls `fesetenv (FE_DFL_ENV)` sees both. A compiler's
 `-ffast-math` startup should do what lcc's does (link MCST's
 `crtfastmath.o`).
+
+**MCST's `fmod` and `remainder` hang in `FE_DOWNWARD`** [hw:
+`tools/abi/probes/libmchk.c` `fmod`, on the 4C (ALT's glibc 2.35), the
+8C2 and the 2C3 (their libm is byte-identical to that of lcc 1.29.16's
+v5.8c2 and v6.2c3 sysroots); the static `libm.a` and lcc 1.31.05's
+glibc 2.41 behave the same; glibc `sysdeps/e2k/fpu/e_fmod.c:17-21,27,
+61-64,69,78-81,84-96,114-117`, `e_remainder.c:19-23,29,39,76,91-101,122`,
+`e_fmodf.c:26,64,99`, `e_fmodl.c:21,61-68,82`, `f2c.h:24,41`]. MCST's
+own `fmod` and `remainder` (which halves x first) subtract multiples of
+y from x in chunks. The loop runs while x's bit pattern, read as an
+unsigned 64-bit number, exceeds y's by more than 26 exponents (31 in a
+v6 build). When rounding down, an exact step `x − q·y` gives −0 (IEEE
+754's sign for an exact zero difference in that mode). Its pattern,
+0x8000000000000000, passes the bound, and further steps leave −0 as it
+is, so the call never returns. This happens with `fmod (±0x1p52, 2.0)`,
+`fmod (0x1p40, 2.0)`, `fmod (0x1p1023, 0.5)` (through the path that
+first reduces by y·2¹⁰²²) and `remainder (0x1p52, 2.0)` on all three
+machines, and with `fmod (0x1p30, 2.0)` on the 4C and 8C2 only (the
+2C3's libm is a v6 build).
+
+Where the call returns, an exact zero has the wrong sign. For a
+positive x the step's −0 is the result; for a negative x the code puts
+x's sign on by adding the sign bit to the result's pattern
+(`absx.llong += ret.llong`), which turns that −0 into +0. So when
+rounding down `fmod (8.0, 2.0)` is −0 and `fmod (-8.0, 2.0)` is +0,
+where C wants the sign of x. `fmodf`, `fmodl`, `remainder`,
+`remainderf` and `remainderl` do the same, but never hang: their
+`float` and `long double` loops compare signed numbers (`LL`, or `LI`
+loaded from a signed `short` exponent), which −0 makes negative. Every
+exact zero we tried came out with the wrong sign except `fmod (0x1.8p40,
+3.0)`, whose last step leaves y, which the code replaces with +0.
+Nonzero results are right, and so is every result in the other three
+rounding modes (checked against Python's `math.fmod` and
+`math.remainder`). A test that calls `fmod` or `remainder` in
+`FE_DOWNWARD` can hang on E2K, for example when it uses them as the
+reference for a rounding-mode test.
+
+**MCST's libm needs the sticky FP flags set** [hw:
+`tools/abi/probes/libmchk.c` `sqrt` and `err`, on the 4C, 8C2 and 2C3,
+lcc 1.29.16 `-O3`, `-O0`, `-O3 -fno-spec-fp` and `-O3 -static`; lcc
+1.31.05 `-O3 -static` and, on the 8C2, the shared glibc 2.41; libm.so.6
+of lcc 1.29.16's v3 sysroot and the 8C2's, disassembled; glibc as
+cited]. lcc builds glibc with its default `-fspec-fp` (MCST's Makefile
+turns it off for a few files, `sysdeps/e2k/fpu/Makefile:1-20`). A
+speculative FP operation that would set a flag that is clear gives a
+diagnostic value instead ([speculation.md](../isa/speculation.md),
+"Speculative operations"). Processes start with all six flags set, so
+libm works. After `feclearexcept`, the shared libm dies with SIGILL
+`ILL_ILLOPN`, either inside libm or at the caller's first use of the
+diagnostic value it returns:
+
+| Flags cleared | Calls that die | Calls that still work |
+|---|---|---|
+| `FE_INVALID` | `sqrt (-1.0)`, `sqrt (-INFINITY)`, `sqrtf (-1.0f)`, `sqrtl (-1.0L)`, `fmod (1.0, 0.0)`, `fmod (INFINITY, 1.0)`, `fmodf (1.0f, 0.0f)`, `fmodl (1.0L, 0.0L)`, `pow (-1.0, 0.5)`: inside libm | `acosh (0.5)`, `atanh (2.0)`, `remainder (1.0, 0.0)` (NaN, EDOM, invalid set); the domain errors of the next paragraph (no flag); valid operands |
+| `FE_INEXACT` | `sqrt (2.0)` and `sqrtf (2.0f)` return a diagnostic value (the 2C3's `sqrtf` traps inside libm); `sqrtl (2.0L)` dies inside libm | exact roots; negative operands |
+| `FE_ALL_EXCEPT` | all of the above, and `sin (1.0)`, `exp (1.0)`, `acos (0.5)`, `atan (1.0)`, `pow (2.0, 0.5)`, `hypot (1.0, 1.0)`, `fmod (5.5, 2.0)`, `remainder (5.5, 2.0)` | `log (2.0)`, `cbrt (2.0)` (inexact set); exact roots; `acosh (0.5)`, `atanh (2.0)`, `remainder (1.0, 0.0)` and the domain errors, as in the first row |
+
+The square roots and the domain errors of `sqrt`, `fmod` and `pow`
+fail because of how the shared library is built:
+
+- libm's base version is GLIBC_2.2
+  (`sysdeps/unix/sysv/linux/e2k/shlib-versions:1`), so
+  `LIBM_SVID_COMPAT` holds (`math/math-svid-compat.h:76`) and `sqrt` is
+  the SVID wrapper of `math/w_sqrt_compat.c:30-42`.
+- Inside glibc, `__ieee754_sqrt` is an `asm_inline`
+  (`sysdeps/e2k/fpu/bits/mathinline.h:45-51,290-293`), which lcc
+  schedules like its own code. It if-converts the wrapper and makes the
+  root `fsqrtid,sm` and `fsqrttd,sm` (libm.so.6 of lcc 1.29.16's v3
+  sysroot, 0x190c0; `sqrtf`'s `fsqrts,sm` at 0x21098).
+- The error path jumps to `__kernel_standard`. Its `zero/zero` for
+  `sqrt`, `fmod` and `pow` sits under a test of the `_LIB_VERSION`
+  variable (`sysdeps/ieee754/k_standard.c:38-42,568-571,603-606,
+  622-625`). lcc computes it as `fdivd,sm 0x0, 0x0` and stores it into
+  its `struct exception` with a plain `std`, and that store traps
+  (libm+0x1c8f8 and +0x1cac0 on the 8C2). The 0/0 of `remainder`,
+  `acosh` and `atanh` is unconditional (`k_standard.c:641,657,673`), a
+  plain `fdivd` that raises invalid, so those work.
+- `sqrtf` and `sqrtl` end up there too (`k_standardf.c:31`,
+  `k_standardl.c:108`). MCST's Makefile builds `k_standardl.c` with
+  `-fno-spec-fp` ("Bug #118896", `sysdeps/e2k/fpu/Makefile:12-13`) but
+  not `k_standard.c`.
+
+The static `libm.a` has neither problem. Without the compat symbols,
+`_LIB_VERSION` is the constant `_POSIX_` (`math-svid-compat.h:83`),
+`sqrt` is `math/w_sqrt_template.c:37-44` with the root on its only
+path, and `__kernel_standard`'s 0/0 is a plain `fdivd`. Its `sin`,
+`exp`, `acos`, `atan`, `pow`, `hypot`, `fmod` and `remainder` still die
+with all flags cleared (they return a diagnostic value). lcc 1.31.05's
+glibc 2.41 behaves the same, shared and static.
+
+The caller's options change nothing (`-fno-spec-fp`, `-O0`), with one
+exception. lcc `-O0` code spills a call's result with `std,sm` and
+reloads it with a plain `ldd`, which reads the bits as an ordinary
+number (the tag stays in memory; [speculation.md](../isa/speculation.md),
+"Spill and fill"). So a diagnostic result comes back as a number with
+bit 30 of each half set instead of trapping: `sqrt (2.0)` with
+`FE_INEXACT` clear gives 0x7ff6a09e667f3bcd, a NaN, at `-O0`.
+
+lcc's own inline expansion of `sqrt` (an inline root, and a libm call
+for negative and NaN operands) has the same problems at `-O3`: its root
+is `fsqrtid,sm` and `fsqrttd,sm`, a diagnostic for `sqrt (2.0)` with
+`FE_INEXACT` clear, and its call path dies inside libm as above [lcc
+1.29.16 `-O3`, v3.4c: `fsqrttd,5,sm … ? %pred0`, `call … ? ~%pred0`;
+`libmchk.c` `dsqrt`]. At `-O0` or with `-fno-spec-fp` the root is
+plain, but the call path still dies.
+
+A root computed with plain `fsqrtid`/`fsqrttd`, followed by a `sqrt`
+call made only for errno, works with any flags cleared. The root raises
+invalid first, so `__kernel_standard`'s 0/0 is then an ordinary NaN. A
+call made before the root traps (`libmchk.c` `rootfirst`, `rootlast`).
+
+GCC's `gcc.dg/torture/pr68264.c` clears the flags and calls `acos` of a
+NaN. Built by lcc, it dies with SIGILL in `acos` (`-O2` and `-O0`, on
+the 8C2).
+
+**MCST's libm raises no exception for most domain and range errors**
+[hw: `libmchk.c` `err`, the three machines, shared and static alike;
+glibc `sysdeps/e2k/fpu/e_acos.c:104-106`, `e_log.c:39-40`,
+`e_exp.c:46-47`, `f2c.h:136`, `sysdeps/ieee754/k_standard.c:122-140,
+410-428`]. `acos (2.0)`, `asin (2.0)`, `log (-1.0)`, `log10 (-1.0)` and
+`logf (-1.0f)` return NaN, `log (0.0)` returns −∞, and `exp (1000.0)`
+and `pow (0.0, -1.0)` return +∞. Each sets errno but raises no flag,
+where C's Annex F wants invalid, divide-by-zero or overflow. MCST's
+`e_*.c` pass these cases straight to `__kernel_standard`
+(`SVID_libm_err`), which returns a constant (`NAN`, `HUGE_VAL`) for
+most of them. `acosh (0.5)`, `atanh (2.0)` and `remainder (1.0, 0.0)`
+compute 0/0 and do raise invalid. `acos (-1.0)` is π, as it should be.
 
 ## DWARF register numbers
 

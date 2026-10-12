@@ -365,7 +365,7 @@ the other cluster) [hw: `tools/isa-probes/tagx.c` `adds_addd`,
 integer operations and other 64-bit consumers, such as an address or
 store data, inferred]. So lcc's `adds` + `sxt` under `dbl = 0` costs
 nothing extra, while a 64-bit use of a 32-bit result without the `sxt`
-waits 4. `tools/isa-score` does not model it.
+waits 4. `tools/isa-score` models it, per function from its `setwd`.
 
 ## Clusters
 

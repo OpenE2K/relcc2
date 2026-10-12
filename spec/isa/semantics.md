@@ -534,7 +534,9 @@ C1, which is below):
   a single (`a` = `s`) or double (`d`) in the low bits of its register,
   src2 the 80-bit value, and the result a single, double or 80-bit
   value (`r`). `fxdiv<b><r>` has the 80-bit operand first; `t`
-  presumably stands for this transposition (inferred). Both qemus
+  presumably stands for this transposition (inferred). objdump prints
+  the narrow src1 as `%drN` and, in the `s` forms, the 80-bit src2 as
+  `%rN` (binutils' operand formats); gas takes either spelling. Both qemus
   implement it this way (MCST's `fp_helper.c`, the community's
   `helper_fpu.c`). On the 4C, 8C2 and 2C3, 16,512 lines
   [hw: `tools/isa-probes/sregs.c` `dt`: special and random operands

@@ -388,8 +388,10 @@ its `wait`s with `.word` (`__E2K_WAIT`), so it can set a modifier
 alone. v5 ignores bits 9–11: a `wait` with only them is an empty
 1-cycle instruction, and with `ld_c` or `st_c` it costs what those
 alone cost [hw: 8C2, `tools/isa-probes/memleft.c` `wait`, raw
-encodings]. objdump prints none of bits 9–15 (Known objdump bugs), so
-they are [source] here. What the fields cost and order: timing.md,
+encodings]. objdump prints none of bits 9–15 (Known objdump bugs); our
+decoder (`tools/isa-decode/e2kdis.py`) prints them, and
+`compare_objdump.py` checks each such line by assembling it with gas
+(corpus `wait*.s`, v3–v7) [decoded]. What the fields cost and order: timing.md,
 "Every v3 operation"; [atomics.md](../abi/atomics.md).
 
 ## PLS: predicate logic syllables [decoded, except `%bgrpred`, which gas does not accept as a `pass` source]

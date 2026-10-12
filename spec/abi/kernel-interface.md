@@ -33,10 +33,12 @@ stack grows, a context's stack overflowing), `abileft.c` with
 stack overflow in threads and the main thread) and `abileft-san.c`
 (lcc's sanitizers), built by each machine's own lcc 1.29.16, and
 `accerr.c` with `getsp.s` (the `si_code` and `si_addr` of stack
-overflows and bad accesses) and `ctxthr.c` (contexts shared between
-threads, `fork` and thread exits), built by the cross lcc 1.29.16 for
-each CPU (`e2k-v3.4c`, `v5.8c2`, `v6.2c3`); `ctxtls.c` (thread-local
-storage across a switch) is read with `lcc -S`.
+overflows and bad accesses), `ctxthr.c` (contexts shared between
+threads, `fork` and thread exits) and `kernleft.c` with `kernleft.s`
+(the disabled system-call entries and entry 4, edited signal frames and
+`%bgr`, switching to a context another thread ran), built by the cross
+lcc 1.29.16 for each CPU (`e2k-v3.4c`, `v5.8c2`, `v6.2c3`); `ctxtls.c`
+(thread-local storage across a switch) is read with `lcc -S`.
 
 ## System calls
 
@@ -50,13 +52,37 @@ these entries for a 64-bit task (`%osem`; kernel
 |---|---|
 | 1 | 32-bit system call table (enabled for 64-bit tasks too: a 64-bit process calling it gets the compat behaviour, pointers cut to 32 bits [hw: [mode32.md](mode32.md)]) |
 | **3** | **64-bit system call table**: what glibc and the uapi headers use |
-| 4 | deprecated: a negative number −N calls N in an old table, others go to entry 3 (kernel `kernel/trap_table.S:554-597`) |
+| 4 | deprecated. For a 64-bit task a number N ≥ 0 continues as entry 3; −N calls N in `sys_call_table_deprecated`, an older numbering whose entries are partly `compat_` handlers (32-bit structures) and are all `sys_ni_syscall` from 326 on (kernel `kernel/trap_table.S:553-597`, `kernel/systable.c:1568-1947`). The arguments go through whole: unlike entry 1 it cuts no pointers (format 2, not entry 1's zero-extending format 1, `trap_table.S:424-457`) [hw: `kernleft.c` part 1, 4C, 8C2, 2C3: +20 and −20 gave the pid, −24 the uid, +327 ran `getcpu`, −327 and −119 gave −38 (the old table has no `sigreturn`); `sigprocmask` (126) through entries 3 and 4 wrote an 8-byte set and −126 a 4-byte one through the same 64-bit pointer (compat `sigprocmask`, `linux/kernel/compat.c:40-75`); `%g16` came back empty, as after entry 3] |
 | 5, **6** | fast system calls, 32-bit and **64-bit** (below) |
 | 7, 8 | fast and ordinary calls of protected mode: protected tasks only |
 
 32-bit code uses entries 1 and 5 ([mode32.md](mode32.md), "Kernel"),
 protected code 8 and 7 ([protected-mode.md](protected-mode.md), "System
 calls"); both are out of scope here.
+
+**Disabled entries** [hw: `kernleft.c` part 1; 4C, 8C2, 2C3]. The trap
+table also has code at entries 0 (hardware traps and interrupts), 7, 8
+and 10 (protected mode; 10 is the legacy one), 11 and 12 (the kernel's
+own: `osgd_to_gd` and the boot jump-start) and 16–18 (hypercalls, in
+kernels built as KVM hosts) (kernel `kernel/vmlinux.lds.S:50-101`,
+`kernel/trap_table.S:1138-1145`, `p2v/boot_head.c:92-94`); `%osem`
+enables only 1, 3, 4, 5 and 6 for a 64-bit task. The check is made when
+the transfer is prepared: `sdisp %ctpr1, N` for any of the disabled
+entries leaves `%ctpr1` with `ta_tag` 0 (empty), while entries 3 and 4
+give `ta_tag` 5, a system label (`opc` 0 for all; read with `rrd
+%ctpr1`, which works in user mode; MCST's qemu models the same, setting
+the entry's address with tag 0, `target/e2k/tcg/translate-ctp.c:163-174`).
+A `call` through it is then a transfer through an empty CTPR
+([control-transfer.md](../isa/control-transfer.md), "Lifetime and
+validity"): SIGILL with `si_code` 1 and `si_addr` at the `call`, and no
+entry code runs. The kernel handles it as an illegal instruction
+address and passes `SEGV_MAPERR`, which has `ILL_ILLOPC`'s value; for
+entry 10, whose address the CTPR still holds, it also logs "uses legacy
+protected mode implementation.  Have you recompiled it with newer
+compiler?" (`kernel/traps.c:992-1038`; the log line appeared for the
+entry-10 child on all three). Entries 2, 9, 13–15 and 19–31, which the
+trap table does not name, were not tried; their `%osem` bits are clear
+too.
 
 ```
 { sdisp %ctpr1, 0x3              ; entry 3

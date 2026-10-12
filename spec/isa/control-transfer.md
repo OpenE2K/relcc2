@@ -96,6 +96,12 @@ v7 widens the register to 128 bits and moves the fields):
 | 57–58 | `opc` | 0 `disp`, 1 `ldisp`, 3 `return` |
 | 59–60 | `ipd` | the kernel names 0 no prefetch, 1 the target instruction, 2 the target and the next (`cpu_regs_types.h:733-735`). Measured, it is how much of the target the prepare fetches ahead: 0 nothing; 1 and 2 part of a cold three-line (768-byte) target (from L2, `ipd 2` is enough); 3 all of a 768-byte target but not of a 1.5 KiB one; a prepare in an instruction without SS behaves as 3 [hw: `ctlleft.c`, 4C, 8C2, 2C3; the depths in 256-byte lines are inferred from timing] |
 
+`rrd %ctprN` reads a CTPR in user mode (ALC0, as every `rrd`). After
+`sdisp` it holds `ta_tag` 5 for an entry the kernel enables and 0 for
+one `%osem` disables, which then traps at the `call` like any empty CTPR
+[hw: `tools/abi/probes/kernleft.c` part 1; 4C, 8C2, 2C3;
+[kernel-interface.md](../abi/kernel-interface.md), "Disabled entries"].
+
 ## Lifetime and validity [hw, source]
 
 Checked on the 4C by `tools/abi/probes/ctpr.c`:

@@ -259,7 +259,7 @@ groups:
     does: a ÷ b as above, ALC5.
     use: "`divxf3` `fxdivxx`. lcc uses a float or double divisor as it is (`a / d` = `fxdivdx a, d`; a constant exact as a single goes in as a 32-bit literal, `a / 3.0L` = `fxdivsx a, 0x40400000`, and `a / 4.0L` stays a division), rounds a narrower quotient in the same operation, as x87 `fdiv` then a narrow `fstp` (`(double) (a / b)` `fxdivxd`, `(float) (a / b)` `fxdivxs`, `(double) (a / d)` `fxdivdd`), and converts an integer divisor first (`istofx`). A float or double dividend takes `fxdivt*`."
   - ops: fxdivt{ss,sx,dd,dx}
-    lat: "16, as `fxdiv*` (8C2: 18 through the single or double src1)"
+    lat: "16; 18 to an integer op; 8C2: 18 into the single or double src1"
     does: "src1 ÷ src2 with src1 a single (`s`) or double (`d`) and src2 80-bit; the result as the second letter. x87 `fld src1; fld src2; fdivrp; fstp` exactly, rounded to the precision control, then to a single or double result; ALC5."
     use: "`divxf3` with a single or double dividend. lcc: `float` or `double` ÷ `long double` (`fxdivtsx`, `fxdivtdx`), the same narrowed back (`fxdivtss`, `fxdivtdd`), and constants exact as a single (`1.0L / x`: `adds 0, 0x3f800000` puts the single in a register, as src1 takes no long literal, then `fxdivtsx`; `0.1L / x` is an 80-bit constant and `fxdivxx`)."
     see: semantics.md, "80-bit operations"

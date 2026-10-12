@@ -167,15 +167,17 @@ operations match the guide. Differences:
 ## Every v3 operation [hw]
 
 `bench.py --only v3op` chains every v3 computational operation that had
-no scheduled latency (807 chains, generated from `binutils-ops.yaml` as
+no scheduled latency (811 chains, generated from `binutils-ops.yaml` as
 the v5 ones are): the result feeds the same operation, or a conversion,
 `merge` or `cctope` that reads it in the format it was produced in, and
 each FP-side result also goes to an integer operation in its own
-channel. Combined integer operations are chained through each operand.
+channel. Combined integer operations are chained through each operand,
+and so are `fxdivt*`, whose single or double operand comes first.
 The 4C, the 8C2 and the 2C3 agree on every chain except where noted
 (v6: an integer compare or `cctop` reaches `merge` in 1, as above; v5
-and v6: `pfdivd` and `pfsqrttd` 16). The data is in the three YAML
-files (`v3op_*`, `v3st_*`).
+and v6: `pfdivd` and `pfsqrttd` 16; v5: `fxdivtss` and `fxdivtdd`
+through their single or double src1 18, "Elbrus-8C2 (v5)"). The data
+is in the three YAML files (`v3op_*`, `v3st_*`).
 
 | Latency to its own kind | To an integer op | Operations |
 |---|---|---|
@@ -195,7 +197,7 @@ files (`v3op_*`, `v3st_*`).
 | 11 | 13 | integer divides with small quotients (`sdivs`, `sdivd`, `udivs`, `udivd`, `sdivx`, `udivx`; 11–18 by the quotient, above), `fsqrtid`, `pfdivs`; the 80-bit `fxsqrti*` (to an FP op only) |
 | 12 | 14 | `fsqrts`, `pfsqrts` |
 | 14 | 16 | `fdivd`, `fsqrttd`; `pfdivd` and `pfsqrttd` on v3 (16 and 18 on v5 and v6) |
-| 16 | 18 | 80-bit divides `fxdiv*` and `fxdivt*` (`fxdivt*`: `tools/isa-probes/sregs.c` `latg`, 16 on the 4C, 8C2 and 2C3, but 18 on the 8C2 through the single or double src1, "Elbrus-8C2 (v5)"; their 18 to an integer op is taken from `fxdiv*`, inferred); the square root steps `fxsqrtu*` (`fxsqrtuxx` 16–17, 18 on v6) and `fxsqrtt*` (to an FP op only) |
+| 16 | 18 | 80-bit divides `fxdiv*` and `fxdivt*`, `fxdivt*` through either operand (8C2: 18 into the single or double operand from an FP operation, "Elbrus-8C2 (v5)"; `tools/isa-probes/sregs.c` `latg` agrees); the square root steps `fxsqrtu*` (`fxsqrtuxx` 16–17, 18 on v6) and `fxsqrtt*` (to an FP op only) |
 
 What this adds to the table above:
 
@@ -212,10 +214,17 @@ What this adds to the table above:
 - **`pfdivd` and `pfsqrttd`** compute what `fdivd` and `fsqrttd` do
   (semantics.md) and take as long on v3, but 2 cycles more on v5 and
   v6.
-- The `v3op_fxdivt*` chains in the YAML files (19; 20 to an integer
-  op) ran on operands for which the operations return invalid, so they
-  timed that path (semantics.md, "80-bit operations"); the 16 above
-  comes from `sregs.c` `latg`, with valid operands in their roles.
+- `fxdivt<a><r> src1, src2` divides a single or double src1 by an
+  80-bit src2 (semantics.md, "80-bit operations"). Their chains divide
+  1.0 by 1.0: through src1 (`v3op_fxdivtss`, `v3op_fxdivtdd`; an
+  80-bit result converted back, `v3op_fxdivtsx_to_fxtofs`,
+  `v3op_fxdivtdx_to_fxtofd`), through src2 (`_opb`; a single or
+  double result converted to 80-bit) and to an integer op: 16 (18 to
+  the integer op) on all three machines, except `v3op_fxdivtss` and
+  `v3op_fxdivtdd` on the 8C2, 18 (an FP result into the narrow src1,
+  "Elbrus-8C2 (v5)"). The chains before 2026-10-12 passed the 80-bit
+  value as src1, which makes the result invalid, and timed that path
+  (19; 20 to an integer op).
 - `pextrh`'s own chain reads its 32-bit result as 64 bits; its 4 to
   `adds` is the cleaner figure. `puttags`, `gettags` and `gettagd`
   write 32-bit results too: `gettagd` → `gettagd` measures 4 because
@@ -1005,7 +1014,8 @@ What v5 adds or changes:
   costs at least what it costs an integer consumer.
 - **An FP operation's result reaches an 80-bit operation's single or
   double operand 2 cycles later** [hw: `tools/isa-probes/sregs.c`
-  `latg` and `lp`, gap method; the 4C and 2C3 don't]: `faddd` →
+  `latg` and `lp`, gap method; `bench.py` `v3op_fxdivtss`,
+  `v3op_fxdivtdd`; the 4C and 2C3 don't]: `faddd` →
   `fxadddd`'s second operand 6 (4C 4), `fxadddd` → `fxadddd` 7 (5),
   `fxtofd` → `fxadddx` 7 (5), `fxdivtss`/`fxdivtdd` → their own single
   or double src1 18 (16), `fxdivdd` → `fxdivdd` 18 (16). Other
@@ -1014,15 +1024,17 @@ What v5 adds or changes:
   from the other cluster takes 4 as on the 4C (`ldd,3` → `fxadddd,0`,
   `ldd,0` → `fxdivtdx,5`'s src1), and an integer operation 1 as
   everywhere (`addd` → `fxadddd`). Edges into the 80-bit operand are
-  unchanged (`fxdivtsx`, `fxdivtdx`, `fxdivxx` chains 16; `fxadddx` →
-  `fxtofd` 5), and so are results of 80-bit operations going to
-  ordinary operations (`fxadddd` → `faddd` 5). Back to back, a chain
-  through the narrow operand costs 4 more per step (`fxadddd` 9 instead
-  of 5, `fxdivdd` 21 instead of 17), because stalls come in 4-cycle
-  steps. The v3 sweep missed this because its chains run through the
-  first (80-bit) operand. Conversions with a narrow input (`fdtofx`,
-  `fstofx`), the `fx*` compares and a load in ALC5 into the divider
-  were not measured.
+  unchanged (`fxdivtsx`, `fxdivtdx`, `fxdivxx` chains 16, as every
+  `v3op_fxdivt*_opb*` chain; `fxadddx` → `fxtofd` 5), and so are
+  results of 80-bit operations going to ordinary operations (`fxadddd`
+  → `faddd` 5). Back to back, a chain through the narrow operand costs
+  4 more per step (`fxadddd` 9 instead of 5, `fxdivdd` 21 instead of
+  17), because stalls come in 4-cycle steps. The v3 sweep shows it only
+  in `v3op_fxdivtss` and `v3op_fxdivtdd` (18): its other 80-bit chains
+  run through the 80-bit operand or reach the narrow one from a
+  conversion 12 cycles earlier. Conversions with a narrow input
+  (`fdtofx`, `fstofx`), the `fx*` compares and a load in ALC5 into the
+  divider were not measured.
 - **Divider:** `sdivd` and `udivd` every 2 cycles no longer conflict (2
   cycles; v3 3.4); `fxsqrtuxx` and `fxsqrttxx` every 3 cycles now do
   (4.4; v3 3), `pfdivd` every 2 cycles takes 2.5, and `pfsqrttd` has a

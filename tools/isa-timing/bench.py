@@ -30,12 +30,16 @@ measurement:
          alone; a full run leaves it out (about 9,000 kernels). The
          timing YAML files include it: run the built bench binary on the
          host once without an argument and once with `v3op`, join the
-         two outputs and pass them to --results with --yaml.
+         two outputs and pass them to --results with --yaml. To
+         re-measure some of its chains, run `--only v3op --chains REGEX
+         --save FILE` and put FILE's lines in place of theirs in the
+         joined output.
 
 Usage:
   bench.py [--target T] [--remote [USER@]HOST] [--ssh-key FILE] [--ssh-port N]
            [--remote-dir DIR] [--out DIR] [--yaml FILE] [--memory]
-           [--numa CPU:MEM] [--only KIND,...] [--results FILE]
+           [--numa CPU:MEM] [--wrap CMD] [--only KIND,...] [--chains REGEX]
+           [--save FILE] [--results FILE]
 
 --target picks lcc as in tools/abi/compat/run.py (default v3). Results
 are printed as tables; --yaml writes them as data (see
@@ -892,7 +896,7 @@ def add_v6():
 #            binutils-ops.yaml, as v5op_*), to a consumer of its own
 #            class and, for FP-side results, to an integer operation;
 #            the combined integer operations through operand c (a
-#            representative set);
+#            representative set) and fxdivt* through each operand;
 #   v3div_*  divider sharing: the ALC5 operations not yet timed, alone,
 #            every g cycles, alternating with fdivd, and two a cycle
 #            apart;
@@ -989,6 +993,8 @@ def _v3_types(n, alopf, args):
         return ["x"], _V3_CVT[m[1]], 0
     if re.match(r"fxsqrt[iut][sdx]x$", n):
         return "square root step: v3op_fxsqrt*[sd]x chains of all three"
+    if re.match(r"fxdivt[sd][sdx]$", n):
+        return "narrow src1, 80-bit src2: v3op_fxdivt* chains through each"
     m = re.match(r"fxcmp[a-z]+?([sdx])([bf])$", n)
     if m:
         return ["x", _V3_FX[m[1]]], "p" if m[2] == "b" else "F", 0
@@ -1288,6 +1294,45 @@ def _v3_special_chains():
                                            (back, 12)], 24)
         out[f"v3op_fxsqrtt{t}x_to_{back.split(',')[0]}"] = (
             init, [(i, 24), (u, 24), (s, None), (back, 12)], 24)
+    # fxdivt<a><r> src1, src2 is src1 / src2 with src1 a single or double
+    # (a) and src2 80-bit (semantics.md, "80-bit operations"); binutils
+    # gives src1 the format d and src2 that of a, so objdump prints a
+    # single src1 as %drN and the 80-bit src2 of an s form as %rN (gas
+    # takes either spelling), and these chains spell them so.  Each chain
+    # divides 1.0 by 1.0: through src1 (no suffix; an 80-bit result
+    # converted back to a), through src2 (_opb; a narrow result converted
+    # to 80-bit), and to an integer operation (through src1).
+    for a, r in (("s", "s"), ("s", "x"), ("d", "d"), ("d", "x")):
+        n = f"fxdivt{a}{r}"
+        s2 = "%r" if a == "s" else "%dr"        # src2's register syntax
+        x2, c2 = s2 + "7", s2 + "2"             # 80-bit 1.0; the chain
+        one1 = "%dr6" if a == "s" else "%dr4"   # 1.0 of type a as src1
+        res = {"s": "%r8", "d": "%dr8", "x": "%dr8"}[r]
+        init = f"addd,0 0x0, {one1}, %dr2; fdtofx,1 %dr4, %dr7"
+        if r == "x":
+            back = "fxtofs,3 %dr8, %r2" if a == "s" else "fxtofd,3 %dr8, %dr2"
+            out[f"v3op_{n}_to_{back.split(',')[0]}"] = (
+                init, [(f"{n},5 %dr2, {x2}, %dr8", None), (back, 12)], 24)
+            out[f"v3op_{n}_opb"] = (
+                "fdtofx,0 %dr4, %dr2",
+                [(f"{n},5 {one1}, {c2}, %dr2", None)], 24)
+            out[f"v3op_{n}_to_andd"] = (init, [
+                (f"{n},5 %dr2, {x2}, %dr8", None),
+                ("andd,5 %dr8, 0x0, %dr8", 12),
+                (f"ord,5 %dr8, {one1}, %dr2", 12)], 26)
+        else:
+            to = "fstofx,3 %r8, %dr2" if a == "s" else "fdtofx,3 %dr8, %dr2"
+            own = res.replace("8", "2")
+            out[f"v3op_{n}"] = (init, [(f"{n},5 %dr2, {x2}, {own}", None)], 24)
+            out[f"v3op_{n}_opb_to_{to.split(',')[0]}"] = (
+                "fdtofx,0 %dr4, %dr2",
+                [(f"{n},5 {one1}, {c2}, {res}", None),
+                 (to, 12)], 24)
+            c = "adds" if a == "s" else "addd"
+            z = "%r5" if a == "s" else "%dr5"
+            out[f"v3op_{n}_to_{c}"] = (init, [
+                (f"{n},5 %dr2, {x2}, {own}", None),
+                (f"{c},5 {own}, {z}, {own}", 12)], 26)
     return out
 
 
@@ -2372,10 +2417,10 @@ def run(args, prog, sysroot):
         subprocess.run(ssh + [args.remote, f"mkdir -p {rdir}"], check=True)
         subprocess.run(["scp", "-q"] + ssh[1:] + [str(prog), f"{args.remote}:{rdir}/"],
                        check=True)
-        wrap = ""
+        wrap = f"{args.wrap} " if args.wrap else ""
         if args.numa:
             cpu, mem = args.numa.split(":")
-            wrap = f"numactl --cpunodebind={cpu} --preferred={mem} "
+            wrap += f"numactl --cpunodebind={cpu} --preferred={mem} "
         cmd = ssh + [args.remote, f"{wrap}{rdir}/{prog.name}"
                      + (f" {args.only}" if args.only else "")]
     else:
@@ -2555,6 +2600,15 @@ def main():
     ap.add_argument("--only", metavar="KIND,...",
                     help="run only these kinds (tp, lat, chase, sched, "
                     "chsched, br, ctl, hz, v3op); not with --yaml")
+    ap.add_argument("--chains", metavar="REGEX",
+                    help="with --only v3op: build only the v3op kernels "
+                    "whose names match REGEX (re.search)")
+    ap.add_argument("--save", type=Path, metavar="FILE",
+                    help="also write the run's output to FILE, as "
+                    "--results reads it")
+    ap.add_argument("--wrap", metavar="CMD",
+                    help="with --remote: a prefix for the command on the "
+                    "host (e.g. flock -w 3600 LOCKFILE)")
     ap.add_argument("--results", type=Path, metavar="FILE",
                     help="don't run: read the output of an earlier run "
                     "(e.g. one started with nohup on the host)")
@@ -2563,6 +2617,8 @@ def main():
     args = ap.parse_args()
     if args.only and args.yaml:
         ap.error("--yaml needs a full run")
+    if args.chains and (args.only != "v3op" or args.results):
+        ap.error("--chains needs --only v3op and a run")
 
     m = re.match(r"v(\d+)", args.target)
     if m and int(m.group(1)) >= 5:
@@ -2570,6 +2626,11 @@ def main():
     if m and int(m.group(1)) >= 6:
         add_v6()
     add_v3op(int(m.group(1)) if m else 3)
+    if args.chains:
+        for table in (SCHED, TP, TP2):
+            for name in [n for n in table if n in V3OP
+                         and not re.search(args.chains, n)]:
+                del table[name]
     if args.results:
         res = parse(args.results.read_text())
         report(res)
@@ -2581,7 +2642,10 @@ def main():
     prog = args.out / "bench"
     subprocess.run([str(lcc), "-O1", str(args.out / "main.c"),
                     str(args.out / "kernels.s"), "-o", str(prog)], check=True)
-    res = parse(run(args, prog, sysroot))
+    text = run(args, prog, sysroot)
+    if args.save:
+        args.save.write_text(text)
+    res = parse(text)
     report(res)
     if args.yaml:
         write_yaml(args.yaml, res, args)

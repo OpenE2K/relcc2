@@ -63,6 +63,8 @@ PROBES = {
     "native6.s": ("native.c", "2C3"),
     "loops.s": ("loops.c", "4C, 8C2, 2C3"),
     "loops-v5.s": ("loops.c", "8C2, 2C3"),
+    "lsrw.s": ("lsrw.c", "4C, 8C2, 2C3"),
+    "lsrw-v5.s": ("lsrw.c", "8C2, 2C3"),
     "apb.s": ("apb.c", "4C, 8C2, 2C3"),
     "apb-v5.s": ("apb.c", "8C2, 2C3"),
     "apb-loop.s": ("apb-loop.c", "4C, 8C2, 2C3"),

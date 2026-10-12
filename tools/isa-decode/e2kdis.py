@@ -5,7 +5,8 @@
 It decodes wide instructions using only spec/isa/bundle.md,
 spec/isa/binutils-ops.yaml and spec/isa/registers.yaml, and prints them in
 the same textual form as MCST objdump, so the two can be compared line by
-line (see compare_objdump.py).
+line (see compare_objdump.py). Where objdump has a known bug (bundle.md,
+"Known objdump bugs"), it prints what the spec says instead.
 """
 
 import sys
@@ -25,6 +26,9 @@ FMT_PREFIX = {"s": "", "d": "d", "q": "q", "p": "qp"}
 SPECIAL_DST = {13: "%tst", 14: "%tc", 15: "%tcd", 17: "%ctpr1", 18: "%ctpr2",
                19: "%ctpr3", 30: "%empty.lo", 31: "%empty.hi"}
 MAS_SHIFT = {0: 21, 2: 14, 3: 7, 5: 0}
+# wait fields above sal (CS1 bits 9-15), with the version that has them.
+WAIT_MODIFIERS = (("fl_c_mode", 15, 7), ("macp", 14, 7), ("mem_mod", 13, 6),
+                  ("int", 12, 6), ("mt", 11, 6), ("lal", 10, 6), ("las", 9, 6))
 
 SHORT_FORMATS = {"ALOPF1", "MERGE", "ALOPF2", "ALOPF3", "ALOPF7", "ALOPF8"}
 
@@ -526,18 +530,26 @@ class Printer:
             else:
                 out.append(f"setei 0x{cs1 & 0xff:x}")
         elif opc == 3:
-            s = "wait "
+            # Fields from the highest bit down, as objdump orders them.
+            # objdump never prints bits 9-15, nor sal/sas without
+            # ld_c/st_c (bundle.md, "Known objdump bugs"). So the v6/v7
+            # modifiers are printed when set, and sal/sas when they or
+            # their ld_c/st_c are: a wait objdump shows in full prints the
+            # same here.
+            fields = []
+            for name, bit, since in WAIT_MODIFIERS:
+                if iset >= since and cs1 & (1 << bit):
+                    fields.append((name, bit))
             if iset >= 5:
-                if cs1 & 8:
-                    s += f"sal = {(cs1 >> 8) & 1}, "
-                if cs1 & 4:
-                    s += f"sas = {(cs1 >> 7) & 1}, "
+                if cs1 & 0x108:
+                    fields.append(("sal", 8))
+                if cs1 & 0x84:
+                    fields.append(("sas", 7))
             if iset >= 2:
-                s += f"trap = {(cs1 >> 6) & 1}, "
-            s += ", ".join(f"{n} = {(cs1 >> i) & 1}" for n, i in
-                           (("ma_c", 5), ("fl_c", 4), ("ld_c", 3), ("st_c", 2),
-                            ("all_e", 1), ("all_c", 0)))
-            out.append(s)
+                fields.append(("trap", 6))
+            fields += [("ma_c", 5), ("fl_c", 4), ("ld_c", 3), ("st_c", 2),
+                       ("all_e", 1), ("all_c", 0)]
+            out.append("wait " + ", ".join(f"{n} = {(cs1 >> i) & 1}" for n, i in fields))
         elif opc == 5:
             ctop, wbs = (b.ss >> 10) & 3 if b.ss is not None else 0, cs1 & 0x7f
             if ctop:

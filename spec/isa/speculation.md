@@ -607,6 +607,29 @@ Compiling small patterns at `-O3` (v3.4c, v6.2c3) separates them:
   still done, with corrupted data (above): a fault the program would
   have taken becomes a silent bad store.
 
+**Tag clearing.** lcc's `puttag*` always clears (tag operand 0: all
+2,282 `puttagd` and 123 `puttags` in its v3 system libraries) [lcc]. In
+libc and ld.so they come from MCST glibc's string and memory functions
+(`sysdeps/e2k/*.c`, 117 calls of
+`__builtin_e2k_ld_64s_cleartag`/`ld_128_cleartag`,
+[lcc-builtins.md](../abi/lcc-builtins.md)), which read whole aligned
+words or 32-byte blocks around a string, also before its start or past
+its end (`sysdeps/e2k/strncmp.c:94-95`: "so as not to run over the
+left/right boundary", translated) [source]. `ldd,sm` cannot fault there,
+and `puttagd …, 0x0` turns a word from an invalid address
+(`4afafafa4afafafa`, tag 5) into an ordinary number, so the byte tests
+(`pcmpeqb`, `pmovmskb`) and the branches on them see a number and cannot
+trap [hw: `tools/isa-probes/tagx.c` `ld_use` traps, `ld_put_use`
+doesn't; 4C, 8C2, 2C3]; the code masks off the bytes outside the string.
+In libgfortran (1,470, 855 in `matmul_*`) and libstdc++ (506, 458 in the
+EDG demangler `decode.c`) lcc applies `puttagd x, 0x0, y` to the result
+of a speculative operation (`addd,sm`, `ldd,sm`, `muld,sm`,
+`add_addd,sm`: 1,225 and 473 of them by the last writer in the code), in
+place in about 30%, the `puttagd` itself `,sm` in about half and rarely
+predicated (libgfortran 131, libstdc++ none) [lcc]. Why is not known
+(inferred: to hand a later non-speculative use an ordinary number where
+lcc knows a diagnostic cannot matter).
+
 **Consequence for FP exceptions** (hw, 4C, 8C2 and 2C3 alike;
 `tools/isa-probes/specfp.c` with `specfp-kern.c`): a
 program that clears the sticky flags (`feclearexcept (FE_ALL_EXCEPT)`,

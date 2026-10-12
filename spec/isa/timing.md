@@ -587,6 +587,17 @@ operation every cycle, at full width:
 | 2 `add_addd` (ALC1, 4); 2 `add_addd` or `shl_addd` + 4 `addd`: **8 simple integer operations** (4C and 8C2) | 1 |
 | 4 `ldd` or `ldw`; 4 `ldd` + 2 `addd` | 1 |
 | 1 `std` (ALC2 or 5); a store with loads in any allowed channels, far apart | 1 |
+| 4 of any pipelined 64-bit packed FP operation (`pfaddd`, `pfadds`, `pfsubd`, `pfmuld`, `pfmuls`, `pfmaxd`, `pfmins`, `pfcmpeqd`, `pfcmplts`, `pfcmpuodd`, `pfhadds`, `pfaddsubs`, `pfmul_addd`, `pfmul_adds`, `pfadd_hadds`, `pfdtoifd`, `pfstoifs` and the conversions `pfstois`, `pfstofd`, `pistofs`, `pfdtois`, `pfdtofs`); 1 or 2 `pfaddd`; 4 `pfaddd` + 2 `addd`; 2 `pfmuls` + 2 `fmuld`; 4 `pfmul_addd` + 2 `ldd` (4C, 8C2, 2C3: `pf_*`) | 1 |
+
+The 64-bit packed FP operations (two singles or one double in a 64-bit
+register) issue like scalar FP ones: one per allowed channel per cycle,
+fully pipelined, with nothing in the other channels slowing them [hw:
+`bench.py` `pf_*` and `v5_pf*`, 4C, 8C2, 2C3, 2026-10-12; the
+`timing-*.yaml` files gain these kernels at their next full run]. Their
+channels are binutils' (gas rejects the others: "`pfmuld' cannot be
+encoded in ALC2"): ALC0, 1, 3 and 4 on v3, so 4 `pfmul_adds`, 16
+single-precision operations, is v3's peak a cycle; v4+ add ALC2/5 for
+some ("Elbrus-8C2 (v5)").
 
 The exceptions are the divider and the memory banks.
 
@@ -1078,7 +1089,16 @@ What v5 adds or changes:
   `fmul_add*` (and the single forms) in ALC2 and ALC5, so 6 `faddd`,
   `fmuld` or `fmul_addd` issue in one instruction (v3: 4). In ALC2/5
   they have the usual latencies (4; `fmul_addd` 8) and crossing costs
-  (ALC5 → ALC0 FP 6, ALC5 FP → integer 6).
+  (ALC5 → ALC0 FP 6, ALC5 FP → integer 6). The 64-bit packed adds
+  (`pfaddd`, `pfadds`, `pfsubd`, `pfsubs`, `pfhadds`, `pfhsubs`,
+  `pfaddsubs`), `pfmuls` and the combined `pfmul_addd`, `pfmul_adds`
+  and `pfadd_hadds` also gained ALC2/5 in v4 (binutils): six of one
+  issue a cycle (`v5_pf*_6` for `pfaddd`, `pfadds`, `pfsubd`, `pfmuls`,
+  `pfhadds`, `pfaddsubs`, `pfmul_addd`, `pfmul_adds` and
+  `pfadd_hadds`; 8C2, 2C3). `pfmuld`, `pfmax*`/`pfmin*`, `pfcmp*` and
+  the packed conversions stay in ALC0, 1, 3 and 4 on every version, so
+  4 `pfmuld` + 2 `pfaddd` is the widest packed-double instruction (1
+  cycle).
 - **128-bit packed operations** (`qp*`, v5) work on whole registers
   (`%qprN` is register N at its full 128 bits): `qpfaddd`, `qpfmuld` 4
   cycles, `qpfmul_addd` 8, `qpaddd` and `qpand` 1; 6 `qpfaddd` or
@@ -1308,13 +1328,11 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
 ## Not measured yet
 
 - v4, v7; v6 on the Elbrus-16C (the 2C3 is the v6 machine measured).
-- Throughput of the pipelined 64-bit packed FP operations (`pfadd*`,
-  `pfmul*`, `pfcmp*` …; the packed divides and square roots are in
-  "Every v3 operation", "The divider") and of byte and halfword loads
-  and stores; whether the store bank rule involves physical address
-  bits. (Measured on this page: 128-bit operations, "Elbrus-8C2 (v5)"
-  (`v5tp_*`); array prefetch areas and `mova`, "Array prefetch"; word
-  loads and AAU stores, "Throughput".)
+- Throughput of byte and halfword loads and stores; whether the store
+  bank rule involves physical address bits. (Measured on this page:
+  128-bit operations, "Elbrus-8C2 (v5)" (`v5tp_*`); 64-bit packed FP
+  operations, word loads and AAU stores, "Throughput"; array prefetch
+  areas and `mova`, "Array prefetch".)
 - Why a stream of loads that miss leaves only part of its lines in L1
   (Memory, "Not every load that misses fills L1"), and why a chase
   in the other cluster finds fewer of a chase's lines on the 4C and

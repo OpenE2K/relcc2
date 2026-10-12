@@ -475,7 +475,8 @@ CTL_KINDS = ["disp", "movtd", "cmp_ct", "cmp_alu", "cmp_andp", "andp_alu",
 # overwritten while in flight. Inputs are constants (INIT, %dr1 = cell),
 # so there are no dependences.
 def _ch(fmt, chans):
-    return [fmt.format(c=c, o=8 * c, o2=16 * c, d="{d}") for c in chans]
+    return [fmt.format(c=c, o=8 * c, o2=16 * c, d="{d}", s="{s}")
+            for c in chans]
 
 
 TP = {
@@ -597,6 +598,43 @@ for _b in (0x0, 0x100):
                  f"ldd,0 %dr1, {_b + _l:#x}, {{d}}"], "grid")
 TP["stld_0"] = (["std,2 %dr1, 0x100, %dr3", "ldd,0 %dr1, 0x100, {d}"],
                 "std + ldd same address")
+# The pipelined 64-bit packed FP operations (two singles or one double
+# in a 64-bit register), four per instruction in ALC0, 1, 3 and 4 (the
+# only channels binutils gives them before v4).  %dr4 = 1.0 reads as
+# the singles (0.0, 1.875), so no input is denormal; the rounding
+# operand of pfdtoifd and pfstoifs is %dr5 = 0 (to nearest).
+_PF4 = [0, 1, 3, 4]
+TP_PF = {
+    f"pf_{op}_4": (_ch(f"{op},{{c}} {args}, {{d}}", _PF4), f"4 {op}")
+    for op, args in (
+        ("pfaddd", "%dr4, %dr5"), ("pfadds", "%dr4, %dr4"),
+        ("pfsubd", "%dr4, %dr5"), ("pfmuld", "%dr4, %dr4"),
+        ("pfmuls", "%dr4, %dr4"), ("pfmaxd", "%dr4, %dr5"),
+        ("pfmins", "%dr4, %dr4"), ("pfcmpeqd", "%dr4, %dr5"),
+        ("pfcmplts", "%dr4, %dr4"), ("pfcmpuodd", "%dr4, %dr5"),
+        ("pfhadds", "%dr4, %dr4"), ("pfaddsubs", "%dr4, %dr4"),
+        ("pfmul_addd", "%dr4, %dr4, %dr5"), ("pfmul_adds", "%dr4, %dr4, %dr4"),
+        ("pfadd_hadds", "%dr4, %dr4, %dr4"),
+        ("pfdtoifd", "%dr5, %dr4"), ("pfstoifs", "%dr5, %dr4"),
+        ("pfstois", "%dr4"), ("pfstofd", "%r6"), ("pistofs", "%dr3"))}
+TP_PF.update({
+    # Results of a single format go to %rN ({s}).
+    "pf_pfdtois_4": (_ch("pfdtois,{c} %dr4, {s}", _PF4), "4 pfdtois"),
+    "pf_pfdtofs_4": (_ch("pfdtofs,{c} %dr4, {s}", _PF4), "4 pfdtofs"),
+    "pf_pfaddd_1": (_ch("pfaddd,{c} %dr4, %dr5, {d}", [0]), "1 pfaddd"),
+    "pf_pfaddd_2": (_ch("pfaddd,{c} %dr4, %dr5, {d}", [0, 3]),
+                    "2 pfaddd (ALC0, 3)"),
+    "pf_pfaddd4_addd2": (_ch("pfaddd,{c} %dr4, %dr5, {d}", _PF4)
+                         + _ch("addd,{c} %dr3, %dr5, {d}", [2, 5]),
+                         "4 pfaddd + 2 addd"),
+    "pf_pfmuls2_fmuld2": (_ch("pfmuls,{c} %dr4, %dr4, {d}", [0, 3])
+                          + _ch("fmuld,{c} %dr4, %dr4, {d}", [1, 4]),
+                          "2 pfmuls (ALC0, 3) + 2 fmuld (ALC1, 4)"),
+    "pf_pfmul_addd4_ldd2": (_ch("pfmul_addd,{c} %dr4, %dr4, %dr5, {d}", _PF4)
+                            + _ch("ldd,{c} %dr1, {o:#x}, {d}", [2, 5]),
+                            "4 pfmul_addd + 2 ldd (ALC2, 5)"),
+})
+TP.update(TP_PF)
 TP_DEST = range(8, 64)
 
 # v5 and later (added when --target is v5+): FP operations in ALC2 and
@@ -709,6 +747,21 @@ TP_V5 = {
     "v5_stqp_2": (["stqp,2 %dr1, 0x100, %qpr7", "stqp,5 %dr1, 0x140, %qpr7"],
                   "2 stqp, 64 bytes apart"),
 }
+# v4+ also puts the packed FP adds, single multiplies and their combined
+# forms in ALC2 and ALC5 (binutils; pfmuld, pfmax*, pfmin*, pfcmp* and
+# the conversions stay in ALC0, 1, 3, 4): six per instruction.
+TP_V5.update({
+    f"v5_{op}_6": (_ch(f"{op},{{c}} {args}, {{d}}", range(6)), f"6 {op}")
+    for op, args in (
+        ("pfaddd", "%dr4, %dr5"), ("pfadds", "%dr4, %dr4"),
+        ("pfsubd", "%dr4, %dr5"), ("pfmuls", "%dr4, %dr4"),
+        ("pfhadds", "%dr4, %dr4"), ("pfaddsubs", "%dr4, %dr4"),
+        ("pfmul_addd", "%dr4, %dr4, %dr5"), ("pfmul_adds", "%dr4, %dr4, %dr4"),
+        ("pfadd_hadds", "%dr4, %dr4, %dr4"))})
+TP_V5["v5_pfmuld4_pfaddd2"] = (
+    _ch("pfmuld,{c} %dr4, %dr4, {d}", [0, 1, 3, 4])
+    + _ch("pfaddd,{c} %dr4, %dr5, {d}", [2, 5]),
+    "4 pfmuld + 2 pfaddd (ALC2, 5)")
 TP2_V5 = {
     # fdivd, then faddd in ALC5 G cycles later, then 8 quiet cycles.
     **{f"v5_fdivd_faddd5_g{g}": ([f"fdivd,5 %dr4, %dr4, {{d}}"]

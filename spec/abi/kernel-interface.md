@@ -55,11 +55,11 @@ return what `getpid ()` and `write ()` do, and −9 for a bad descriptor:
 
 | Item | Rule | Source |
 |---|---|---|
-| Window | The caller hands over 4 pairs (`%b[0]`–`%b[7]`), as glibc, the uapi macros and lcc all do; the entry starts with `vfrpsz rpsz=4; setwd wsz=4`. glibc's assembly wrappers use `setwd wsz = 9`, `wbs = 5` | kernel `kernel/trap_table.S:536,546`, `include/asm/trap_table.S.h:49`; glibc `sysdep.h:105-106` |
+| Window | The caller hands over 4 pairs (`%b[0]`–`%b[7]`), as glibc, the uapi macros and lcc all do; the entry starts with `vfrpsz rpsz=4; setwd wsz=4`. glibc's assembly wrappers use `setwd wsz = 9`, `wbs = 5`. **Handing over more than 4 pairs kills the process**: `getppid` with 6 or 8 pairs (`wsz − wbs`), and fast call 2 with 6, died with SIGKILL on all three machines; 2 and 4 pairs work [hw: `ctxsig.c` section 3]. The cause is presumably the entries' `vfrpsz rpsz = 4`: entry 6's `setwd wsz = 0x8` has room for 6 pairs, and 6 still die there (inferred). A compiler that emits system calls inline must hand over exactly the 4 pairs the convention gives, or fewer | kernel `kernel/trap_table.S:536,546`, `include/asm/trap_table.S.h:49`; glibc `sysdep.h:105-106` |
 | Number | `%b[0]`, low 32 bits, zero-extended; numbers ≥ 446 (`NR_syscalls`) go to `sys_ni_syscall` (−ENOSYS) | kernel `kernel/trap_table.S:405-418`; uapi `unistd.h:466` |
 | Arguments | `%db[1]`–`%db[6]`, tags cleared by the kernel. The uapi's 7-argument macro also writes `%b[7]`, but entry 3 uses `%dr7` as scratch | kernel `kernel/trap_table.S:405-460`; uapi `e2k_api.h:278-309` |
 | Result, error | `%db[0]`; −errno. glibc's C wrappers test `(unsigned long) r > -4096UL`, its assembly `PSEUDO` any negative value (`cmpldb %db[0], 0`) | uapi `e2k_api.h:129`; glibc `sysdeps/unix/sysv/linux/sysdep.h:26-28`, `sysdep.h:117-122` |
-| Clobbers | uapi: `"ctpr1"`–`"ctpr3"`, `"b[0]"`–`"b[7]"`; glibc: `"call"`, `"memory"`. Globals and predicates are in neither list; the window below `wbs` and the predicates are kept by the call mechanism, and the `call` empties `%ctpr1`–`%ctpr3` like any call (inferred) | uapi `e2k_api.h:108-111`; glibc `sysdep.h:172-173` |
+| Clobbers | uapi: `"ctpr1"`–`"ctpr3"`, `"b[0]"`–`"b[7]"`; glibc: `"call"`, `"memory"`. Neither list names a global, but a system call through entry 3 returns with **`%g16`–`%g31` set to 0 with tag 5**: the kernel keeps its own values in `%g16`–`%g25`, and its common exit path empties all sixteen. `%g0`–`%g11`, `%g14` and `%g15` are kept [hw: `ctxsig.c` section 3, `getppid`, `tgkill` and the clock fast calls that continue in entry 3; `%g12`, `%g13` not tried]. (`sigreturn` is the exception: it returns to code interrupted outside a system call with the frame's values, "Signals".) Predicates and the window below `wbs` are kept by the call mechanism, and the `call` empties `%ctpr1`–`%ctpr3` like any call (inferred). glibc's `"call"` clobber makes lcc treat the asm as a call, across which `%g16`–`%g31` are not preserved anyway ([registers.md](registers.md); inferred). Code that uses the uapi macros, or its own asm, must not keep a value in `%g16`–`%g31` across a system call | uapi `e2k_api.h:108-111`; glibc `sysdep.h:172-173`; kernel `kernel/ttable-inline.h:756-783`, `include/asm/gregs.h:146-147`, `include/asm/e2k_api.h:909-922` |
 
 **`%#`** in `call %%ctpr1, wbs = %#` (uapi, glibc) is lcc's operand
 modifier for the `wbs` that leaves `%b[0]`–`%b[7]` above it: `wsz − 4`
@@ -152,6 +152,18 @@ The calling sequence is the one above with `sdisp %ctpr1, 0x6` (glibc
 | 4 | `getcontext` | `ucp`, 8 | no ordinary counterpart (below) |
 | 5 | `set_return` | `ip`, 0 | rewrites `cr0_hi` of the nearest user chain frame; checks only that `ip` is a user address (`fast_syscalls.h:415-460`). Not advertised; glibc doesn't use it |
 | 6, 7 | — | | −ENOSYS |
+
+A fast call keeps `%g0`–`%g11`, `%g14`, `%g15` and `%g16`–`%g25`
+(`%g12`, `%g13` not tried), but **may change `%g26`–`%g31`**: the kernel
+is compiled to use those six as scratch registers (`-fglobal-regs`;
+`SCRATCH_GREGS_START` 26, kernel `include/asm/glob_regs.h:22-24, 57-68`).
+The calls tested changed only `%g26`–`%g28`: fast calls 2 and 3 left
+kernel values in all three on every machine, and the clock calls 0 and 1
+changed `%g26` on the 2C3. On the 4C and 8C2 the clock calls emptied all
+of `%g16`–`%g31`, because their `lt` clock source makes them continue as
+ordinary system calls through entry 3 (above; kernel
+`fast_syscalls/fast_clock_gettime.c:15-18`) [hw: `ctxsig.c` section 3].
+So treat `%g16`–`%g31` as clobbered by every system call, fast or not.
 
 glibc uses a fast call only when its bit is set in `AT_FAST_SYSCALLS`
 (glibc `sysdep-vdso.h:26-40`). **There is no vDSO**: `AT_SYSINFO_EHDR`
@@ -363,11 +375,22 @@ grown if needed.
 The handler is entered as if called from `[trampolines]+0x100`, with
 `%dr0` = signal, `%dr1` = `&info` with `SA_SIGINFO`, else
 `&uc.uc_mcontext`, and `%dr2` = `&uc` or 0 [hw: `sysabi.c` section 3],
-and its stack top at the frame (kernel `kernel/signal.c:932-1040`).
-`%g16`–`%g31` hold empty-tagged values (tag 5) and `%bgr` is 0xff
-(`signal.c:1271-1277`, `include/asm/tags.h:48`) [source]. Its window and
-chain frames go on the **thread's own hardware stacks**, also with
-`SA_ONSTACK` (`signal.c:1064-1116`).
+and its stack top at the frame (kernel `kernel/signal.c:932-1040`). Its
+window and chain frames go on the **thread's own hardware stacks**, also
+with `SA_ONSTACK` (`signal.c:1064-1116`).
+
+`%g16`–`%g31` read 0 with tag 5, the kernel's "empty" value [hw: read
+with `gettagd` in an assembly handler before any compiled code, for
+`tgkill` and for a timer signal, `ctxsig.c` section 3], and `%bgr` is
+0xff (`signal.c:1271-1277`, `include/asm/tags.h:48`) [source; the
+frame's copy of the interrupted code's `%bgr` also read 0xff]. Reading
+the empty registers does not trap. A non-speculative `addd %dg16, 0`
+gives 0 with tag 0, and a non-speculative `std` stores 0, which a
+fill-MAS load reads back with tag 5. A diagnostic value, such as the
+result of a failed speculative load, does trap a non-speculative `addd`
+(`ILL_ILLOPN`), in a handler or not. An empty half has bit 30 clear and
+a diagnostic one has it set ([speculation.md](../isa/speculation.md),
+"Diagnostic values").
 
 `ucontext_t` (glibc `sys/ucontext.h:268-278`, uapi `sigcontext.h`,
 `ucontext.h`; offsets printed by `sysabi.c` section 10). The `mcontext_t`,
@@ -418,7 +441,22 @@ IP, the trapped instruction's pending memory operations are dropped
 unless `uc_flags` has `UC_HANDLE_SIGRETURN_CELLAR` (1, uapi
 `ucontext.h:14`) ([x86-support.md](../isa/x86-support.md)). Window
 registers, predicates, `cr1`, `usd`, CTPRs, loop, prefetch and FP fields
-in the frame are ignored [source].
+in the frame are ignored [source]. Checked on hardware with an
+`SA_SIGINFO` handler that edits its frame (`ctxsig.c` section 2; the 4C,
+8C2 and 2C3 agree; `cr0_hi` not tried):
+
+| Edited in the frame | After the handler returns |
+|---|---|
+| `uc_sigmask` (+ USR2, − HUP) | applied, after `tgkill` and after a timer signal |
+| `uc_extra.g[0..2]` (`%g16`–`%g18`), `gtag[3] = 5` (`%g19`) | applied, tags included, when a timer signal interrupted user code (`%g19` came back with its value and tag 5). When the signal arrived at the end of a system call (`tgkill`, as `raise` sends it), `%g16`–`%g31` came back empty (0, tag 5) whatever the frame held, because the system call empties them ("System calls") |
+| `uc_extra.fpcr`, `fpsr`, `pfpfr` (0 at entry) | ignored: the registers stay as the handler left them |
+| `uc_mcontext.usd_lo` (−256) | ignored: the stack pointer is unchanged |
+| `uc_mcontext.cr1_hi` (`br.rbs` 6 → 7) | ignored: `%b[0]` is the same register |
+| nothing; the handler writes `%g16`–`%g19` before returning | after a timer signal the interrupted code gets its own values back; after `tgkill` they are empty (0, tag 5), as above |
+
+The frame's `g[]` holds the values `%g16`–`%g31` had when the code was
+interrupted. After `tgkill` these are the values from before the system
+call, which the program never sees again.
 
 **The FP control registers are not saved or restored around a handler**
 [hw]: a handler starts with the interrupted code's rounding mode and
@@ -543,6 +581,28 @@ only with addresses in the same file and with the same permissions
 (kernel `kernel/backtrace.c:20-100, 160-260`). MCST's unwinder lands in a
 catching frame with `set_backtrace`
 ([stack-and-unwinding.md](stack-and-unwinding.md), "Signal frames").
+
+From a signal handler [hw, `ctxsig.c` section 4; the 4C, 8C2 and 2C3
+agree], `E2K_READ_CHAIN_STACK_EX` shows, from the top: the handler and
+its callees; one frame whose return address is `[trampolines]+0x100`,
+with `cr1.pm` set in the copy and `wbs` 0, `br` 0; then **the
+interrupted function's frame, whose return address is the interrupted
+instruction itself**. For a timer signal that is an instruction inside
+the loop it interrupted. For `raise` it is the instruction after the
+`call` of the `tgkill` system call in libc. Then come the callers as
+usual. The bottom frame (return address 0) also has `pm` set. In a
+context made by `makecontext_e2k`, `makecontext_helper`'s frame is
+followed by one returning into `[trampolines]+0x400` (`pm` set, `wbs`
+4) and two frames with return address 0.
+
+`get_backtrace (buf, n, 0, 0)` starts with the return address of the
+function that calls it, leaves out the `[trampolines]+0x100` frame and
+continues with the interrupted frame. `skip` 1 drops the first entry.
+Inside a context it ends with a 0 entry (the frame below `+0x400`), so a
+reader must stop at 0. glibc's `backtrace` reads the chain stack itself
+(glibc `backtrace.c`). It starts one entry earlier, at its caller's own
+call site, and keeps the trampoline frames (`[trampolines]+0x100`,
+`+0x400`).
 
 ### The data stack: growing the main thread's stack costs a walk of the chain stack
 
@@ -688,9 +748,9 @@ drivers expect anyway. A static link with an ifunc crashes ld
 ## Not checked yet
 
 - Disabled entries and entry 4; fast call 5.
-- What `%g16`–`%g31` read as in a handler before it writes them; what
-  `sigreturn` takes from a modified frame.
-- `get_backtrace` across a handler.
+- `sigreturn` with an edited `uc_mcontext.cr0_hi` (resuming elsewhere)
+  and `uc_extra.bgr`; all of `uc_extra.g[]` (only `%g16`–`%g19` were
+  edited); `%bgr` as a handler finds it (source only).
 - Signals delivered while a made context runs; switching to a context
   suspended in another thread; `freecontext_e2k` of a context running in
   another thread (the kernel checks only the calling thread's context,

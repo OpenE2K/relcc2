@@ -220,7 +220,7 @@ about 300 cycles each (inferred).
 
 | Case | Result |
 |---|---|
-| `_Unwind_Backtrace` and glibc's `backtrace` in a handler of a `raise`d signal | both walk through the signal frame to `main` and `_start`: the handler, `[trampolines]+0x100`, a libc frame, `raise`, the caller, …; `_Unwind_Backtrace` ends with `_URC_END_OF_STACK` |
+| `_Unwind_Backtrace` and glibc's `backtrace` in a handler of a `raise`d signal | both walk through the signal frame to `main` and `_start`: the handler, `[trampolines]+0x100`, a libc frame, `raise`, the caller, …; `_Unwind_Backtrace` ends with `_URC_END_OF_STACK`; the kernel's `get_backtrace` leaves the `[trampolines]+0x100` frame out ([kernel-interface.md](kernel-interface.md), "Hardware stacks") |
 | `throw` in a handler of a `raise`d signal, caught in the code that called `raise` | **the process dies with SIGSEGV** |
 | `throw` caught inside the handler itself | works, and the program goes on |
 | `throw` in a SIGSEGV handler for a load fault, in C++ code or in an assembly leaf, with or without `-fnon-call-exceptions` | `terminate` (no handler found; SIGABRT) |

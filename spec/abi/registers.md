@@ -140,7 +140,7 @@ measured 0.54% of xz -6's cycles in `BUB_B_RF_SPILLFILL` on the 8C2
 | `%g13` | Thread pointer (TLS) | guide 9.3.1.4 |
 | `%g12` | Reserved by the guide; used as the **static chain** by MCST's libffi (its closure trampolines load the closure address into `%g12` and jump; Go closures receive it there; its testsuite defines `STATIC_CHAIN_REG "%g12"`). In protected mode it is the thread pointer | guide 9.3.1.4, libffi |
 | `%g0`–`%g11`, `%g14`, `%g15` | Scratch across calls, but **not for temporaries**: a signal handler's writes to them reach the interrupted code (below) | kernel, hw |
-| `%g16`–`%g31` | Scratch: not preserved across calls; saved and restored around signal handlers, so usable for temporaries (lcc's code uses these and never `%g0`–`%g15`) | kernel, hw, lcc |
+| `%g16`–`%g31` | Scratch: not preserved across calls, and **emptied (0, tag 5) by system calls** through entry 3; fast calls may change `%g26`–`%g31` ([kernel-interface.md](kernel-interface.md), "System calls"). Saved and restored around signal handlers that interrupt code outside a system call, so usable for temporaries between calls (lcc's code uses these and never `%g0`–`%g15`) | kernel, hw, lcc |
 | Predicates `%pred0`–`%pred31` | Saved and restored automatically: the caller's come back whatever the callee writes. The callee starts with a copy of the caller's values (hw: `tools/isa-probes/preds.c` `call_*`; the guide says only "a new predicate file"), so it must write a predicate before reading it ([predicates.md](../isa/predicates.md)) | guide 9.3.2, 9.5.3, hw |
 | `%ctpr1`–`%ctpr3` | Scratch: not preserved across calls. Returns go through `%ctpr3` | guide 9.3.3 |
 | `%lsr`, `%ilcr` (loop status, counter) | Scratch | guide 9.3.4 |
@@ -160,7 +160,11 @@ the proof-of-concept back end, which kept temporaries in `%g0`–`%g11`,
 crashed under signals until it moved them). So compiler temporaries
 belong in `%g16`–`%g31`, as lcc does, and `%g0`–`%g15` are for values
 meant to be global (as `%g12`, `%g13`; the kernel also decodes a
-`getsp` amount only from `%g16` on, elf.md).
+`getsp` amount only from `%g16` on, elf.md). A signal delivered at the
+end of a system call returns to code whose `%g16`–`%g31` the system call
+has already emptied: `sigreturn` puts the frame's values back only for
+code interrupted outside a system call [hw: `tools/abi/probes/ctxsig.c`
+section 2; [kernel-interface.md](kernel-interface.md), "Signals"].
 
 ## Floating-point control and status (kernel, glibc)
 

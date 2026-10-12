@@ -783,20 +783,73 @@ With `CLONE_VM` the new thread gets its own hardware stacks (kernel
 [hw, above]. A thread's data stack is mapped whole: its `USD` covers
 the whole mapping above glibc's guard page from the start, so a
 thread's recursion never traps [hw, above; `stackregs.c` section 4: the
-bottom is the start of the mapping]. On overflow the kernel would grow
-`USD` as for a context ("User contexts"): by at least 16 KiB, but never
-beyond a total of `RLIMIT_STACK` (`mm/fault.c:1075`). A thread of the
-default size is about as large as `RLIMIT_STACK`, so its one step is
-what is left, 5,888 bytes for `stackregs.c`'s thread, and a second
-overflow fails (computed from the kernel code and the probe's
-addresses). Either step reaches past glibc's one-page guard
-(`OpenE2K/glibc/nptl/pthread_attr_init.c:46`), so the new bottom lands
-below it: a mapping directly below the guard is accepted and written
-over unnoticed, while unmapped memory there makes the `getsp` fail with
-SIGSEGV (inferred from the context test in "User contexts" and the
-kernel code; not run in a thread). `%sbr` in a thread is its top
+bottom is the start of the mapping]. `%sbr` in a thread is its top
 rounded down to a page: [stack-and-unwinding.md](stack-and-unwinding.md),
 "Stack registers".
+
+**Overflow** [hw: `abileft.c` part 3; the 4C, 8C2 and 2C3 agree apart
+from addresses, except that the 4C reports `SEGV_ACCERR` where the
+others report `SEGV_BNDERR`]. The kernel grows a thread's `USD` as a
+context's ("User contexts"): by the `getsp` amount, at least 16 KiB,
+but never beyond a total of `RLIMIT_STACK` (`mm/fault.c:1075`). A
+thread of the default size (16 MiB, as `RLIMIT_STACK`) has 5,888 bytes
+of that left, and that was its step; a second overflow would fail
+(computed). The kernel accepts the `getsp` whenever its new bottom lies
+in a mapping, whatever that holds, and no hole lies between mappings
+that end below the stack's top (`mm/fault.c:1105-1127`; "User
+contexts"). The memory below a glibc stack is always mapped: the kernel
+hands out `mmap` space bottom-up, first fit from `mmap_base` (kernel
+`mm/mmap.c:101`), so glibc's stack mapping, guard page first, starts
+where an earlier mapping ends (inferred from the code). In every run
+the page below the guard belonged to an anonymous mapping of 40 to
+52 KiB (in some runs it began with a `link_map`, so ld.so had allocated
+it).
+
+So only glibc's one-page `PROT_NONE` guard
+(`OpenE2K/glibc/nptl/pthread_attr_init.c:46`) catches an overflow, and
+only when the frame's first store falls in it. A frame larger than the
+guard that is filled from its low end (an array, `alloca`, a VLA)
+writes the mapping below first. A 96 KiB frame changed about 36 KiB of
+that mapping, just above ld.so's data segment, before its stores
+reached the guard; the SIGSEGV handler ran, and its first lazily bound
+call (`_exit`) died with SIGILL `ILL_ILLOPN` in `_dl_fixup` (gdb on the
+4C; SIGILL on all three; with `LD_BIND_NOW=1` the run ended normally).
+A guard larger than the largest frame (`pthread_attr_setguardsize`)
+catches such a frame. A compiler can make a one-page guard enough by
+touching each page of a large frame from the top down right after its
+`getsp`, as GCC's `-fstack-clash-protection` does on other targets
+(inferred). lcc 1.29.16 and 1.31.05 accept `-fstack-clash-protection`
+and `-fstack-check` and emit the same code as without them [lcc].
+
+With `pthread_attr_setstack`, `USD` covers the given stack and
+everything below it down to the start of its mapping (the `clone` row
+above), so give such a stack a mapping of its own or a `PROT_NONE` page
+below it. A `getsp` fails, with SIGSEGV at the old bottom − 1
+(`kernel/traps.c:1132-1141`), only when its new bottom is unmapped or a
+hole lies between mappings that end below the stack's top (kernel log:
+`jumped over a hole`). In the main thread `[stack]` grows with `USD` up
+to `RLIMIT_STACK`, and the failing `getsp` gives the same SIGSEGV.
+`[stack]` ends at the stack's top, so the hole check never sees the gap
+below it: a single `getsp` that reaches past the gap into another
+mapping is accepted. A SIGSEGV handler on an alternate stack ran in
+every case:
+
+| Stack | Below it | Frames | Result |
+|---|---|---|---|
+| glibc, 64 KiB | one-page guard | 4 KiB | the `getsp` is accepted (the bottom 16 KiB down, in the mapping below the guard); then `SEGV_ACCERR` in the guard; nothing below it changed |
+| glibc, 64 KiB | one-page guard | one of 96 KiB, filled upward | the `getsp` is accepted (the bottom 96 KiB down: in ld.so's data on the 4C, in its text on the 8C2 and 2C3); about 36 KiB of the mapping below the guard changed, then `SEGV_ACCERR` at the guard's first byte; then SIGILL (above) |
+| glibc, 64 KiB | 128 KiB guard | one of 96 KiB | `SEGV_ACCERR` in the guard; nothing below it changed |
+| glibc, default (16 MiB) | one-page guard | 4 KiB | after 4,062 levels a step of 5,888 bytes (into the mapping below the guard), then `SEGV_ACCERR` in the guard |
+| `pthread_attr_setstack`, 64 KiB in a 1 MiB mapping | the rest of the mapping | 4 KiB, 64 levels | no signal and no trap: `USD` covered the whole mapping from the start; 204,448 bytes below the stack changed |
+| `pthread_attr_setstack`, 64 KiB | a `PROT_NONE` page, then mapped | 4 KiB | `SEGV_ACCERR` in the guard; nothing below it changed |
+| the same | the same | one of 96 KiB | 36,064 bytes below the guard changed, then `SEGV_ACCERR` at its first byte |
+| `pthread_attr_setstack`, 64 KiB | 64 KiB `PROT_NONE`, then mapped | 4 KiB; one of 96 KiB | `SEGV_ACCERR` in the guard; nothing below it changed |
+| `pthread_attr_setstack`, 64 KiB | a `PROT_NONE` page, then unmapped | 4 KiB | the `getsp` fails (kernel log: `user data stack overflow`) |
+| `pthread_attr_setstack`, 64 KiB | a `PROT_NONE` page, a 64 KiB hole, then mapped | one of 96 KiB | the `getsp` fails: the guard's mapping ends below the stack's top, so the kernel sees the hole |
+| `pthread_attr_setstack`, 64 KiB | one unmapped page, then mapped | 4 KiB | the `getsp` is accepted (the bottom 16 KiB down); `SEGV_MAPERR` in the hole |
+| main thread, `RLIMIT_STACK` 2 MiB | unmapped | 4 KiB | the bottom moved 16 KiB every 4 levels and `[stack]` grew with it to exactly 2 MiB; after 507 levels the `getsp` failed |
+| main thread, `RLIMIT_STACK` 16 MiB | unmapped | 64 KiB | the same at 16 MiB (255 levels) |
+| main thread | a gap of about 3 MiB, then a 1 MiB mapping | one of about 3.75 MiB | the `getsp` is accepted with the bottom inside that mapping; about 638 KiB of it changed, then `SEGV_MAPERR` at its top, in the gap |
 
 ## Address space [hw, `sysabi.c` sections 6 and `maps`]
 
@@ -908,7 +961,7 @@ drivers expect anyway. A static link with an ifunc crashes ld
   source).
 - lcc's sanitizers on hardware (MCST's map predates the 6.1 layout,
   above).
-- A thread's data stack overflowing past glibc's guard page ("Threads":
-  source only); why the 4C's ALT kernel reports a failed growth of a
-  context's stack as `SEGV_ACCERR` rather than `SEGV_BNDERR` ("User
-  contexts"; its source is not at hand).
+- Why the 4C's ALT kernel reports a failed growth of the data stack as
+  `SEGV_ACCERR` rather than `SEGV_BNDERR`, for contexts, threads and the
+  main thread alike ("User contexts", "Threads"; its source is not at
+  hand).

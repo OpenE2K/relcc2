@@ -26,8 +26,9 @@ Status markers, in addition to bundle.md's:
   `mrng` limits, the halves areas sit in and plain loads beside an area
   by `tools/isa-probes/pocchk3.c` (cases from `gen_pocchk3.py`; the
   proof-of-concept back end's I47–I49), on the 4C, the 8C2 and the
-  2C3. The emulators model almost none of this; see the end of the
-  page.
+  2C3; `UPSR.ac`, movas wider than their area's format and `%aabfN` by
+  `tools/isa-probes/isaleft.c` (`gen_isaleft.py`) on all three. The
+  emulators model almost none of this; see the end of the page.
 - **[guide]**: MCST programming guide, 6.6 (prefetch), 6.3.6 and
   10.9.5, 10.11.6–9, 10.12.3–4
 - **[lcc]**: observed in lcc 1.29.16 and 1.31.05 `-O2`/`-O3` output
@@ -180,7 +181,7 @@ operand. Cases seen:
 | `ind + size > mrng` | diagnostic |
 | v3: `mrng` > 24 + *g*, where *g* is the largest of 1, 2, 4 and 8 dividing both the area's start (base + `%aaind` + `disp`) and its step in bytes | **every** `mova` from the area is diagnostic, `ind` 0 included. An area stepping one element from an aligned start takes `mrng` ≤ 25 for bytes, 26 for halves, 28 for words and 32 for doublewords: 24 + the element size is always safe, since v3 already needs the start aligned to the element. A byte area stepping 8, 24 or 40 bytes from a doubleword boundary takes 32, stepping 2 bytes 26, stepping 4 or 12 bytes 28. A start 1, 2 or 4 bytes past a doubleword, set through the base, `%aaind` or `disp`, allows 25, 26 or 28. Backward areas (steps −1, −2, −8 bytes) behave as forward ones. The 8C2 and the 2C3 give data in all of these (`tools/isa-probes/pocchk3.c` `m_*`: 321 areas, each read by eight wide instructions of two movas, at `ind` 0 and at `ind` = `mrng` − size; the rule predicts every one on the 4C; the proof-of-concept back end's I48) |
 | v3: a `mova` at an `ind` that is not a multiple of its own size (`movah` at `ind` 1, `movaw` at 2, `movad` at 4, in areas of their own format) | diagnostic. The 8C2 and the 2C3 return the bytes there (`m_*`, the reads at `ind` = `mrng` − size). Narrow movas at offsets aligned to their own size inside a wider element work (`movab` at 3, `movah` at 6, `movaw` at 4 in a doubleword area: `apb.c` `narrow`) |
-| `mova` wider than `fmt` (`movad` on `fmt = 3`) | diagnostic |
+| `mova` wider than `fmt` (`movad` on `fmt = 3`) | diagnostic (v3, v5, whatever `mrng`; v6 reads data whenever `ind` + size ≤ `mrng`, "v6") |
 | Base not aligned to `fmt` (v3) | diagnostic. lcc versions loops or needs `-faligned` [lcc]; v5 allows unaligned 2, 4, 8 bytes and v6 16 bytes [guide, lcc-doc]. Whatever `UPSR.ac` says: with it set, misaligned areas give the same and never trap ([x86-support.md](x86-support.md); `isaleft.c` `ac_*`) |
 | Two areas whose `abs`/`asz` overlap | diagnostic |
 | Element in an unmapped page | diagnostic; no signal. The prefetch running past the end of an array into an unmapped page is harmless (lcc's loops over arrays that end at a `PROT_NONE` page are correct) |
@@ -623,6 +624,13 @@ result is the swapped high doubleword). An area with `fmt` 7 makes the
 `movaqp` (any `mova`) SIGILL `ILL_ILLOPC` on the 8C2, the 2C3 and the
 4C (the `fmt` field, above).
 
+On v5 `movaqp` gives data only from an `fmt` 5 area with `mrng` 16 or
+more (0 is 32): from `fmt` 1–4 it is diagnostic whatever `mrng`, as any
+`mova` wider than its area's format is there; v6 reads it from those
+too ("v6"). `mrng` 8 is diagnostic on both (`ind` + 16 > `mrng`), so a
+compiler sets `mrng` ≥ `ind` + 16, as lcc's 0 does [hw: `isaleft.c`
+`q_*`; 8C2, 2C3].
+
 ## How lcc uses APB [lcc, guide]
 
 - At `-O2` and above (not `-O1`), also when software pipelining is
@@ -746,7 +754,7 @@ a return, `eap` or a `%ctpr2` write: all as on the 8C2. What differs:
 | | 8C2 (v5) | 2C3 (v6) |
 |---|---|---|
 | Trap (page fault, signal handler) between movas outside a loop | positions recomputed from the loop counters: the next element repeats | **positions kept**: the next `mova` continues where it was (the kernel saves `%aaldi`, above). Inside a `loop_mode` loop both are correct; an ordinary branch loop is correct only on v6 (Traps, above) |
-| `mova` wider than `fmt` (`movad` on `fmt = 3`) | diagnostic | **data** (the 8 bytes at the position); but `movaqp` on `fmt = 4` gave a diagnostic value, `4000000040000000` (`tagx.c` `movaqp4`) |
+| `mova` wider than `fmt` | diagnostic, whatever `mrng` (`movad` on `fmt` 3 with `mrng` 8 or 16, `movaw` on `fmt` 2 with `mrng` 4, `movad` on `fmt` 1 and 2 with `mrng` 8, `movaqp` on `fmt` 1–4 with `mrng` 16, 24 or 32) | **data whenever `ind` + size ≤ `mrng`**, in all of those: the read takes its size in bytes at the area's position, which steps by the area's own element (`movaqp` from `fmt` 4 reads + 0, + 8, + 16, overlapping; from `fmt` 1 + 0, + 1, + 2), also from a base 4 bytes past a doubleword; otherwise diagnostic (`movad` with `mrng` 4, `movaw` with 2, `movaqp` with 8, or at `ind` 8 with `mrng` 16). The earlier diagnostic `movaqp` on `fmt = 4` (`tagx.c` `movaqp4`) had `mrng` 8 (`isaleft.c` `m_*`, `q_*`) |
 | A byte area read by `movad` with a 12-byte step, a half area by `movaw` with a 6-byte step, `movad` at `ind` 4 of a byte area (`w12`, `w6`, `w_ind4`) | diagnostic | **the bytes at each position**, unaligned: a step need not be a multiple of the read (lcc 1.31's APB for such strides, "from Elbrus V6") |
 | Diagnostic value | `eaed0f70eaed0f70`, tag 1 | `4000000040000000`, tag 1 |
 | `aaurrd %aaldi0` after two `movad` | 0x40 | 0x10 (the position in bytes) |
@@ -791,8 +799,6 @@ dot product 7× faster on a 64 MiB array there.
 ## Not checked yet
 
 - v6 on the Elbrus-16C; v7.
-- Why `movaqp` from an `fmt` 4 area is diagnostic on the 2C3, where a
-  `movad` from an `fmt` 3 area gives data ("v6").
 - Why only `%aabfN` with bit 1 of N clear act (the encodings are
   `0x30 | N << 7`).
 - Why two areas in one half walk columns more slowly with 4 KiB pages

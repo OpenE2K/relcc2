@@ -464,16 +464,25 @@ as a 32-bit result; the suffix gives the x86 operand width (`_fb` 8,
 | `shls_f*`, `shrs_f*`, `sars_f*` `a, b, c` and `_fd` | count b modulo 32 (`s`) or 64 (`d`), as x86 masks it; count 0: c's flags unchanged. ZF, SF, PF from the low bits of the whole register shifted (so higher bits of a shift into an 8-bit result); CF the last bit shifted out of the operand of that width (zero- or sign-extended, so 0 or its sign once the count passes the width); OF as x86 for a count of 1, else 0; AF 0 |
 | `scls_f*`, `scrs_f*` `a, b, c` and `_fd` | x86 `rol`/`ror` within the width: CF and OF (count 1 only, else 0) set, the other flags c's |
 | `umulx_f*`, `smulx_f*` | CF = OF = 1 when bits *w* to 2*w* − 1 of the product of the 32-bit operands are not the zero (sign) extension of bits 0 to *w* − 1, as x86 `mul`/`imul` for *w*-bit operands; the rest 0 |
-| `cctop<c> f` | predicate: x86 condition `c` evaluated on f as EFLAGS: `o` OF, `b` CF, `e` ZF, `be` CF\|ZF, `s` SF, `p` PF, `l` SF ≠ OF, `le` ZF \| (SF ≠ OF) |
+| `cctop<c> f` | predicate: x86 condition `c` evaluated on f's low 32 bits as EFLAGS (the upper half is ignored): `o` OF, `b` CF, `e` ZF, `be` CF\|ZF, `s` SF, `p` PF, `l` SF ≠ OF, `le` ZF \| (SF ≠ OF) |
 
 Neither qemu implements the flag forms (both stop at them), and the
 community qemu evaluates `cctopl` as true when SF and OF are both set.
 lcc doesn't emit any of them for C: its `__builtin_add_overflow` on
 `int` is ten operations of compares and selects, where `adds_fw` then
 `cctopo` give the overflow predicate (and `cmposb a, b` alone gives
-subtraction's). Every flag form takes 2 cycles (the multiplies 4), also
-into `cctop`, and `cctop*` reaches a predicated operation in 2 (1 on
-v6) (timing.md).
+subtraction's). A flag form's result reaches an integer operation or
+`cctop` in its own cluster in 2 cycles and one in the other cluster in
+4, so the `cctop` in its own channel in 2 and the other `cctop` in 4.
+The multiplies' result reaches `cctop` or any integer operation in 6.
+`cctop*` reaches a predicated operation in 2 (1 on v6) and a `ct` in 3
+(timing.md). `cctopo x` is bit 11 of x's low half for any register
+value, so a compiler can model it as `(x & 0x800) != 0` [hw:
+`tools/isa-probes/pocchk4.c` `cc`: 2^20 values per condition with
+random upper halves, all eight conditions in ALC0 and ALC3, `cctopo,sm`
+too; 4C, 8C2, 2C3]. The flags word is a 32-bit result: under `dbl = 0`
+the destination's upper half is kept, under `dbl = 1` it is zeroed,
+`smulx_fw` included [hw: `pocchk4.c` `dbl`].
 
 Apart from the flag forms, MCST's qemu differs from the hardware in this
 sweep only in FP flags:

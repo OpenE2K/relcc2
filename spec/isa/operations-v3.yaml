@@ -143,23 +143,25 @@ groups:
     use: Bit tests (`if (x & m)`); lcc tests FP compare flags with them.
     see: semantics.md, "Integer compares"
   - ops: cctop{o,b,e,be,s,p,l,le}
-    lat: "2"
-    does: "Predicate: x86 condition c on b read as EFLAGS (`o` OF, `b` CF, `e` ZF, `be` CF|ZF, `s` SF, `p` PF, `l` SF≠OF, `le` ZF|(SF≠OF)). ALC0/3; 2 cycles to a predicated op."
+    lat: "2; 3 to `ct`"
+    does: "Predicate: x86 condition c on b's low 32 bits read as EFLAGS (`o` OF, `b` CF, `e` ZF, `be` CF|ZF, `s` SF, `p` PF, `l` SF≠OF, `le` ZF|(SF≠OF)). ALC0/3; 2 cycles to a predicated op."
     use: With the flag forms below, e.g. overflow checks.
     see: semantics.md, "x86 flag operations"
 
 - title: x86 flag operations
   rules:
   - match: '[a-z]+[sd]_f[bhwd]|[su]mulx_f[bhw]'
-    does: "Return the x86 EFLAGS the operation would set (CF 0x01, PF 0x04, AF 0x10, ZF 0x40, SF 0x80, OF 0x800) as a 32-bit result, for operand width b/h/w/d: add, sub, the logic operations, inc/dec (a ± b, CF from c), shifts and rotates (old flags in c), 32 × 32 multiplies. For x86 binary translation; 2 cycles (`smulx_f*` 4); ALC0/3."
+    does: "Return the x86 EFLAGS the operation would set (CF 0x01, PF 0x04, AF 0x10, ZF 0x40, SF 0x80, OF 0x800) as a 32-bit result, for operand width b/h/w/d: add, sub, the logic operations, inc/dec (a ± b, CF from c), shifts and rotates (old flags in c), 32 × 32 multiplies. For x86 binary translation; ALC0/3; a 32-bit result (dbl applies)."
+    lat: "2 to an integer op or `cctop` in its cluster, 4 to the other; store data 1 (3 across); `[su]mulx_f*` 6 (4 to an FP-side op)"
     use: "`adds_fw` + `cctopo` give `__builtin_add_overflow`'s flag (lcc doesn't use them)."
     see: semantics.md, "x86 flag operations"
 
 - title: Combined integer operations
   intro: >
     `X_Y a, b, c` = Y(c, X(a, b)): two ordinary operations chained in
-    ALC1 or ALC4 with the latency of both (2). They save an instruction
-    slot, not time (semantics.md, "FP min, max and combined operations").
+    ALC1 or ALC4 with the latency of both (2; 4 to the other cluster).
+    They save an instruction slot, not time (semantics.md, "FP min, max
+    and combined operations").
   rules:
   - match: '(and|andn|or|orn|xor|xorn|add|sub|scl|scr|shl|shr|sar|getf)_(and|andn|or|orn|xor|xorn|add|sub|rsub)[sd]'
     does: "Y(c, X(a, b)), `rsub` being t − c. Every one equals the two ordinary operations (icomb.c, 252 of v3's)."

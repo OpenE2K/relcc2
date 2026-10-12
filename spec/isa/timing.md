@@ -59,7 +59,7 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | Producer → consumer | Guide | Scheduled latency | Back-to-back |
 |---|---|---|---|
 | integer add/sub, logic, shift, `sxt` (32 or 64-bit) | 1 | 1 | 1 |
-| combined integer (`add_addd`, `shl_addd`; ALC1/4) | 2 | 2 | 5 |
+| combined integer (`add_addd`, `shl_addd`; ALC1/4) | 2 | 2 (4 to the other cluster, Clusters) | 5 |
 | integer multiply (`muls`, `muld`) | 4 | 4 | 5 |
 | FP add, multiply (single and double) | 4 | 4 | 5 |
 | FP multiply (`fmuld`, `fmuls`, `pfmuls`) with a denormal operand or a tiny result; adds and divides don't change (semantics.md, "Rounding modes, flush to zero and denormals are zero") | — | 5 | — |
@@ -104,8 +104,10 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | `fsubs`, `fsubd`; `fmaxs` | — | 4; 2 | — |
 | round to integral `fdtoifd`, `fstoifs` | — | 4 | — |
 | `fscaled`, `fscales` (v4+, Elbrus-8C2) | — | 4 | — |
-| x86 flag forms (`adds_fw`, `subs_fw`, `ands_fw`, `incs_fw`, `shls_fw`, `addd_fd`, `subd_fd`, `incd_fd`, `shld_fd`, `sard_fd`, in ALC0 or ALC3); `smulx_fw`, `umulx_fw` | — | 2, also to an integer op or `cctop`; 4 | — |
+| x86 flag forms (`adds_fw`, `subs_fw`, `ands_fw`, `incs_fw`, `shls_fw`, `addd_fd`, `subd_fd`, `incd_fd`, `shld_fd`, `sard_fd`, in ALC0 or ALC3) → an integer op, compare, `cctop`, `merges`, `smulx` or `fadds` in the producer's cluster; the same in the other cluster; store data (pocchk4.c) | — | 2; **4**; 1 (3 from the other cluster) | — |
+| `smulx_fw`, `umulx_fw` → `smulx`; → an integer op, compare or `cctop` in either cluster; → store data (pocchk4.c) | — | 4; 6; 4 | — |
 | `cctop{o,b,e,l}` → predicated ALU op or `merge` | — | 2 (as `cmpesb`; 1 on v6) | — |
+| `cctop*` → `ct ? pred` (pocchk4.c) | — | 3 (as `cmpesb`) | — |
 | `abgd`, `abgi` → a read of `%g24`–`%g31` under the new rotation (v3–v5) | — | the next instruction (`native.c`) | — |
 | `rws %bgr` → a read under the new rotation (v3–v5) | — | 10, or the next instruction after `wait all_e` (`native.c`) | — |
 | 80-bit `fxaddxx` / `fxmulxx` / `fxdivxx` | — | 5 / 4 / 16 | — |
@@ -144,6 +146,14 @@ cycles of `nop`, consumer, counted with the TICKS monitor;
 `timing-e2s.yaml`; nor is the AAU load row, from
 `tools/isa-probes/memleft.c` `timing` (`t_use_ldaad*`: the load, D
 empty cycles, an `addd` in ALC0; 4C, 8C2, 2C3).
+
+Rows marked (pocchk4.c) come from `tools/isa-probes/pocchk4.c`, section
+`lat`, not from `bench.py`. Each step is a producer with constant
+inputs, G − 1 empty cycles and a consumer; 12 such steps after 4 run
+between two `%clkr` reads, so only the producer → consumer edge can
+stall. The 4C, the 8C2 and the 2C3 print the same. `bench.py` chains
+each flag form into a consumer in its own channel (under `dbl = 1`),
+which is why it found 2 everywhere.
 
 The scheduled latencies of scalar integer, FP, control and predicate
 operations match the guide. Differences:
@@ -184,7 +194,7 @@ is in the three YAML files (`v3op_*`, `v3st_*`).
 | 1 | — | scalar logic, shifts and rotates (`scl`, `scr`), `getfd`, `merges`, `popcnts`, `bitrevs`, `sub` |
 | 1 | 1 | the tag operations (`tools/isa-probes/tagx.c`, `lat` section; 4C, 8C2, 2C3 alike): `puttagd` through either operand (+1 to the other cluster, as any integer result), `puttags`, `gettags`, `gettagd` (to a 32-bit consumer; a 64-bit one waits 4, Formats) |
 | 1 | 4 | every packed integer operation except the multiplies: add and subtract (also saturating), compares, min/max, averages, shifts (`psllqh` …), packs and unpacks, `pshufh`, `pshufw`, `pmerge`, `pinsh`, `pextrh`, `pmovmsk*`, `psign*`, horizontal add and subtract, logic |
-| 2 | 2 | the x86 flag forms (`*_fb`, `_fh`, `_fw`, `_fd`); combined integer operations through any operand (`and_addd`, `add_xord`, `merge_addd` …); an integer compare, `cmpand*` or `cctop*` → `merge` (v6: 1); the tag-keeping moves `movts`, `movtd`, `movtq` between registers (`tagx.c`; `movtd` → `ct` is 9, Latencies) |
+| 2 | 2 | the x86 flag forms (`*_fb`, `_fh`, `_fw`, `_fd`); combined integer operations through any operand (`and_addd`, `add_xord`, `merge_addd` …) (both: 4 to the other cluster, below); an integer compare, `cmpand*` or `cctop*` → `merge` (v6: 1); the tag-keeping moves `movts`, `movtd`, `movtq` between registers (`tagx.c`; `movtd` → `ct` is 9, Latencies) |
 | 2 | 4 | FP compares into a register (`fcmp*s`, `fcmp*d`, `pfcmp*`), FP min/max (`fmins`, `pfmax*`, `pfmin*`), packed multiplies (`pmulh*`, `pmadd*`, `pmulubhh`), `phminposuh` |
 | 4 | 4 | the FP flags compares `fcmp{ud,od}{s,d}f` (to `cctop` as to any integer op) |
 | 4 | — | FP compares into a predicate (`fcmp*b`, `fxcmp*b`) → predicated op or `merge` |
@@ -231,6 +241,21 @@ What this adds to the table above:
   the second reads 64 bits of the first's result (Formats, "32-bit
   integer results read as 64 bits"). `pmovmsk*` were chained as packed
   integers (1), their result being an integer mask: 4 to an integer op.
+- **2-cycle integer results cross clusters at +2**, not +1. An x86 flag
+  form (`adds_fw`, `addd_fd`, `ands_fw`, `shls_fw`) reaches an integer
+  operation, compare or `cctop` in its own cluster in 2 cycles and in
+  the other cluster in 4, and a combined integer operation (`add_addd`
+  in ALC1) reaches `adds` the same way. Both reach a store's data in 1,
+  or 3 from the other cluster [hw: `tools/isa-probes/pocchk4.c` `lat`;
+  4C, 8C2, 2C3; the other combined operations inferred]. The chains
+  above put each operation in one channel. `cctop` runs only in
+  ALC0 and ALC3, so the `cctop` in a flag form's own channel gets the
+  flags in 2 and the other one in 4 (found by the proof-of-concept back
+  end, I50: overflow-checked loops with `cctopo` 3 cycles after
+  `adds_fw` in the other channel ran at 2.3 cycles an iteration instead
+  of 1). The multiply flag forms are FP-side results (the 4 | 6 row): 6
+  to `cctop` or any integer operation in either cluster, 4 to `smulx`
+  and to store data.
 
 **The divider.** Every ALC5 operation that divides, takes a root or
 estimates a reciprocal shares one unit with `fdivd` (`v3div_*` kernels):
@@ -351,21 +376,37 @@ penalty.
 32-bit integer operation writes only the low half of its destination
 ([registers.md](../abi/registers.md), `dbl`). An operation that reads
 the whole 64-bit register gets the result 4 cycles after the producer
-issues instead of 1, in the same cluster or the other one (the crossing
-adds nothing): `adds`, `ands`, `shls` → `addd`, `andd`, `shld`, `movtd`,
-`gettagd`, from ALC0 or ALC3 to ALC0–4, and `gettagd` → `gettagd`, whose
-result is 32-bit. A reader of the 32-bit operand gets it in 1 (`adds`,
-`sxt 2`), and a producer slower than 4 is not delayed further (`muls` →
-`addd` 6, as `muls` → `adds`). Under `dbl = 1`, which zero-extends the
-result into the whole register, the 64-bit readers get it in 1 (2 from
-the other cluster) [hw: `tools/isa-probes/tagx.c` `adds_addd`,
-`ands_andd`, `shls_shld`, `adds_addd1`, `adds_addd3`, `adds3_addd4`,
-`adds_movtd`, `adds_gettagd`, `gettagd`, `adds_sxt`, `muls_addd`,
-`*_dbl1`; the 4C, the Elbrus-8C2 and the 2C3 alike; other 32-bit
-integer operations and other 64-bit consumers, such as an address or
-store data, inferred]. So lcc's `adds` + `sxt` under `dbl = 0` costs
-nothing extra, while a 64-bit use of a 32-bit result without the `sxt`
-waits 4. `tools/isa-score` models it, per function from its `setwd`.
+issues instead of 1. This holds in the same cluster or the other one
+(the crossing adds nothing).
+
+Measured producers: `adds`, `ands`, `xors`, `shls`, `merges`, `getfs`,
+`gettagd` and the x86 flag forms (`adds_fw`, `addd_fd`, `ands_fw`,
+`shls_fw`, whose flags word is a 32-bit result), from ALC0 or ALC3.
+Measured consumers, in ALC0–5: `addd`, `andd`, `shld`, `getfd`,
+`cmpedb`, `merged`, `movtd`, `gettagd` and `faddd`, a load or store
+index (`ldd` in ALC0 or ALC3, `std`), and `std`'s data (ALC2 or ALC5).
+
+A reader of the 32-bit operand gets it at its usual latency: 1 for
+`adds` (2 from the other cluster), `cmpesb`, `sxt 2`, `getfs`, `merges`,
+`fadds` and `stw`'s data. A producer slower than 4 is not delayed
+further (`muls` → `addd` 6, as `muls` → `adds`; `smulx_fw` → `addd` 6).
+Under `dbl = 1`, which zero-extends the result into the whole register,
+the 64-bit readers also get it at the usual latency: 1, 2 from the
+other cluster, and `std`'s data 1 from either (from a flag form: 2, 4
+from the other cluster, store data 1) [hw: `tools/isa-probes/tagx.c`
+`adds_addd`, `ands_andd`, `shls_shld`, `adds_addd1`, `adds_addd3`,
+`adds3_addd4`, `adds_movtd`, `adds_gettagd`, `gettagd`, `adds_sxt`,
+`muls_addd`, `*_dbl1`; `tools/isa-probes/pocchk4.c` `lat`, the `dbl 0`
+and `dbl 1` rows; the 4C, the Elbrus-8C2 and the 2C3 alike; other
+32-bit integer operations inferred].
+
+So lcc's `adds` + `sxt` under `dbl = 0` costs nothing extra, while a
+64-bit use of a 32-bit result without the `sxt` waits 4. Under
+`dbl = 0`, read 32-bit values with 32-bit forms (`getfs`, `cmp*sb`,
+`stw`) or extend them first. The proof-of-concept back end met this
+too (I51): `getfd` of an `xors` result held a pipelined loop at 3
+cycles an iteration, `getfs` at 1. `tools/isa-score` models it, per
+function from its `setwd`.
 
 ## Clusters
 
@@ -376,11 +417,15 @@ ALC3, consumer in the channel shown):
 | Producer | Consumer in the same cluster | Consumer in the other cluster |
 |---|---|---|
 | integer ALU op (`addd`) | 1 to an integer op, FP op or load address (ALC1, ALC2: 1) | 2 (ALC3, ALC4; ALC3 → ALC0 also 2) |
+| x86 flag form (`adds_fw`); combined integer op (`add_addd` in ALC1, into `adds`) | 2 to an integer op, compare or `cctop` (ALC1, ALC2: 2) | 4 (ALC3–5; ALC3 → ALC0 also 4) |
 | `ldd`, L1 hit | 3 (to `addd` or the next load's address) | 4 |
 | FP add/multiply, integer `muld` | 4 to an FP op or `muld`; 6 to an integer op | 6 to any op |
 
-So integer and load results cost one extra cycle across clusters, and
-FP-class results two, which an FP → integer use pays anyway. All of these
+So 1-cycle integer and load results cost one extra cycle across
+clusters. The 2-cycle integer results measured (flag forms, `add_addd`)
+and FP-class results cost two, which an FP → integer use pays anyway
+[hw for the 2-cycle row: `tools/isa-probes/pocchk4.c` `lat`; 4C, 8C2,
+2C3]. All of these
 paths are interlocked (hazard tests `int_fp_use`, `fp_int_use` and their
 `_x` cross-cluster forms see the new value at distance 1). For a
 scheduler: give each result two latencies, own cluster and other cluster,
@@ -395,7 +440,9 @@ back end, I44):
 | Producer → store data | Same cluster | Other cluster |
 |---|---|---|
 | `addd` | 1 | 1 (no crossing cost) |
+| x86 flag form (`adds_fw`), `add_addd` (`pocchk4.c` `lat`) | 1 (not the 2 an integer op waits) | 3 |
 | `faddd`, `fmuld` | 4 (not the 6 an integer op waits) | 6 |
+| `smulx_fw` (`pocchk4.c` `lat`) | 4 (not the 6 an integer op waits) | not measured |
 | `fdivd` (ALC5) | — | 16 (14 + 2) |
 
 `aaurw`/`aaurwd` (writing `%aaind`, `%aaincr` or `%aabf`, ALC2 or ALC5)
@@ -447,8 +494,11 @@ apart, don't delay each other. Transfers wait exactly, not in steps
 
 An FP-side result (FP add or multiply, integer multiply) on its way to
 an integer operation arrives one cycle late when an integer-side
-operation (an ALU operation or a load, not a store) issues in the
-**same channel exactly 2 cycles after** the producer. With the consumer
+operation that writes a register issues in the **same channel exactly
+2 cycles after** the producer. Such an operation is an integer ALU
+operation (the x86 flag forms included, but not the multiply ones,
+which are FP-side) or a load; a store is not, and neither is a compare
+or `cctop` into a predicate. With the consumer
 placed at the producer's latency, that is a stall step (4 cycles).
 Measured (`bench.py`, `*_p*` kernels; the reported latency counts from
 the second operation, so the producer → consumer distance is 2 more):
@@ -460,6 +510,14 @@ the second operation, so the producer → consumer distance is 2 more):
 | `muld` | `addd,1` (other channel) | 6 |
 | `muld` | `faddd,0` (FP side) | 6 |
 | `faddd` | `addd,0` | 7 |
+
+The multiply flag forms are FP-side producers. `smulx_fw,0` → `adds,1`
+or `cctopo` (either channel) takes 6 cycles. It takes 7 when an
+`adds,0`, `adds_fw,0` or `ldw,0` issues 2 cycles after it, and stays 6
+with a `cmpesb,0`, a `cctopo,0` or another `smulx_fw,0` there. `muld,0`
+→ `adds,1` is likewise 7 or 6. `adds_fw` and the other flag forms are
+integer-side and suffer no conflict [hw: `tools/isa-probes/pocchk4.c`
+`wb`; 4C, 8C2, 2C3; found by the proof-of-concept back end, I50].
 
 The same conflict delays an FP-side result going to an **FP consumer in
 the other cluster** (`fmuld,0` → `faddd,3`: 6 cycles, 7 with an

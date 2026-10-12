@@ -46,8 +46,8 @@ ordinary programs.
 
 | Facility | Encoding | ISA | Native user code | Where |
 |---|---|---|---|---|
-| x86 EFLAGS results of add, sub, logic, inc/dec, shifts, rotates, 32×32 multiply | `*_f{b,h,w}` (v1+), `*_fd` (v3+), ALC0/3 | v1+ | yes [hw]; latency 2 (multiplies 4), also into `cctop` | semantics.md, "x86 flag operations"; timing.md |
-| an x86 condition of a flags word into a predicate | `cctop{o,b,e,be,s,p,l,le}`, ALC0/3 | v1+ | yes [hw]; 2 cycles to a predicated op (1 on v6), as a compare | semantics.md, predicates.md |
+| x86 EFLAGS results of add, sub, logic, inc/dec, shifts, rotates, 32×32 multiply | `*_f{b,h,w}` (v1+), `*_fd` (v3+), ALC0/3 | v1+ | yes [hw]. 2 cycles to an integer op or the `cctop` of the producer's cluster (the one in its channel), 4 to the other cluster, 1 to store data. The multiplies take 6 to `cctop` or any integer op, 4 to `smulx`. A 32-bit result: the upper half is kept under `dbl = 0` and zeroed under `dbl = 1` [hw: `tools/isa-probes/pocchk4.c`] | semantics.md, "x86 flag operations"; timing.md |
+| an x86 condition of a flags word into a predicate | `cctop{o,b,e,be,s,p,l,le}`, ALC0/3 | v1+ | yes [hw]. 2 cycles to a predicated op (1 on v6), 3 to `ct`, as a compare. Reads only the low 32 bits of its operand [hw: `pocchk4.c` `cc`, `lat`] | semantics.md, predicates.md |
 | x87 80-bit arithmetic, `%fpcr`/`%fpsr` | `fx*`, `movif`/`movfi` | v1+ | yes [hw]. `%fpsr` holds the six flags and C1 (and on v6 x87's stack-fault bit, which nothing sets and which does not set ES). ES and B are computed from the flags and `%fpcr`'s masks. C0, C2, C3 and TOP don't exist (the stack is `%bgr`, whose faults are separate SIGFPE `FPE_FLTINV` traps, loops.md). C1 is written only by non-speculative divides and the square root, so an emulator computes it for `fadd`, `fmul`, `fst` and the compares. An unmasked exception traps at the operation itself, with no deferred trap at the next FP instruction (registers.md, "Traps") [hw: `tools/isa-probes/sregs.c`] | semantics.md, "80-bit operations"; registers.md, "Floating-point control and status" |
 | the x87 register stack: rotating globals | `%bgr`, `abg` (v1–v5), `abgc`/`rbgc` (v6+), `vfbg`; v6 `mkfsw`, `modbgv`, `vfbgv` | v1+ | yes [hw]; v3–v5 rename `%g24`–`%g31` from the next instruction (10 cycles after `rws %bgr`); **v6 renames nothing**, only `cur` changes (`vfbg` and `%bgrpred` never run) | loops.md |
 | x86 FP compare results into a register (`ucomisd` flags), MXCSR layout of `%pfpfr` | `fcmpud*f`, `fcmpod*f`, `fxcmpud*f` | v1+ | yes [hw]; lcc uses `fxcmpudxf` for `long double` `isless`/`isnan` [lcc] | semantics.md |
@@ -81,11 +81,23 @@ Ranked by how directly a compiler or a JIT can use them.
    uses the flag operations except through its four
    `__builtin_e2k_*_f*` builtins). The `_fd` forms (v3+) do 64-bit add
    and subtract; there are no 64-bit multiply flags. Both run only in
-   ALC0 and ALC3 and take 2 cycles (4 for the multiplies; timing.md),
-   so a predicated operation can use the result 4 cycles after the
-   operands (3 on v6), a `ct` 5, a little sooner than lcc's sequence.
-   A flag-producing op and the plain op
-   can share an instruction. A JIT for a dynamic language gets cheap
+   ALC0 and ALC3. An add's or a logic operation's flags reach the
+   `cctop` in the same channel in 2 cycles and the other channel's in
+   4, because a cluster crossing costs 2 here. A multiply's flags are
+   an FP-side result: they reach either `cctop` in 6, and an integer
+   operation issued in the multiply's channel 2 cycles after it delays
+   them a cycle (timing.md, "Write-back conflicts"). With the `cctop`
+   in the producer's channel, a predicated operation can use an add's
+   overflow 4 cycles after the operands (3 on v6) and a `ct` 5, a
+   little sooner than lcc's sequence; for a multiply, 8 (7 on v6) and
+   a `ct` 9. Two `cctop`s (also beside two compares), two flag
+   operations, or a `cctop` beside a flag operation issue in one
+   instruction, one instruction a cycle [hw:
+   `tools/isa-probes/pocchk4.c` `lat`, `wb`, `tp`; 4C, 8C2, 2C3]. The
+   flags word is a 32-bit result, so under `dbl = 0` a 64-bit reader
+   waits 4 for it (timing.md, "Formats"); test it with `cctop` or a
+   32-bit operation. A flag-producing op and the plain op can share an
+   instruction. A JIT for a dynamic language gets cheap
    overflow-checked small integers the same way.
 2. **Publishing JIT code.** After writing code: `wait st_c = 1`, a store
    with MAS 0xf to every 256-byte line of the code, `wait fl_c = 1`
@@ -178,5 +190,5 @@ and the TC/TS state, whose purpose the open sources don't explain.
   area).
 
 Measured with `tools/isa-probes/native.c` (and bench.py's distance
-sweeps for the flag operations; `memleft.c` for `UPSR.ac` and the watch
-load) on the 4C, 8C2 and 2C3.
+sweeps and `pocchk4.c` for the flag operations; `memleft.c` for
+`UPSR.ac` and the watch load) on the 4C, 8C2 and 2C3.

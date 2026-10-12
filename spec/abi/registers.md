@@ -122,6 +122,7 @@ measured 0.54% of xz -6's cycles in `BUB_B_RF_SPILLFILL` on the 8C2
   |---|---|---|
   | the whole 32-bit integer ALU group: `adds`, `ands`, `andns`, `shls`, `sars`, `scls`, `muls`, `sdivs`, `udivs`, `getfs`, `merges` (either predicate value), `popcnts`, `lzcnts`; also predicated (`? %pred`, when it writes) and speculative (`,sm`) | upper half kept | zero-extended |
   | the 32-bit combined integer operations (`add_adds`, `shr_ands`, `and_ors`, `xor_xors`, …) | upper half kept | zero-extended (`tools/isa-probes/pocchk.c`; 4C, 8C2, 2C3) |
+  | the x86 flag forms' 32-bit flags word (`adds_fw`, `addd_fd`, `ands_fw`, and `smulx_fw`, although its result arrives on the FP side as `fadds`'s does, timing.md) [hw: `tools/isa-probes/pocchk4.c` `dbl`; 4C, 8C2, 2C3] | upper half kept | zero-extended |
   | `ldw` | zero-extended | zero-extended |
   | `sxt` | 64-bit result | 64-bit result |
   | FP-unit operations with a 32-bit result: `fadds`, `fstois`, `fdtois`, `fstoistr`, `movts` | upper half kept | upper half kept |

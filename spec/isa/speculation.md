@@ -113,7 +113,7 @@ What happens to a diagnostic operand ([hw] unless marked):
 | ALU or FP operand (`addd`, `faddd`, ...) | SIGILL, `ILL_ILLOPN` | diagnostic result |
 | Compare operand (`cmpedb`) | SIGILL, `ILL_ILLOPN` | diagnostic predicate |
 | x86 flag operation operand (`adds_fw`, `addd_fd`, `smulx_fw`) or `cctop*` operand (`tools/isa-probes/pocchk5.c` `dg`, 4C, 8C2, 2C3) | SIGILL | a diagnostic flags word (tag 1: the result is 32-bit) / a diagnostic predicate, as for `cmpedb,sm` (a predicated `addd,sm` under it, either polarity, gives a diagnostic result) |
-| Diagnostic predicate as an operation's condition (`? %pred0`, and `? ~%pred0` alike) | SIGILL, `ILL_ILLOPN`, at the operation | the operation runs and its result is diagnostic: an `addd,sm`, an `ldd,sm` (its register), a `cmpesb,sm` (its predicate) (`preds.c` `dg_*`; [predicates.md](predicates.md)) |
+| Diagnostic predicate as an operation's condition (`? %pred0`, and `? ~%pred0` alike) | SIGILL, `ILL_ILLOPN`, at the operation | the operation runs and its result is diagnostic: an `addd,sm`, an `ldd,sm` (its register), a `cmpesb,sm` (its predicate) (`preds.c` `dg_*`; [predicates.md](predicates.md)). The load makes no memory access: its register gets `4000000040000000` (2C3 `400defad400defad`), as from a diagnostic address, with no page-in, no kernel entry and no DAM entry (`isaleft.c` `dl_*`, `dk_*`) |
 | Diagnostic predicate in `merge` | SIGILL, `ILL_ILLOPN` | diagnostic result (`dg_mrg*`) |
 | Diagnostic predicate in `ct ? %pred0` | SIGILL, `ILL_ILLOPN` | — |
 | `merge` choosing the diagnostic operand / the other one (`tagx.c` `ld_merge*`, `ldw_merges*`) | SIGILL `ILL_ILLOPN` / no trap | diagnostic / no effect [source] |
@@ -257,6 +257,11 @@ A load's speculation kind is set by `,sm` and the MAS `mod` field
 | `ld` | normal | data | page fault, data | SIGSEGV (`SEGV_MAPERR` 1 / `SEGV_ACCERR` 2) |
 | `ld,sm` (MAS mod 0) | **semi-speculative** | data | the kernel pages it in (about 5,000 cycles) and returns the data | diagnostic |
 | `ld,sm ..., mas=0x3` (mod 3) | **speculative** | data | **diagnostic**, no kernel entry | diagnostic |
+
+Under a diagnostic predicate (`? %predN` or `? ~%predN`) both kinds,
+and a lock load (MAS 0x4), behave as a load from a diagnostic address:
+no access at all ([predicates.md](predicates.md), "Under a diagnostic
+predicate").
 
 Measured costs on the 4C:
 

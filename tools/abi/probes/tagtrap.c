@@ -18,11 +18,14 @@
      f  as e, but copied with a plain addd
    With "good", BAD is a valid address, which shows what the store writes.
 
-   Elbrus 4C (v3): a and b die with SIGILL; c stores 0000000012345678;
-   d stores 4afafafa12345678 (no trap); e stores 4afafafa52345678 (the
-   speculative copy is wholly diagnostic, low half included); f dies with
-   SIGILL; with "good", b, d and e store 2222222212345678 and c
-   0000000012345678.  */
+   Elbrus 4C (v3), and the same on the 8C2 and 2C3: a and b die with
+   SIGILL; c stores 0000000012345678; d stores 4afafafa12345678 (no
+   trap); e stores 4afafafa52345678 (the speculative copy is wholly
+   diagnostic, low half included); f dies with SIGILL; with "good", b, d
+   and e store 2222222212345678 and c 0000000012345678.  Under MCST's
+   qemu a, b and f abort ("exception handling is unimplemented"), d
+   stores 4000000012345678 and e 4000000040000000 (qemu's diagnostic bits
+   differ from the hardware's 4afafafa).  */
 
 #include <stdio.h>
 

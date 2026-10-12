@@ -83,7 +83,12 @@ the reverse. A non-speculative `addd` of an accepted value does not trap
 and gives the value with tag 0. The kernel's empty registers are of this
 kind: 0 with tag 5, in `%g16`–`%g31` after a system call and in a signal
 handler ([kernel-interface.md](../abi/kernel-interface.md), "System
-calls", "Signals").
+calls", "Signals"). So are the registers a window gains (a `setwd` that
+grows it, a call's new window): 0 with tag 5 on the 8C2 and 2C3, the
+stale bits with bit 30 cleared and tag 5 on the 4C, and a plain `std`
+of them does not trap (`tools/abi/probes/tagempty.c`;
+[calling-convention.md](../abi/calling-convention.md), "Unused parts of
+a slot").
 
 The hardware keeps bit 30 set in every diagnostic value it makes. A
 failed load gives `4afafafa`, a failed operation its result with bit 30

@@ -641,7 +641,10 @@ result is the swapped high doubleword). An area with `fmt` 7 makes the
   APB (lcc 1.29.16 for v3 and v3.4c, 1.31.05; no run-time alignment
   check was seen, although lcc's changelog mentions versioning).
   On v5 and v6 it uses APB for the same loops without any of these.
-  Byte arrays never got APB in our probes.
+  Arrays of single bytes (`unsigned char a[]`, `signed char a[]`)
+  never got APB in our probes, on v3, v5 or v6 [lcc 1.29.16 `-O3` for
+  v3.4c, v5.8c2 and v6.2c3: sums over global byte arrays]; byte fields
+  of larger records do (next item).
 - On v3 it keeps to the `mrng` limit ("Diagnostic results"). A loop
   reading the first and last element of 32-byte records of bytes,
   halves or words reads each record through an area of `mrng` 32,

@@ -261,7 +261,12 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     never read, window and call costs, the wbs rule,
                     atomic spacing, store pairs, APB disp and backward
                     areas, stores of FP and integer results across
-                    clusters),
+                    clusters; pocchk3.c, gen_pocchk3.py: APB halves, the
+                    v3 mrng limit, loads beside areas; pocchk4.c,
+                    gen_pocchk4.py: flag-form latencies and dbl = 0
+                    reads; pocchk5.c, gen_pocchk5.py: rounding, sqrt,
+                    flag ops, fcmp latency; damwb.c, gen_damwb.py: a
+                    DAM lock and check together, write-back conflicts),
                     run on hardware; -DSPEC_V5, -DLOOPS_V5, -DAPB_V5
                     builds add v5 cases
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
@@ -635,9 +640,10 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   speculation.md, control-transfer.md, atomics.md, x86-support.md).
 
   The translator's facilities for native code (x86-support.md,
-  `native.c`): every x86 flag operation takes 2 cycles (32×32
-  multiplies 4) and `cctop*` reaches a predicated op in 2 (v6 1), so an
-  overflow test is two operations and 4 cycles; `srp`/`crp` cost
+  `native.c`, `pocchk4.c`): every x86 flag operation takes 2 cycles in
+  its cluster and 4 across (32×32 multiplies 6 to an integer op, also
+  into `cctop`) and `cctop*` reaches a predicated op in 2 (v6 1) and
+  `ct` in 3, so an overflow test is two operations and 4 cycles; `srp`/`crp` cost
   nothing; libgcc's `__clear_cache` (MAS 0xf) costs about 140 cycles
   for a line and 7 a line in bulk; `UPSR.fsm` makes predicate FP
   compares read unordered as x86 flags (`lt`/`le`/`eq` true); v3–v5
@@ -883,8 +889,9 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 ## Next steps (proposed, owner to choose)
 
 0. `docs/spec-poc-findings.md` (the PoC agent's file, untracked): all
-   entries so far are folded into `spec/` and `doc/` and removed from it;
-   new ones continue as I47, A22, P63 (I35 and I45 are still open).
+   entries so far are folded into `spec/` and `doc/` and removed from it
+   (I47–I51, A22, A23 and P63–P85 on 2026-10-12); new ones continue as
+   I52, A24, P86 (I35 and I45 are still open).
 1. Extend the compat suite (see Current state). It runs on the 4C with
    `run.py --target v3 --remote ...`; all pairs match qemu except the
    tag-trap tests, which pass on the 4C and on the 8C2 (v5, `--target
@@ -920,6 +927,13 @@ None at the moment.
   such a loop livelocks; atomics.md), and it applies `setbn`'s new base
   to `%b[]` operands in the same instruction (hardware uses the old one;
   registers.md). Run atomics and hand-written prologues on hardware.
+
+- MCST's libm needs the sticky FP flags set: lcc built it with
+  speculative FP, so after `feclearexcept` many functions (`sqrt` of a
+  negative, `sin`, `exp`, `pow`, `fmod`, ...) die with SIGILL inside
+  libm, and its `fmod`/`remainder` hang in `FE_DOWNWARD` on some exact
+  multiples (registers.md, "MCST glibc's FP bugs";
+  `tools/abi/probes/libmchk.c`). Expect testsuite noise from both.
 
 - MCST's glibc `fesetenv (FE_DFL_ENV)` unmasks the denormal exception
   and sets x87 precision control to single (registers.md): after it a

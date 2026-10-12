@@ -829,6 +829,24 @@ environment is unchanged across a point where a signal can arrive unless
 handlers behave. (Faults in lcc's speculative code arrive as SIGILL:
 [source-compat.md](source-compat.md), "Signals".)
 
+**Extended register parts**: with `setwd nfx = 1` a signal can clear
+the extended parts of the interrupted function's window registers: the
+16-bit part of an 80-bit value and, on v5+, the high half of a 128-bit
+register. On the 8C2 and 2C3 every handler that ran while one was held
+cleared it (0). On the 4C a handler did so when its frames pushed the
+interrupted window out of the register file (a handler that recursed,
+a 96-pair interrupted window), and otherwise in about one signal in
+1,200. Page faults without a signal and system calls (a blocking
+`nanosleep` too) kept the 16-bit part; without any signal, 1 of 2,000
+and 4 of 4,000 holds of 2 million cycles still lost it on the 4C and
+8C2 (none of 3,000 on the 2C3). Extended values in `%g16` and `%g20`
+survived the SIGSEGV handlers, shallow and recursing (the frame's
+`gext` restores them), and with `nfx = 0` nothing was lost [hw:
+`tools/abi/probes/pocabi2.c` `ext`; 4C, 8C2, 2C3;
+[registers.md](registers.md), `nfx`, has the counts]. So code that holds
+an extended value in a window register needs `nfx = 0`, as lcc's does.
+Which kernel step clears them was not traced.
+
 **Alternate stacks** [hw, `sysabi.c` section 2]:
 
 - `sigaltstack` refuses less than 4,096 bytes (ENOMEM; the kernel's

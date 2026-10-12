@@ -133,20 +133,59 @@ measured 0.54% of xz -6's cycles in `BUB_B_RF_SPILLFILL` on the 8C2
 
 - **`nfx`**: the kernel's `WD.fx` is its inverse. With `nfx = 0` the
   hardware saves and restores the extended parts of the window's
-  registers when spilling; with `nfx = 1` a spilled window comes back with
-  them cleared (hw, qemu: `tools/abi/probes/ldouble.c`). On v5+ the
-  extended part is the high half of a 128-bit register: with `nfx = 1`
-  it read 0 after a signal handler had run while the function held it
-  (3 of 3 runs on each machine), and 0, stale data or, by chance, the
-  right value after a call deep enough to spill the window; with
-  `nfx = 0` it survived both (hw: `tools/isa-probes/isaleft.c`
-  `qspill`, 8C2 and 2C3). A signal can spill any window, so a function
-  that holds 128-bit values in window registers needs `nfx = 0` even if
-  it calls nothing. Both compilers clear `nfx` in functions that use
-  `long double` (lcc, unipro); lcc's v5 and v6 code also in every
-  function that uses a 128-bit register, leaves included, and across a
-  call it keeps a 128-bit value in its stack frame, not in a register
-  (lcc 1.29.16 `-O3`, small vector-type functions).
+  registers when spilling; with `nfx = 1` it does not, and a spilled
+  window comes back with them 0, stale or, by chance, right (hw, qemu:
+  `tools/abi/probes/ldouble.c`; hw: `pocabi2.c`). The extended parts
+  are the 16-bit part of an 80-bit value (`movif` … `movfi`) and, on
+  v5+, the high half of a 128-bit register. What became of a 16-bit
+  part held in a window register of an `nfx = 1` function [hw:
+  `tools/abi/probes/pocabi2.c` `ext`, several runs a machine, five
+  values a case unless counted]:
+
+  | While the value was held | 4C (v3) | 8C2 (v5) | 2C3 (v6) |
+  |---|---|---|---|
+  | a call 1,000 levels deep (the window spills) | lost: 0 or stale (`0x0005`, `0x004d`, `0x8690`, …) | lost: 0 | kept, except in a process's first deep call or two (0) |
+  | a SIGSEGV whose handler fixes the page and returns | kept: 2 of 65 lost | lost: 0, 25 of 25 | lost: 0, 25 of 25 |
+  | the same in a 96-pair window | 16 of 25 lost | 10 of 10 lost | 10 of 10 lost |
+  | a SIGSEGV whose handler first recurses 1,000 levels | lost (0) | lost (0) | lost (0) |
+  | SIGALRM every 100 µs, holds of about 100,000 cycles | 18 of 12,000 holds lost (21,576 signals) | 6,281 of 8,000 (6,264 signals) | 4,477 of 8,000 (4,490 signals) |
+  | no signal, holds of 2 million cycles (timer interrupts; on the 8C2 also time-sliced with another process) | 1 of 2,000 lost | 4 of 4,000 | 0 of 3,000 |
+  | a page fault without a signal; system calls `getpid`, `sched_yield`, `nanosleep (1 ms)` | kept | kept | kept |
+
+  With `nfx = 0` none of these lost it on any machine, and values in
+  `%g16` and `%g20` came through the SIGSEGV cases intact under either
+  setting (the kernel restores `%g16`–`%g31` after a handler,
+  [kernel-interface.md](kernel-interface.md), "Signals"). On the 4C a
+  handler loses it when its frames push the interrupted window out of
+  the register file (a handler that recurses, a big interrupted window;
+  inferred), and about once in 1,200 signals otherwise; on the 8C2 and
+  2C3 every handler that runs while it is held does. The 128-bit high
+  half behaves the same: with `nfx = 1` it read 0 after a signal
+  handler had run while the function held it (3 of 3 runs on each
+  machine), and 0, stale data or, by chance, the right value after a
+  call deep enough to spill the window; with `nfx = 0` it survived both
+  (hw: `tools/isa-probes/isaleft.c` `qspill`, 8C2 and 2C3). So any
+  extended value in a window register needs `nfx = 0` in the function
+  that owns the window, however briefly it is held (between a `movif`
+  and its `movfi`) and whether or not the function calls: a signal, and
+  now and then an interrupt, can come anywhere (the proof-of-concept
+  back end's A26). lcc clears it in every function that computes with
+  an 80-bit value (`movif`, `fdtofx`, `istofx`, `fx*` arithmetic,
+  conversions and compares), leaves included and also when the value
+  sits only in `%g16`/`%g17`. A function that only moves a `long double`
+  as its two 64-bit parts (copies through memory, arguments returned,
+  stored or passed on, call results returned) holds no extended value
+  and keeps `nfx = 1`, except that from `-O1` on it inherits `nfx = 0`
+  from the function before it in the file when that one had it (a
+  function without a `long double` in a register between them stops
+  this) [lcc 1.29.16 `-O3`, v3, v5.8c2, v6.2c3, and 1.31.05:
+  `tools/abi/probes/pocabi2_nfx.c`]. Unipro's clang clears it in
+  exactly the functions that compute with an 80-bit value (unipro
+  20.1.8 `-O2 -march=elbrus-v3`, the same file). lcc's v5 and v6 code
+  also clears it in every function that uses a 128-bit register, leaves
+  included, and across a call it keeps a 128-bit value in its stack
+  frame, not in a register (lcc 1.29.16 `-O3`, small vector-type
+  functions).
 - **`dbl`** (v3+): with `dbl = 1`, 32-bit integer ALU operations
   zero-extend their result into the whole 64-bit register; with
   `dbl = 0`, they write only the low half and leave the upper half
@@ -512,16 +551,29 @@ qemu as v3 and v5.
   compares `fxcmp*xb` into predicates. Loads and stores go through the
   two parts: `ldd`/`ldh`, then `movif`; `std` of the mantissa and `sth`
   of `movfi`'s result. lcc's v5 code is the same.
-- **A `long double` kept in a window register across a call needs
-  `nfx = 0`** in the function that owns the window: with `nfx = 1` the
-  16-bit part is lost when the window is spilled to the procedure stack
-  (a deep call): it reads back as 0 on the Elbrus-8C2 and as 0 or stale
-  data (`0x1f98` in one run) on the 4C, though it survives a call that
-  does not spill (hw, qemu). A signal handler spills the window too (the
-  same loss for the 128-bit high half, above; for the 16-bit part
-  inferred). lcc sets `nfx = 0` in every function that touches
-  `long double` and keeps such values in window registers across calls.
-  Global registers are not spilled.
+- **A `long double` held in a window register needs `nfx = 0`** in the
+  function that owns the window, across a call or not. With `nfx = 1`
+  its 16-bit part is lost when the window is spilled to the procedure
+  stack: after a deep call it reads back as 0 on the Elbrus-8C2 and as
+  0 or stale data (`0x1f98`, `0x0005`) on the 4C, while the 2C3 mostly
+  keeps it; a call that does not spill keeps it (hw, qemu: `ldouble.c`).
+  It is also lost when a signal handler runs while it is held: every
+  handler on the 8C2 and 2C3, on the 4C a handler whose frames spill the
+  window and about one signal in 1,200 otherwise. System calls and page
+  faults keep it, timer interrupts nearly always (hw: `pocabi2.c`; the
+  table under `nfx` above). The proof-of-concept back end, holding its
+  values only between `movif` and `movfi`, got 104 and 143 wrong
+  results of 8,192,000 on the 4C and 8C2 under a 50 µs profiling timer
+  until it set `nfx = 0` (its A26; its counts not rechecked). Which
+  functions lcc gives `nfx = 0`: under `nfx` above. Global registers are
+  not spilled, and their extended parts survive signal handlers [hw:
+  `pocabi2.c`, `%g16` and `%g20`, all three machines], but not system
+  calls, which empty `%g16`–`%g31`
+  ([kernel-interface.md](kernel-interface.md), "System calls"). An
+  ordinary write of the register keeps the 16-bit part (`addd`, `adds`
+  under `dbl = 0`, `ldd`), except that on the 4C a `faddd` result
+  clears it to 0, where the 8C2 and 2C3 keep it [hw: `pocabi2.c`];
+  nothing should rely on either.
 - The arithmetic is x87 extended precision exactly: 64-bit mantissa,
   round to nearest even, denormals down to 2^-16445, overflow to
   infinity; `sqrtl(2)` is correctly rounded. Unnormals and pseudo-NaNs

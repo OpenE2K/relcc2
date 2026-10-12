@@ -15,6 +15,7 @@ code.
 | [atomics.md](atomics.md) | Atomic read-modify-write, memory orders, 16-byte atomics |
 | [source-compat.md](source-compat.md) | Predefined macros, inline-asm constraints, modifiers and clobbers, register names, lcc options that change code |
 | [kernel-interface.md](kernel-interface.md) | System calls, auxiliary vector, contexts (also shared between threads), signals and their frames, hardware and data stacks, address space, `-pg`, sanitizers, static PIE |
+| [mode32.md](mode32.md) | For completeness (the GCC port targets 64-bit mode only): lcc's 32-bit mode (`-mptr32`): data layout, `ldgd*`/`stgd*` and `getpl`, calling convention, ELF32, TLS, system calls and signals, address space, why the modes can't be mixed |
 
 ## Sources
 

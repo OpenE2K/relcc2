@@ -357,8 +357,9 @@ DTP0 = start of the module's TLS segment.
 | 119, 120 | `R_E2K_ALIGN_RELAX`, `R_E2K_MCSTBUG_140436_RELAX` | – | none (linker relaxation markers) | |
 
 The 32-bit-mode types (8–11: `R_E2K_32_JMP_SLOT`, `_COPY`, `_RELATIVE`,
-`_IRELATIVE`) and the protected-mode types (3, 4, 100, 101: `R_E2K_AP_GOT`,
-`R_E2K_PL_GOT`, `R_E2K_AP`, `R_E2K_PL`) are not used in e2k64.
+`_IRELATIVE`; [mode32.md](mode32.md), "ELF") and the protected-mode types
+(3, 4, 100, 101: `R_E2K_AP_GOT`, `R_E2K_PL_GOT`, `R_E2K_AP`, `R_E2K_PL`)
+are not used in e2k64.
 
 There is no `GLOB_DAT`: dynamic GOT entries use `R_E2K_64_ABS` against the
 symbol, or `R_E2K_64_RELATIVE` for local ones (lcc output). There is no
@@ -633,4 +634,5 @@ same again built for the Elbrus-2C3 (v6, `run.sh v6.2c3 --ssh-port
 
 ## Not covered yet
 
-- 32-bit and protected modes (separate relocation types, `ldgd`, `%g12`).
+- Protected mode (separate relocation types, `%g12`). 32-bit mode is in
+  [mode32.md](mode32.md).

@@ -48,14 +48,14 @@ these entries for a 64-bit task (`%osem`; kernel
 
 | Entry | Use |
 |---|---|
-| 1 | 32-bit system call table (enabled for 64-bit tasks too) |
+| 1 | 32-bit system call table (enabled for 64-bit tasks too: a 64-bit process calling it gets the compat behaviour, pointers cut to 32 bits [hw: [mode32.md](mode32.md)]) |
 | **3** | **64-bit system call table**: what glibc and the uapi headers use |
 | 4 | deprecated: a negative number −N calls N in an old table, others go to entry 3 (kernel `kernel/trap_table.S:554-597`) |
 | 5, **6** | fast system calls, 32-bit and **64-bit** (below) |
 | 7, 8 | fast and ordinary calls of protected mode: protected tasks only |
 
-32-bit code uses entries 1 and 5, protected code 8 and 7; both are out of
-scope here.
+32-bit code uses entries 1 and 5 ([mode32.md](mode32.md), "Kernel"),
+protected code 8 and 7; both are out of scope here.
 
 ```
 { sdisp %ctpr1, 0x3              ; entry 3
@@ -1306,7 +1306,7 @@ drivers expect anyway. A static link with an ifunc crashes ld
 
 ## Not checked yet
 
-- Disabled entries and entry 4; fast call 5.
+- Disabled entries and entry 4.
 - `sigreturn` with an edited `uc_mcontext.cr0_hi` (resuming elsewhere)
   and `uc_extra.bgr`; all of `uc_extra.g[]` (only `%g16`–`%g19` were
   edited); `%bgr` as a handler finds it (source only).

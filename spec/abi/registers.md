@@ -69,6 +69,17 @@ proof-of-concept backend's probe, `docs/spec-poc-findings.md` A2):
   that writes an argument register next to its `setbn` works under qemu
   and fails on hardware: a recursion written so dies with
   SIGSEGV at once on the 4C; `tools/abi/probes/sysabi.s`, `sa_down`.)
+  lcc fills that instruction (lcc 1.29.16 `-O3`, Lua 5.4.7's 724
+  functions, v3 and v6.2c3 alike within a few functions; the
+  proof-of-concept back end's P73). Besides `setwd` it holds `setbn`
+  (618 functions) or `setbp` (76), `getsp` (649; always ALC0, the only
+  channel it has), a prepare (706: a `disp` to the first callee or
+  `return %ctpr3`), loads through the argument registers (361: up to
+  three beside `getsp`, which takes ALC0, four without it) and up to
+  five integer operations, mostly constants for later: 2 to 10
+  operations in all. Nothing there reads `getsp`'s result, which reaches
+  an integer operation 2 cycles later
+  ([timing.md](../isa/timing.md)) [lcc].
 
 What windows cost (`pocchk2.c`, `%clkr`; 4C, 8C2 and 2C3 alike; the
 proof-of-concept back end's I31):

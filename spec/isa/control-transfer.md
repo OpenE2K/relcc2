@@ -405,13 +405,53 @@ call, a `switch`, an early exit and an indirect call:
   tail call in a `switch`).
 - Calls: `disp %ctprN, f` well ahead, then `call %ctprN, wbs = 4`;
   conditional calls (`call %ctpr1, wbs = 4 ? %pred0`) next to the opposite
-  `ct` for if/else.
+  `ct` for if/else. At `-O3` most calls are predicated: 12,999 of 20,519
+  in lcc 1.29.16's SQLite for v5, and 2,592 of 5,921 in Lua 5.4.7 for v3.
+  Each callee is prepared in its own CTPR before the condition is known,
+  so two predicated calls in opposite arms run back to back: `if (f ==
+  2) lng (l); else dbl (d)` is `disp %ctpr1, dbl` and `disp %ctpr2, lng`
+  before the compare, then `call %ctpr2 ? %pred0` and, in the next
+  instruction, `call %ctpr1 ? ~%pred0` (v3, v5.8c2 and v6.2c3 alike). A
+  CTPR prepared before a predicated call is used after it only under a
+  predicate that excludes the call's, since a taken call empties all
+  three (above; a call under a false predicate leaves them). `sqrt` with
+  `errno` is `fcmpledb 0, x` into `p`, an unconditional `fsqrtid,sm`,
+  `call %ctpr2 ? ~p` to libm's `sqrt` (the `disp` in the function's first
+  instruction) and `fsqrttd,sm ? p`. A prepare takes no predicate (CS0
+  has no condition field, [bundle.md](bundle.md)), so lcc prepares
+  unconditionally [lcc; the proof-of-concept back end's P67].
 - After every call it prepares again whatever the rest needs (the loop's
   back edge, the next call, the return), as the hardware requires.
 - Counted loops use loop mode: `disp %ctpr1, head` before the loop and
   `ct %ctpr1 ? %NOT_LOOP_END` with `loop_mode`, `alc`, `abn`
   ([loops.md](loops.md)).
-- `switch`: the target is loaded from a jump table and moved with
-  `movtd,0,sm` into `%ctpr1`; indirect calls the same way, 9 cycles before
-  the `call`.
+- `switch` (lcc 1.29.16 at `-O3` for v3, v5.8c2 and v6.2c3 alike, and
+  at `-O2` for v3; lcc 1.31.05 `-O3` for v3; generated switches of N
+  arms, K of them calling; the proof-of-concept back end's P65 and
+  P72). lcc counts arms, not case values: a run of consecutive values
+  with one target counts once, so 32 values in 8 ranges stay small. A
+  switch of up to 17 arms becomes predicated code with no table. The
+  selector is compared
+  against each value into predicates (`cmpesb`, up to four an
+  instruction), `landp` trees join the arms' conditions, the arms' loads
+  and arithmetic run `,sm`, their stores are predicated, and each arm
+  leaves through a conditional `ct %ctpr3 ? %predN`. Up to 13 arms
+  without calls make one block; from 14 arms, or with calls, range
+  compares (`cmplesb`, with a `ct` to the other part) split the values
+  into a few such blocks first. SQLite's `sqlite3VdbeSerialGet` (12 case
+  values in 9 arms and a `default`, v5.8c2) is two blocks split at 5, 34
+  wide instructions in all. At `-O3` the arms' calls are predicated too
+  (`call %ctprN ? %predK`, each callee prepared in its own CTPR
+  beforehand); with all 17 arms calling, the switch stays predicated.
+  lcc builds a jump table in two cases: from 18 arms, and from 6 arms
+  when 6 or more of them end in a tail call (`return g (x)`, which
+  becomes a `ct` to `g`; with 5 such arms, of 6 or of 17, the switch
+  stays predicated). The table code is a bound compare (`cmpbedb`), an
+  `ibranch` out of range, `shld`, an `ldd` of the target from a `.T.N`
+  table, `movtd,0,sm` into `%ctpr1` and the `ct` 9 cycles after the
+  `movtd`: about 14 cycles from the bound compare to the arm on v3 (3 for
+  the load), 16 on v6 (5). Indirect calls use `movtd` the same way, 9
+  cycles before the `call`. Labels as values (`goto *p`) go through such
+  a table too ([source-compat.md](../abi/source-compat.md), "Labels as
+  values").
 - `ibranch` is rare: one in the sample against 20 `ct`s.

@@ -389,6 +389,17 @@ values only for `goto *` in the same function works with either
 compiler; code that prints them, compares them across functions or
 uses them as code addresses (GCC's documented uses for profiling or
 `__builtin_return_address` comparisons) gets 0, 1, 2 from lcc.
+At `-O3` every `goto *p` of a function branches to one shared block:
+a range check of the index (`cmpbedb` against the highest index, an
+`ibranch` out when it fails), `sxt` and `shld`, a load of the code
+address from a second, compiler-made table (`.T.N`), and `movtd,0,sm`
+into `%ctpr1` with the `ct` 9 cycles later. Lua 5.4.7's `vmfetch`
+handlers in `luaV_execute` each load the index (from `disptab`, some
+under a predicate) and branch to that block: about 28 cycles on v6
+from loading the instruction word to the transfer (lcc 1.29.16 `-O3`,
+v3 and v6.2c3; the proof-of-concept back end's P72) [lcc]. A GCC port
+that keeps `&&label` a code address saves the index load, the range
+check and the second table.
 
 ## Headers (source)
 

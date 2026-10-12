@@ -1948,6 +1948,64 @@ check-free semi-speculative form works.
   (`hwloop_optimize`, c6x.cc:5478, `set_modulo_params`,
   haifa-sched.cc:580) — the closest model for E2K's hardware loop mode.
   Selective scheduling can also pipeline (`-fsel-sched-pipelining`).
+- **Hardware loops after register allocation: `hw-doloop.cc`** (P66,
+  P68). C6x, Blackfin, ARC and Xtensa keep a `doloop_end` counter in an
+  ordinary register through allocation and turn the loop into a
+  hardware loop in machine reorg by calling `reorg_loops`
+  (hw-doloop.cc:618; c6x.cc:5870, bfin.cc:3920, arc.cc:8334,
+  xtensa.cc:5341) with three hooks (hw-doloop.h:141–158):
+  `end_pattern_reg` names the counter of a `doloop_end` insn, `opt`
+  converts a loop (for E2K: `rwd` of the count into `%lsr` at least 4
+  cycles ahead, `ct %ctpr1 ? %NOT_LOOP_END`), and `fail` splits the insn
+  back into a decrement and a branch. C6x's `opt` hook is also its
+  modulo scheduler (above). Two things the framework leaves to the
+  port:
+  - *A spilled counter hides the loop* (P66). `discover_loops` skips a
+    `doloop_end` whose `end_pattern_reg` is NULL (hw-doloop.cc:369–371),
+    and every port's hook returns NULL when the counter isn't a register
+    (c6x.cc:5384, bfin.cc:3901, arc.cc:8315, xtensa.cc:5319), so neither
+    `opt` nor `fail` sees such a loop. Allocation spills the counter of
+    a loop that wants every register, since it is live throughout and
+    read once an iteration (the proof of concept's v3 `jacld` in NPB LU:
+    609 operations using all of `%g16`–`%g31` and `%r0`–`%r63`). The
+    ports give their `loop_end` a memory alternative and split it after
+    reload into a load, a decrement, a store and a branch
+    (bfin.md:1977–2018, c6x.md:1482–1519, arc.md:5163–5193); with a
+    register-only pattern LRA reloads the counter around the jump
+    instead, with the store on the successor edges (lra.cc:2012–2030,
+    whose critical edges IRA splits for it, ira.cc:5686–5728), and the
+    loop is lost just the same (inferred). Either way it counts in
+    memory and isn't pipelined. E2K needs the count only on the way in
+    (`%lsr` counts, loops.md), so give the pattern a memory alternative
+    and convert such loops in the port: find a `doloop_end` whose
+    counter is in memory, load the count from the slot into a register
+    dead at the loop's head, write `%lsr` from it and drop the memory
+    counter (checking that nothing reads the slot after the loop). The
+    proof of concept's `jacld` then pipelined (II 103, 4 stages): LU.W on
+    the 4C 23.63–23.79 → 22.19–22.68 s (lcc 17.88; gcc-claude
+    b28002c9f27); the v5 code of that loop got a register for its
+    counter. lcc keeps the count only in `%lsr`, written before the loop
+    (`rwd %g17, %lsr` in `jacld`'s preheader; lcc `-O3`, v3, v5, v6).
+  - *The hook must check where the loop is entered* (P68). A loop's
+    blocks are those reachable from its head in which the counter
+    register is live (`discover_loop`, hw-doloop.cc:225–289), so when
+    allocation reuses that register for another value next to the
+    loop, outside blocks join, and the "loop" can be entered away from
+    its head. `process_incoming_edges` (:158–184) accepts entries that
+    share a source or a destination, which need not be the head, and
+    when it fails a second time, after forwarder blocks are added, the
+    loop is only dumped ("can't find suitable entry", :328–334), not
+    marked bad, with `incoming_src` and `incoming_dest` both NULL (which
+    hw-doloop.h:51–56 says can't be optimized). `opt` is called for
+    every loop not marked bad (:589). ARC and Xtensa return false when
+    `incoming_dest` is NULL or not `loop->head` (`hwloop_optimize`,
+    arc.cc:8016–8030, xtensa.cc:5173–5187); C6x converts only one-block
+    loops (c6x.cc:5502) and asserts the entry (:5505); Blackfin jumps to
+    `incoming_dest` (bfin.cc:3764). Check as ARC does: the proof of
+    concept's hook sent every entry to the head and deleted the loop's
+    code while its setup still named the head's label (xz's `main`:
+    `.L21` undefined at link time, once predicated calls joined the
+    blocks around a short loop).
 - **Modulo scheduling pitfalls** found by the proof-of-concept back end
   (spec/isa/loops.md "For a compiler" has the hardware side: schedule
   with the crossing cost, a kernel with its stores in the last stage
@@ -2380,6 +2438,29 @@ check-free semi-speculative form works.
   CoreMark lost 18% and xz 28% on the 8C2 (the stages cost every way
   in). Never raise II for it; when the ring runs out, halve the distance
   (deriche's II-1 loops need 56 stages at 48 cycles and fit at 24).
+
+  Gathers in loops of unknown length (P74; NPB CG's row loop, `sum +=
+  a[k] * p[colidx[k]]`, 72.6 elements a row in class W, II 4 from the
+  FP add's recurrence in both compilers): lcc uses `p[colidx[k]]` 13
+  iterations (52 cycles) after loading it on v5 and v6 and 8 (32
+  cycles) on v3, and its way into each row costs little because its
+  peeled prologue is packed: the first 14 iterations' loads (45, up to
+  four a wide instruction) take 23 wide instructions, 27 cycles, and
+  the row 34 cycles from its head to the kernel (lcc `-O3`, v5; v6
+  alike; spec/isa/loops.md, "How lcc builds loops"). The proof of
+  concept's kernel read the gather one iteration (4 cycles) after its
+  load, for an L1 hit, and stalled on every miss (4.7 cycles an
+  iteration against lcc's 4.2, measured on the 8C2); at 48 cycles the
+  loop went from 6 to 17 stages and the way into each row cost more
+  than the misses (CG.W 0.75 → 0.78 s); at about an L2 hit's latency
+  (it used 12 cycles up to v5 and 16 on v6; L2 takes 9 cycles on the
+  4C, 11 on the 8C2 and 13 on the 2C3, timing.md) it gained: CG.W 0.75
+  → 0.72 s on the 8C2 (lcc 0.68), 0.81 → 0.77 on the 2C3 (gcc-claude
+  9dbb3274d4f). The same in while loops that often leave early
+  (CoreMark's list searches) cost CoreMark 1%. So give a gather in a
+  counted loop of unknown length at least an L2 hit's latency, and the
+  far distance where the loop is known to run long or the prologue is
+  packed as lcc's is.
 - **Big counted loops want loop mode and array prefetch even when
   overlap gains nothing** (P53): in a loop of hundreds of operations the
   II can't be much below one iteration, so a pipeliner that wants a
@@ -2387,18 +2468,120 @@ check-free semi-speculative form works.
   on L2 (NPB LU's blts, buts and jacld at 1.5 times their modelled
   cycles in the PoC on the 8C2). lcc runs them as `loop_mode` loops that
   don't overlap iterations (no `abn`; only induction and recurrence
-  values cross the back edge) with APB where it can: v5 jacld and jacu
-  in kernels of 105–106 wide instructions with 20 `mova`s, blts in 112
-  with 85 (lcc `-O3`, NPB LU class W; their values in `%b[]`, D1,
-  "Registers above `%r63`"). So decide APB per counted loop and count it
-  when deciding whether pipelining pays; SMS keeps a single-stage
-  schedule only with `--param sms-min-sc=1` (default 2,
-  modulo-sched.cc:1660). The PoC pipelined such loops at an II up to
-  5/4 of one iteration (blts at II 284: LU.W 11.93 → 11.41 s); its two
-  resource-bound loops then had about 260 values live at once, more than
-  the ring and the window hold, and spill slots stored and reloaded
-  across iterations: overlapping loops that big needs placement that
-  keeps lifetimes short, and spill code turned back into values.
+  values cross the back edge) with APB where it can: jacld and jacu in
+  kernels of 105–106 wide instructions with 20 `mova`s on v5 and v6
+  (116 on v3), blts in 112 with 85 (129 on v3, with plain loads) (lcc
+  `-O3`, NPB LU class W; their values in `%b[]`, D1, "Registers above
+  `%r63`"; spec/isa/loops.md, "How lcc builds loops"). So decide APB
+  per counted loop and count it when deciding whether pipelining pays;
+  SMS keeps a single-stage schedule only with `--param sms-min-sc=1`
+  (default 2, modulo-sched.cc:1660). The PoC pipelined such loops at an
+  II up to 5/4 of one iteration (blts at II 284: LU.W 11.93 → 11.41 s);
+  its two resource-bound loops then had about 260 values live at once,
+  more than the ring and the window hold, and spill slots stored and
+  reloaded across iterations: overlapping loops that big needs placement
+  that keeps lifetimes short, and spill code turned back into values
+  (next item).
+- **A pipeliner for loops of hundreds of operations** (P63, P64, P75;
+  NPB LU, the proof of concept on all three machines). GCC's SMS lacks
+  four things such loops need:
+  - *A register-pressure limit* (P64). SMS never checks pressure ("???
+    If (success), check register pressure estimates",
+    modulo-sched.cc:2260); its swing order places each node next to its
+    scheduled predecessors or successors (:1812–1828), which keeps
+    lifetimes short but doesn't bound them, and it runs before
+    allocation (passes.def:512, IRA at :518), which then spills what
+    doesn't fit. A ring holds at most 128 registers (`setbn rsz` ≤
+    0x3f, 2 (rsz + 1) registers; loops.md, "Rotation"), and in a loop at
+    the machine's width the values alive at the worst cycle, not the
+    six channels, are the limit: in the proof of concept `jacu` (575
+    operations) at II 106 in 2 stages has 116 values alive on average
+    but 166 at the worst cycle, for 126 ring names and 49 free
+    registers, and `jacld`'s 2-stage schedules peak at 204–224 against
+    175. One iteration already nearly fills the register file: lcc's v5
+    `jacld` kernel names 177 distinct registers (98 `%b[]`, 63 `%r`,
+    `%g16`–`%g31`) of the 192 in its window and the 16 globals, and lcc
+    doesn't overlap iterations of these loops at all (above). The proof
+    of concept (gcc-claude 2ced4f36492, 02a87b004a2, 1f82859c980) skips
+    IIs a lower bound rules out (half the peak, and the lifetimes over 2
+    II, in pairs), moves nodes within their dependences to cut the peak
+    and then the lifetimes (not loads: moving them nearer their uses
+    cost NPB BT 9% on the 2C3), tries II up to 1.5 times one unpipelined
+    iteration, and runs a loop in one stage, as lcc does, when its MII
+    is within a tenth of one iteration and the overlapped schedule would
+    be more than an eighth longer: `jacld` at II 124, where lcc's kernel
+    takes 106 cycles (105 wide instructions) on v5 and v6 and 118 on v3
+    (lcc `-O3`).
+  - *Stores spread over the schedule* (P64). Only ALC2 and ALC5 store
+    (bundle.md), two a cycle. `jacld` stores 100 elements an iteration
+    (lcc: 75 `staad` and 25 `std`); a forward list schedule of one
+    iteration piled the proof of concept's 115 (its spills included) up
+    at the end, two a cycle; a backward pass from the last cycle spreads
+    them. lcc's v5 kernel stores 29 of its 34 constant zeros in its
+    first 52 wide instructions and 51 of its 66 computed values in its
+    last 26, two a cycle.
+  - *Spill code read as values* (P63). A pipeliner after allocation
+    (C6x's model) meets the allocator's spill code, and a value carried
+    to the next iteration through a slot (stored below, reloaded at the
+    top) is a dependence through memory from the store to the next
+    iteration's load, so every stage must come after the store: the
+    proof of concept's `jacld` (618 operations) didn't schedule until it
+    read through it. LRA's slots are easy to recognise: their
+    `MEM_EXPR` is the artificial `%sfp` decl of `get_spill_slot_decl`,
+    with a known offset and an alias set nothing else has
+    (`set_mem_attrs_for_spill`, emit-rtl.cc:2818–2869, called from
+    lra-spills.cc:161), and LRA shares a slot only between pseudos whose
+    lifetimes don't conflict (lra-spills.cc:24–33). So read a reload of
+    a slot the loop body stores as a copy of the stored value: of the
+    same iteration when the store comes first, of the previous iteration
+    when the load does, and in the first iteration the value loaded from
+    the slot before the loop (gcc-claude b90c3b67c22: `jacld` then
+    schedules at II 105–134). Predictive commoning makes such values: at
+    `-O2` it runs, without unrolling, whenever the loop vectorizer is on
+    (tree-predcom.cc:3571–3588), and in `jacld`'s `j` loop it carries
+    `u[i][j-1][k][0..4]` over from the previous iteration's
+    `u[i][j][k][0..4]` (five chains of distance 1; host GCC 16.2.1 `-O2
+    -fpredictive-commoning -fno-tree-vectorize
+    -fdump-tree-pcom-details`). lcc carries none of them: its kernel
+    reads all 20 `u` elements it needs (four neighbours × 5) with 20
+    `movad` and divides four times every iteration, with no frame
+    access (lcc `-O3`, v3, v5, v6). With this and the pressure limit
+    above the proof of concept's LU.W ran 10.07 → 8.0 s on the 2C3,
+    11.40 → 9.94 s on the 8C2 and 24.39 → 22.48 s on the 4C (lcc 6.51,
+    8.39, 17.88).
+  - *Eviction* (P75). SMS places each node once, in swing order; a node
+    with no free cycle in its window gets an empty row inserted, raising
+    II by one, and after ten such splits SMS starts over at the larger
+    II (modulo-sched.cc:2225–2258), up to `max (max_asap, 2 × MII)`
+    (:1621; `sms-max-ii-factor`, params.opt:1088); a placed node never
+    moves. NPB LU's `blts` (329 operations in the proof of concept,
+    about 115 loads, a recurrence through `v[i][j-1][k][*]` with five
+    divides and 33 dependent FP operations) is bound by that recurrence
+    to II 207, yet every one-pass order the proof of concept tried (body
+    order, earliest starts, least room first) failed below 274: the
+    loads that start an iteration have no predecessors, so every order
+    puts them in the first rows, and the recurrence's last nodes (its
+    stores, in the last stage) wrap into those rows at any II below the
+    chain's length. Rau's iterative modulo scheduling (place the highest
+    node, evict what is in its way and what its dependences no longer
+    allow, place those again; six placements a node) reaches II 207;
+    over 712 pipelined loops of NPB, PolyBench, CoreMark, Lua, zlib,
+    bzip2 and Linpack it shortened 15 (SP's `x_solve` 48 → 30,
+    `z_solve` 72 → 55) and lengthened 2: LU.W 4.4% faster on the 8C2
+    and 7.8% on the 4C, SP 2–2.6%, PolyBench adi 3–6% (gcc-claude
+    62bdc8316cf, 11506a4c3a6, e451fb3964a). lcc doesn't overlap `blts`:
+    a one-stage `loop_mode` kernel of 112 wide instructions taking 253
+    cycles on v5 and v6 (85 `movad`), 129 and 239 on v3 (plain loads),
+    whose operations isa-score bounds at 209 cycles by the recurrence
+    (lcc `-O3`; loops.md, "How lcc builds loops"). So plan for iterative
+    modulo scheduling, or SMS with an eviction step, for loops of
+    hundreds of operations, and compare each loop's II with its
+    recurrence bound to tell a scheduling failure from a real
+    recurrence. The bound is the least II at which no dependence cycle
+    has positive weight when an edge weighs LAT − II × DIST (a
+    longest-path test); SMS's own `rec_mii` assumes one back edge per
+    cycle and rounds `length / distance` down (ddg.cc:780–803), so it
+    can understate it.
 - **Unroll a column walk so each copy has its own area** (P54): on v3–v5
   one area fetches at most a 64-byte line every 2 cycles from L1
   (apb.md, "Timing"), so a load stepping a line or more an iteration
@@ -2452,6 +2635,41 @@ check-free semi-speculative form works.
   1 (LAME 9.34 → 7.64 s on the 8C2, lcc 7.44). lcc makes the loop one
   `loop_mode` block: the load `,sm` every iteration, `merges`, an AAU
   store (lcc `-O3`, v3/v5/v6).
+- **A loop that calls: the errno call and the next iteration** (P84;
+  NPB EP's acceptance loop, `t2 = sqrt (-2.0 * log (t1) / t1)` for the
+  points inside the unit circle, about 78.5%). GCC's scheduler keeps
+  every memory access after a call, const and pure calls included: a
+  call becomes the last memory flush, on which every later load or
+  store depends (sched-deps.cc:1795, :2687–2688, :3909), and it waits
+  for every earlier store (:1769–1771); before reload nothing crosses a
+  call (:3843–3848). So `-fno-math-errno`, which makes `log` const
+  (builtins.def:279–289, :548), doesn't free the loads after it.
+  `tree-call-cdce` turns `y = sqrt (x)` into `if (x < 0) y = sqrt (x);
+  else y = .SQRT (x)` (tree-call-cdce.cc:91–104), so the inline root
+  sits in the arm opposite the call and if-conversion predicates it
+  (D8 gives the shape to use instead: the root on every path, then the
+  call for errno only). lcc (1.29.16, `-O2` and `-O3`, v3, v5, v6)
+  issues `fsqrtid,sm` on every path with `fcmpledb 0, x` into a
+  predicate in the same or the next wide instruction, calls `sqrt` when
+  that test fails (for errno, taking its result on that path) between
+  `fsqrtid` and `fsqrttd,sm`, and only then loads the next point: at
+  `-O3` the next two points' loads and multiplies run beside `fsqrttd`
+  and the tally, at `-O2` beside the tally. The divide overlaps nothing
+  on that path (at `-O2` the next point's work shares the divide's wide
+  instructions only when the current point was rejected and the divide
+  is speculative). lcc's order is the one D8 warns about: for a
+  negative operand nothing raises invalid before its call, which then
+  traps in MCST's libm when `FE_INVALID` is clear. The proof of concept
+  runs each point as one chain (`log` → `fmuld` → `fdivd` → `fcmpuddf`,
+  `cmpesb` → `fsqrtid ? ~p` → `fsqrttd ? ~p` → `call sqrt ? p` → the
+  next point's loads): 39% more samples than lcc in the loop on the
+  8C2, EP.W at 1.10–1.12 of lcc's time on all three machines. D8's
+  shape (P85) gains 1%; `-fno-math-errno`, which removes the `sqrt`
+  call and with it the barrier before the next point's loads, gains
+  nothing more (class A: 55.15 against 55.23 s on the 8C2, 41.27
+  against 41.37 on the 2C3), so neither the call's place nor memory
+  order at the calls explains the rest of the gap; not settled. Keep
+  D8's order.
 - **Branchy loops** are where lcc's lead on integer code comes from
   (zlib `-9`: lcc 1.18 s, the proof-of-concept back end 2.24 s on the
   8C2; P22): lcc turns a chain of tests (zlib's `longest_match`) into one
@@ -2515,9 +2733,10 @@ The model for explicit unit (channel) assignment and for
 generated DFA from a template (`c6x-sched.md.in` + `gensched.sh`),
 real/shadow pairs (`split_delayed_branch` :5118), nop gap computation
 (`reorg_emit_nops` :4989), and a post-RA software pipeliner for its
-hardware loop buffer (`hwloop_optimize` :5478). C6x has an exposed
-(non-interlocked) pipeline, so much of its complexity is not needed for
-E2K.
+hardware loop buffer (`hwloop_optimize` :5478, its `opt` hook for
+hw-doloop.cc; 7.7, "Hardware loops after register allocation"). C6x
+has an exposed (non-interlocked) pipeline, so much of its complexity is
+not needed for E2K.
 
 ### SPARC (`gcc/config/sparc/`)
 

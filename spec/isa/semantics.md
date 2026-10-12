@@ -951,7 +951,12 @@ operation whose first ISA version is 6 (67, without `ibranchd` and
 whose product plus addend differs when rounded once and twice, and two
 with equal operands.
 On the 2C3 and under the community qemu (`-cpu elbrus-v6`, the
-`v6.16c` build; MCST's qemu has no v6):
+`v6.16c` build). MCST's qemu's `-cpu elbrus-v6` is a 2C3 and runs the
+`v6.2c3` build: its `clmul*` and `fma*` results match the 2C3's except
+the denormal flag (which neither qemu sets, "The denormal flag"), and
+it aborts on an assertion (`target/e2k/tcg/translate-lookahead.c:318`,
+`op_descr->is_al`) at `mkfsw`, so the rest of `sem6.c` doesn't run
+under it (`toolchains/sem6-mcst`, 2026-10-12):
 
 | Operations | Result on the 2C3 |
 |---|---|

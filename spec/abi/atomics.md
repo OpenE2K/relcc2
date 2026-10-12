@@ -165,6 +165,50 @@ sequences to CAS loops where the operation exists. MCST's qemu keeps the
 lock across memory accesses, so code that breaks these rules passes
 there and livelocks on hardware.
 
+**A type-9 branch in the loop** (`ibranch L ? %MLOCK || [~]%cmpN`,
+[predicates.md](../isa/predicates.md), "Control transfers") is taken
+when the store failed or the compare in the store's instruction holds
+[hw: `tools/isa-probes/ctlleft.c`, 4C, 8C2, 2C3]. With the lock kept,
+the store is done and the branch follows the compare (`t9_lock`). With
+the lock broken by a load in between, the store is dropped and the
+branch is taken whatever the compare (`t9_lockbrk`, `rb_lockbrk`). So a
+test-and-set acquire can be one loop (ctlleft's `spin9_lock`):
+
+```
+1:  nop 1                                  ! loop head, as lcc's
+    { ldw,0 %dr0, 0x0, %r5, mas = 0x7      ! locked load of the lock word
+      nop 2 }
+    { cmpesb,0 %r5, 0x0, %pred0            ! was it free?
+      stw,2 %dr0, 0x0, %r6, mas = 0x2      ! store 1 (%r6) if the lock holds
+      ibranch 1b ? %MLOCK || ~%cmp0 }      ! retry if the lock was lost or held
+```
+
+It stayed exact in 2 threads × 200,000 lock–unlock rounds on each
+machine. Uncontended it costs what an exchange plus a separate test
+costs with the same gap (`t_tas9` 18.1 cycles a round on the 4C and
+8C2 and 22.1 on the 2C3, `t_tasc_n2` 18.0 and 22.0). Contended, the
+result depends on the machine (ns a lock–unlock round, against lcc's
+exchange, `rbranch` and a separate test, `spinc_lock`):
+
+| Two threads on | type 9 | exchange and test |
+|---|---|---|
+| 4C, one chip (cores 0, 1) | 102–116 | 183 |
+| 4C, two chips (cores 0, 4) | 139–163 | 273 |
+| 8C2, cores 0, 1 | 122 | 96 |
+| 8C2, cores 0, 4 | 55 | 58 |
+| 8C2, unpinned | 59–60 | 68–69 |
+| 2C3, pinned | 98 | 69–74 |
+| 2C3, unpinned (one run) | 68 and 98 | 68–69 |
+
+The two loops differed by one cycle in their load-to-store gap (type 9
+2, the exchange 1), and fairness was not measured, so the contended
+figures compare whole loops, not the branch alone. A compare-exchange
+can't use it, since its store's data depends on the compare. lcc
+doesn't use type 9. MCST's erratum #164666 (E2C3, E12C, E16C) only asks
+that `ibranch(d) ? %MLOCK [|| %cmp] [|| %clp]` not come right before a
+`wait int = 1`, which can trigger falsely (kernel
+`asm/cpu_features.h:660-667`; hwbugs.md lists it as OS-only).
+
 ## Loads, stores and fences (lcc)
 
 | Operation | lcc's code |

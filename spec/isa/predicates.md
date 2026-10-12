@@ -423,7 +423,10 @@ conditional `abgc` cannot share an instruction with any `ct`.
   ? %MLOCK || %cmp0` is taken exactly when the ALC0 compare is true
   [hw]. Not taken it costs nothing and doesn't wait for the compare;
   taken, 12 cycles ([control-transfer.md](control-transfer.md),
-  "Costs"). lcc never uses it (below).
+  "Costs"). In a lock loop it lets a test-and-set acquire test the old
+  value in the unlocking store's own instruction
+  ([atomics.md](../abi/atomics.md), "A type-9 branch in the loop"). lcc
+  never uses it (below).
 - The masking in types 6, 7, 14 and 15 keeps a pipelined while-loop's
   exit test from acting on predicates its prologue stages haven't
   computed yet: `ct %ctpr1 ? ~%pred3 && %NOT_LOOP_END` (lcc's search

@@ -11,7 +11,15 @@ MCST's compiler-rt 11.1.0 from the same tarball as **libgcc**.
 
 **hw** here means the 4C (ALT Linux, kernel `6.1.158-mcst-e4c`), the 8C2
 and the 2C3 (Elbrus Linux 9.5.5, kernels `6.1.0-1.17-e8c2` and
-`6.1.0-1.18-e2c3`) agree, unless a row names one of them. The probes are
+`6.1.0-1.18-e2c3`) agree, unless a row names one of them. The kernels
+are three releases of MCST's tree: the 4C's ALT package
+`kernel-image-mcst-e4c-6.1.158-alt1.9.1` is MCST's 6.1-1.9 (its
+changelog: "updated to 6.1-1.9 mcst source tree"), the others 6.1-1.17
+and 6.1-1.18 (`/proc/config.gz`). `OpenE2K/linux` is at 6.1-1.19-open,
+and its history holds 6.1-1.9 (commit 6a2673970ea0) and 6.1-1.17-open
+(d639a5da9813); line numbers here are 6.1-1.19's unless a commit is
+named. Where the 4C differs, the older tree is the reason ("Overflow
+signals"). The probes are
 `tools/abi/probes/sysabi.c` (sections 1–10; `./sysabi maps` for the PIE
 and static builds), `sigeh.cc` with `sigeh-c.c` (exceptions and
 cancellation), `pgprof.c` (`-pg`), `sanitize.c` (`lcc -S`), `ctlcost.cc`
@@ -23,7 +31,10 @@ calls and in handlers, the chain stack seen from a handler),
 stack grows, a context's stack overflowing), `abileft.c` with
 `abileft.s` (signals in made contexts, switching from handlers, data
 stack overflow in threads and the main thread) and `abileft-san.c`
-(lcc's sanitizers), built by each machine's own lcc 1.29.16.
+(lcc's sanitizers), built by each machine's own lcc 1.29.16, and
+`accerr.c` with `getsp.s` (the `si_code` and `si_addr` of stack
+overflows and bad accesses), built by the cross lcc 1.29.16 for each
+CPU (`e2k-v3.4c`, `v5.8c2`, `v6.2c3`).
 
 ## System calls
 
@@ -244,7 +255,7 @@ which the 4C, 8C2 and 2C3 agree apart from addresses.
   | the rest of the mapping | the stack grows 32 KiB per frame; 65,640 bytes below `uc_stack` are overwritten (65,656 on the 8C2) and no signal is raised |
   | a `PROT_NONE` page | the stack grows over the page; the first store into it gives SIGSEGV `SEGV_ACCERR` at `ss_sp − 16` |
   | one unmapped page | the stack grows over the gap; SIGSEGV `SEGV_MAPERR` at `ss_sp − 16` |
-  | 512 KiB unmapped | the `getsp` fails: SIGSEGV at `ss_sp − 1`, `SEGV_BNDERR` on the 8C2 and 2C3 (`kernel/traps.c:1132-1141`); the 4C's ALT kernel reports `SEGV_ACCERR` (its source is not at hand) |
+  | 512 KiB unmapped | the `getsp` fails: SIGSEGV at `ss_sp − 1`, `SEGV_BNDERR` on the 8C2 and 2C3 (`kernel/traps.c:1132-1141`); `SEGV_ACCERR` on the 4C, whose kernel is MCST's older 6.1-1.9 tree ("Overflow signals" below) |
 
   A fiber library should leave unmapped memory below each context's
   stack, at least one growth step large: the larger of 16 KiB and the
@@ -789,7 +800,8 @@ rounded down to a page: [stack-and-unwinding.md](stack-and-unwinding.md),
 
 **Overflow** [hw: `abileft.c` part 3; the 4C, 8C2 and 2C3 agree apart
 from addresses, except that the 4C reports `SEGV_ACCERR` where the
-others report `SEGV_BNDERR`]. The kernel grows a thread's `USD` as a
+others report `SEGV_BNDERR`: an older kernel, "Overflow signals"
+below]. The kernel grows a thread's `USD` as a
 context's ("User contexts"): by the `getsp` amount, at least 16 KiB,
 but never beyond a total of `RLIMIT_STACK` (`mm/fault.c:1075`). A
 thread of the default size (16 MiB, as `RLIMIT_STACK`) has 5,888 bytes
@@ -850,6 +862,63 @@ every case:
 | main thread, `RLIMIT_STACK` 2 MiB | unmapped | 4 KiB | the bottom moved 16 KiB every 4 levels and `[stack]` grew with it to exactly 2 MiB; after 507 levels the `getsp` failed |
 | main thread, `RLIMIT_STACK` 16 MiB | unmapped | 64 KiB | the same at 16 MiB (255 levels) |
 | main thread | a gap of about 3 MiB, then a 1 MiB mapping | one of about 3.75 MiB | the `getsp` is accepted with the bottom inside that mapping; about 638 KiB of it changed, then `SEGV_MAPERR` at its top, in the gap |
+
+### Overflow signals [hw: `accerr.c`; 4C, 8C2, 2C3]
+
+What a SIGSEGV handler is told when a program runs off its data stack,
+beside plain bad accesses. Each case ran in a child process with the
+handler on an alternate stack, frames filled from the top down; how far
+each stack grows first is in "Threads" and "User contexts" above.
+`SEGV_MAPERR` is 1, `SEGV_ACCERR` 2, `SEGV_BNDERR` 3.
+
+| Case | `si_code` | `si_addr` | Kernel path |
+|---|---|---|---|
+| A load or store to an unmapped page, or to address 0x40 | `SEGV_MAPERR` | the address | no mapping: `vma_lookup` fails (`mm/fault.c:3809-3814`) |
+| A load or store to a `PROT_NONE` page; a store to a read-only page | `SEGV_ACCERR` | the address | `access_error` (`mm/fault.c:3210-3240, 3615-3617`) |
+| A load or store 64 bytes below the main thread's `[stack]`, no `getsp` | `SEGV_MAPERR` | the address | as unmapped: the fault path only looks the address up (`vma_lookup`) and never extends a stack mapping; only a `getsp` grows one |
+| A load or store in glibc's guard page, directly or from frames whose `getsp` the kernel accepted past it | `SEGV_ACCERR` | the first access in the guard | as `PROT_NONE` |
+| A store into an unmapped hole that an accepted `getsp` spans (one unmapped page, then a mapping, below a `pthread_attr_setstack` stack or a made context) | `SEGV_MAPERR` | that store | as unmapped |
+| A `getsp` the kernel refuses to grow the stack for: nothing mapped below a `pthread_attr_setstack` stack or a made context; a `PROT_NONE` page, then nothing; a `PROT_NONE` page, then a hole; the main thread at `RLIMIT_STACK`. A literal amount (a fixed array) and a register one (`alloca`) alike | **`SEGV_BNDERR`** on the 8C2 and 2C3, **`SEGV_ACCERR`** on the 4C | **the interrupted `USD`'s bottom − 1**, the first byte below the stack, even when that byte is in a `PROT_NONE` page. At `RLIMIT_STACK` the kernel first grows the stack to exactly the limit, so this is `[stack]`'s top − the limit − 1 | `expand_user_data_stack` fails (`mm/fault.c:1037-1172`), then `force_sigsegv_expand_stack` (`kernel/traps.c:1132-1141`) |
+| A `getsp` whose amount the kernel cannot read (in `%g8`, 4 MiB: [stack-and-unwinding.md](stack-and-unwinding.md), "User stack") | `SEGV_BNDERR` | the `getsp` instruction | `GETSP_OP_FAIL`: `S_SIG` with the trap's `TIR.ip` (`kernel/traps.c:1178`, `include/asm/traps.h:24-38`) |
+| The chain stack beyond `RLIMIT_PC_STACK` | SIGKILL; no handler runs | – | "Hardware stacks" above |
+
+With `SEGV_BNDERR`, `si_lower` and `si_upper` are 0: the kernel sends
+these with `force_sig_fault`, not `force_sig_bnderr`. The kernel log
+records a refused growth of a thread's or a context's stack, rate
+limited: `expand_user_data_stack(): user data stack overflow: stack
+bottom …, top …, sp …, free size …` or `… jumped over a hole …-… or
+inconsistent VM_GROWSDOWN flag` (`mm/fault.c:1104-1127`). It records
+nothing for the main thread at `RLIMIT_STACK`, whose path has only a
+debug print (`mm/fault.c:1075-1080`).
+
+**The 4C's `SEGV_ACCERR` comes from its older kernel** [source; hw:
+the `%g8` case]. In MCST's 6.1-1.9 tree (commit 6a2673970ea0) the same
+function is named `force_sigsegv_array_bounds` and sends `SEGV_ACCERR`
+(`arch/e2k/kernel/traps.c:1174-1183` there); 6.1-1.17-open (d639a5da9813)
+renamed it and sends `SEGV_BNDERR`, with the same address (MCST's
+#100842 in the comment: "the first byte below the stack"). The
+unreadable amount gives `SEGV_BNDERR` in both trees (`:1224` in 1.9),
+and the 4C reports `SEGV_BNDERR` for it, so the two kernels differ only
+in that one constant. The growth checks of `expand_user_data_stack`,
+the page-fault codes and every other case above are the same on all
+three machines. The kernel configuration plays no part: the function has no
+`#if`, and the three kernels' stack, guard and VMA options are the same
+(`/proc/config.gz`). ALT ships MCST's tree unchanged: the
+`kernel-image-mcst-e4c-6.1.180-alt1.17.1` source package that ALT's
+e2k Sisyphus now carries ("updated to 6.1-1.17 mcst source tree") has
+the same `arch/e2k`, `mm` and `kernel/signal.c` as d639a5da9813
+[source: the package unpacked and compared]. So an updated 4C will
+report `SEGV_BNDERR` too (inferred).
+
+A SIGSEGV handler that wants to recognise a data stack the kernel
+would not grow should therefore accept both codes, or better, compare
+`si_addr` with the interrupted stack's bottom, `uc_mcontext.usd_lo`'s
+pointer (bits 0–47) minus `usd_hi`'s size (bits 32–63) ("Signals",
+the frame table; [stack-and-unwinding.md](stack-and-unwinding.md),
+"Stack registers"): a refused growth reported exactly bottom − 1 in
+every case, and no other case did [hw]. On 6.1-1.9 a refused growth
+whose bottom − 1 lies in a guard page has the code and an address of a
+store into the guard; only that comparison separates them (inferred).
 
 ## Address space [hw, `sysabi.c` sections 6 and `maps`]
 
@@ -1010,7 +1079,3 @@ drivers expect anyway. A static link with an ifunc crashes ld
   `freecontext_e2k` of a context running in another thread (the kernel
   checks only the calling thread's context, so presumably it is freed:
   source).
-- Why the 4C's ALT kernel reports a failed growth of the data stack as
-  `SEGV_ACCERR` rather than `SEGV_BNDERR`, for contexts, threads and the
-  main thread alike ("User contexts", "Threads"; its source is not at
-  hand).

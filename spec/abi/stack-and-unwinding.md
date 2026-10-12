@@ -23,7 +23,9 @@ Each thread has three stacks (guide 9.1.1):
   `traps.c`). It reads literals, window and rotating
   registers (from the procedure stack) and its saved copies of
   `%g16`–`%g31`, but for `%g0`–`%g15` (or a tagged value) it fails and
-  the process gets SIGSEGV (`SEGV_BNDERR`). On the 4C
+  the process gets SIGSEGV (`SEGV_BNDERR`, `si_addr` the `getsp`
+  itself, on all three machines: [kernel-interface.md](kernel-interface.md),
+  "Overflow signals"). On the 4C
   (`tools/abi/probes/getsp.c`): 16 KiB, 256 KiB and 4 MiB with the
   amount in a window register, `%g16` or `%g24` all work; with `%g8`
   16 KiB works (no growth needed) and 256 KiB and 4 MiB die. So the

@@ -77,7 +77,7 @@ APS fields (APLS is the 32-bit `disp`):
 | 31 | `ct` (left) / `dpl` (right) | `ct = 1`: last instruction of the program; it must be set in the last instruction's left half. `dpl = 1`: the right half's other fields are ignored and its area streams the same array as the left half's, with a position of its own (channels 2 and 3 read element 0, then 1, as channels 0 and 1 do) [hw]; lcc always writes 0 |
 | 30 | `si` | Secondary index, v1 only; gas rejects it on v2+ |
 | 28–29 | `dcd` | "Data cache disabled" (kernel `aau_context.h`; the guide's "cd", flag disabling the cache memories): 0 all caches; 1 reserved; 2 DCACHE2 off; 3 DCACHE2 and ECACHE off [guide]. Values 1–3 return the same data as 0; a stream with 2 (4C) or 3 (both) leaves other cached data alone, where 0 evicts it (Timing) [hw]. lcc always writes 0: also under `#pragma vector nontemporal`, `-fcache-opt`, `-fcache-opt-l2` and `-floop-st-dcache-mode=nocache_wc_force`, in 1.29.16 for v3, v5, v6 and in 1.31.05 [lcc]; it bypasses caches only per access, through the MAS (timing.md, "Memory") |
-| 25–27 | `fmt` | Element format: 1 byte, 2 half, 3 word, 4 double, 5 quad, 7 quad packed (both qemus accept 7 as a 16-byte format; on the Elbrus-8C2 any `mova` from an area with `fmt` 7 is SIGILL, `movaqp` or `movad`, `mrng` 16 or 32, so it is not a v5 format there). Used to scale the increment and to check alignment |
+| 25–27 | `fmt` | Element format: 1 byte, 2 half, 3 word, 4 double, 5 quad, 7 quad packed (both qemus accept 7 as a 16-byte format; on the 4C, the Elbrus-8C2 and the 2C3 any `mova` from an area with `fmt` 7, `movaqp` or `movad`, is SIGILL `ILL_ILLOPC` at the `mova`, while `bap` itself doesn't trap (`tools/isa-probes/tagx.c` `movaqp7`, `movad7`, `nomova7`; on the 8C2 also with `mrng` 32), so it is a format of none of them). Used to scale the increment and to check alignment |
 | 20–24 | `mrng` | Bytes a `mova` may read per step, from 1 to 31; 0 means 32 |
 | 15–19 | `d` | Descriptor `%aadN` (0–31) |
 | 12–14 | `incr` | Increment register `%aaincrN` (0–7); `%aaincr0` is always 1 |
@@ -158,8 +158,8 @@ and each step adds `size(fmt) × AAINCR[incr]` bytes. A `mova` reads
 | `ind` | Byte offset inside the step, 0–31: `mrng = 32` with `movad` at `ind` 0, 8, 16, 24 reads four consecutive doubles |
 | `movab`, `movah`, `movaw` | Zero-extended |
 | `be = 1` | Byte-swapped; for `movaq` the whole 16 bytes |
-| `movaq,0 ind=I` | Low half from `I`, high half from `I + 8` (gas writes it as two AAS entries, `ind` I and I + 8, in channels 0 and 1); `movaq,2` likewise in channels 2 and 3 |
-| `movaq` / `movaqp` | Quad registers; `movaqp` is v5+ (lcc uses it on v5, v6 with `fmt = 5`, `mrng = 0`) |
+| `movaq,0 ind=I` | Low half from `I`, high half from `I + 8` (gas writes it as two AAS entries, `ind` I and I + 8, in channels 0 and 1); `movaq,2` likewise in channels 2 and 3 (4C, 8C2, 2C3: `tagx.c` `movaq`; with `fmt` 5 the area steps 16 bytes) |
+| `movaq` / `movaqp` | `movaq` fills a register pair (`%qrN`); `movaqp` is v5+: 16 bytes into one quad register (lcc uses it on v5, v6 with `fmt = 5`, `mrng = 0`). gas accepts `movaqp` for every `-mcpu` (v2–v7), but on v3 (the 4C) it does not trap: from an `fmt` 5 or 4 area it writes **a diagnostic value** (`eaed0f70eaed0f70`, tag 1 in both halves) into the low 64-bit register, and a plain use of it is SIGILL `ILL_ILLOPN` (`tagx.c` `movaqp`, `movaqp4`, `movaqp_use`). v3 code must not use it |
 
 ### Diagnostic results [hw]
 
@@ -460,7 +460,8 @@ or by 4 bytes still returns the right (unaligned) 16 bytes, as v5's
 doubleword movas do with a misaligned base (the 4C gives a diagnostic
 value there). `be = 1` reverses all 16 bytes (the low half of the
 result is the swapped high doubleword). An area with `fmt` 7 makes the
-`movaqp` SIGILL on the 8C2.
+`movaqp` (any `mova`) SIGILL `ILL_ILLOPC` on the 8C2, the 2C3 and the
+4C (the `fmt` field, above).
 
 ## How lcc uses APB [lcc, guide]
 
@@ -554,7 +555,7 @@ a return, `eap` or a `%ctpr2` write: all as on the 8C2. What differs:
 | | 8C2 (v5) | 2C3 (v6) |
 |---|---|---|
 | Trap (page fault, signal handler) between movas outside a loop | positions recomputed from the loop counters: the next element repeats | **positions kept**: the next `mova` continues where it was (the kernel saves `%aaldi`, above). Inside a `loop_mode` loop both are correct; an ordinary branch loop is correct only on v6 (Traps, above) |
-| `mova` wider than `fmt` (`movad` on `fmt = 3`) | diagnostic | **data** (the 8 bytes at the position) |
+| `mova` wider than `fmt` (`movad` on `fmt = 3`) | diagnostic | **data** (the 8 bytes at the position); but `movaqp` on `fmt = 4` gave a diagnostic value, `4000000040000000` (`tagx.c` `movaqp4`) |
 | A byte area read by `movad` with a 12-byte step, a half area by `movaw` with a 6-byte step, `movad` at `ind` 4 of a byte area (`w12`, `w6`, `w_ind4`) | diagnostic | **the bytes at each position**, unaligned: a step need not be a multiple of the read (lcc 1.31's APB for such strides, "from Elbrus V6") |
 | Diagnostic value | `eaed0f70eaed0f70`, tag 1 | `4000000040000000`, tag 1 |
 | `aaurrd %aaldi0` after two `movad` | 0x40 | 0x10 (the position in bytes) |
@@ -572,5 +573,7 @@ dot product 7× faster on a 64 MiB array there.
 ## Not checked yet
 
 - v6 on the Elbrus-16C; v7.
+- Why `movaqp` from an `fmt` 4 area is diagnostic on the 2C3, where a
+  `movad` from an `fmt` 3 area gives data ("v6").
 - Why only `%aabfN` with bit 1 of N clear act (the encodings are
   `0x30 | N << 7`).

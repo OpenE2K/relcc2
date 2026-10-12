@@ -421,7 +421,7 @@ groups:
     (apb.md, which gives the correctness rules).
   rules:
   - ops: mova{b,h,w,d,q,qp}
-    does: "Read the next element(s) of an array prefetch area: base + index + displacement + step × n, zero-extended; a diagnostic value instead of a fault. 5 cycles."
+    does: "Read the next element(s) of an array prefetch area: base + index + displacement + step × n, zero-extended; a diagnostic value instead of a fault. 5 cycles. `movaqp` is v5+: gas accepts it for v3, where it writes a diagnostic value."
     use: Software-pipelined loops in `loop_mode` (lcc at -O2+).
     see: apb.md
   - ops: bap eap fapb

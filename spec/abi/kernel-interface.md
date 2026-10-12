@@ -543,6 +543,33 @@ the target `ucontext_t`. It does not touch the global registers, so
 **`%g13`, the thread pointer, stays with the thread**: TLS and `errno`
 are those of the thread that runs the context (the table above).
 
+**A switch into a context that another thread ran last** costs no more
+than any switch when that thread ran on the same core, and 500 to 1,700
+cycles more when it ran on another [hw: `kernleft.c` `cost`; one
+`swapcontext`, `%clkr` read in the switching thread just before it and
+first thing in the context, both on the switching core; medians of
+3,800 switches, ranges over three or more runs under the shared timing
+lock]:
+
+| Into the context | 4C | 8C2 | 2C3 |
+|---|---|---|---|
+| the same thread ran it last | 1,611 | 1,628–1,632 | 1,644 |
+| the same thread, after letting another thread run on its core | 1,631–1,664 | 1,642–1,671 | 1,723 |
+| another thread on the same core ran it last | 1,662–1,664 | 1,663–1,683 | 1,719–1,722 |
+| another thread on another core ran it last | 3,187–3,235 (on another chip: 3,346–3,348) | 2,112–2,212 | 2,634 |
+| `getppid`, for scale | 520–525 | 460–472 | 436–438 |
+
+The kernel does nothing extra for a context that comes from another
+thread: on one core the switch costs what it costs after any other
+thread ran there. A context last run on another core costs about 1,600
+(4C; 1,700 across chips), 500 (8C2) or 1,000 (2C3) cycles more,
+presumably its state coming from the other core's caches (inferred).
+The switch back to the thread's own context then costs 1,849–1,858 on
+the 4C (1,918–2,068 across chips) against 1,605–1,609 after a context
+the thread itself ran, 1,672–1,740 against 1,651–1,656 on the 8C2, and
+1,800–1,848 against 1,641 on the 2C3. ("User contexts", "What a switch
+costs", has the plain round trip.)
+
 **Compilers assume the thread pointer does not change within a
 function.** `tools/abi/probes/ctxtls.c` reads a `__thread` variable
 `tv`, its address or `errno` before and after `swapcontext` [lcc:
@@ -674,6 +701,32 @@ test a new thread T3 took a signal right after `pthread_join`, waited
 | B makes the `exit` system call in a made context that took a signal in A | T3's new `[signal stack]`, mapped at the freed address, was unmapped; T3's second signal killed the process (SIGSEGV) | a chain stack that had grown into the freed page during T3's first signal lost it; T3 ended without any signal after its wait, before its second signal, and the process went on (exit 0) | a chain stack that had grown into the freed page lost it; SIGSEGV |
 | A takes a signal, switches into a made context and back, and exits | as above | the first page of T3's procedure stack was unmapped; SIGSEGV | the same; SIGSEGV (once a hang) |
 | No contexts; or the context holding the `[signal stack]` stays suspended while its thread exits at home; or T3 starts 300 ms after the exit | T3 ran | T3 ran | T3 ran |
+
+**How T3 ends without a signal on the 8C2** [source; the kernel logs
+of these runs; inferred where marked]. When a system call returns, the
+kernel puts back the caller's chain frames it took off the chain
+register file: the hardware refills some and the kernel copies the rest
+into the user's chain stack (`native_user_hw_stacks_prepare` and
+`user_pcsp_stack_copy`, kernel `include/asm/copy-hw-stacks.h:486-519,
+705-775`). The 4C and 8C2 refill only 8 frames (their kernels emulate
+the missing `FILLC`: "CF FILL depth: 16 quadro registers" in the boot
+log, `kernel/ttable.c:435-459`), the 2C3 up to 29 (`FILLC`;
+`include/asm/cpu_regs_types.h:73`, `copy-hw-stacks.h:249-258`). On the
+8C2 every run of the first case logged, with T3's thread id, "chain
+stack could not be copied … to 0xc2e0_0000_d060 size 0x20", an address
+in the lost page, then the same with size 0x120: a system call T3 made
+after its wait (while reading `/proc/self/maps`) needed one 32-byte
+frame copied there, the copy failed, and the kernel ended the thread
+with `do_exit (SIGKILL)` (`copy-hw-stacks.h:772-774`). Only that thread
+ends; no signal reaches the process, and `pthread_join` returns as for
+a normal exit. The second line is the exit path's own full copy
+(`kernel/process.c:1891-1896`). On the 2C3 a system call copies
+nothing unless more than 29 frames are in the register file, so T3 went
+on to its second signal; setting that up copies every frame the kernel
+holds (`kernel/signal.c:1240-1241`), that copy failed (three log lines,
+size 0xc0) and the process got SIGSEGV (inferred). So the same loss
+ends one thread quietly or kills the process, depending on which kernel
+exit first needs the lost page.
 
 **Signals and contexts that move** [hw]:
 
@@ -1393,12 +1446,14 @@ drivers expect anyway. A static link with an ifunc crashes ld
 
 ## Not checked yet
 
-- Disabled entries and entry 4.
-- `sigreturn` with an edited `uc_mcontext.cr0_hi` (resuming elsewhere)
-  and `uc_extra.bgr`; all of `uc_extra.g[]` (only `%g16`–`%g19` were
-  edited); `%bgr` as a handler finds it (source only).
-- Whether a switch to a context that another thread ran last costs more
-  than one between two contexts of one thread (not timed); what ends a
-  thread without a signal when the second unmap of a `[signal stack]`
-  takes a page of its chain stack (the 8C2 row in "Contexts and
-  threads").
+- `sigreturn` with an edited `uc_mcontext.cr0_hi` (resuming elsewhere).
+- Entries 2, 9, 13–15 and 19–31, which the trap table does not name
+  ("Disabled entries").
+- Why the 4C's kernel entries move `%g24`–`%g31` under a nonzero
+  `%bgr.cur`, and whether ALT's newer 4C kernel still does ("Signals",
+  "The rotating globals in the frame").
+- Whether the 4C hands the 16-bit extensions of `%g16`–`%g31` from one
+  process to the next: in `kernleft.c` part 2, the frames of later
+  children held extensions (0x7e06, 0x7e09, 0x7e0e, 0x7e0f) that an
+  earlier sibling had put there through its own frame, and values none
+  of them wrote; on the 8C2 and 2C3 the frames' `gext` read 0 with tag 5.

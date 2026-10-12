@@ -399,6 +399,12 @@ A root computed with plain `fsqrtid`/`fsqrttd`, followed by a `sqrt`
 call made only for errno, works with any flags cleared. The root raises
 invalid first, so `__kernel_standard`'s 0/0 is then an ordinary NaN. A
 call made before the root traps (`libmchk.c` `rootfirst`, `rootlast`).
+The plain root's results are libm's bit for bit
+([semantics.md](../isa/semantics.md), "Square root and reciprocals";
+`tools/isa-probes/pocchk5.c` `sqrt`). A speculative root (`,sm`, as
+lcc `-O3` emits it) raises no flag that is clear, so it doesn't help
+(inferred from [speculation.md](../isa/speculation.md), "Speculative
+operations").
 
 GCC's `gcc.dg/torture/pr68264.c` clears the flags and calls `acos` of a
 NaN. Built by lcc, it dies with SIGILL in `acos` (`-O2` and `-O0`, on
@@ -416,6 +422,28 @@ where C's Annex F wants invalid, divide-by-zero or overflow. MCST's
 (`SVID_libm_err`), which returns a constant (`NAN`, `HUGE_VAL`) for
 most of them. `acosh (0.5)`, `atanh (2.0)` and `remainder (1.0, 0.0)`
 compute 0/0 and do raise invalid. `acos (-1.0)` is π, as it should be.
+
+**MCST's `floor`, `ceil` and `trunc` raise inexact, and `round` needs
+the flags set** [hw: `tools/isa-probes/pocchk5.c` `round` and `libm`,
+on the 4C (ALT's glibc), the 8C2 and the 2C3; libm.so.6 of lcc 1.29.16's
+v3, v5.8c2 and v6.2c3 sysroots, disassembled]. `floor`, `ceil` and
+`trunc` (and `floorf`, `ceilf`, `truncf`) are each a single
+`fdtoifd`/`fstoifs` with immediate 1, 2 or 3
+([semantics.md](../isa/semantics.md), "Other scalar operations"), so
+they raise inexact for every non-integral argument: 368 of 368 in each
+rounding mode on all three machines. C99 to C17 allow that; C23 (F.10.6) and
+GCC's default from C23 on (`-fno-fp-int-builtin-inexact`) don't. `rint`
+raises it, as it should, and `nearbyint` doesn't. Their values are right
+in all four modes. `round`, `roundf` and `roundeven` are speculative lcc
+code: with every flag clear, sweeps of `round` and `roundeven` over the
+probe's values die with SIGILL. With `FE_INEXACT` clear, `round (0.7)`
+returns a diagnostic value; with every flag clear so does `round (2.0)`,
+an integral argument, and `roundf (0.7)` on the 4C and 2C3 (on the 8C2
+it returns a number and raises inexact). With the flags set the values
+are right, except that `round` returns a signalling NaN unchanged:
+neither quieted nor raising invalid. So this libm is no reference for
+the flags of rounding, and its `round` is one more function that needs
+the sticky flags set (above).
 
 ## DWARF register numbers
 

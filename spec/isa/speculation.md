@@ -112,6 +112,7 @@ What happens to a diagnostic operand ([hw] unless marked):
 |---|---|---|
 | ALU or FP operand (`addd`, `faddd`, ...) | SIGILL, `ILL_ILLOPN` | diagnostic result |
 | Compare operand (`cmpedb`) | SIGILL, `ILL_ILLOPN` | diagnostic predicate |
+| x86 flag operation operand (`adds_fw`, `addd_fd`, `smulx_fw`) or `cctop*` operand (`tools/isa-probes/pocchk5.c` `dg`, 4C, 8C2, 2C3) | SIGILL | a diagnostic flags word (tag 1: the result is 32-bit) / a diagnostic predicate, as for `cmpedb,sm` (a predicated `addd,sm` under it, either polarity, gives a diagnostic result) |
 | Diagnostic predicate as an operation's condition (`? %pred0`, and `? ~%pred0` alike) | SIGILL, `ILL_ILLOPN`, at the operation | the operation runs and its result is diagnostic: an `addd,sm`, an `ldd,sm` (its register), a `cmpesb,sm` (its predicate) (`preds.c` `dg_*`; [predicates.md](predicates.md)) |
 | Diagnostic predicate in `merge` | SIGILL, `ILL_ILLOPN` | diagnostic result (`dg_mrg*`) |
 | Diagnostic predicate in `ct ? %pred0` | SIGILL, `ILL_ILLOPN` | — |

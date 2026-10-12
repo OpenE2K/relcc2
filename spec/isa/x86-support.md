@@ -97,7 +97,10 @@ Ranked by how directly a compiler or a JIT can use them.
    flags word is a 32-bit result, so under `dbl = 0` a 64-bit reader
    waits 4 for it (timing.md, "Formats"); test it with `cctop` or a
    32-bit operation. A flag-producing op and the plain op can share an
-   instruction. A JIT for a dynamic language gets cheap
+   instruction. With `,sm` both the flag operations and `cctop*`
+   speculate: a diagnostic operand gives a diagnostic result or
+   predicate, not a trap (speculation.md; `tools/isa-probes/pocchk5.c`
+   `dg`). A JIT for a dynamic language gets cheap
    overflow-checked small integers the same way.
 2. **Publishing JIT code.** After writing code: `wait st_c = 1`, a store
    with MAS 0xf to every 256-byte line of the code, `wait fl_c = 1`

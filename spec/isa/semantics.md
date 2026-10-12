@@ -339,6 +339,16 @@ special values:
   `fsqrttd x, t, r` [guide 10.4.2], and the pair is correctly rounded in
   every mode (0 of 16,040 results differ), with IEEE flags (invalid for
   a negative or a signalling NaN, which becomes quiet).
+- **They give glibc's results**: `fsqrtid` + `fsqrttd` and `fsqrts`
+  match MCST glibc's `sqrt` and `sqrtf` (called with every flag set, so
+  its speculative code computes numbers) bit for bit in all four
+  rounding modes, 605 operands a mode (special values, NaNs included,
+  and random ones; `sqrt (-1.0)` is the default NaN 0xfff8000000000000
+  both ways),
+  and raise invalid exactly for a negative non-zero operand or a
+  signalling NaN [hw: `tools/isa-probes/pocchk5.c` `sqrt`; 4C, 8C2 and
+  2C3 alike]. So an inline root needs the libm call only for `errno`
+  ([registers.md](../abi/registers.md), "MCST glibc's FP bugs").
 - **`fsqrtid` is an intermediate in its own format**, not an
   approximation of √x: with x = m · 2^e (1 ≤ m < 2) it **keeps x's sign
   and exponent field** and replaces the significand by √(m · 2^(e mod
@@ -447,6 +457,24 @@ can use `udivx`/`sdivx` for a 64 ÷ 32 division whose quotient is known
 to fit (x86's `div`), and a remainder only when it knows the dividend is
 below 2^32 × b.
 
+**Round to integral, every immediate** [hw: `tools/isa-probes/pocchk5.c`
+`round`; 4C, 8C2 and 2C3 alike]. `fdtoifd`, `fstoifs` and `pfstoifs`
+(both singles) ran with each immediate 0–15 in the four rounding modes
+on 239 doubles and 238 singles: zeros, halves, ±0.49999…, values around
+2^52 (2^23), subnormals, infinities, quiet and signalling NaNs, and 200
+random values. All 45,760 results and flag sets a machine are what an
+integer model of the roundings gives. Bits 0–1 choose nearest-even,
+down, up or toward zero, unless bit 2 is set, which takes `%pfpfr`'s
+mode instead. Bit 3 suppresses inexact and nothing else. Only a
+signalling NaN raises invalid, and it comes back quiet; no other `FE_*`
+flag is raised (the denormal flag: above). So `floor`, `ceil`, `trunc`
+and `roundeven` without inexact are immediates 9, 0xa, 0xb and 8,
+`nearbyint` is 0xc and `rint` is 4. lcc uses 1, 2, 3, 4 and 0xc for
+`floor`, `ceil`, `trunc`, `rint` and `nearbyint`, so its first three
+raise inexact, and calls `roundeven` [lcc 1.29.16 `-O3`, v3 and v5];
+MCST's libm does the same ([registers.md](../abi/registers.md), "MCST
+glibc's FP bugs").
+
 What lcc uses of these (its C library, libm and libstdc++ for v3, and
 small tests at `-O3`): **`insfs`/`insfd` for bit-field stores**
 (`p->y = v` for a 7-bit field at bit 5 is `insfs word, 0x1c5, v` then
@@ -493,7 +521,11 @@ value, so a compiler can model it as `(x & 0x800) != 0` [hw:
 random upper halves, all eight conditions in ALC0 and ALC3, `cctopo,sm`
 too; 4C, 8C2, 2C3]. The flags word is a 32-bit result: under `dbl = 0`
 the destination's upper half is kept, under `dbl = 1` it is zeroed,
-`smulx_fw` included [hw: `pocchk4.c` `dbl`].
+`smulx_fw` included [hw: `pocchk4.c` `dbl`]. With `,sm` the flag forms
+and `cctop*` speculate like compares: a diagnostic operand gives a
+diagnostic flags word or predicate, and without `,sm` it traps
+([speculation.md](speculation.md); `tools/isa-probes/pocchk5.c` `dg`,
+4C, 8C2, 2C3).
 
 Apart from the flag forms, MCST's qemu differs from the hardware in this
 sweep only in FP flags:

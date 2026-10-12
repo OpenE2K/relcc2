@@ -195,8 +195,8 @@ is in the three YAML files (`v3op_*`, `v3st_*`).
 | 1 | 1 | the tag operations (`tools/isa-probes/tagx.c`, `lat` section; 4C, 8C2, 2C3 alike): `puttagd` through either operand (+1 to the other cluster, as any integer result), `puttags`, `gettags`, `gettagd` (to a 32-bit consumer; a 64-bit one waits 4, Formats) |
 | 1 | 4 | every packed integer operation except the multiplies: add and subtract (also saturating), compares, min/max, averages, shifts (`psllqh` …), packs and unpacks, `pshufh`, `pshufw`, `pmerge`, `pinsh`, `pextrh`, `pmovmsk*`, `psign*`, horizontal add and subtract, logic |
 | 2 | 2 | the x86 flag forms (`*_fb`, `_fh`, `_fw`, `_fd`); combined integer operations through any operand (`and_addd`, `add_xord`, `merge_addd` …) (both: 4 to the other cluster, below); an integer compare, `cmpand*` or `cctop*` → `merge` (v6: 1); the tag-keeping moves `movts`, `movtd`, `movtq` between registers (`tagx.c`; `movtd` → `ct` is 9, Latencies) |
-| 2 | 4 | FP compares into a register (`fcmp*s`, `fcmp*d`, `pfcmp*`), FP min/max (`fmins`, `pfmax*`, `pfmin*`), packed multiplies (`pmulh*`, `pmadd*`, `pmulubhh`), `phminposuh` |
-| 4 | 4 | the FP flags compares `fcmp{ud,od}{s,d}f` (to `cctop` as to any integer op) |
+| 2 | 4 | FP compares into a register (`fcmp*s`, `fcmp*d`, `pfcmp*`; `fcmpeqd` → `addd` 4 in either cluster, Clusters), FP min/max (`fmins`, `pfmax*`, `pfmin*`), packed multiplies (`pmulh*`, `pmadd*`, `pmulubhh`), `phminposuh` |
+| 4 | 4 | the FP flags compares `fcmp{ud,od}{s,d}f` (to `cctop` as to any integer op; 4 to an integer op in either cluster, Clusters) |
 | 4 | — | FP compares into a predicate (`fcmp*b`, `fxcmp*b`) → predicated op or `merge` |
 | 4 | 6 | FP add, subtract, multiply, scalar and packed (`pfhadds`, `pfaddsubs` …); conversions, also packed (`pfdtois`, `pistofs` …) and round to integral, to a consumer of their format; `smulhd`, `umulhd`, `umulx`; the multiply flag forms (`smulx_fw` …); 80-bit `movx`, `movxa`, `movxc` and `fxmul*` with an 80-bit result |
 | 5 | 7 | 80-bit add, subtract and `rsub`, `fxmul*` with a single or double result, conversions to and from 80-bit (`fxto*`, `*tofx`) |
@@ -430,6 +430,21 @@ paths are interlocked (hazard tests `int_fp_use`, `fp_int_use` and their
 `_x` cross-cluster forms see the new value at distance 1). For a
 scheduler: give each result two latencies, own cluster and other cluster,
 and prefer placing a consumer in the producer's cluster.
+
+**FP compares into a register cross for free** [hw:
+`tools/isa-probes/pocchk5.c` `lat`; 4C, 8C2 and 2C3 alike]. `fcmpuddf`,
+`fcmpoddf` and `fcmpudsf` in ALC0 or ALC3 reach `cmpesb`, `cmpandesb`,
+`cctope`, `xors`, `adds`, `getfs`, `getfd` and `addd` in 4 cycles, in
+their own channel, their own cluster and the other cluster alike, and
+`fcmpeqd` reaches `addd` in 4 in either cluster too (the control,
+`faddd` → `addd`, takes 6 in both, as the table says). A consumer one
+or two cycles early stalls 4. A 64-bit read of the 32-bit flags word
+(`getfd`, `addd`) under `dbl = 0` gets it in 4 as well: the wait of
+"Formats" adds nothing to a producer this slow. So an integer consumer
+of these compares gets 4 in any channel, with no crossing cost; a
+scheduler that adds the FP-side crossing to them pads 2 cycles after
+every quiet compare (found by the proof-of-concept back end, P82;
+`tools/isa-score` already gives them 4).
 
 **A store's data** waits like an FP operand, not an integer one
 (`tools/isa-probes/pocchk2.c`, `t_fpst_*` and `t_ist_*`; a chain of

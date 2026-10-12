@@ -210,7 +210,7 @@ groups:
     use: Branch-free FP selects with `and`/`andn`.
     see: semantics.md, "Floating-point compares"
   - ops: fcmp{ud,od}{s,d}f
-    lat: "4 to an integer op or `cctop`"
+    lat: "4 to an integer op or `cctop`, in either cluster"
     does: "x86 `ucomisd`/`comisd` flags into a register: less 0x01, equal 0x40, greater 0, unordered 0x45; `ud` quiet, `od` signalling."
     use: "C's `isless` family: `fcmpuddf` then a `cmpand*`."
     see: semantics.md, "Floating-point compares"
@@ -231,8 +231,8 @@ groups:
     see: timing.md, "Formats"
   - ops: fdtoifd fstoifs
     does: "Round b to an integral value with a as x86 `roundsd`'s immediate (bits 0–1 mode, bit 2 use `%pfpfr`, bit 3 no inexact). v3+."
-    use: "`floor`, `ceil`, `trunc`, `round`(even), `nearbyint`, `rint<mode>2`."
-    see: semantics.md, "Other scalar operations"
+    use: "`floor`, `ceil`, `btrunc`, `roundeven<mode>2` with a = 9, 0xa, 0xb, 8 (no inexact, as C23 and GCC's default for C require); `nearbyint` 0xc, `rint` 4. lcc and MCST's libm use 1, 2, 3 for floor, ceil and trunc, which raise inexact. C `round` has no mode (lcc: x + copysign (0.5, x), truncated, with range guards)."
+    see: 'semantics.md, "Other scalar operations"; every immediate checked by pocchk5.c'
 - title: Combined FP operations
   intro: >
     `X_Y a, b, c` = Y(c, X(a, b)) with a rounding after each stage, 8
@@ -395,7 +395,7 @@ groups:
     does: "Horizontal add/subtract (a's pair low, b's high); `pfaddsubs` (a0 − b0, a1 + b1)."
   - ops: pfdtofs pfdtois pfdtoistr pfstofd pfdtoifd pfstoifs
     does: "One lane, as the scalar operation of the same name (`pfdtofs` = `fdtofs`, …): `pfdtofs`, `pfdtois`, `pfdtoistr` write one 32-bit result, `pfstofd` reads the low single, `pfdtoifd` rounds one double; only `pfstoifs` is packed, rounding both singles to integral with mode a."
-    use: "`pfstoifs`: `floor`, `ceil`, `btrunc`, `rint`, `nearbyint` on `V2SF` with a = 1, 2, 3, 4, 0xc, the values lcc gives scalar `fstoifs` (lcc's `_mm_floor_ps` on v3 is two `pfstoifs 0x1`; its vectorizer keeps these loops scalar). The rest convert one lane at a time: lcc's `__builtin_convertvector` from `V2SF` to `V2DF` is `getfd` (the high single) and two `pfstofd`, from `V2DF` to `V2SF` or `V2SI` two `pfdtofs` or `pfdtoistr` joined by `insfd`; it never uses `pfdtois` or `pfdtoifd` (its x86 headers emit `fdtois`, `fdtoifd`)."
+    use: "`pfstoifs`: `floor`, `ceil`, `btrunc`, `roundeven`, `rint`, `nearbyint` on `V2SF` with a = 9, 0xa, 0xb, 8, 4, 0xc, as for scalar `fstoifs` (both lanes checked with every immediate in pocchk5.c); lcc gives scalar `fstoifs` 1, 2, 3, which raise inexact, its `_mm_floor_ps` on v3 is two `pfstoifs 0x1`, and its vectorizer keeps these loops scalar. The rest convert one lane at a time: lcc's `__builtin_convertvector` from `V2SF` to `V2DF` is `getfd` (the high single) and two `pfstofd`, from `V2DF` to `V2SF` or `V2SI` two `pfdtofs` or `pfdtoistr` joined by `insfd`; it never uses `pfdtois` or `pfdtoifd` (its x86 headers emit `fdtois`, `fdtoifd`)."
 
 - title: Memory
   intro: >

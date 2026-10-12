@@ -336,7 +336,17 @@ mainline libgcc this way, `docs/spec-poc-findings.md` A7, A10, A11):
   configuration without futexes or pinned memory (lcc ships LLVM's
   `libomp`, not libgomp); libquadmath needs the `__builtin_*q` builtins
   (`fabsq`, `copysignq`, `nanq`, `nansq`, `infq`, `huge_valq`) and
-  `-std=gnu17` (glibc's e2k `fenv.h` breaks under C23).
+  `-std=gnu17` (glibc's e2k `fenv.h` breaks under C23). libgo:
+  `-fsplit-stack` needs nothing. GCC's default `supports_split_stack`
+  hook already rejects it (`gcc/common/common-target.def:65-74`,
+  `gcc/opts.cc:1282-1291`), lcc rejects it too, and libgo's configure
+  then builds without split stacks (`libgo/configure.ac:454-499`). E2K
+  cannot support split stacks (`spec/abi/stack-and-unwinding.md`, "No
+  split stacks"). libgo's fallback starts goroutines with `makecontext`
+  (`libgo/runtime/runtime.h:494-500`), which E2K's glibc lacks: it needs
+  `makecontext_e2k` and `freecontext_e2k`, each goroutine gets its own
+  kernel hardware stacks, and every switch is a system call
+  (`spec/abi/kernel-interface.md`, "User contexts").
 - DWARF: MCST's gdb ignores CFI and misreads `DW_OP_call_frame_cfa`, so
   `DW_AT_frame_base` must be a register expression
   (stack-and-unwinding.md, "Debug information").

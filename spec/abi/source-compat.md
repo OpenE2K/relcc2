@@ -233,7 +233,11 @@ GCC accepts a clobber only if it is a register name, an
 `"memory"`, `"cc"` or `"redzone"`, after stripping one leading `%`;
 anything else is "unknown register name" (`gcc/varasm.cc:978-1095`,
 `gcc/cfgexpand.cc:3496-3502`). So `"call"` and `"b[N]"` need to be names
-the port knows.
+the port knows. Both should also clobber `%g16`–`%g31`, as a call does
+(lcc treats both as a call, above): a system call through entry 3
+returns with those registers emptied, and neither glibc's nor the
+uapi's clobber list names them ([kernel-interface.md](kernel-interface.md),
+"System calls").
 
 ### What lcc assumes an asm does (lcc)
 

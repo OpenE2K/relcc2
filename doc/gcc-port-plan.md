@@ -2954,11 +2954,18 @@ and Blackfin (`bfin_gen_bundles`, bfin.cc:3989).
    `--target v3`, `--remote claude@ringo.lan` for hardware). Any failure
    not in `known.txt` is a port bug.
 2. **GCC's testsuite** through DejaGnu with a board that runs programs
-   under qemu-e2k or over ssh on the 4C. GCC ships no board files; relcc2
-   can provide them (section 11). Then:
+   under qemu-e2k or over ssh on the Elbrus machines. GCC ships no board
+   files; relcc2's are in `tools/dejagnu` (`e2k-qemu`, `e2k-4c`,
+   `e2k-8c2`, `e2k-2c3`, `e2k-ssh`; README.md there). With
+   `DEJAGNU=tools/dejagnu/site.exp` and the binutils named
+   `e2k-linux-gnu-*` in `PATH` (`tools/dejagnu/run-gcc-tests.sh -b
+   BUILD` does both):
    `make check-gcc RUNTESTFLAGS="--target_board=e2k-qemu execute.exp"`
    for `gcc.c-torture/execute`, later the whole `check-gcc`, compared with
    `contrib/test_summary` / `contrib/compare_tests` between revisions.
+   Under MCST's qemu a memory fault or a division by zero kills qemu
+   instead of raising a signal, so tests that catch SIGSEGV or SIGFPE
+   need a hardware board.
 3. **GCC's own compat tests** against lcc: `gcc.dg/compat` and
    `struct-layout-1.exp` with `ALT_CC_UNDER_TEST=<lcc>` (sourcebuild.texi
    :4309–4430): a second, independent ABI check.
@@ -3005,8 +3012,9 @@ and Blackfin (`bfin_gen_bundles`, bfin.cc:3989).
 Agents may write specs, data, tests and tools (AGENTS.md decision 2).
 Useful next pieces of relcc2 work for the port, in rough order:
 
-1. **DejaGnu board files** for qemu-e2k and for ssh to the 4C, and a
-   script to run GCC's testsuite with them.
+1. **DejaGnu board files** for qemu-e2k and for ssh to the 4C, 8C2
+   and 2C3, and a script to run GCC's testsuite with them: done,
+   `tools/dejagnu` (a smoke suite checks each board).
 2. **Timing tables** for more generations (v4/v6 via the community)
    with `tools/isa-timing/bench.py`; the 4C (v3) and 8C2 (v5) tables
    are in `spec/isa/timing.md`.

@@ -513,12 +513,16 @@ two independent GOT offsets.
 
 `.eh_frame` CIEs use augmentation `zR` (C) or `zPLR` (C++ with
 handlers), with FDE pointer encoding `0x1b` (`pcrel|sdata4`,
-`R_E2K_32_PC`), personality `0x9c` (`indirect|pcrel|sdata8`, through a
-`DW.ref.__gxx_personality_v0` word, `R_E2K_64_PC`) and LSDA `0x1c`
-(`pcrel|sdata8`). `.gcc_except_table` refers to type infos through
-`DW.ref.*` words with `R_E2K_64_PC`. Return-address column 0, no CFI
-instructions (see [stack-and-unwinding.md](stack-and-unwinding.md)). lcc
-emits no `.eh_frame` for C code at `-O2`. (MCST's readelf can't apply
+`R_E2K_32_PC`). In PIC code the personality is `0x9c`
+(`indirect|pcrel|sdata8`, through a `DW.ref.__gxx_personality_v0` word,
+`R_E2K_64_PC`) and the LSDA `0x1c` (`pcrel|sdata8`), and
+`.gcc_except_table` refers to type infos through `DW.ref.*` words with
+`R_E2K_64_PC`. Without `-fPIC` (`l++ -O2 -c`) lcc writes the personality
+and LSDA as `absptr` (`0x00`), 8-byte `R_E2K_64_ABS` words, and refers
+to type infos directly, also with `R_E2K_64_ABS`. Return-address column
+0, no CFI instructions (see
+[stack-and-unwinding.md](stack-and-unwinding.md)). lcc emits no
+`.eh_frame` for C code at `-O2`. (MCST's readelf can't apply
 `R_E2K_64_PC` when dumping an object's `.eh_frame` and warns.)
 
 ## Stack protector (lcc, unipro, glibc)

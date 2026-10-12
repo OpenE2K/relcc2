@@ -398,7 +398,23 @@ The protocol, as lcc uses it and as measured:
      of the register right after the check gets the right value at the
      lock load's latency. Two lock loads may share one wide instruction
      (ALC0 and ALC3): both keep their entries (`spec.c` `kd_*`, 4C, 8C2
-     and 2C3 alike; the proof-of-concept back end's I30 and I40).
+     and 2C3 alike; the proof-of-concept back end's I30 and I40). A lock
+     load and the check of an earlier lock (another register) may share
+     one too, in any pairing of the lock's channel (ALC0, ALC3) with the
+     check's (ALC2, ALC5), and so may two locks and two checks under one
+     `rbranch`: each check keeps or reloads as it would alone, and each
+     new lock records its entry, also when the instruction's `rbranch`
+     is taken and the compensation code returns with `ibranch` to the
+     next instruction. A lock of the word that a check in its
+     instruction reads loads the word's current value, and a later store
+     to the word removes the new entry ([hw] `tools/isa-probes/damwb.c`,
+     25 cases, 100 runs each, 4C, 8C2 and 2C3 alike; the
+     proof-of-concept back end's P69). A lock and its own check can't
+     usefully share an instruction: the check needs the entry the lock
+     makes, and both write the register (inferred). The `rbranch` takes
+     CS0 as well as the SS transfer, so the check's instruction holds no
+     prepare and no `ct` ([bundle.md](bundle.md), "Bundling
+     restrictions").
 4. **Recovery**: `rbranch label` (= `ibranch label ? %MLOCK`) in the
    **same wide instruction as the check** jumps when the check reloaded,
    to compensation code that recomputes whatever already used the early
@@ -563,10 +579,23 @@ rule is that every check is preceded on every path by its own lock load
 of that register, with no write to the register in between.
 
 lcc pipelines loops with this (`a[i] = b[i] * 3 + a[i - 1]` without
-`restrict`): the lock load runs a few iterations ahead in ALC0, the check
-in ALC5 shares a wide instruction with `rbranch` to a two-operation
-compensation block [lcc]. Options: `-fno-dam`, `-fno-swp-dam`,
-`-fswp-dam-cc` (compensation code in pipelined loops; default at `-O3`),
+`restrict`): the lock load runs a few iterations ahead in ALC0, the
+check in ALC5 shares a wide instruction with `rbranch` to a
+two-operation compensation block [lcc]. NPB IS's histogram loop
+(`prv_buff1[key_buff2[i]]++`; lcc 1.29.16 `-O3`, v3, v5.8c2 and v6.2c3
+alike) takes two wide instructions an iteration: `{ loop_mode; rbranch;
+ldw,3,sm … mas=0x4 ? %pcnt28; adds,4,sm; ldw,5 … mas=0x3 ? %pcnt0;
+movaw,1 }` and `{ loop_mode; alc; abn; ct %ctpr1 ? %NOT_LOOP_END;
+staaw,2; incr,2; getfd,4,sm; stw,5 }`. The lock reads the counter 28
+iterations ahead of its check (it writes `%b[1]`, and the check reads
+that register as `%b[57]`), so up to 28 entries are in use. The keys
+come through array prefetch, both stores sit in the other instruction,
+and the compensation block is one `{ ibranch back; adds,0,sm }`: unlike
+a `disp` + `ct` back, it writes no CTPR, so the APB program in `%ctpr2`
+keeps running ([apb.md](apb.md)). Its `full_verify` loop puts two locks
+(ALC0, ALC3) and two checks (ALC2, ALC5) with one `rbranch` in one
+instruction [lcc]. Options: `-fno-dam`, `-fno-swp-dam`, `-fswp-dam-cc`
+(compensation code in pipelined loops; default at `-O3`),
 `-fno-dam-call`, `#pragma no_dam`; the guide (6.5.4.2) recommends
 `-fno-dam` when a profile shows the compensation code running often
 [lcc-doc, guide].

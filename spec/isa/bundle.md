@@ -485,12 +485,23 @@ gas rejects these combinations within one wide instruction:
   v6; found by the proof-of-concept back end, I46];
 - `disp` and `ldisp` together (both need CS0);
 - two operations in the same channel;
-- a load or store with a MAS together with `setwd`, `wait` or a `call`
-  ("cannot encode MAS: CS1 syllable is busy"): the MAS goes in CS1,
-  which those also use [checked]. CS1 holds the MAS of several loads at
-  once: two lock loads (`ldd,0,sm … mas=0x4` and `ldd,3,sm … mas=0x4`)
-  assemble in one wide instruction and both record their entries (hw,
-  speculation.md).
+- a load or store with a MAS together with `setwd`, `setbn`, `setbp`,
+  `wait` or a `call` ("cannot encode MAS: CS1 syllable is busy with
+  set-instructions", for each of them): the MAS goes in CS1, which those
+  also use [checked, v3, v5, v6]. CS1 has a MAS field for each of ALC0,
+  2, 3 and 5 (opc 6, above), so MAS accesses don't exclude each other:
+  two lock loads (`ldd,0,sm … mas=0x4` and `ldd,3,sm … mas=0x4`), or two
+  locks and two checks (`ldd,0,sm … mas=0x4`, `ldd,2 … mas=0x3`,
+  `ldd,3,sm … mas=0x4`, `ldd,5 … mas=0x3`) with one `rbranch`, as lcc's
+  NPB IS `full_verify` loop has them, assemble in one wide instruction,
+  and each acts on its own entry ([hw] `tools/isa-probes/damwb.c`
+  `four_*`, 4C, 8C2 and 2C3; speculation.md);
+- `ibranch` or `rbranch` together with a prepare (`disp`, `ldisp`,
+  `sdisp`, `return`, `pref`: "CS0 in the current wide instruction is
+  already busy", since `ibranch` keeps its displacement in CS0, above)
+  or a `ct` ("SS.ctop in the current wide instruction is already busy")
+  [checked, v3, v5, v6]. So the instruction of a DAM check with its
+  `rbranch` holds neither a prepare nor a loop's `ct`.
 
 ### Two writes of one register [hw]
 

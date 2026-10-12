@@ -532,6 +532,31 @@ instead of 13). A scheduler should keep the producer's channel free of
 integer operations 2 cycles after an FP-side result it routes to the
 integer side, or place the consumer a cycle later.
 
+The conflict belongs to the producer's issue cycle, not to the
+channel's latest FP-side operation. An FP-side operation (`muld`,
+`fmuld`, `faddd` or `smulx_fw`) issued in the producer's channel one
+cycle after it doesn't hide the conflict: an `addd` or `ldd` in that
+channel two cycles after the producer still delays the producer's
+result. And the second operation's own conflict doesn't touch the
+producer: an `addd` two cycles after the second operation (three after
+the producer) leaves the producer's chain alone. Cycles a step of a
+chain, the producer in ALC0 and its consumer at the producer's latency
+(16 steps timed with `%clkr`, best of 200 runs; 10.75 is 7 plus a
+4-cycle stall step in 15 of the 16 steps, 16 is 12 plus one in each):
+
+| Chain | Second op, ALC0, +1 | `addd,0` or `ldd,0` at +2 | `addd,2` at +2, or nothing | `addd,0` at +3 |
+|---|---|---|---|---|
+| `muld,0` → `addd,1` → `muld` | none, `muld`, `fmuld`, `faddd` or `smulx_fw` | 10.75 | 7 | 7 |
+| `fmuld,0` → `faddd,3` → `fmuld` | the same | 16 | 12 | 12 |
+| `smulx_fw,0` → `adds,1` → `smulx_fw` | the same | 10.75 | 7 | 7 |
+
+[hw] `tools/isa-probes/damwb.c` `wb_*`, 4C, 8C2 and 2C3 alike (the
+proof-of-concept back end's P81; the +3 column was run with `muld` and
+`smulx_fw` as the second operation). So a scheduler must check each
+integer operation or load it places against the FP-side operation
+issued in the same channel two cycles earlier, not only against the
+channel's latest one.
+
 ## Throughput
 
 Measured by `bench.py`'s `tp` kernels: 32 or 64 wide instructions, each

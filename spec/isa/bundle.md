@@ -359,12 +359,26 @@ Bits 28–31 are the opcode:
 | 0 | `setwd` (+ `setbn`/`setbp`) | `setwd` takes `wsz` (bits 5–11), `nfx` (bit 4) and `dbl` (bit 3, v3+) from **LTS0** |
 | 1 | `vfrpsz` + `setwd` (+ `setbn`/`setbp`) | `rpsz` in LTS0 bits 12–16 |
 | 2 | `setei` / `setsft` | `setei`: value in bits 0–7. Bit 27 set means `setsft` |
-| 3 | `wait` | `all_c` bit 0, `all_e` 1, `st_c` 2, `ld_c` 3, `fl_c` 4, `ma_c` 5, `trap` 6 (v2+), `sas` 7, `sal` 8 (v5+) |
+| 3 | `wait` | `all_c` bit 0, `all_e` 1, `st_c` 2, `ld_c` 3, `fl_c` 4, `ma_c` 5, `trap` 6 (v2+), `sas` 7, `sal` 8 (v5+), `las` 9, `lal` 10, `mt` 11, `int` 12, `mem_mod` 13 (v6+), `macp` 14, `fl_c_mode` 15 (v7) |
 | 4 | `setbn` / `setbp` | Applies to opcodes 0, 1 and 4: `setbn` (bit 26) uses `rbs` bits 0–5, `rsz` bits 6–11, `rcur` bits 12–17; `setbp` (bit 27) uses `psz` bits 18–22 |
 | 5 | `call` | `wbs` in bits 0–6, target from `SS.ctop`. With `ctop` = 0, bits 7–9 = 1/2 select `icall`/`hcall`, and CS0 holds the displacement |
 | 6 | MAS | 7-bit memory access specifiers for ALC0 (bits 21–27), ALC2 (14–20), ALC3 (7–13) and ALC5 (0–6) |
 | 7 | `flushr` / `flushc` / `fillr` / `fillc` | Bits 0–3; `fill*` is v6+ |
 | 8 | `vfbg` | `umask` bits 0–7, `dmask` 8–15, `chkm4` 16 |
+
+**`wait` fields** [checked: gas; source: gas `tc-e2k.c`
+`parse_wait_args`, kernel `asm/e2k_api.h:5072-5080`]. gas accepts each
+field only from the version shown ("Invalid `las=' WAIT parameter for
+elbrus-v5"). It sets `st_c` along with `sas` or `las`, and `ld_c` along
+with `sal` or `lal`, unless they are written, and rejects `st_c = 0,
+sas = 1` (and `fl_c_mode` without `fl_c = 1`). MCST's kernel encodes
+its `wait`s with `.word` (`__E2K_WAIT`), so it can set a modifier
+alone. v5 ignores bits 9–11: a `wait` with only them is an empty
+1-cycle instruction, and with `ld_c` or `st_c` it costs what those
+alone cost [hw: 8C2, `tools/isa-probes/memleft.c` `wait`, raw
+encodings]. objdump prints none of bits 9–15 (Known objdump bugs), so
+they are [source] here. What the fields cost and order: timing.md,
+"Every v3 operation"; [atomics.md](../abi/atomics.md).
 
 ## PLS: predicate logic syllables [decoded, except `%bgrpred`, which gas does not accept as a `pass` source]
 
@@ -587,3 +601,7 @@ disassembling; the first four also by the proof-of-concept backend,
   dropped. So objdump can never show `staa` or `incr` correctly, and their
   encodings are marked [source] here. `print_alf` accepts the AAU register forms when
   ALES is `0x01c0` *or* MAS is `0x3f`; it should require MAS `0x3f`.
+- `wait` prints none of bits 9–15 (`las`, `lal`, `mt`, `int`,
+  `mem_mod`, `macp`, `fl_c_mode`), and prints `sas`/`sal` only when
+  `st_c`/`ld_c` are set (`opcodes/e2k-dis.c:2152-2190`): a raw `wait`
+  with `sas` alone shows no `sas`.

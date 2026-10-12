@@ -275,6 +275,47 @@ then `wait all_c` 10, `all_e` 10 (v6 16); `fdivd` then `wait all_c`
 20. A C11 fence or seq_cst store (atomics.md) therefore costs about 15
 cycles after a store.
 
+The other fields [hw: `tools/isa-probes/memleft.c` `wait`; cycles a
+repetition for the `wait` alone, a `std` then the `wait`, and an `ldd`
+then the `wait`, as in the pairs above; 4C / 8C2 / 2C3 where they
+differ; the field bits: bundle.md, "`wait` fields"]:
+
+| `wait` | Alone | After `std` | After `ldd` |
+|---|---|---|---|
+| `ma_c` (also with `st_c`, with `fl_c`, and all six fields) | 6 (with `fl_c` or all six: 8) | **25 / 33 / 20** | 11 / 12 / 13 |
+| `fl_c` | 8 | 10 | 9 |
+| `all_c, fl_c` (glibc's spinlock fence) | 8 | 15 / 15 / 16 | 9 / 9 / 11 |
+| `all_e` | 6 | 10 | 10 |
+| `st_c, sas` (v5+) | 2 | 7 / 5.75 (8C2 / 2C3) | 3 |
+| `ld_c, sal` (v5+) | 2 | 3 | 7 / 3 (8C2 / 2C3) |
+| `ld_c, st_c, sal, sas` (lcc's v5 release) | 2 | 7 / 6 (8C2 / 2C3) | 7 / 3 (8C2 / 2C3) |
+| `st_c, las` (v6) | 2 | 6 | 3 |
+| `ld_c, lal` (v6) | 2 | 3 | 6 |
+| `ld_c, st_c, sas, sal, las, lal, mt` (the kernel's v6 `smp_mb`) | 2 | 6 | 6 |
+| `mt` (v6) | 2 | 3 | 3 (with `ld_c, st_c`: as without it) |
+
+After a store, `ma_c` waits far longer than `st_c` (20–33 against 15–16
+cycles). `fl_c` there costs one cycle more than the store and the
+`wait` take apart (10 against 1 + 8), and `all_e` three more (10
+against 1 + 6), both well short of `st_c`'s 15. A soft modifier (`sas`,
+`sal`, `las`, `lal`) cuts the `wait` alone from 6–7 cycles to 2, and
+after a store from 15–16 to 6–7. After a load the saving varies: `ld_c,
+sal` costs 7 against `ld_c`'s 8 on the 8C2 but 3 against 9 on the 2C3,
+and `ld_c, lal` 6 (2C3). Each modifier costs the same without its
+`st_c`/`ld_c` bit (raw encodings, 2C3), and v5 ignores bits 9–11. What
+these fences cost in atomics, and what the soft bits order: atomics.md.
+
+**`wait trap = 1`** in user mode never returns [hw: all three;
+`memleft.c` `trap`]: the thread stayed in it for 5 s until `alarm`
+killed it, and stayed through five handled SIGALRMs, 20 ms apart,
+without returning (that it is back on the `wait` after each interrupt
+is inferred). It is the kernel's v3–v5 C1 idle state, which the kernel
+leaves only by rewriting the return address in its interrupt handler
+(`arch/e2k/kernel/cpu/iset_v3.c:465` `C1_wait_trap`,
+`kernel/traps.c:1735` `handle_wtrap`); v6 idles with `wait int = 1,
+mem_mod = 1` instead (`asm/e2k_api.h:7833`) [source]. A compiler never
+emits it.
+
 ## Formats
 
 An FP-side result read by an FP-side operation in another format than
@@ -1058,7 +1099,9 @@ conflicts, the store bank rule (two stores agreeing in address bits
   `fxsqrtusx` and `fxsqrtudx`, 16 as before).
 - **`wait`** after a load or an FP operation costs more: `ldd` then
   `wait ld_c`+`st_c` 11 cycles a pair (v3, v5 8: the load's 5), `faddd`
-  then `wait all_e` 16 (10); after a store 16 (15).
+  then `wait all_e` 16 (10); after a store 16 (15), but `ma_c` after a
+  store 20 (25 and 33), and the soft modifiers save more after a load
+  than on the 8C2 ("Every v3 operation").
 - **Store to load**: a reload of the same aligned doubleword in the next
   instruction still costs 7.6 cycles (lcc 1.26's note that v6 removed
   the store-to-load bypass shows no extra cost), but a load of *other*

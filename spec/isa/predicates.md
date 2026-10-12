@@ -30,8 +30,8 @@ Marks:
 
 - 32 predicates `%pred0`–`%pred31`, each a value and a tag (diagnostic
   or not). They are preserved across calls for free: a callee starts
-  with a copy of the caller's, and the caller gets its own back on
-  return [hw].
+  with a copy of the caller's, tags included, and the caller gets its
+  own back on return [hw].
 - Up to **4 compares** write predicates in one wide instruction (ALC0,
   1, 3, 4), up to **3 predicate-logic results** go back to the file
   (CLP/MLP), and up to **6 RLP/MRGC entries** make operations
@@ -57,7 +57,7 @@ Marks:
 | Item | Fact | Source |
 |---|---|---|
 | Registers | `%pred0`–`%pred31`; a function may use all 32 | guide 4.5, 9.3.2 |
-| Contents | a value bit and a tag bit: as (tag, value), (0, 0) false, (0, 1) true, (1, x) a **diagnostic predicate** (DP), from a speculative compare of a diagnostic operand ([speculation.md](speculation.md)) | guide 10.5 |
+| Contents | a value bit and a tag bit: as (tag, value), (0, 0) false, (0, 1) true, (1, x) a **diagnostic predicate** (DP), from a speculative compare of a diagnostic operand ([speculation.md](speculation.md)); such a compare writes (1, 0): the saved image showed value 0 for diagnostic predicates whose old value was 1 (`isaleft.c` `pt_sig`) | guide 10.5; [hw] |
 | Saved image | `CR0.lo` of a chain-stack frame holds the whole file: predicate N's value at bit 2N, its tag at bit 2N + 1 | kernel `cpu_regs_types.h`, gdb `e2k-feature.xml` |
 | Rotation | `%pred0`–`%predP` rotate when `setbp psz = P`: `%predN` (N ≤ psz) is physical `(N + pcur) mod (psz + 1)`; above psz nothing rotates. `BR.psz` is bits 18–22, `BR.pcur` 23–27; `setbp` sets `pcur` to 0, `abp` decrements it, so the old `%pred0` becomes the new `%pred1` ([loops.md](loops.md)) | kernel `ptrace.c`, gdb `e2k-tdep.c`, both qemus; hw in loops.md |
 | Rotating syntax | none: gas takes only `%pred0`–`%pred31` (`%pred[3]` is "invalid predicate") | [checked] |
@@ -70,10 +70,10 @@ BR has no predicate base; the area always starts at `%pred0`.
 
 | Event | What happens to the predicates | Source |
 |---|---|---|
-| `call` | the caller's file is saved in the chain stack (`CR0.lo`) with `BR` (`CR1.hi`); **the callee starts with a copy of the caller's values** (patterns `0x5a5a5a5a` and `0xa5a5a5a5` came back bit for bit from a leaf that read all 32, `call_seen_*`) | [hw]; guide 9.5.3 says only "a new predicate file is created", so don't rely on the contents |
-| return | the caller's file comes back **whatever the callee wrote** (`call_kept_*`: a leaf setting all 32 to false or true changed nothing), and its rotation with `BR` from `CR1.hi` | [hw]; rotation [source] |
+| `call` | the caller's file is saved in the chain stack (`CR0.lo`) with `BR` (`CR1.hi`); **the callee starts with a copy of the caller's values and tags** (patterns `0x5a5a5a5a` and `0xa5a5a5a5` came back bit for bit from a leaf that read all 32, `call_seen_*`; diagnostic `%pred1`, `%pred5` and `%pred30` arrive diagnostic and clean ones clean, `isaleft.c` `pt_seen`, so a plain `addd ? %pred1` in the callee is SIGILL `ILL_ILLOPN`, `pt_use`) | [hw]; guide 9.5.3 says only "a new predicate file is created", so don't rely on the contents |
+| return | the caller's file comes back **whatever the callee wrote** (`call_kept_*`: a leaf setting all 32 to false or true changed nothing), tags included (the caller's diagnostic predicates are diagnostic again after a leaf set all 32 true, `pt_kept`; two the callee made diagnostic don't reach the caller, `pt_mk`), and its rotation with `BR` from `CR1.hi` | [hw]; rotation [source] |
 | trap, syscall | preserved (the kernel saves `cr0`/`cr1` and writes them back) | kernel `regs_state.h` |
-| signal handler | preserved; the handler sees them in `sigcontext` (`cr0_lo`, `cr1_hi`) but **cannot change them**: `sigreturn` reads back only the IP | kernel `signal.c` |
+| signal handler | preserved; the handler sees them in `sigcontext` (`cr0_lo`, `cr1_hi`), tags at bit 2N + 1 (`2144114411441948`: tags `40000022`, values `1a5a5a58`, for a trap in the caller and one in its callee alike, `pt_sig` [hw]), but **cannot change them**: `sigreturn` reads back only the IP | kernel `signal.c` |
 | frames the kernel builds (process entry, signal handler entry, `makecontext`) | start with all 32 false and `BR` 0 | kernel `process.c` (`chain_stack_frame_init` zeroes the CR quad) |
 | `setjmp`/`longjmp` | `jmp_buf` keeps `BR` (rotation) but no predicates; after `longjmp` the frame has the predicates saved at its latest outgoing call, as for window registers | glibc `setjmp_tmpl.S`, kernel `signal.c` |
 | `getcontext`/`swapcontext` | `getcontext` saves the file into `uc_mcontext.cr0_lo`, but `setcontext`/`swapcontext` never load it back: the predicates again come from the frame's latest call | glibc `getcontext.c`, kernel `proc_context.c` |
@@ -83,7 +83,8 @@ So predicates are effectively **callee-saved at no cost**: a value
 computed before a call is still there after it (lcc and glibc rely on
 this: 16.6% of lcc's `%pred` reads read a value written before the
 latest call, and 3,180 `call`s share their instruction with a
-predicate write [lcc]). A callee must write a predicate before reading it.
+predicate write [lcc]). A callee must write a predicate before reading it:
+an inherited one may be diagnostic, and a plain use of that traps.
 
 ### Primary and special predicates
 
@@ -660,7 +661,7 @@ Neither qemu can be trusted on predicates beyond the basics:
 | Behaviour | Hardware | MCST qemu | Community qemu |
 |---|---|---|---|
 | diagnostic predicates | yes | yes | only with `-cpu …,tags=on`; reports `ILL_ILLOPC` instead of `ILL_ILLOPN` |
-| a callee's initial predicates | the caller's | the caller's | the caller's |
+| a callee's initial predicates | the caller's, tags included | the caller's, tags included (`pt_seen`, `pt_kept`, `pt_mk`) | the caller's, tags included (with `tags=on`) |
 | `%spred` | readiness (above) | always false | SIGILL |
 | `%rndpred` | LFSR (above) | always false | decoded as `%pcnt` |
 | `%bgrpred` | not probed | always false | decoded as `%pcnt0` |
@@ -679,5 +680,3 @@ Neither qemu can be trusted on predicates beyond the basics:
   ctcond type 11 (v7; no hardware); type 9 with `ibranchd`, and with no
   integer compare in ALC N or an FP compare or `cctop*` there (gas
   rejects all three, so a test needs hand encoding).
-- The callee's initial predicate **tags** (only clean predicates were
-  passed).

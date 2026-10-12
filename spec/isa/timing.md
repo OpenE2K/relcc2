@@ -233,7 +233,14 @@ result is late anyway). Two patterns serialise: a write after a read of
 pair), and a write of `%pfpfr` does not overlap a divide in flight
 (`fdivd`, `rws` alternating: 22 a pair; with `faddd` 2). So `fesetenv`
 and friends cost a dozen cycles, and FP code should not read the flags
-on a hot path.
+on a hot path. `rrd %clkr` and `rrd %idr` deliver their value 2
+cycles later, and `rrs %core_mode` 4 cycles later (an `addd` 1 cycle
+after the read stalls 4 cycles; for `%clkr` and `%idr` the stall is
+gone at 2 cycles, for `%core_mode` at 4). Back to back, `rrd %clkr`
+and `rrd %idr` issue one a cycle. An `addd` 1 cycle after `rrs %pfpfr`
+stalls 12 cycles, which agrees with the 11 above [hw:
+`tools/isa-probes/sregs.c` `clkr`, the `rd_*` cases; 4C, 8C2 and 2C3
+identical].
 
 **`wait`** (`v3wait_*`) costs 6–7 cycles even with nothing outstanding
 (`all_c`, `ld_c`, `ld_c`+`st_c` 7; `st_c`, `all_e` 6). After the

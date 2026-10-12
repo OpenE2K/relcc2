@@ -832,13 +832,33 @@ without a trap (v3 and v5: SIGILL; v6 reuses the opcode).
 
 ## Other facts [guide]
 
-- `%idr` (read with `rrd`, also in user mode): CPU model in bits 0–7,
-  revision 8–11, L2 write-back length 12–14, core 15–19, node 20–23,
-  hardware virtualisation 24–28 (kernel `e2k_idr_t`). Models (kernel
-  `bootinfo.h`): E2S (4C) 3, E8C 7, E1C+ 8, E8C2 9, E12C 0xa, E16C 0xb,
-  E2C3 0xc, E8V7 0xe; 0 under virtualisation. The 4C reads `0x312203`
-  on core 2 of node 3 [hw]; MCST's qemu `0x2203` (`-cpu elbrus-v3`) and
-  `0x2309` (`elbrus-v5`). lcc's `__builtin_cpu_is` uses its own model
+- `%idr` (read with `rrd`, also in user mode; ready 2 cycles later, one
+  read a cycle): CPU model in bits 0–7, revision 8–11, L2 write-back
+  length 12–14 (2 = 64 bytes, `IDR_WBL_TO_BYTES`), core 15–19, node
+  20–23, hardware virtualisation 24–28 (kernel `e2k_idr_t`). Models
+  (kernel `bootinfo.h`): E2S (4C) 3, E8C 7, E1C+ 8, E8C2 9, E12C 0xa,
+  E16C 0xb, E2C3 0xc, E8V7 0xe; 0 under virtualisation. MCST's qemu
+  reads `0x2203` (`-cpu elbrus-v3`) and `0x2309` (`elbrus-v5`). Pinned
+  to each CPU in turn [hw: `tools/isa-probes/sregs.c` `idr`]:
+
+  | Machine | `%idr` | Fields | Linux CPU, NUMA node |
+  |---|---|---|---|
+  | 4C (4 × E2S) | `0x2203` (CPU 0) … `0x31a203` (CPU 15) | model 3, rev 2, core 0–3, node 0–3 | CPU = 4 × node + core, node = node field |
+  | 8C2 | `0x2309` … `0x3a309` | model 9, rev 3, core 0–7, node 0 | CPU = core |
+  | 2C3 | `0x100210c`, `0x100a10c` | model 0xc, rev 1, core 0–1, node 0, `hw_virt` 1 | CPU = core |
+
+  `sched_getcpu`, getcpu fast call 2 and the `getcpu` system call agree
+  on every CPU. Cost in `%clkr` cycles per call in a loop, with the
+  call: a function returning `rrd %idr` 14–15, the same as an empty
+  function; fast call 2 53–59; glibc's `sched_getcpu` 88–98 (fast call
+  2 behind glibc's wrapper); the system call 467–511. glibc never
+  registers rseq on e2k (the port defines no `RSEQ_SIG`, so
+  `__rseq_size` is 0 on all three machines). `%idr` is therefore a free
+  hint for per-CPU data where a wrong guess only costs speed. It does
+  not replace `sched_getcpu`: Linux numbers CPUs from its own
+  enumeration (the interrupt controller's ids), `%idr` doesn't give the
+  cores per node, and offline CPUs or a hypervisor would break the
+  formula (inferred). lcc's `__builtin_cpu_is` uses its own model
   numbers ([source-compat.md](../abi/source-compat.md)).
 - `getsp src2, dst`: src2 is a 32-bit signed operand; a negative value
   allocates that many bytes on the user stack, and dst receives the new

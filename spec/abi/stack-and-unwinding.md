@@ -94,7 +94,7 @@ of that is user code (inferred: a chain-stack read costs about 300 to
 390 cycles per frame, [kernel-interface.md](kernel-interface.md), "What
 a call costs").
 
-## Stack registers
+## Stack registers (guide 9.3.4; kernel, qemu, glibc, libgcc, lcc, hw)
 
 The positions of the three stacks are kept in state registers. User
 code reads them with `rrd` (`rrs` also works for the 32-bit `%pcshtp`
@@ -353,7 +353,7 @@ Runtimes with many stacks, such as gccgo's goroutines and D's fibers,
 must therefore use contexts with full-size stacks. libgo already has
 such a path for targets without split stacks: `StackMin` is 4 MiB on
 64-bit targets (GCC's `libgo/runtime/proc.c:50-54`), and goroutines
-start through `makecontext` (`libgo/runtime/runtime.h:487-500`). On E2K
+start through `makecontext` (`libgo/runtime/runtime.h:494-500`). On E2K
 that call becomes `makecontext_e2k`, followed by `freecontext_e2k` when
 a goroutine's stack is released, and each context's stack needs
 unmapped memory below it ([kernel-interface.md](kernel-interface.md),

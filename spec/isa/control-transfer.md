@@ -249,11 +249,13 @@ buffer (`tools/isa-probes/pmu.c`, `fetch_*`, `cmpib_*`, `wide*`,
   `disp`, 9 after `movtd`, minus the distance) is counted here too.
 
 Free: a not-taken `ibranch` (it only waits, exactly, for its condition:
-compare → `ibranch` 3), a not-taken `ct`, any prepare (`disp` with `ipd`
-0, 1 or 2, `return`), the `ipd` of the transfer's own instruction, and
-straight-line code from the instruction cache: wide instructions of up
-to 64 bytes issue one a cycle (`tools/isa-probes/ctlleft.c` `s_*`, 4C,
-8C2, 2C3; 40 bytes measured right after a taken branch).
+compare → `ibranch` 3), a not-taken `ct`, any prepare of a cached target
+(`disp` with `ipd` 0–3 or with no SS, `return`; for code not in the
+instruction cache the depth matters, below), the `ipd` of the
+transfer's own instruction, and straight-line code from the instruction
+cache: wide instructions of up to 64 bytes issue one a cycle
+(`tools/isa-probes/ctlleft.c` `s_*`, 4C, 8C2, 2C3; 40 bytes measured
+right after a taken branch).
 
 Whole programs agree (the 4C, CoreMark, `tools/isa-score/profile.py`):
 gcc-claude's code branches with conditional `ibranch`; 6 cycles per

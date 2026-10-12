@@ -27,8 +27,11 @@ Status markers, in addition to bundle.md's:
   by `tools/isa-probes/pocchk3.c` (cases from `gen_pocchk3.py`; the
   proof-of-concept back end's I47–I49), on the 4C, the 8C2 and the
   2C3; `UPSR.ac`, movas wider than their area's format and `%aabfN` by
-  `tools/isa-probes/isaleft.c` (`gen_isaleft.py`) on all three. The
-  emulators model almost none of this; see the end of the page.
+  `tools/isa-probes/isaleft.c` (`gen_isaleft.py`) on all three; the
+  narrow and misaligned AAU loads and stores and what misaligned AAU
+  accesses cost by `tools/isa-probes/apbleft.c` (`gen_apbleft.py`),
+  also on all three. The emulators model almost none of this; see the
+  end of the page.
 - **[guide]**: MCST programming guide, 6.6 (prefetch), 6.3.6 and
   10.9.5, 10.11.6–9, 10.12.3–4
 - **[lcc]**: observed in lcc 1.29.16 and 1.31.05 `-O2`/`-O3` output
@@ -559,7 +562,13 @@ right bytes at the misaligned addresses and nothing else, with no signal,
 on the 4C, 8C2 and 2C3 (`tools/isa-probes/pocchk2.c` `staad_mis`,
 `staaw_mis`; the proof-of-concept back end's I43). So a compiler may use
 AAU stores for arrays of unknown alignment on every version; only the
-loads through APB need aligned elements on v3 and v4 (above).
+loads through APB need aligned elements on v3 and v4 (above). `staah` at
++1, `staaw` at +1 and `staaq` at +1, +2, +4 and +8 also write exactly
+the right bytes, on all three (`tools/isa-probes/apbleft.c` `st_*`).
+v5's `staaqp` doesn't: not 16-byte aligned (+1, +2, +4, +8) it is
+SIGBUS (`BUS_ADRALN`) on the 8C2 and writes nothing, as `stqp` does; the
+2C3 stores it at any offset. What misaligned AAU stores cost: the same
+as `st*` (timing.md, "Misaligned loads and stores").
 
 **MAS.** AAU stores take a MAS as `std` does [hw:
 `tools/isa-probes/memleft.c` `values`; 4C, 8C2, 2C3]. `staad` with
@@ -585,23 +594,50 @@ on shared machines.
 `incr,CH %aaincrN` beside one advances the index after the load, as
 after a store: two `ldaad` with `incr,5 %aaincr0` beside the first read
 consecutive doublewords. A load from a page the program may not read is
-SIGSEGV, as for `ldd` [hw]. lcc 1.29.16 emits no AAU loads: four `-O3`
-loops built for v3, v5 and v6 have none (its loops read arrays through
-APB or ordinary loads), and lcc-usage.yaml has no `aaurr*` (objdump's
-name for `ldaad`, `ldaaw` and `ldaaq`), `ldaab`, `ldaah` or `ldaaqp`
-[lcc].
+SIGSEGV (`SEGV_ACCERR`), as for `ldd`; for `ldaaq` its `si_addr` is the
+address + 8 (`ldaaqp`: the address) [hw: `apbleft.c` `values`]. lcc
+1.29.16 emits no AAU loads: four `-O3` loops built for v3, v5 and v6
+have none (its loops read arrays through APB or ordinary loads), and
+lcc-usage.yaml has no `aaurr*` (objdump's name for `ldaad`, `ldaaw` and
+`ldaaq`), `ldaab`, `ldaah` or `ldaaqp` [lcc].
 
 With a MAS [hw: `tools/isa-probes/memleft.c` `values`, cases from
-`gen_memleft.py`; `ldaad` in ALC2 and ALC5, `ldaaq` and (8C2, 2C3)
-`ldaaqp`; 4C, 8C2 and 2C3 alike except where shown]:
+`gen_memleft.py` (`ldaad` in ALC2 and ALC5, `ldaaq` and, on the 8C2 and
+2C3, `ldaaqp`), and `tools/isa-probes/apbleft.c` `values`, cases from
+`gen_apbleft.py` (`ldaab`, `ldaah` and `ldaaw` with each MAS, and every
+width's `,sm` forms with a cache hint or `be`, each in ALC2 and ALC5);
+each against a readable page, an untouched page and one the process may
+not read; 4C, 8C2 and 2C3 alike except where shown]:
 
 | MAS | `ldaa*` | `ldaa*,sm` |
 |---|---|---|
 | 0 | ordinary load | semi-speculative: pages in an untouched page; a page it may not read gives the diagnostic value |
-| 0x20, 0x40, 0x60 | ordinary load; the cache hints act as on `ldd` (timing.md, "Cache hints in the MAS") | not tried |
-| 0x8 (`be`) | byte-swapped | not tried |
-| mod 2, 3 | **an ordinary load, not a DAM check**: after a lock load (`ldd,0,sm … mas=0x4`) of the same register it reads its own address and never sets `%MLOCK`, where an `ldd,5 … mas=0x3` in its place keeps the early value (`dam_aa03_*`) | mod 3: fully speculative (diagnostic also for an untouched page) |
-| mod 4, 7 | — | v3, v5: **`ldaad` and `ldaaqp` give the diagnostic value for every address**, valid pages included; `ldaaq` (a register pair, tried in ALC2): mod 4 semi-speculative, mod 7 fully speculative. v6: `ldaad` and `ldaaqp` behave as `ldaaq` |
+| 0x20, 0x40, 0x60 | ordinary load; the cache hints act as on `ldd` (timing.md, "Cache hints in the MAS") | semi-speculative, as with 0 |
+| 0x8 (`be`), 0x68 | byte-swapped: each element's bytes reversed (`ldaab` unchanged); `ldaaq` and `ldaaqp` reverse all 16 bytes, so the first register of `ldaaq`'s pair gets bytes 15–8, as `movaq` with `be` | the same, semi-speculative |
+| mod 2, 3 | **an ordinary load, not a DAM check**: after a lock load (`ldd,0,sm … mas=0x4`) of the same register it reads its own address and never sets `%MLOCK`, where an `ldd,5 … mas=0x3` in its place keeps the early value (`dam_aa03_*`) | mod 3 (also 0x23): fully speculative (diagnostic also for an untouched page) |
+| mod 4, 7 (also 0x24, 0x27) | — | v3, v5: **`ldaab`, `ldaah`, `ldaaw`, `ldaad` and `ldaaqp` give the diagnostic value for every address**, valid pages included; `ldaaq` (a register pair, tried in ALC2): mod 4 semi-speculative, mod 7 fully speculative. v6: every width behaves as `ldaaq` |
+
+`ldaab`, `ldaah` and `ldaaw` write the whole 64-bit register,
+zero-extended (under `dbl = 0` too). The diagnostic value is a failed
+load's, `4afafafa4afafafa` with tag 1 in both halves, on all three
+machines (speculation.md; v6's movas give another, "v6" below).
+
+**Misaligned AAU loads work on every version** [hw: `apbleft.c`
+`mis_*`; 4C, 8C2, 2C3]. `ldaah` at +1, `ldaaw` at +1 and +2, `ldaad` at
++1, +2, +4 and +7 (the offset in the base, in `%aasti1` or in the
+literal) and `ldaaq` at +1, +4 and +8 return the bytes there, plain or
+`,sm`, also on the 4C, where the movas of array prefetch need aligned
+elements. One that crosses into a page the process may not read is
+SIGSEGV with `si_addr` the first byte of that page; its `,sm` form gives
+the diagnostic value, and for `ldaaq,sm` only the register whose 8
+bytes reach into that page is diagnostic, the other gets its data.
+v5's `ldaaqp` is the exception: not 16-byte aligned, it is SIGBUS
+(`BUS_ADRALN`, `si_addr` the instruction) on the 8C2, as `ldqp` is, and
+its `,sm` form gives the diagnostic value; the 2C3 reads it at any offset (across into
+a page it may not read: SIGSEGV, or wholly diagnostic with `,sm`).
+Misaligned AAU accesses cost what `ld*` and `st*` do, except that an AAU
+load's latency grows only when it crosses a 32-byte line (timing.md,
+"Misaligned loads and stores").
 
 In a `loop_mode` loop with the APB program running (`movad` → `staad`,
 plus a sum through `ldaad`; 8 iterations, run twice), every combination
@@ -627,6 +663,13 @@ were measured with the line in L1; a line only in L2 presumably costs
 the same (inferred). A stream of AAU loads leaves no line in L1
 (timing.md, "Memory"). So AAU loads are served from L2, as `ldqp` is on
 v5 (inferred): use them only where a load's latency doesn't matter.
+
+Two AAU loads in one wide instruction issue every cycle in a stream.
+Two that read the same 64-byte line again in every instruction take 2
+cycles, aligned or misaligned inside a 32-byte line, on all three
+machines, where two aligned `ldd` take 1; two `ldaaw` 4 bytes apart
+take 1 only when they straddle a 64-byte boundary [hw: `apbleft.c`
+`cost`, `s_ldaad2`, `t_ldaad2`, `t_ldaaw2`, `t_ldaah2`].
 
 ## 128-bit movas (v5+) [hw: Elbrus-8C2]
 
@@ -820,6 +863,3 @@ dot product 7× faster on a 64 MiB array there.
   no TLB events were counted), and why plain loads that miss L1 slow
   down beside an area on the 4C and the 2C3 ("Plain loads beside an
   area").
-- AAU loads ("AAU loads"): `ldaab`, `ldaah` and `ldaaw` with a MAS (on
-  v6 also with `,sm` mod 4 or 7), `,sm` with a cache hint or `be`,
-  misaligned AAU loads, and what misaligned AAU loads and stores cost.

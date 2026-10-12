@@ -253,7 +253,7 @@ groups:
     use: "String and vector tails at aligned addresses (lcc: `strcpy`, `strncat`, `memccpy`)."
     see: semantics.md, "Memory, tag and descriptor operations"
   - ops: ldaaqp staaqp
-    does: "128-bit AAU access through `%aadN` + `%aastiN`; `staaqp` counts as one store for loop-mode store suppression. `ldaaqp` is an AAU load (served from L2); with `,sm` and MAS mod 4 or 7 it gives a diagnostic value for every address on v5 (v6 loads)."
+    does: "128-bit AAU access through `%aadN` + `%aastiN`; `staaqp` counts as one store for loop-mode store suppression. Both need 16-byte alignment on v5 (SIGBUS), none on v6. `ldaaqp` is an AAU load (served from L2); with `,sm` and MAS mod 4 or 7 it gives a diagnostic value for every address on v5 (v6 loads)."
     use: "Pipelined loops: lcc stores with `staaqp` (`memmove`, vectorized loops) and emits no `ldaaqp`."
     see: apb.md, "AAU loads"; loops.md
   - ops: ld{cs,ds,es,fs,gs,ss}qp st{cs,ds,es,fs,gs,ss}{qp,mqp} ldgdqp stgd{qp,mqp} ldcudqp ldapqp stap{qp,mqp} ldrqp strqp

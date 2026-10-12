@@ -944,7 +944,10 @@ lines are 64 bytes, the kernel separates shared data by 64 and an
 atomic's lock covers 64 bytes; 64 for the destructive size follows.
 
 **Misaligned loads and stores** (`pocchk.c`, cycles per wide
-instruction; any misaligned offset costs the same):
+instruction over 32 instructions, fixed costs included; offsets 1, 4, 7
+and 60 from a 64-byte boundary, where its four loads at +0, +8, +16 and
++24 always include one that crosses a 32-byte line, so every misaligned
+offset costs the same there):
 
 | | 4C (v3) | 8C2 (v5) | 2C3 (v6) |
 |---|---|---|---|
@@ -952,8 +955,9 @@ instruction; any misaligned offset costs the same):
 | 2 `std`, aligned / misaligned | 1.0 / 8.0 | 1.0 / 8.0 | 1.0 / 1.0 |
 | load → address of the next load, aligned / misaligned / crossing a 64-byte line | 4.7 / 8.3 / 11.9 | 4.7 / 11.9 / 15.5 | 4.7 / 4.7 / 4.7 |
 
-So on v3 and v5 a misaligned access costs several cycles (a misaligned
-load about 4 more latency, 7–11 across a line), and peeling or
+So on v3 and v5 a misaligned access costs several cycles (a load that
+crosses a doubleword one or two 4-cycle stall steps more latency, one
+that crosses a 32-byte line a step more: below), and peeling or
 versioning for alignment pays; v6 handles misaligned accesses at full
 speed. (lcc keeps `-mstrict-align` up to v4, source-compat.md; the
 8C2's misaligned accesses work but are no faster than the 4C's.)
@@ -961,6 +965,62 @@ speed. (lcc keeps `-mstrict-align` up to v4, source-compat.md; the
 operations"): 32 `ldq` take 33 cycles aligned or at +8 and 133 at +4 or
 +1 on the 8C2, 32 `stq` 41 and 297; misaligned `ldqp`/`stqp` are SIGBUS
 there. On the 2C3 all four take the aligned time at any offset.
+
+What costs is crossing a boundary [hw: `tools/isa-probes/apbleft.c`
+`cost`, cases from `gen_apbleft.py`: one or two accesses a wide
+instruction, 32 and 128 instructions timed and the difference taken, so
+fixed costs drop out (the 8.0 above for two stores is this table's 9
+less the stores still pending when the clock is read, inferred); best
+of 300; several runs a machine, identical except the 4C's `staaq`
+below; base offsets 0, 1, 2, 4, 7, 8, 28 and 60 from a 64-byte
+boundary. AAU accesses (`ldaa*`, `staa*`) cost what `ld*` and `st*` do
+except where shown]:
+
+| Cycles a wide instruction, or a load-and-use pair | 4C | 8C2 | 2C3 |
+|---|---|---|---|
+| a load inside a 32-byte line, any offset | 1 | 1 | 1 |
+| a load crossing a 32-byte line, the same address again | 5 | 6.3 | 1 |
+| two `ldd` in one instruction, misaligned inside a 32-byte line, the same addresses again | 2 | 2 | 1 |
+| a stream of doublewords from a base 1–7 bytes off: one load / two an instruction | 2 / 3 | 2 / 3.5 | 1 / 1 |
+| a store inside an aligned doubleword (`sth` at +1, `stw` at +1 and +2) | 1 | 1 | 1 |
+| a store crossing an aligned doubleword, one / two an instruction (also in a stream) | 5 / 9 | 5 / 9 | 1 / 1 |
+| a misaligned stream of `ldaaq` / `staaq` | 3 / 9 | 3 / 9 | 1 / 1 |
+| `ldd` and use: aligned / crossing a doubleword / crossing a 32-byte line | 6 / 10 / 14 | 6 / 14 / 18 | 6 / 6 / 6 (14, below) |
+| `ldaad` and use: inside a 32-byte line, any offset / crossing one | 10 / 14 | 14 / 18 | 14 / 14 |
+
+(A pair is the load and its consumer in the next instruction, here in
+the other cluster: 2 + 4 × ⌈(latency − 1) / 4⌉ cycles by the stall
+rule, so 6 means a latency of at most 5, 10 means 6–9, 14 means 10–13,
+18 means 14–17.)
+
+- On v3 and v5 a load inside a 32-byte line issues at full rate however
+  it is aligned. Crossing a doubleword adds one stall step to its
+  latency (4C) or two (8C2); crossing a 32-byte line one more, and
+  about 4 cycles of issue (8C2 4–5): in a stream of doublewords from a
+  misaligned base one load in four crosses a line, which makes 2 cycles
+  a load.
+- A store costs 4 extra cycles whenever it crosses an aligned
+  doubleword (two such stores in one instruction 8), in a stream too; a
+  misaligned store inside a doubleword costs nothing.
+- An AAU load's latency is the L2's (apb.md, "AAU loads") and grows only
+  when the load crosses a 32-byte line.
+- On the 2C3 none of this costs, with one exception: a load crossing a
+  32-byte line had the L2's latency (pair 14) unless earlier aligned
+  loads had brought both of its lines into L1 (the `t_use_ldd` case run
+  alone, 300 calls in a row: 19 of 19 runs), and the L1's after them.
+  So such a load doesn't fill L1 (inferred), as AAU loads and stores
+  don't (above).
+- With the same addresses again in every instruction (see "Two stores
+  in one instruction" under Throughput): two AAU loads in one 64-byte
+  line take 2 cycles on all three, aligned or not (1 in a stream;
+  apb.md, "AAU loads"); on the 2C3 an `staaq` that is not 16-byte
+  aligned, or an `ldaaq` that crosses a 32-byte line, takes 2; on the 4C
+  an `staaq` to a 16-byte boundary takes 13–15 cycles (five runs; the
+  cause is not known), against 2 for one 8 bytes past it or for two
+  `std` 8 bytes apart, and 1 in a stream (the 8C2 and 2C3: 1).
+- v5's `ldaaqp` and `staaqp` are SIGBUS on the 8C2 when not 16-byte
+  aligned, as `ldqp` and `stqp` are, and cost nothing on the 2C3 at any
+  offset.
 
 **Store to load** (`tools/isa-probes/stld.c`, 4C and 8C2 alike): a load
 of a doubleword just stored, issued in the **very next** instruction,

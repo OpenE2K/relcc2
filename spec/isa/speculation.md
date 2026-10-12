@@ -60,11 +60,22 @@ non-speculative operations read as a number. The kernel defines both the
 empty and the diagnostic single as tag 1 (`ETAGEWS`, `ETAGDWS`) and the
 double as tag 5, with the internal-tag mask `0x4000000040000000` (kernel
 `include/asm/tags.h`) [hw, `tools/abi/probes/ctxsig.c` section 3; the
-4C, 8C2 and 2C3 agree].
+4C, 8C2 and 2C3 agree]. The kernel tells them apart by bit 30
+(`kernel/soft_pm.c:290-292`, `:329-332`, `E2K_IS_EW`, `E2K_IS_DW`), and
+MCST's qemu does the same (`target/e2k/cpu.h` `e2k_greg_tag_unpack`)
+[source]. User-mode operations take an empty half as an ordinary number,
+`,sm` or not: `addd`, `adds`, `faddd`, `cmpedb` and `merged` take it
+without a trap or `%dt_al` and give tag 0, a load or store takes it as
+its address, and a plain `std` of it doesn't trap and keeps its tag in
+memory for the fill MAS [hw: `tools/isa-probes/tagx.c` `pd_*`, `pa_*`;
+4C, 8C2, 2C3].
 
 `puttagd` refuses to make a diagnostic half: SIGILL, `ILL_PRVOPC` (the
 `priv_action` exception, kernel `traps.c:935-941`), at the `puttagd`
-itself. With tag 5 it refused 0x40000000, 0x4000000000000000,
+itself; it also refuses a pointer tag (2 or 3) unless the other half is
+empty, and its `,sm` form makes a diagnostic value where the plain one
+traps (semantics.md, "Tag operations"; "Diagnostic values made on
+purpose" below). With tag 5 it refused 0x40000000, 0x4000000000000000,
 0x4000000040000000 and 0x4afafafa4afafafa, and accepted 0, 1,
 0x0afafafa0afafafa and 0xbfffffffbfffffff. Tag 1 (the low half) refused
 0x40000000 and accepted 0x4000000000000000; tag 4 (the high half) did
@@ -80,9 +91,15 @@ set, and a speculative operation on a diagnostic operand sets bit 30 of
 each half of its result. `andd,sm` of `4afafafa4afafafa` with 0 gives
 `4000000040000000`, with `0xbfffffffbfffffff` gives `4afafafa4afafafa`,
 and with `0x0000ffff0000ffff` gives `4000fafa4000fafa`; `ord,sm` with 0
-gives `4afafafa4afafafa`; each result traps a non-speculative `addd`. So
-user code can neither make a diagnostic value with `puttagd` nor turn a
-diagnostic value into an empty one.
+gives `4afafafa4afafafa`; each result traps a non-speculative `addd`.
+Results whose computed bits have bit 30 clear get it too: `xord,sm` of
+the value with itself and `shrd,sm` by 63 give `4000000040000000`, tag
+5, `ands,sm` with 0 gives `40000000`, tag 1, and each traps a plain use
+and takes `rbranch ? %dt_al0` [hw: `tools/isa-probes/tagx.c`
+`ld_andsm*`, `ld_xorsm*`, `ld_shrsm`, `ldw_andssm`; 4C, 8C2, 2C3]. So no
+operation turns a diagnostic value into an empty one, and a plain
+`puttagd` cannot make one; a `,sm` `puttag*` can ("Diagnostic values
+made on purpose" below).
 
 What happens to a diagnostic operand ([hw] unless marked):
 
@@ -93,7 +110,7 @@ What happens to a diagnostic operand ([hw] unless marked):
 | Diagnostic predicate as an operation's condition (`? %pred0`, and `? ~%pred0` alike) | SIGILL, `ILL_ILLOPN`, at the operation | the operation runs and its result is diagnostic: an `addd,sm`, an `ldd,sm` (its register), a `cmpesb,sm` (its predicate) (`preds.c` `dg_*`; [predicates.md](predicates.md)) |
 | Diagnostic predicate in `merge` | SIGILL, `ILL_ILLOPN` | diagnostic result (`dg_mrg*`) |
 | Diagnostic predicate in `ct ? %pred0` | SIGILL, `ILL_ILLOPN` | — |
-| `merge` choosing the diagnostic operand / the other one | trap / no trap [source] | diagnostic / no effect |
+| `merge` choosing the diagnostic operand / the other one (`tagx.c` `ld_merge*`, `ldw_merges*`) | SIGILL `ILL_ILLOPN` / no trap | diagnostic / no effect [source] |
 | Store data | SIGILL (calling-convention.md) | the store is done with the register's bits (a wholly diagnostic register stores `4afafafa4afafafa`) and tags; read back by an ordinary load the value has tag 0, by the fill MAS its tag ("Spill and fill") |
 | Store under a diagnostic predicate (`std ? %pred0`) | SIGILL | **the store is done whatever the condition's polarity** (`? %pred0` and `? ~%pred0` alike), with bit 30 of each 32-bit half of the data set (42 → `400000004000002a`, `123456789abcdef0` → `52345678dabcdef0`) |
 | Store address | SIGILL `ILL_ILLOPN` | SIGILL `ILL_ILLOPN`: `,sm` does not help |
@@ -101,6 +118,9 @@ What happens to a diagnostic operand ([hw] unless marked):
 | Non-speculative operation **under a false predicate** with a diagnostic operand (`addd %dr3, 1, %dr8 ? %pred0`, `%pred0` false) | no trap, no effect (true predicate: SIGILL) | — |
 | Load address (a diagnostic base, a diagnostic offset or a base with one diagnostic half) | SIGILL `ILL_ILLOPN`, `si_addr` the instruction | diagnostic result, no kernel entry (`4000000040000000` on the 4C and 8C2, `400defad400defad` on the 2C3), also for mod 3; `rbranch ? %dt_alN` is taken with the load in ALC N (`memx.c` `da_*`) |
 | `movtd` into a CTPR | no trap; taking the `ct` traps (SIGILL; control-transfer.md) | |
+| `puttagd a, 0` / `puttags a, 0` of a diagnostic a (`tagx.c` `ld_put*`, `ldw_puts`) | no trap: a's bits with tag 0 | the same |
+| Tag operand of `puttag*` (`tagop*`) | SIGILL `ILL_ILLOPN` (`ILL_PRVOPC` when its low bits ask for a forbidden tag; semantics.md, "Tag operations") | diagnostic result |
+| `gettagd`, `gettags` (`ld_gettagd*`, `ldw_gettags`) | no trap: 5 / 1 | `gettagd,sm`: the same |
 | 32-bit operation reading only a clean half | no trap (calling-convention.md) | |
 
 The store rows come from `spec.c`'s `st_*` cases (4C, 8C2 and 2C3
@@ -127,6 +147,31 @@ proof-of-concept back end's I33), and lcc relies on it (`if (c) r = *q +
 needed only on consumers that run unconditionally. A program that faults under speculation gets
 SIGILL at the first non-speculative use instead of SIGSEGV, SIGBUS or
 SIGFPE at the faulting operation (source-compat.md).
+
+### Diagnostic values made on purpose [hw: `tagx.c` `pds_*`, `pas_*`, `pq_*`; 4C, 8C2, 2C3]
+
+A program can make a diagnostic value itself (a deferred fault, or a
+JIT's "poison"). A `,sm` `puttagd` or `puttags` asked for a tag the
+plain form refuses sets bit 30 itself: `puttagd,sm a, 0xa` turns
+`0123456789abcdef` into `41234567c9abcdef`, tag 5; `puttags,sm a, 2`
+turns `89abcdef` into `c9abcdef`, tag 1. Tag 1 alone (`puttagd,sm a,
+5`, `puttags,sm a, 1`, and on v5+ `puttagqp a, 0x55`, which needs no
+`,sm`) makes diagnostic only the halves whose bit 30 is already set;
+the others become empty, which every operation takes as a number. The
+plain `puttagd`/`puttags` cannot make one: they trap with `ILL_PRVOPC`
+(semantics.md, "Tag operations"). Such a value behaves exactly like a
+failed speculative load's:
+
+| Use | Result |
+|---|---|
+| `addd` (not speculative) | SIGILL `ILL_ILLOPN` |
+| `addd,sm` | diagnostic (`41234567c9abcdf0`, tag 5) |
+| `rbranch ? %dt_al0` with the `addd,sm` in ALC0 | taken |
+| plain `std` | SIGILL `ILL_ILLOPN` |
+| `std,sm`, then the fill MAS / an ordinary load | tag 5 / the bits with tag 0 |
+| `movtd`, `gettagd`, `puttagd a, 0` | copies the tag / reads 5 / clears it, no trap |
+| load address: `ldd` / `ldd,sm` | SIGILL `ILL_ILLOPN` / diagnostic (`4000000040000000`; 2C3 `400defad400defad`) |
+| v5: `qpand` / `qpand,sm` (8C2, 2C3) | SIGILL `ILL_ILLOPN` / diagnostic in exactly the words that were (tag 1 and bit 30); empty words become numbers |
 
 ### Spill and fill [hw: `memx.c` `fill*`, `ovw*`, `tldw*`; 4C, 8C2, 2C3]
 

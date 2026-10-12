@@ -119,6 +119,7 @@ measured 0.54% of xz -6's cycles in `BUB_B_RF_SPILLFILL` on the 8C2
   | `ldw` | zero-extended | zero-extended |
   | `sxt` | 64-bit result | 64-bit result |
   | FP-unit operations with a 32-bit result: `fadds`, `fstois`, `fdtois`, `fstoistr`, `movts` | upper half kept | upper half kept |
+  | the tag operations with a 32-bit result, `gettags`, `gettagd`, `puttags` [hw: `tools/isa-probes/tagx.c` `gts_upper`, `gtd_upper`, `ps_upper`; 4C, 8C2, 2C3] | upper half kept | not checked |
   | `rrs` of a state register [hw: `tools/isa-probes/sregs.c` `width`; 4C, 8C2, 2C3] | low half written, upper half kept | 32-bit registers (`%pfpfr`, `%fpcr`, `%fpsr`, `%upsr`, `%core_mode`) and `%idr` (whose value fits in 32 bits): zero-extended. 64-bit ones (`%clkr`, `%ip`): the low half zero-extended on the 8C2 and 2C3, but **the whole 64-bit value on the 4C** (`rrs %ip` gives a PIE's full address there) |
   | `rrd` of a 32-bit state register | zero-extended | zero-extended |
 

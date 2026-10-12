@@ -91,6 +91,8 @@ PROBES = {
     "fpcost.s": ("fpcost.c", "4C, 8C2, 2C3"),
     "pf.s": ("pf.c", "4C, 8C2, 2C3"),
     "sregs.s": ("sregs.c", "4C, 8C2, 2C3"),
+    "tagx.s": ("tagx.c", "4C, 8C2, 2C3"),
+    "tagx-v5.s": ("tagx.c", "8C2, 2C3"),
 }
 ABI_PROBES = "tools/abi/probes"
 

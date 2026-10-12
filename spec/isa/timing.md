@@ -691,13 +691,32 @@ the chase]:
 The table holds for `ldd`, `std`, `ldaad`, `staad` and lcc's
 nontemporal `loop_mode` `staad` alike, except that a stream of plain
 `ldd` (MAS 0) also leaves part of its lines in L1, on all three
-machines. Stores and AAU loads leave **no** line in L1 with any MAS, in
+machines (below). Stores and AAU loads leave **no** line in L1 with any MAS, in
 either chase channel: after MAS 0 or 0x20 the chase costs 11.0 cycles
 a load on the 4C and 8C2 and 14.9 on the 2C3, the L2 hit with this
 chase (an L1 hit: 3.0, 3.0 and 7.0). So an AAU load doesn't fill L1
 (and, its latency being the L2 hit, presumably doesn't read it either;
 Latencies), and a store that misses L1 doesn't allocate a line there
 (inferred cause: L1 is write-through).
+
+**Not every load that misses fills L1** [hw: `memleft.c` `fill`; low
+confidence: the mechanism is unknown, and the fractions are inferred
+from where the chase's cost falls between the L1 and L2 levels]. A
+dependent chase leaves every line it reads in L1 for a second chase in
+the same cluster. A stream of independent `ldd` leaves fewer. With two
+loads a wide instruction (`h_ldd_00`, a wide instruction a cycle;
+`f_ldd_00`, one every 8 cycles) it leaves 20–30% on the 4C and 45–50%
+on the 8C2 and 2C3, whether both loads sit in one cluster or one in
+each; the 8C2's stream at a wide instruction a cycle, chased from ALC3,
+left 15%. With four loads a wide instruction it leaves a quarter
+(2C3). With one load every 8 cycles it leaves 38–46% (4C), 75–78% (8C2)
+and 87–94% (2C3). On the 4C and 8C2 a chase in ALC3 after a chase in
+ALC0 (or the reverse) finds only 54–78% of the lines in L1; on the 2C3
+it finds all of them. The fractions move between runs: a C loop of one
+load a line left 50% on the 4C in one run and 25–34% in another. So a
+line just streamed by loads is not reliably in L1 for a second pass;
+isa-score's L1 model holds for data the code reads repeatedly
+(inferred).
 
 | `pf.c`, cycles | 4C | 8C2 | 2C3 |
 |---|---|---|---|
@@ -1111,3 +1130,9 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
 - Throughput of 128-bit and packed FP operations, `mova`, AAU stores,
   and loads and stores of other sizes; whether the store bank rule
   involves physical address bits.
+- Why a stream of loads that miss leaves only part of its lines in L1
+  (Memory, "Not every load that misses fills L1"), and why a chase
+  in the other cluster finds fewer of a chase's lines on the 4C and
+  8C2. A separate L1 per cluster doesn't explain the streams (two loads
+  in one cluster leave what one in each does); one L1 fill per wide
+  instruction is only a guess.

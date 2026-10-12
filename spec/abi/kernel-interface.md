@@ -16,10 +16,12 @@ and the 2C3 (Elbrus Linux 9.5.5, kernels `6.1.0-1.17-e8c2` and
 and static builds), `sigeh.cc` with `sigeh-c.c` (exceptions and
 cancellation), `pgprof.c` (`-pg`), `sanitize.c` (`lcc -S`), `ctlcost.cc`
 (what the calls on the hardware stacks cost), `hwscan.c` with
-`hwscan.s` (what the copies of the stacks hold) and `ctxsig.c` with
+`hwscan.s` (what the copies of the stacks hold), `ctxsig.c` with
 `ctxsig.s` (user contexts, edited signal frames, globals across system
-calls and in handlers, the chain stack seen from a handler), built by
-each machine's own lcc 1.29.16.
+calls and in handlers, the chain stack seen from a handler) and
+`stackregs.c` with `stackregs.s` (the stack registers, how the data
+stack grows, a context's stack overflowing), built by each machine's
+own lcc 1.29.16.
 
 ## System calls
 
@@ -219,6 +221,39 @@ which the 4C, 8C2 and 2C3 agree apart from addresses.
   From that `ucontext_t`, as it is at the time of the switch, the switch
   also loads the signal mask, `%fpcr`/`%fpsr`/`%pfpfr`, `cr0_hi`, `cr1`
   and the chain-stack position (`proc_context.c:1515-1527`).
+- **A context's data stack can overflow into the memory below
+  `uc_stack`** [hw, `stackregs.c` section 7; 4C, 8C2, 2C3]. At the start
+  its `USD` covers exactly `uc_stack`: the bottom is `ss_sp`, and `%sbr`
+  is the top rounded down to a page (`stackregs.c` section 5;
+  [stack-and-unwinding.md](stack-and-unwinding.md), "Stack registers").
+  A `getsp` past the bottom traps as in the main thread ("The data
+  stack" below). The kernel then extends the stack, up to a total of
+  `RLIMIT_STACK` (`mm/fault.c:1075`), into whatever mapping holds the
+  new bottom. It
+  checks for holes only between mappings that end below the stack's top
+  (`mm/fault.c:1105-1127`), so it does not see a gap directly below the
+  mapping that holds `uc_stack` (inferred from the code and the third
+  row). The test put a 64 KiB `uc_stack` in the middle of a 1 MiB
+  mapping and ran four nested frames that each allocate and fill
+  32 KiB:
+
+  | Directly below `uc_stack` | Result |
+  |---|---|
+  | the rest of the mapping | the stack grows 32 KiB per frame; 65,640 bytes below `uc_stack` are overwritten (65,656 on the 8C2) and no signal is raised |
+  | a `PROT_NONE` page | the stack grows over the page; the first store into it gives SIGSEGV `SEGV_ACCERR` at `ss_sp − 16` |
+  | one unmapped page | the stack grows over the gap; SIGSEGV `SEGV_MAPERR` at `ss_sp − 16` |
+  | 512 KiB unmapped | the `getsp` fails: SIGSEGV at `ss_sp − 1`, `SEGV_BNDERR` on the 8C2 and 2C3 (`kernel/traps.c:1132-1141`); the 4C's ALT kernel reports `SEGV_ACCERR` (its source is not at hand) |
+
+  A fiber library should leave unmapped memory below each context's
+  stack, at least one growth step large: the larger of 16 KiB and the
+  largest single `getsp`, rounded up to a page. A `getsp` whose new
+  bottom falls into that gap fails with SIGSEGV; one that reaches past
+  it into another mapping is accepted. A `PROT_NONE` guard page faults
+  only when a store lands in it: a frame that the kernel has extended
+  past it can write below it unnoticed (inferred). The kernel's comment
+  on `expand_user_data_stack` says E2K needs no gap below a stack
+  because the hardware bounds catch overflows (`mm/fault.c:1019-1036`).
+  The extension into the mapping below is what defeats that.
 - glibc passes the arguments as 8-byte slots copied from its `va_list`
   (so no 16-byte arguments) after `ucp`, the function, `argc` and a
   zero. The kernel loads the first 8 slots into `makecontext_helper`'s
@@ -334,7 +369,9 @@ the macro `_setjmp` and `_longjmp` an alias of `longjmp`, so `_setjmp` +
 [stack-and-unwinding.md](stack-and-unwinding.md), "setjmp/longjmp,
 contexts"). Saving and restoring the signal mask adds about 120 cycles
 on the 4C and 2C3 and 190 on the 8C2. A coroutine library pays a kernel
-entry for every transfer.
+entry for every transfer. Runtimes that would use split stacks (gccgo)
+must give each goroutine a full-size context:
+[stack-and-unwinding.md](stack-and-unwinding.md), "No split stacks".
 
 **The trampoline page.** The kernel maps one read-execute page,
 `[trampolines]` (kernel `kernel/trampolines.c`, `include/asm/stacks.h:36-38`;
@@ -572,7 +609,18 @@ conservative garbage collector finds callers' register values only
 through modes 5 and 7, and Boehm GC does exactly this; the layout
 differs between v1–v4 and v5+ [hw:
 [stack-and-unwinding.md](stack-and-unwinding.md), "Scanning for
-roots"].
+roots"]. `access_hw_stacks` works on the calling thread's or
+context's own stacks only: no mode takes a thread or a context
+(`kernel/e2k_syswork.c:2887-2911`; [hw, `stackregs.c` section 5]:
+inside a `makecontext_e2k` context modes 4 and 5 report that context's
+stacks). A collector therefore cannot reach the spilled
+windows of a parked context or of another thread; each has to copy its
+own, as Boehm GC's stopped threads do in their signal handlers
+(inferred). The registers that locate the stacks (`%psp`, `%pshtp`,
+`%pcsp`, `%pcshtp`, `%usd`, `%sbr`), what they tell a collector, and
+why split stacks are impossible are covered in
+[stack-and-unwinding.md](stack-and-unwinding.md), "Stack registers".
+
 `long get_backtrace (unsigned long *buf, size_t count, size_t skip,
 unsigned long flags)` (253) returns the return addresses of the caller's
 callers, skipping `skip` more and the trampoline frames ("just return"
@@ -606,17 +654,32 @@ call site, and keeps the trampoline frames (`[trampolines]+0x100`,
 
 ### The data stack: growing the main thread's stack costs a walk of the chain stack
 
-On v1–v6 a `getsp` that takes the stack pointer below the part of the
-main stack the kernel has handed out traps; the kernel grows `USD` by
-**exactly that `getsp`'s amount** and then rewrites the user-stack size
-(`cr1_hi.ussz`) of **every frame in the chain stack** (kernel
-`kernel/traps.c:1148-1186` `parse_and_handle_getsp`, `mm/fault.c:1037-1172`
-`expand_user_data_stack`, `:949-1000` `fix_all_chain_stack_sz`; v7
-reports the increment in `%usincr`, rounds to a page and skips the chain
-walk). So the first time a
-recursion goes deep, every level that takes a data-stack frame traps and
-walks all the levels above it: the cost is quadratic in the depth [hw,
-`sysabi.c` section 4, a function with a 32-byte frame]:
+On v1–v6, and on v7 CPUs with `CPU_HWBUG_RRD_USINCR`, a `getsp` that
+takes the stack pointer below the part of the stack that `USD` covers
+traps, even when the memory below is mapped. The kernel then grows
+`USD` by **that `getsp`'s amount rounded up to a page, and by at least
+16 KiB**, however much was still free, but never beyond a total of
+`RLIMIT_STACK` (`kernel/getsp.c:229, 303-306`, `USER_C_STACK_BYTE_INCR` in
+`include/asm/stacks.h:129`, `mm/fault.c:1075, 1082`). It then rewrites
+the user-stack size (`cr1_hi.ussz`) of **every frame in the chain
+stack** (kernel `kernel/traps.c:1148-1186` `parse_and_handle_getsp`,
+`mm/fault.c:1037-1172` `expand_user_data_stack`, `:949-967`
+`fix_all_chain_stack_sz`). Other v7 CPUs report the amount in
+`%usincr`, grow by it with the new bottom rounded down to a page, and
+skip the chain walk. [hw, `stackregs.c` section 6; the 4C, 8C2 and 2C3
+agree]:
+
+| Main thread | Growth |
+|---|---|
+| a recursion 20,000 deep with 32-byte locals | 51 growths; the 7 printed were 16,368–16,416 bytes apart and left `0x3fd0`–`0x3ff0` bytes free |
+| `alloca (200000)` with about 130 KiB free (`0x209d0` on the 4C) | free size up by 200,704 (49 pages) |
+| `alloca` of 1 MiB, of 3 MiB, with less free | by exactly the amount |
+
+So the first time a recursion goes deep, one level per 16 KiB of data
+stack traps, and each trap walks all the levels above it: the number of
+traps and the length of each walk both grow with the depth, so the cost
+is quadratic [hw, `sysabi.c` section 4, a function with a 32-byte
+frame]:
 
 | | 4C | 8C2 | 2C3 |
 |---|---|---|---|
@@ -644,9 +707,23 @@ function with a data-stack frame `getsp`s.
 
 With `CLONE_VM` the new thread gets its own hardware stacks (kernel
 `kernel/process.c:1806-1828`), as large as its creator's at the time
-[hw, above]. A thread's data stack is mapped whole and never grows (the
-kernel extends `USD` only into an extendable mapping, kernel
-`mm/fault.c:1037-1130`; [hw]: recursion in a thread never trapped, above).
+[hw, above]. A thread's data stack is mapped whole: its `USD` covers
+the whole mapping above glibc's guard page from the start, so a
+thread's recursion never traps [hw, above; `stackregs.c` section 4: the
+bottom is the start of the mapping]. On overflow the kernel would grow
+`USD` as for a context ("User contexts"): by at least 16 KiB, but never
+beyond a total of `RLIMIT_STACK` (`mm/fault.c:1075`). A thread of the
+default size is about as large as `RLIMIT_STACK`, so its one step is
+what is left, 5,888 bytes for `stackregs.c`'s thread, and a second
+overflow fails (computed from the kernel code and the probe's
+addresses). Either step reaches past glibc's one-page guard
+(`OpenE2K/glibc/nptl/pthread_attr_init.c:46`), so the new bottom lands
+below it: a mapping directly below the guard is accepted and written
+over unnoticed, while unmapped memory there makes the `getsp` fail with
+SIGSEGV (inferred from the context test in "User contexts" and the
+kernel code; not run in a thread). `%sbr` in a thread is its top
+rounded down to a page: [stack-and-unwinding.md](stack-and-unwinding.md),
+"Stack registers".
 
 ## Address space [hw, `sysabi.c` sections 6 and `maps`]
 
@@ -757,3 +834,7 @@ drivers expect anyway. A static link with an ifunc crashes ld
   so presumably it is freed: source).
 - lcc's sanitizers on hardware (MCST's map predates the 6.1 layout,
   above).
+- A thread's data stack overflowing past glibc's guard page ("Threads":
+  source only); why the 4C's ALT kernel reports a failed growth of a
+  context's stack as `SEGV_ACCERR` rather than `SEGV_BNDERR` ("User
+  contexts"; its source is not at hand).

@@ -15,8 +15,8 @@ Each thread has three stacks (guide 9.1.1):
   returns the new pointer, aligned to 16 bytes. `getsp 0` reads it.
 - **The amount of a `getsp` must be a literal, a window or rotating
   register, or a global from `%g16` up.** The data stack is mapped on
-  demand: a `getsp` that moves past the mapped part traps, and up to v6
-  (the `array_bounds` exception; also v7 CPUs with the
+  demand: a `getsp` that moves past the part `USD` covers traps, and up
+  to v6 (the `array_bounds` exception; also v7 CPUs with the
   `CPU_HWBUG_RRD_USINCR` bug, while other v7 CPUs report the amount in
   `%usincr`) the kernel decodes the instruction to learn the amount
   (`arch/e2k/kernel/getsp.c`, `parse_getsp_operation`, called from
@@ -31,11 +31,12 @@ Each thread has three stacks (guide 9.1.1):
   saving and restoring the old value around it (`adds` + `getsp %g24`;
   the 32-bit form, whose amount the kernel sign-extends). Found by the
   proof-of-concept backend (`docs/spec-poc-findings.md` A16).
-  The kernel grows the main stack by exactly the amount asked for and
-  then rewrites the stack size in every chain frame, so the first deep
-  recursion in the main thread costs time quadratic in its depth (49 s
-  for 250,000 levels on the 4C; threads are not affected):
-  [kernel-interface.md](kernel-interface.md), "The data stack".
+  The kernel grows the stack by the amount asked for, rounded up to a
+  page and at least 16 KiB, and then rewrites the stack size in every
+  chain frame, so the first deep recursion in the main thread costs
+  time quadratic in its depth (49 s for 250,000 levels on the 4C;
+  threads are not affected): [kernel-interface.md](kernel-interface.md),
+  "The data stack".
 - The previous `USD` is restored automatically on return, so functions
   don't deallocate their stack.
 - Areas in a frame, from higher to lower addresses: local variables,
@@ -92,6 +93,275 @@ then 6 per 32 frames) and costs 1,330 to 1,590 cycles per frame. Most
 of that is user code (inferred: a chain-stack read costs about 300 to
 390 cycles per frame, [kernel-interface.md](kernel-interface.md), "What
 a call costs").
+
+## Stack registers
+
+The positions of the three stacks are kept in state registers. User
+code reads them with `rrd` (`rrs` also works for the 32-bit `%pcshtp`
+and `%br`). The guide gives `USD`, `WD` and `BR` as readable and
+changed only by `getsp`, `setwd`, `setbn` and the call mechanism (guide
+9.3.4, "R/-/M"), and the other stack registers are not in its list of
+registers a user task may use; writing them was not tried. On the 4C,
+8C2 and 2C3 every register below reads in user mode
+(`tools/abi/probes/stackregs.c`, section 1; `%cwd` was not tried) [hw].
+MCST's qemu implements `rrd` among them only for `%wd`, `%pcsp`,
+`%pcshtp`, `%usd`, `%cr0` and `%cr1`
+(`target/e2k/tcg/translate-al-c14.c:83-270`), and stops with
+"exception handling is unimplemented" on `%psp`, `%pshtp`, `%sbr` and
+`%br` [qemu: `stackregs.c` section 1]. Kernel paths are relative to
+`OpenE2K/linux/arch/e2k/`.
+
+### Layout (v1–v6)
+
+[source: kernel `include/asm/cpu_regs_types.h:43-68, 156-327, 406-505`;
+MCST's qemu `target/e2k/cpu-sregs.h:74-147, 180-216, 317-322`; MCST
+libgcc `config/e2k/unwind-dw2-e2k.c:79-130, 206-215`; hw: checked as
+described below.] Indexes and sizes are in bytes.
+
+| Register | Bits | Field | Meaning |
+|---|---|---|---|
+| `%psp.lo` | 47–0 | base | start of the procedure stack area (`[procedure stack]` in `/proc/self/maps`, privileged pages) |
+| | 60–59, 63–61 | rw, itag | 3 and 0 in every user read: mask bits 63–48 off before using base |
+| `%psp.hi` | 31–0 | ind | spilled windows in memory, counted from base |
+| | 63–32 | size | size of the area |
+| `%pshtp` | 11–0, signed | ind | the part of the procedure stack still in the register file, at 8 bytes per 64-bit register. In memory it takes twice that, because each register spills with its extended part (`PSHTP_MEM_INDEX`, `cpu_regs_types.h:179-201`) |
+| | 26–16, 42–32, 48 | fxind, tind, fx | bookkeeping for spilling extended parts |
+| `%pcsp.lo` | 47–0, 60–59 | base, rw | start of the chain stack area (`[chain stack]`) |
+| `%pcsp.hi` | 31–0, 63–32 | ind, size | chain frames in memory; size of the area |
+| `%pcshtp` | 10–0, signed | ind | chain frames still in the chain register file, 32 bytes each (`cpu_regs_types.h:62-68, 237-242`) |
+| `%usd.lo` | 47–0 | ptr | the stack pointer, equal to `getsp 0` (protected mode: bits 31–0 are the pointer and 47–32 are `psl`) |
+| | 58, 60–59 | p, rw | 0 outside protected mode; 3 |
+| `%usd.hi` | 63–32 | size | the free part below ptr that the kernel has handed out, so the stack's current bottom is ptr − size; at most 4 GiB − 1 (`cpu_regs_types.h:43`) |
+| | 31–0 | | 0 |
+| `%sbr` (= `%usbr`, number 0x1e) | 47–12 | | the top of the current data stack, rounded down to a page. The register has no bits 11–0 (qemu's write mask `0xfffffffff000`, `cpu-sregs.h:180`; kernel `kernel/signal.c:994-1001`) |
+| `%wd` | 10–0, 26–16, 42–32 | base, size, psize | the current window: its start in the register file, its size and the size of its parameter area, at 16 bytes per pair (`setwd wsz = 8` reads size 128; the stack part of the file is 1,792 bytes) |
+| | 48, 49 | fx, dbl | the inverse of `nfx`; `dbl` ([registers.md](registers.md)) |
+| `%br` | 5–0, 11–6, 17–12, 22–18, 27–23 | rbs, rsz, rcur, psz, pcur | rotating base in pairs, and predicate rotation ([registers.md](registers.md)) |
+| `%cwd` | 9–0 | base | the current frame in the chain register file (1,024 bytes, 32 frames) [source; not read] |
+
+A read in the 4C's main thread (`stackregs.c` section 2, depth 0) gave:
+`%psp` `0x1800c2dfffffe000`:`0x0000400000000300` (base
+`0xc2dfffffe000`, size 16 KiB, ind 768); `%pshtp` `0x28001300120` (ind
+288, fxind 304, tind 640); `%pcsp`
+`0x1800c2e000002000`:`0x0000100000000040` (size 4 KiB, ind 64);
+`%pcshtp` 160; `%usd` `0x1800c2deffd549e0`:`0x000209e000000000` (ptr
+`0xc2deffd549e0`, size `0x209e0`); `%sbr` `0xc2deffd55000`; `%wd`
+`0x40008005e0` (base 1504, size 128, psize 64); `%br` `0xc7`.
+
+The decoding was checked on all three machines [hw]. `stackregs.c`
+sections 2, 4 and 5 took 42 snapshots per machine at depths 0 to 1,000,
+in the main thread, in a thread and in a `makecontext_e2k` context. In
+every snapshot:
+
+- `psp.ind + 2 × pshtp.ind` was 160 bytes below what `access_hw_stacks`
+  mode 5 returned right after, and `pcsp.ind + pcshtp` was 64 bytes
+  below mode 4. The probe calls glibc's `syscall` with `wbs = 7`, as it
+  calls its snapshot routine, and `syscall` enters the kernel with
+  `wbs = 5`: the 160 bytes are those 5 pairs, and the 64 are the chain
+  frame of that call plus the 32 bytes mode 4 adds on purpose
+  (`kernel/e2k_syswork.c:2954`) (inferred from the probe binary and
+  lcc's `libc.so.6`). The kernel forms the same sums when it fills
+  `getcontext`'s copies (`include/asm/e2k_api.h:7171-7199`);
+- `getsp 0` equalled `usd.ptr`, the bottom `usd.ptr − usd.hi.size` was
+  the same at every depth, and in the snapshot routine (a leaf without
+  a frame) `cr1_hi.ussz` × 16 equalled `usd.hi.size`.
+
+At depths 0 and 1,000 of each case, `psp.base` and `pcsp.base` plus size
+were the start and end of their mappings, and the bottom was the start
+of `[stack]` (main thread), of the thread's stack mapping and of
+`uc_stack` (context).
+
+The factor 2 holds on v3, v5 and v6, although v5 lays out spilled
+registers differently ("Scanning for roots" below).
+
+### Who reads them
+
+| Code | Reads | For |
+|---|---|---|
+| glibc `setjmp` (`setjmp_tmpl.S:116, 150-186`) | `%cr0.hi`; `%pcsp.lo` and `%pcsp.hi` (`rrd`) and `%pcshtp` (`rrs`) between a lock-wait load and a wait-unlock store, retried with `rbranch`; `%wd`; `%cr1.lo`; `%cr1.hi` with `rrs` (its low 28 bits are the caller's `%br`); `%usd.lo` | the `jmp_buf` ("setjmp/longjmp, contexts") |
+| glibc `getcontext` (`getcontext.c:25-30`) | `%cr0`, `%cr1`, `%usd` (`rrd`); fast system call 4 then reads `%psp`, `%pshtp`, `%pcsp`, `%pcshtp` and `%sbr` in the kernel (`include/asm/e2k_api.h:7171-7199`, `include/asm/fast_syscalls.h:370-412`) | `uc_mcontext` |
+| MCST libgcc's unwinder (`unwind-dw2-e2k.c:865, 873-898`) | `%cr0.hi` through `__builtin_return_address (0)`, to find its own frame; `%usd.lo`, `%usd.hi`: the stack's bottom `ptr − size`, from which it finds each frame's CFA (v7: below) | `_Unwind_Context` |
+| lcc 1.29.16, 1.31.05 | `rrd %cr0.hi` for `__builtin_return_address (0)` ("Chain stack frames" above). `__builtin_frame_address (0)` is the stack pointer at entry, which is the top of the frame: the `getsp` result plus the frame size, or `getsp 0` in a function without a frame [lcc] | |
+
+No user-mode code in glibc or MCST's libgcc reads `%psp`, `%pshtp`,
+`%sbr`, `%br` or `%cwd`. libgcc defines `E2K_READ_STACK_REGS`
+(`%pcshtp`, `%pcsp`, `%pshtp` and `%psp` under the same lock,
+`unwind-dw2-e2k.c:217-240`) but never uses it. It takes the
+hardware-stack positions from `access_hw_stacks` modes 4 and 5 instead
+(`:926-931`).
+
+### What they tell a collector or a fiber library
+
+- **The data stack in use** runs from `usd.ptr` up to the stack's top
+  (next bullet). Its bottom, `usd.ptr − usd.hi.size`, stays put while
+  the stack runs. `getsp`, calls and returns change ptr and size
+  together: a return sets size to the caller's `cr1_hi.ussz` and moves
+  ptr by the difference (MCST's qemu `target/e2k/tcg/translate-ct.c:82-99`)
+  [hw: the same bottom at every depth]. The kernel moves the bottom
+  down when it grows the stack
+  ([kernel-interface.md](kernel-interface.md), "The data stack"), so
+  read it again for every scan.
+- **`%sbr` is the exact top only where the top is page-aligned.** The
+  register has no bits 11–0 (above), so it holds the data stack's top
+  rounded down to a page. In the main thread it is the end of `[stack]`,
+  and in a `makecontext_e2k` context whose `uc_stack` ends on a page
+  boundary it is the top of `uc_stack` [hw]. The kernel accepts a
+  `uc_stack` aligned to 256 only (`kernel/proc_context.c:1132-1134`), so
+  a context's top can lie above `%sbr` too (inferred). A thread's top is
+  its clone stack pointer aligned down to 256 (kernel
+  `kernel/process.c:1603-1655, 1791`), which is usually not
+  page-aligned, so the thread's outermost frames lie above `%sbr`. In a
+  glibc thread `%sbr` was 8 KiB below the end of the stack mapping, and
+  the thread function's `usd.ptr` was 1,472 bytes above `%sbr`; the true
+  top (`…900`) appeared in a signal frame's `uc_mcontext.sbr` [hw, all
+  three]. Take a thread's top from `pthread_getattr_np` (the end of the
+  mapping, a little above the true top). In a signal handler `%sbr` is
+  the handler's own top, the signal frame's address (`round_down (USD −
+  4272, 256)`, [kernel-interface.md](kernel-interface.md), "Signals"),
+  rounded down to a page: in the test 2 pages below the interrupted
+  `%sbr` in the main thread and 1 in the thread, as the interrupted
+  stack pointers happened to lie. `uc_mcontext.sbr` is the interrupted
+  code's top, aligned to 256 (kernel `kernel/signal.c:267, 994-1013`)
+  [hw]. `getcontext` stores the hardware `%sbr`
+  (`include/asm/e2k_api.h:7171-7199`) [hw: equal].
+- **The procedure stack in use** is `psp.ind + 2 × pshtp.ind` bytes from
+  `psp.base`. The top `2 × pshtp.ind` bytes are callers' windows that
+  are still in the register file. Loads reach neither part: the area is
+  privileged, and the register file is not memory. The registers
+  therefore only tell how much to copy with `access_hw_stacks` mode 7,
+  and mode 5 gives that size without them, because the kernel spills
+  the file when it is entered ("Scanning for roots" below). The chain stack
+  works the same way, with `pcsp.ind + pcshtp` and modes 4 and 6.
+  `access_hw_stacks` reaches only the calling thread's or context's own
+  stacks ([kernel-interface.md](kernel-interface.md), "Access").
+- **The values are momentary** [hw]. `pshtp.ind` reached 1,664 (104
+  pairs; together with the current 8-pair window that is the whole
+  112-pair file) and `pcshtp` reached 960 (30 frames; 928 on the 2C3).
+  Right after a system call `pshtp.ind` was at most 1,136 on all three
+  machines, and `pcshtp` at most 192 on the 4C and 8C2 and 864 on the
+  2C3.
+- **The bases can move** [hw]. The kernel may move a hardware stack when
+  it grows it ([kernel-interface.md](kernel-interface.md), "Hardware
+  stacks"). In a 1,000-level recursion the 4C and 8C2 moved both stacks
+  to new mappings (`psp.base` `0xc2dfffffe000` → `0xc2e000043000`,
+  `pcsp.base` `0xc2e000002000` → `0xc2e000087000`). The 2C3 grew the
+  procedure stack in place and moved the chain stack. Keep offsets from
+  the base, as `access_hw_stacks` does, never addresses.
+- **Read them together.** A kernel entry between two reads can spill or
+  fill, which moves `ind` and `pshtp` (or `pcshtp`) in opposite
+  directions. glibc's `setjmp` reads `%pcsp` and `%pcshtp` between a
+  lock-wait load (MAS 0x7) of the `jmp_buf`'s `%pcsp.hi` word and a
+  wait-unlock store (MAS 0x2) of the `%pcsp.hi` value it has just read,
+  and starts again on `rbranch` if an interrupt came between
+  (`setjmp_tmpl.S:137-168`). `stackregs.s` reads all six registers this
+  way.
+- **`getcontext`'s copies** of `%psp` and `%pcsp` already include the
+  register-file parts. The kernel stores `psp.ind + 2 × pshtp.ind` and
+  `pcsp.ind + pcshtp` as ind (`include/asm/e2k_api.h:7171-7199`), less
+  the fast call's own window and chain frame
+  (`include/asm/fast_syscalls.h:398-400`): the totals `getcontext`
+  itself would compute from the registers. They also lack the rw bits,
+  which the kernel drops when it rebuilds the values
+  (`include/asm/cpu_regs.h:244-271, 374-401`). [hw, all three machines:
+  `getcontext` stored ind 1,056 and 192, and a read one call deeper gave
+  768 + 2 × 256 = 1,280 = 1,056 + 7 pairs × 32 and 64 + 160 = 224 =
+  192 + 32; base `0xc2e000043000` against `0x1800c2e000043000` from
+  `rrd`.]
+- **`%br` passes into the callee unchanged.** A function that does no
+  `setbn` reads its caller's `%br`. In a leaf, `rrs %br` equals the low
+  28 bits of `%cr1.hi`, where the call saved the caller's value, and
+  both equal the caller's own `setbn` (`rbs = 7, rsz = 3`, `0xc7`, on
+  all three machines; `0xc5` from another caller on the 4C and 8C2) [hw;
+  tested with `rcur`, `psz` and `pcur` 0]. MCST's qemu sets `%br` to 0
+  at every call (`target/e2k/tcg/translate-ct.c:1084-1090`, which marks
+  it as a hack). Compiled code does a `setbn` before it uses `%b[]` (lcc
+  does), so only code that relies on an inherited base would see the
+  difference (inferred).
+
+### v7 [source]
+
+- `%psp`, `%pcsp` and `%usd` use the v7 descriptor format, and the
+  bitfields above don't apply. Each `.lo`/`.hi` pair is one 128-bit
+  array pointer, read with `getptr` (the pointer), `getind` (for `%usd`
+  the free size, for the others ind) and `getmi` (size − 1), and built
+  with `apincr`/`subarr` (kernel `include/asm/cpu_features.h:881-887`,
+  `include/asm/e2k_api.h:9138-9190`, `include/asm/cpu_regs.h:239-256,
+  369-386, 686-705`). MCST's libgcc reads `%usd` this way on v7
+  (`unwind-dw2-e2k.c:885-898`).
+- `%usfs` holds the current frame's data-stack size, and `cr1_hi.ussz`
+  changes meaning with it: libgcc takes the caller's stack size as
+  `getind (%usd) + %usfs`. The kernel no longer rewrites the chain stack
+  when it grows the data stack (`mm/fault.c:1145-1152`). `%usincr` gives
+  the amount of a `getsp` that trapped (`kernel/traps.c:1188-1207`);
+  CPUs with `CPU_HWBUG_RRD_USINCR` still decode the instruction.
+- `access_hw_stacks` modes 0 and 1 (`E2K_READ_CHAIN_STACK`,
+  `E2K_READ_PROCEDURE_STACK`) return EPERM on v7. In the kernel's words
+  they "required manually reading %psp/%pcsp in user and decoding it"
+  (`kernel/e2k_syswork.c:2958-2996`). Code that takes sizes from modes 4
+  and 5 instead of decoding the registers runs on every version.
+- The kernel has no v7 variant of `%pshtp`, `%pcshtp`, `%wd`, `%br`,
+  `%cwd` or `%sbr` (inferred: their layout is unchanged).
+
+### No split stacks (`-fsplit-stack`)
+
+GCC's split stacks need a per-thread stack limit, a prologue that
+compares the stack pointer with it, and a `__morestack` that moves the
+stack pointer to a new segment for the rest of the function and back
+when it returns. The first two could be built: the limit in a TLS
+variable or a new TCB slot, and the compare would be cheap, since
+`%usd.hi` holds the free size (though that size counts only what the
+kernel has handed out, not a limit). The stack switch cannot be built
+in user code on v1–v6 [source, except where marked]:
+
+- The stack pointer is `USD`, which user code cannot write. The guide
+  gives it as "R/-/M": only `getsp` (and the protected-mode `getsap` and
+  `getsod`, guide 9.4) and calls and returns change it (guide 9.3.4).
+  `stackregs.c` doesn't try `rwd %usd`.
+- A return does not restore a saved stack pointer. The chain frame keeps
+  only the caller's free size (`cr1_hi.ussz`), and the return sets
+  `USD.size` to it and moves `USD.ptr` by the difference (MCST's qemu
+  `target/e2k/tcg/translate-ct.c:82-99`). Every frame's position is
+  therefore a distance from one fixed bottom, `ptr − size` [hw: the same
+  bottom at every depth]. A second segment would need a different
+  bottom, and a return across the switch would need the old one back.
+  Only the kernel can change the bottom, and it does so only when it
+  grows one contiguous stack, rewriting `ussz` in every frame
+  (`fix_all_chain_stack_sz`, kernel `mm/fault.c:949-967, 1145-1152`).
+- Only signal delivery switches the data stack alone: a handler on an
+  alternate stack runs there with the thread's own hardware stacks
+  ([kernel-interface.md](kernel-interface.md), "Alternate stacks"). An
+  alternate stack cannot be changed while it is in use (`sigaltstack`
+  returns EPERM, `OpenE2K/linux/kernel/signal.c:4596-4597`), never
+  grows, and costs a signal per switch, so it cannot carry stack
+  segments (inferred). `setcontext` and `swapcontext` switch all three
+  stacks, and each `makecontext_e2k` context gets hardware stacks of its
+  own ([kernel-interface.md](kernel-interface.md), "User contexts").
+- MCST's libgcc has no `__morestack` and no `__splitstack_*`. Its
+  `config.host` entry for E2K has no `t-stack` (`config.host:591-594`).
+  The `libgcc.a` and `libgcc_s.so.1` in lcc 1.29.16's v3 and 2C3
+  sysroots define none of these symbols (`nm`); only the generic version
+  script names them (`libgcc-std.ver.in:1917-1937`). lcc 1.29.16 and
+  1.31.05 reject `-fsplit-stack` ("unrecognized command line option")
+  [lcc]. glibc's E2K `tcbhead_t` has no slot for a stack limit
+  (`sysdeps/e2k/nptl/tls.h:39-43`); x86-64 uses `__private_ss` for this.
+
+On v7 each frame records its own size (`%usfs`, the new `cr1_hi.ussz`),
+and the kernel no longer rewrites the chain when the stack grows. `USD`
+is still not writable by user code (inferred).
+
+Runtimes with many stacks, such as gccgo's goroutines and D's fibers,
+must therefore use contexts with full-size stacks. libgo already has
+such a path for targets without split stacks: `StackMin` is 4 MiB on
+64-bit targets (GCC's `libgo/runtime/proc.c:50-54`), and goroutines
+start through `makecontext` (`libgo/runtime/runtime.h:487-500`). On E2K
+that call becomes `makecontext_e2k`, followed by `freecontext_e2k` when
+a goroutine's stack is released, and each context's stack needs
+unmapped memory below it ([kernel-interface.md](kernel-interface.md),
+"User contexts"). libgo's collector would also miss pointers that a
+parked goroutine holds in window registers. `getcontext` saves no
+window registers, and `access_hw_stacks` reads only the calling
+context's own stacks, so each goroutine would have to copy its own
+procedure stack (mode 7) before it parks (inferred).
 
 ## Exceptions (libgcc `unwind-dw2-e2k.c`)
 

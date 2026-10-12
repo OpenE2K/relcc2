@@ -32,6 +32,12 @@ units). (kernel `e2k_wd_t`, `e2k_br_t`; unipro, lcc)
 | `setbp psz=P` | `psz` | Rotating predicate area size |
 | `call ..., wbs=W` | `wbs` | The callee's window starts at pair W of the caller's window |
 
+A callee starts with its caller's `%br` (rotating base and predicate
+rotation) until it sets its own with `setbn` or `setbp` (hw:
+`tools/abi/probes/stackregs.c`; 4C, 8C2, 2C3; MCST's qemu zeroes it at
+every call): [stack-and-unwinding.md](stack-and-unwinding.md), "Stack
+registers".
+
 Window size limits (Elbrus 4C; `tools/abi/probes/winsize.c`, and the
 proof-of-concept backend's probe, `docs/spec-poc-findings.md` A2):
 

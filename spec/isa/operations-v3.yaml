@@ -466,12 +466,12 @@ groups:
   rules:
   - ops: rr{s,d} rw{s,d}
     lat: "2 (`%ip`, `%upsr`, `%clkr`, `%idr`); 4 (`%core_mode`); 11 (`%pfpfr`, `%fpcr`, `%fpsr`)"
-    does: "Read or write a state register: in user mode `%pfpfr`, `%fpcr`, `%fpsr` (FP control and status), `%lsr`/`%ilcr` (loops), `%clkr` (cycle counter), `%ip`, `%idr`, `%core_mode`, `%dimar0/1`, …; ALC0, one a cycle. `rrs` gives the low 32 bits (under `dbl = 0` the destination's upper half is kept, under `dbl = 1` zeroed, but the 4C then writes all 64 bits of `%clkr` and `%ip`); `rrd` zero-extends a 32-bit register (registers.md, `dbl`). `rwd %lsr` needs 4 cycles before `rrd %lsr`; a write of the FP state is seen by the next operation but does not overlap a divide in flight (timing.md, \"Every v3 operation\")."
+    does: "Read or write a state register: in user mode `%pfpfr`, `%fpcr`, `%fpsr` (FP control and status), `%lsr`/`%ilcr` (loops), `%clkr` (cycle counter), `%ip`, `%idr`, `%core_mode`, `%dimar0/1`, the stack registers (`%usd`, `%psp`, `%pshtp`, `%pcsp`, `%pcshtp`, `%sbr`, `%wd`, `%br`, `%cr0`, `%cr1`: reads checked, writes not tried; MCST's qemu stops on `%psp`, `%pshtp`, `%sbr`, `%br`), …; ALC0, one a cycle. `rrs` gives the low 32 bits (under `dbl = 0` the destination's upper half is kept, under `dbl = 1` zeroed, but the 4C then writes all 64 bits of `%clkr` and `%ip`); `rrd` zero-extends a 32-bit register (registers.md, `dbl`). `rwd %lsr` needs 4 cycles before `rrd %lsr`; a write of the FP state is seen by the next operation but does not overlap a divide in flight (timing.md, \"Every v3 operation\")."
     use: "`fenv`, the GOT base (`rrd %ip`), loop counts, cycle counting."
-    see: registers.yaml; spec/abi/registers.md
+    see: registers.yaml; spec/abi/registers.md; spec/abi/stack-and-unwinding.md, "Stack registers"
   - ops: getsp
     lat: "2"
-    does: "Allocate (negative b) or release stack in the user stack and return the new stack pointer; `getsp 0` reads it. 2 cycles. The amount must be a window register or `%g16`+."
+    does: "Allocate (negative b) or release stack in the user stack and return the new stack pointer; `getsp 0` reads it. 2 cycles. The amount must be a window register or `%g16`+. One past the part of the stack `USD` covers traps, and the kernel grows the stack by the amount rounded up to a page, at least 16 KiB."
     use: "`allocate_stack`, frame setup."
     see: spec/abi/stack-and-unwinding.md, "User stack"; spec/abi/kernel-interface.md, "The data stack"
 - title: Predicates

@@ -42,3 +42,10 @@ unipro callee ^structs/char(9|1[0-2]|1[7-9]|20|2[5-8]|3[3-6]|4[1-4]|49|5[0-2]|5[
 unipro callee ^structs/A_(si_[35]|ss_[59])/
 unipro callee ^floats/fff/
 unipro callee ^layout/P_c_l/(arg_ret|after_1_long)$
+
+# Mixed targets (run.py --target v3,v5.8c2, v3,v6.2c3, v3,v3.4c; compilers
+# named lcc-TARGET and unipro-vN, which the unipro lines above match): no
+# entries of their own. lcc's v3 code with its 8C2, 2C3 and 4C code, and
+# with Unipro's -march=elbrus-v3/v5/v6 code, both ways, fails only the
+# Unipro tests above, on the 8C2, 2C3 and 4C and under qemu (2026-10-12;
+# spec/abi/elf.md, "Mixing targets in one program").

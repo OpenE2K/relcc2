@@ -59,6 +59,85 @@ every input the set of CPUs it runs on, intersects the sets, and fails if
 nothing is left; the output gets the most general machine that matches,
 with `INCOMPAT` if any input had it. Shared libraries don't take part.
 
+### Mixing targets in one program (binutils, glibc, lcc, unipro, qemu, compat, hw)
+
+Measured with MCST's GNU ld 2.41, the linker lcc 1.29.16's driver runs:
+a small object from each lcc target and from Unipro's
+`-march=elbrus-v3`…`v7`, linked with lcc `e2k-v3` code by the `e2k-v3`
+driver, whose startup files are generic v3:
+
+| Other object | Output `e_flags` | readelf |
+|---|---|---|
+| lcc `e2k-v3`, Unipro `-march=elbrus-v3` | `0x03000000` | elbrus-v3 |
+| lcc `e2k-v3.4c` | `0x03000010` | elbrus-4c |
+| lcc `e2k-v4.8c` | `0x13000010` | elbrus-8c |
+| lcc `e2k-v4.1c+` | `0x14000010` | elbrus-1c+ |
+| lcc `e2k-v5.8c2` | `0x05000010` | elbrus-8c2 |
+| lcc `e2k-v6.16c` | `0x16000010` | elbrus-16c |
+| lcc `e2k-v6.2c3` | `0x17000010` | elbrus-2c3 |
+| Unipro `-march=elbrus-vN`, N = 4…7 | `0x0N000000` | elbrus-vN |
+
+- Inputs with no CPU in common are an error (``input file `f.o' for
+  `elbrus-2c3' architecture is incompatible with `elbrus-8c2' output``):
+  two different CPU targets (`v5.8c2` with `v6.2c3`, `v3.4c` with
+  `v5.8c2`), or generic code for a later version than a CPU target
+  (Unipro `-march=elbrus-v6` with `v5.8c2`).
+- **A program is no more general than its startup files.** Every file in
+  an lcc tree carries the tree's `e_flags`: `crt1.o`, `crti.o`, `crtn.o`,
+  `crtbegin.o`, `libgcc.a`, `liblcc.a`, `libc_nonshared.a`, `libm.a` and
+  `libc.so.6` are `0x03000000` in `e2k-v3`, `0x05000010` in `e2k-v5.8c2`
+  and `0x17000010` in `e2k-v6.2c3`. So whatever the `e2k-v5.8c2` driver
+  links runs only on the 8C2, even when every object of its own is v3
+  code, and a cross compiler gives forward compatible programs only with
+  the `e2k-v3` sysroot. The installed systems are the same: on ALT Linux
+  (the 4C) the system's `crt1.o`, `libc_nonshared.a`, `libc.so.6` and
+  `libatomic.so.1` are generic v3 (`0x03000000`); on Elbrus Linux 9.5.5
+  they are `0x05000010` on the 8C2 and `0x17000010` on the 2C3, so a
+  native link there makes a program for that CPU only (hw).
+- ld's `--relaxed-e2k-machine-check` skips the check and leaves the
+  output at `elbrus-v2` (`0x02000000`), which the kernel runs on any CPU:
+  lcc v3 code linked this way with 2C3 code ran on the 4C, the 8C2 and
+  the 2C3 (hw; the 2C3 function used no v6 operation). Not for a
+  compiler.
+- The kernel refuses an executable whose machine doesn't fit the CPU
+  with `ENOEXEC` ("Exec format error"), as the rules above say (hw,
+  programs linked as in the table): on the 4C the `elbrus-v5`,
+  `elbrus-8c2` and `elbrus-2c3` ones; on the 8C2 the `elbrus-2c3` one;
+  on the 2C3 the `elbrus-8c2` ones, while the `elbrus-v5` one (lcc v3
+  code with Unipro `-march=elbrus-v5` code) runs there.
+- ld ignores a shared library's `e_flags` (a v3 program linked against an
+  `e2k-v5.8c2` or `e2k-v6.2c3` library stays `0x03000000`), but ld.so
+  checks each object it loads by the same rules (glibc,
+  `sysdeps/unix/sysv/linux/e2k/ldsodefs.h`, `runtime_compatible_host`)
+  and stops: "error while loading shared libraries: ./libf6.so: ELF file
+  for forward incompatible elbrus-2c3 is incompatible with your
+  elbrus-8c2 host". Measured on all three (hw): the 4C refuses both
+  libraries, the 8C2 the 2C3 one, the 2C3 the 8C2 one.
+- MCST's qemu-e2k ignores the executable's `e_flags` (it runs an
+  `elbrus-8c2` program with `-cpu elbrus-v3`), and each of its CPUs is
+  one model to ld.so's check, which uses `__builtin_cpu_is`
+  ([source-compat.md](source-compat.md), "CPU detection at run time";
+  the models are the `%idr` values in qemu's `target/e2k/cpu.c`):
+  `elbrus-v3` is a 4C, `v4` an 8C, `v5` an 8C2, `v6` a 2C3 and `v7` an
+  8V7. So the `e2k-v4.1c+` and `e2k-v6.16c` sysroots don't run under it:
+  ld.so refuses their own `libc.so.6` ("ELF file for forward
+  incompatible elbrus-16c is incompatible with your elbrus-2c3 host").
+  The community qemu's `elbrus-v6` is a 16C. A run under qemu must
+  therefore pick the CPU itself; `run.py` takes it from its last
+  `--target`.
+- The calling convention doesn't depend on the target. The compat suite
+  (`tools/abi/compat/run.py --target v3,v5.8c2`, `v3,v6.2c3`) links
+  lcc's v3 code with its 8C2 and 2C3 code and with Unipro's
+  `-march=elbrus-v3`, `v5` and `v6` code, each as caller and as callee,
+  and passes on the 8C2 and the 2C3 and under qemu with only Unipro's
+  known differences (compat, hw); `--target v3,v3.4c` passes on the 4C
+  and `v3,v4.8c` under qemu. v5 and v6 code from both compilers moves
+  aggregates through quad registers (`qppackdl`, `stqp`, `ldqp`), but
+  what it leaves in argument registers and memory is the same. The
+  exception is a 16-byte atomic object shared
+  by v3/v4 and v5+ code ([atomics.md](atomics.md), "16-byte atomics"),
+  which the suite doesn't test.
+
 ## Sections and segments (binutils, glibc, lcc)
 
 - Ordinary ELF sections: `.text`, `.data`, `.bss`, `.rodata`, `.tdata`,

@@ -31,7 +31,7 @@ Each rule is marked with where it comes from:
 | **gdb**, **glibc**, **kernel**, **libgcc** | MCST's GPL sources: `OpenE2K/gdb`, `OpenE2K/glibc`, `OpenE2K/linux`, and the E2K libgcc in lcc's `internal-lcc-libs-open-source` tarball |
 | **compiler-rt** | MCST's compiler-rt 11.1.0 (Apache-2.0 with LLVM exceptions) from the same tarball (`lib/compiler_rt-11.1.0`): the sanitizer runtimes lcc links |
 | **qemu** | `OpenE2K/qemu-e2k-mcst` and `OpenE2K/qemu-e2k-community` (source or behaviour) |
-| **compat** | Checked by the compatibility suite `tools/abi/compat`: caller and callee built by different compilers, run under MCST's qemu-e2k |
+| **compat** | Checked by the compatibility suite `tools/abi/compat`: caller and callee built by different compilers (or for different targets), run under MCST's qemu-e2k |
 | **hw** | Run on hardware: Elbrus 4C (v3), 8C2 (v5) or 2C3 (v6), by the compat suite (`run.py --remote`) or a probe in `tools/abi/probes` |
 
 Where lcc and Unipro disagree, lcc is the reference: it built the system.
@@ -45,11 +45,22 @@ stores. Other rules are marked **compat** rather than **hw** until a
 hardware run is recorded against them. The suite also passes on the 8C2
 (v5) and the 2C3 (v6).
 
+It also mixes targets in one program: lcc's v3 code with its 8C2 and 2C3
+code and with Unipro's `-march=elbrus-v3`, `v5` and `v6` code, each as
+caller and as callee (`run.py --target v3,v5.8c2` on the 8C2,
+`--target v3,v6.2c3` on the 2C3, both also under qemu), and lcc's v3
+code with its 4C code on the 4C (`--target v3,v3.4c`). These pass with
+no differences beyond Unipro's known ones: the calling convention
+doesn't depend on the target. What the linker, ld.so and the kernel do
+with objects for different targets is in [elf.md](elf.md), "Mixing
+targets in one program".
+
 ## Compatibility suite
 
 ```
 python3 tools/abi/compat/gen.py toolchains/compat/gen
 python3 tools/abi/compat/run.py toolchains/compat/gen
+python3 tools/abi/compat/run.py toolchains/compat/gen --target v3,v5.8c2
 ```
 
 `gen.py` writes caller/callee pairs for the rules in
@@ -62,7 +73,13 @@ one, e.g. a GCC port, and `--cxx NAME=COMMAND` its C++ compiler), links
 with lcc (`l++` for C++) and runs each program under `--runner` (qemu-e2k
 by default) or on hardware over SSH (`--remote`). Known differences of
 the reference compilers are listed in `tools/abi/compat/known.txt`; any
-other failure fails the run.
+other failure fails the run. With several targets (`--target
+v3,v5.8c2`) each target has its own compilers (`lcc-v3`,
+`lcc-v5.8c2`, `unipro-v3`, `unipro-v5`; `--cc NAME@TARGET=COMMAND` adds
+one), the default pairs are those whose caller and callee have
+different targets, and the programs are linked by the last target's lcc
+and run on its CPU (qemu's `-cpu` follows it; with `--remote`, choose a
+host with that CPU).
 
 ## Probes
 

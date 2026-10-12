@@ -467,7 +467,8 @@ precision, and double and single precision control). `check_semfx.c`
 redoes each line with the host's x87. The 4C and the Elbrus-8C2 give
 the same 51,324 lines (the 8C2 564 more for `fxscalesx`), and **every
 line with an x87 counterpart matches x87 code in value and flags**
-(43,992 lines on the 4C, 44,556 on the 8C2):
+(43,992 lines on the 4C, 44,556 on the 8C2; the exception flags, not
+C1, which is below):
 
 - **Rounding as x87 code does**: the result is rounded to the precision
   control's precision, then to its own format. So `fxadddd` (80-bit +
@@ -501,14 +502,54 @@ line with an x87 counterpart matches x87 code in value and flags**
   but unlike x87 `fscale`, which is exact, it **rounds the result to the
   precision control** as an arithmetic operation does (62 of 564 lines,
   all under single or double precision control).
-- **`fxdivt*`** (`fxdivtss`, `fxdivtsx`, `fxdivtdd`, `fxdivtdx`) give
-  invalid and a NaN for most ordinary operands: a division step that
-  needs a prepared operand, not decoded. lcc divides with `fxdivxx`,
-  `fxdivdd` and the other plain forms.
+- **`fxdivt<a><r> src1, src2`** (`fxdivtss`, `fxdivtsx`, `fxdivtdd`,
+  `fxdivtdx`) is src1 ÷ src2 with the **narrow operand first**: src1 is
+  a single (`a` = `s`) or double (`d`) in the low bits of its register,
+  src2 the 80-bit value, and the result a single, double or 80-bit
+  value (`r`). `fxdiv<b><r>` has the 80-bit operand first; `t`
+  presumably stands for this transposition (inferred). Both qemus
+  implement it this way (MCST's `fp_helper.c`, the community's
+  `helper_fpu.c`). On the 4C, 8C2 and 2C3, 16,512 lines
+  [hw: `tools/isa-probes/sregs.c` `dt`: special and random operands
+  under six `%fpcr` settings; `check_sregs.c`] give exactly the value of
+  x87 code `fld src1; fld src2; fdivrp; fstp` to the result type,
+  double rounding included (under single precision control `fxdivtdd`
+  rounds to single, then to double). The flags agree too, except that
+  C1 is never set for a single or double result (below), and that the
+  conversion of src1 raises no denormal flag of its own: a denormal
+  src1 divided by zero, a NaN or an invalid encoding gives no `de`,
+  where x87's `flds`/`fldl` would set it (x87's `fdiv` itself would
+  not). **lcc uses them** [lcc 1.29.16 `-O3`, v3 and v5]: `1 / x`,
+  `-1.0L / x` and `2.5L / x` (a constant exact as a single) become
+  `fxdivtsx` with the constant as a 32-bit literal; `f / x` (`float` ÷
+  `long double`) becomes `fxdivtsx`, `d / x` `fxdivtdx`, and `(float)
+  (f / x)` and `(double) (d / x)` one `fxdivtss` or `fxdivtdd`, whose
+  double rounding is what C requires (at `-O0` lcc uses `fxdivxx`).
+  Its v3 libraries use them 20 times (`lcc-usage.yaml`; libm's
+  `atanl`, `remainderl`, `fmodl` and libgcc's `__powixf2` compute 1/x
+  this way, `tanl` −1/x). (`semfx.c` had passed the 80-bit value as
+  src1, which made most results invalid; this section said so until
+  2026-10-12.)
+- **`%fpsr.c1`** [hw: `tools/isa-probes/sregs.c` `c1` (8,920 lines),
+  `dc` and `fp`, the same on the 4C, 8C2 and 2C3; `check_sregs.c`]:
+  only a non-speculative divide or square root writes it. `fxdiv*` and
+  `fxdivt*` with an 80-bit result, and lcc's square-root chain, set C1
+  exactly when x87 does (the result was rounded up in magnitude, an
+  overflow to infinity included) and clear it otherwise, exceptions
+  included. With a single or double result (`fxdivxd`, `fxdivtss`,
+  `fxdivtdd`) they always clear it. Their `,sm` forms never write it,
+  also when they return the normal result (`fxdivtsx,sm` 1 / 3 with the
+  flags already set leaves C1 as it was, where `fxdivtsx` sets it).
+  Add, subtract, multiply, the conversions (`fxtofd`, `fxtoid`) and the
+  compares never change C1. They neither set it where x87 would (175
+  `fxaddxx` lines that round up) nor clear it where x87 would (an exact
+  result, `fcomi`). Code that needs x87's C1 (an emulator; nothing a C
+  compiler emits reads it) must compute it itself.
 
-So the 80-bit operations implement x87 arithmetic exactly, and a
-compiler can map `long double` operations one to one, including an
-operation whose result is converted straight to `double` or `float`.
+So the 80-bit operations implement x87 arithmetic exactly (C1 aside),
+and a compiler can map `long double` operations one to one, including
+an operation whose result is converted straight to `double` or `float`
+or whose dividend is one (`fxdivt*`).
 (MCST's qemu uses `%pfpfr` instead of `%fpcr`/`%fpsr` for them:
 AGENTS.md, gotchas.)
 

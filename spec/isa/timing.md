@@ -174,8 +174,7 @@ files (`v3op_*`, `v3st_*`).
 | 11 | 13 | integer divides with small quotients (`sdivs`, `sdivd`, `udivs`, `udivd`, `sdivx`, `udivx`; 11–18 by the quotient, above), `fsqrtid`, `pfdivs`; the 80-bit `fxsqrti*` (to an FP op only) |
 | 12 | 14 | `fsqrts`, `pfsqrts` |
 | 14 | 16 | `fdivd`, `fsqrttd`; `pfdivd` and `pfsqrttd` on v3 (16 and 18 on v5 and v6) |
-| 16 | 18 | 80-bit divides `fxdiv*`; the square root steps `fxsqrtu*` (`fxsqrtuxx` 16–17, 18 on v6) and `fxsqrtt*` (to an FP op only) |
-| 19 | 20 | `fxdivt*`, timed with ordinary operands, for which they return invalid (semantics.md) |
+| 16 | 18 | 80-bit divides `fxdiv*` and `fxdivt*` (`fxdivt*`: `tools/isa-probes/sregs.c` `latg`, 16 on the 4C, 8C2 and 2C3, but 18 on the 8C2 through the single or double src1; their 18 to an integer op is taken from `fxdiv*`, inferred); the square root steps `fxsqrtu*` (`fxsqrtuxx` 16–17, 18 on v6) and `fxsqrtt*` (to an FP op only) |
 
 What this adds to the table above:
 
@@ -192,6 +191,10 @@ What this adds to the table above:
 - **`pfdivd` and `pfsqrttd`** compute what `fdivd` and `fsqrttd` do
   (semantics.md) and take as long on v3, but 2 cycles more on v5 and
   v6.
+- The `v3op_fxdivt*` chains in the YAML files (19; 20 to an integer
+  op) ran on operands for which the operations return invalid, so they
+  timed that path (semantics.md, "80-bit operations"); the 16 above
+  comes from `sregs.c` `latg`, with valid operands in their roles.
 - `pextrh`'s own chain reads its 32-bit result as 64 bits; its 4 to
   `adds` is the cleaner figure. `pmovmsk*` were chained as packed
   integers (1), their result being an integer mask: 4 to an integer op.

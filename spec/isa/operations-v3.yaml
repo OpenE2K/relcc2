@@ -257,8 +257,11 @@ groups:
     lat: "16; 18 to an integer op"
     does: a ÷ b as above, ALC5.
   - ops: fxdivt{ss,sx,dd,dx}
-    does: A division step that needs a prepared operand (invalid for ordinary ones); not decoded, lcc doesn't emit it. 19 cycles with ordinary operands (the invalid path).
+    lat: "16, as `fxdiv*` (8C2: 18 through the single or double src1)"
+    does: "src1 ÷ src2 with src1 a single (`s`) or double (`d`) and src2 80-bit; the result as the second letter. x87 `fld src1; fld src2; fdivrp; fstp` exactly, rounded to the precision control, then to a single or double result; ALC5."
+    use: "lcc: `1 / x` and other constants exact as a single (`fxdivtsx` with a 32-bit literal), `float` or `double` ÷ `long double` (`fxdivtsx`, `fxdivtdx`), and the same narrowed (`fxdivtss`, `fxdivtdd`)."
     see: semantics.md, "80-bit operations"
+    status: "sregs (4C, 8C2, 2C3); semfx ran them with the operands swapped"
   - match: 'fxsqrt[iut][sdx]x'
     lat: "11 (`fxsqrti*`), 16 (`fxsqrtu*`, `fxsqrtt*`; `fxsqrtuxx` 16–17, 18 on v6)"
     does: "Square root steps: lcc's `fxsqrtixx a, t; fxsqrtuxx a, t, t; fxsqrttxx a, t, r` equals x87 `fsqrt`; the steps alone are not decoded. ALC5, 53 cycles for the chain."

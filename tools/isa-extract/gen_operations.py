@@ -90,6 +90,7 @@ PROBES = {
     "fpenv-v6.s": ("fpenv.c", "2C3"),
     "fpcost.s": ("fpcost.c", "4C, 8C2, 2C3"),
     "pf.s": ("pf.c", "4C, 8C2, 2C3"),
+    "sregs.s": ("sregs.c", "4C, 8C2, 2C3"),
 }
 ABI_PROBES = "tools/abi/probes"
 

@@ -61,13 +61,12 @@ progs="islocal-exe islocal-pie islocal-dso ifunc-dso ifunc-exe gotplt-exe gotplt
 libs="libext.so libislocal.so libifunc.so libgotplt.so"
 script="cd $rdir && for p in $progs; do echo \"== \$p\"; ./\$p; done"
 if [ -n "$remote" ]; then
-	key=$root/secrets/id_ed25519
-	ssh_opts="-o BatchMode=yes"
-	[ -f "$key" ] && ssh_opts="$ssh_opts -i $key -o IdentitiesOnly=yes"
-	[ -n "$port" ] && ssh_opts="$ssh_opts -o Port=$port"
-	ssh $ssh_opts "$remote" "mkdir -p $rdir"
-	scp -q $ssh_opts $libs $progs "$remote:$rdir/"
-	ssh $ssh_opts "$remote" "$script"
+	# relcc2's key and nothing else (tools/setup/e2k-ssh refuses without it)
+	ssh_opts=
+	[ -n "$port" ] && ssh_opts="-o Port=$port"
+	"$root/tools/setup/e2k-ssh" $ssh_opts "$remote" "mkdir -p $rdir"
+	"$root/tools/setup/e2k-scp" -q $ssh_opts $libs $progs "$remote:$rdir/"
+	"$root/tools/setup/e2k-ssh" $ssh_opts "$remote" "$script"
 else
 	for p in $progs; do
 		echo "== $p"

@@ -58,7 +58,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--remote", required=True)
     ap.add_argument("--remote-dir", default="relcc2/isa-score")
-    ap.add_argument("--key", default=str(ROOT / "secrets" / "id_ed25519"))
+    ap.add_argument("--key", help="default: $RELCC2_SSH_KEY or "
+                    "secrets/id_ed25519")
     ap.add_argument("--ssh-port", type=int)
     ap.add_argument("--cpu", type=int, default=2)
     ap.add_argument("-o", default=str(ROOT / "toolchains" / "isa-score" / "validate"))

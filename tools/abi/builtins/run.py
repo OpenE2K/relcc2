@@ -32,7 +32,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
 VERSION = "1.31.05"
-SSH_KEY = ROOT / "secrets" / "id_ed25519"
+sys.path.insert(0, str(ROOT / "tools" / "setup"))
+import sshkey  # noqa: E402  (never connect without relcc2's key)
 
 
 def default_lcc(target):
@@ -58,7 +59,7 @@ def main():
     ap.add_argument("--runner")
     ap.add_argument("--remote")
     ap.add_argument("--ssh-key", type=Path,
-                    default=SSH_KEY if SSH_KEY.exists() else None)
+                    help="default: $RELCC2_SSH_KEY or secrets/id_ed25519")
     ap.add_argument("--ssh-port", type=int)
     ap.add_argument("--remote-dir", default="relcc2/builtins")
     a = ap.parse_args()
@@ -78,15 +79,10 @@ def main():
             if p.returncode:
                 sys.exit(f"{name}: {src.name} does not build:\n{p.stdout}{p.stderr}")
             progs.append(out)
-    ssh = ["ssh", "-o", "BatchMode=yes"]
-    scp = ["scp", "-q", "-o", "BatchMode=yes"]
-    if a.ssh_key:
-        ssh += ["-i", str(a.ssh_key), "-o", "IdentitiesOnly=yes"]
-        scp += ["-i", str(a.ssh_key), "-o", "IdentitiesOnly=yes"]
-    if a.ssh_port:
-        ssh += ["-p", str(a.ssh_port)]
-        scp += ["-P", str(a.ssh_port)]
     if a.remote:
+        opts = sshkey.options(sshkey.find_key(a.ssh_key), a.ssh_port)
+        ssh = ["ssh", *opts]
+        scp = ["scp", "-q", *opts]
         sh(ssh + [a.remote, f"mkdir -p {a.remote_dir}"])
         p = sh(scp + [str(x) for x in progs] + [f"{a.remote}:{a.remote_dir}/"])
         if p.returncode:

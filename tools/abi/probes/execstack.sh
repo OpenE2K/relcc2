@@ -43,8 +43,7 @@ while [ $# -gt 0 ]; do
 	esac
 done
 if [ -n "$remote" ]; then
-	ssh -i "$root/secrets/id_ed25519" -o IdentitiesOnly=yes \
-		-o BatchMode=yes ${port:+-p "$port"} "$remote" sh -s <<'EOF_REMOTE'
+	"$root/tools/setup/e2k-ssh" ${port:+-p "$port"} "$remote" sh -s <<'EOF_REMOTE'
 for d in /bin /usr/bin /lib64 /usr/lib64 /usr/libexec; do
 	[ -d "$d" ] || continue
 	if [ -L "$d" ]; then

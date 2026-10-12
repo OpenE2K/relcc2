@@ -294,9 +294,11 @@ proc e2k_ssh_sockdir {} {
 proc e2k_ssh_opts {dest} {
     set cmd [list ssh -o BatchMode=yes -o ConnectTimeout=30 \
 		 -o ServerAliveInterval=15 -o ServerAliveCountMax=4]
-    if {[board_info $dest e2k,key] ne ""} {
-	lappend cmd -i [board_info $dest e2k,key] -o IdentitiesOnly=yes
+    # relcc2's key only: the board files refuse to load without one.
+    if {[board_info $dest e2k,key] eq ""} {
+	error "e2k board $dest: no SSH key"
     }
+    lappend cmd -i [board_info $dest e2k,key] -o IdentitiesOnly=yes
     if {[board_info $dest e2k,port] ne ""} {
 	lappend cmd -p [board_info $dest e2k,port]
     }

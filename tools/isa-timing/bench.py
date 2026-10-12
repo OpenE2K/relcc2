@@ -57,7 +57,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 LCC_VERSION = "1.29.16"
-SSH_KEY = ROOT / "secrets" / "id_ed25519"
+sys.path.insert(0, str(ROOT / "tools" / "setup"))
+import sshkey  # noqa: E402  (never connect without relcc2's key)
 
 K1, K2 = 32, 64
 ITER = 20000
@@ -2461,11 +2462,9 @@ def find_lcc(target):
 
 def run(args, prog, sysroot):
     if args.remote:
-        ssh = ["ssh", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=30"]
-        if args.ssh_key:
-            ssh += ["-i", str(args.ssh_key), "-o", "IdentitiesOnly=yes"]
-        if args.ssh_port:
-            ssh += ["-o", f"Port={args.ssh_port}"]
+        ssh = ["ssh", *sshkey.options(sshkey.find_key(args.ssh_key),
+                                      args.ssh_port),
+               "-o", "ServerAliveInterval=30"]
         rdir = args.remote_dir
         subprocess.run(ssh + [args.remote, f"mkdir -p {rdir}"], check=True)
         subprocess.run(["scp", "-q"] + ssh[1:] + [str(prog), f"{args.remote}:{rdir}/"],
@@ -2637,7 +2636,7 @@ def main():
     ap.add_argument("--target", default="v3")
     ap.add_argument("--remote", metavar="[USER@]HOST")
     ap.add_argument("--ssh-key", type=Path,
-                    default=SSH_KEY if SSH_KEY.exists() else None)
+                    help="default: $RELCC2_SSH_KEY or secrets/id_ed25519")
     ap.add_argument("--ssh-port", type=int, metavar="PORT")
     ap.add_argument("--out", type=Path, default=ROOT / "toolchains" / "isa-timing")
     ap.add_argument("--yaml", type=Path)

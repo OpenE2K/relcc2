@@ -38,13 +38,12 @@ $lcc -O2 -static "$src/main.c" "$src/lib.c" -o "$out/main-static"
 progs="main-pie main-nopie main-static"
 script="cd $rdir && for p in $progs; do echo \"\$p: \$(./\$p)\"; echo \"\$p now: \$(LD_BIND_NOW=1 ./\$p)\"; done"
 if [ -n "$remote" ]; then
-	key=$root/secrets/id_ed25519
-	ssh_opts="-o BatchMode=yes"
-	[ -f "$key" ] && ssh_opts="$ssh_opts -i $key -o IdentitiesOnly=yes"
-	[ -n "$port" ] && ssh_opts="$ssh_opts -o Port=$port"
-	ssh $ssh_opts "$remote" "mkdir -p $rdir"
-	scp -q $ssh_opts "$out/libdso.so" "$out/main-pie" "$out/main-nopie" "$out/main-static" "$remote:$rdir/"
-	ssh $ssh_opts "$remote" "$script"
+	# relcc2's key and nothing else (tools/setup/e2k-ssh refuses without it)
+	ssh_opts=
+	[ -n "$port" ] && ssh_opts="-o Port=$port"
+	"$root/tools/setup/e2k-ssh" $ssh_opts "$remote" "mkdir -p $rdir"
+	"$root/tools/setup/e2k-scp" -q $ssh_opts "$out/libdso.so" "$out/main-pie" "$out/main-nopie" "$out/main-static" "$remote:$rdir/"
+	"$root/tools/setup/e2k-ssh" $ssh_opts "$remote" "$script"
 else
 	isa=$(echo "$target" | sed 's/^v\([0-9]*\).*/\1/')
 	cd "$out"

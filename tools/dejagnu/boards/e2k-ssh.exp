@@ -14,8 +14,10 @@
 # Settings (Tcl variable, else environment, else default; ../README.md):
 #   E2K_SSH_HOST    [user@]host (required)
 #   E2K_SSH_PORT    ssh port (default: ssh's)
-#   E2K_SSH_KEY     identity file (default secrets/id_ed25519 of this
-#                   checkout if present, else ssh's own keys)
+#   E2K_SSH_KEY     identity file (default $RELCC2_SSH_KEY, else
+#                   secrets/id_ed25519 of this checkout or of the main
+#                   checkout; the board refuses to run without one:
+#                   never ssh's own keys)
 #   E2K_SSH_OPTS    more ssh options (a Tcl list)
 #   E2K_REMOTE_DIR  directory on the remote, relative to its home
 #                   (default relcc2/dejagnu)
@@ -30,12 +32,31 @@ if {[info procs e2k_setting] eq ""} {
 
 set_board_info e2k,host [e2k_setting E2K_SSH_HOST]
 set_board_info e2k,port [e2k_setting E2K_SSH_PORT]
-if {[file readable "$e2k_repo_root/secrets/id_ed25519"]} {
-    set_board_info e2k,key [e2k_setting E2K_SSH_KEY \
-				"$e2k_repo_root/secrets/id_ed25519"]
-} else {
-    set_board_info e2k,key [e2k_setting E2K_SSH_KEY]
+# The machines must only see relcc2's key: without it ssh would offer the
+# user's personal keys, which their owners see as failed logins.
+set e2k_key [e2k_setting E2K_SSH_KEY]
+if {$e2k_key eq "" && [info exists ::env(RELCC2_SSH_KEY)]} {
+    set e2k_key $::env(RELCC2_SSH_KEY)
 }
+if {$e2k_key eq ""} {
+    set dirs [list $e2k_repo_root]
+    if {![catch {exec git -C $e2k_repo_root rev-parse --path-format=absolute \
+		     --git-common-dir} common]} {
+	lappend dirs [file dirname [string trim $common]]
+    }
+    foreach dir $dirs {
+	if {[file readable "$dir/secrets/id_ed25519"]} {
+	    set e2k_key "$dir/secrets/id_ed25519"
+	    break
+	}
+    }
+}
+if {$e2k_key eq "" || ![file readable $e2k_key]} {
+    perror "e2k board $board: no SSH key (set E2K_SSH_KEY or RELCC2_SSH_KEY);\
+	    refusing to connect with ssh's own keys"
+    exit 1
+}
+set_board_info e2k,key $e2k_key
 set_board_info e2k,ssh_opts [e2k_setting E2K_SSH_OPTS]
 set_board_info e2k,remote_dir [e2k_setting E2K_REMOTE_DIR relcc2/dejagnu]
 set_board_info e2k,lcc [e2k_setting E2K_LCC [e2k_lcc_dir e2k-v3]]

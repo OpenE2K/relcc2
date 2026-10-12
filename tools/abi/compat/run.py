@@ -82,7 +82,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 LCC_VERSION = "1.29.16"
 UNIPRO = ROOT / "toolchains" / "unipro" / "bin" / "clang"
-SSH_KEY = ROOT / "secrets" / "id_ed25519"
+sys.path.insert(0, str(ROOT / "tools" / "setup"))
+import sshkey  # noqa: E402  (never connect without relcc2's key)
 
 # Set by find_lcc().
 LCC = None
@@ -191,14 +192,10 @@ class Remote:
         # in OUTDIR.
         self.sockdir = tempfile.mkdtemp(prefix="relcc2-ssh-",
                                         dir=os.environ.get("XDG_RUNTIME_DIR"))
-        self.ssh = ["ssh", "-o", "BatchMode=yes",
+        self.ssh = ["ssh", *sshkey.options(key, port),
                     "-o", "ControlMaster=auto",
                     "-o", f"ControlPath={self.sockdir}/%C",
                     "-o", "ControlPersist=60"]
-        if key:
-            self.ssh += ["-i", str(key), "-o", "IdentitiesOnly=yes"]
-        if port:
-            self.ssh += ["-o", f"Port={port}"]
 
     def remote(self, command, timeout=None, stdin=None):
         rc, out = sh(self.ssh + [self.host, command], timeout, stdin)
@@ -308,7 +305,7 @@ def main():
     where.add_argument("--runner", default=None)
     where.add_argument("--remote", metavar="[USER@]HOST")
     ap.add_argument("--ssh-key", type=Path,
-                    default=SSH_KEY if SSH_KEY.exists() else None)
+                    help="default: $RELCC2_SSH_KEY or secrets/id_ed25519")
     ap.add_argument("--ssh-port", type=int)
     ap.add_argument("--remote-dir", default="relcc2/compat")
     ap.add_argument("--remote-jobs", type=int, default=4)
@@ -365,7 +362,8 @@ def main():
     out = args.outdir.resolve()
     out.mkdir(parents=True, exist_ok=True)
     if args.remote:
-        host = Remote(args.remote, args.ssh_key, args.remote_dir, out,
+        host = Remote(args.remote, sshkey.find_key(args.ssh_key),
+                      args.remote_dir, out,
                       args.ssh_port)
         run_jobs = args.remote_jobs
     else:

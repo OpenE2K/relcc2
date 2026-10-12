@@ -1,0 +1,35 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# ssh to the Elbrus machines with relcc2's key and nothing else.
+#
+#   tools/setup/e2k-ssh [ssh options] [user@]host [command]
+#   tools/setup/e2k-scp [scp options] files... [user@]host:dir
+#
+# (e2k-scp is a link to this script.)  The key is RELCC2_SSH_KEY, else this
+# checkout's secrets/id_ed25519, else the main checkout's (from a git
+# worktree).  Without one it refuses to connect: ssh would offer the
+# user's personal keys, which the machines see as failed logins.  Use this
+# instead of passing ssh options through a shell variable: zsh does not
+# split "$opts", and ssh then can't find the key and falls back to its own.
+set -e
+here=$(cd "$(dirname "$0")" && pwd)
+root=$(cd "$here/../.." && pwd)
+key=
+if [ -n "$RELCC2_SSH_KEY" ]; then
+	key=$RELCC2_SSH_KEY
+elif [ -f "$root/secrets/id_ed25519" ]; then
+	key=$root/secrets/id_ed25519
+else
+	common=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+	[ -n "$common" ] && [ -f "$common/../secrets/id_ed25519" ] &&
+		key=$common/../secrets/id_ed25519
+fi
+if [ -z "$key" ] || [ ! -f "$key" ]; then
+	echo "$(basename "$0"): no SSH key for the Elbrus machines (set RELCC2_SSH_KEY);" \
+	     "refusing to connect with ssh's own keys" >&2
+	exit 2
+fi
+case $(basename "$0") in
+*scp*) exec scp -i "$key" -o IdentitiesOnly=yes -o BatchMode=yes "$@" ;;
+*)     exec ssh -i "$key" -o IdentitiesOnly=yes -o BatchMode=yes "$@" ;;
+esac

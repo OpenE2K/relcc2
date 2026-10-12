@@ -31,6 +31,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(ROOT / "tools" / "setup"))
+import sshkey  # noqa: E402  (never connect without relcc2's key)
 import analysis  # noqa: E402
 import elf as elfmod  # noqa: E402
 import score  # noqa: E402
@@ -47,11 +49,9 @@ STAT = [("TICKS", 0x572), ("EXEC", 0x513), ("BUB_E2", 0x511),
 
 
 def ssh_opts(a):
-    """ssh/scp options for A.key and A.ssh_port."""
-    o = ["-i", a.key, "-o", "IdentitiesOnly=yes"]
-    if getattr(a, "ssh_port", None):
-        o += ["-o", f"Port={a.ssh_port}"]
-    return o
+    """ssh/scp options for A.key and A.ssh_port: relcc2's key and nothing
+    else (tools/setup/sshkey.py)."""
+    return sshkey.options(sshkey.find_key(a.key), getattr(a, "ssh_port", None))
 
 
 def run_remote(a, prog):
@@ -272,7 +272,8 @@ def main():
     ap.add_argument("--remote-dir", default="relcc2/isa-score")
     ap.add_argument("--stdin", help="text for the program's standard input"
                     " (default: none)")
-    ap.add_argument("--key", default=str(ROOT / "secrets" / "id_ed25519"))
+    ap.add_argument("--key", help="default: $RELCC2_SSH_KEY or "
+                    "secrets/id_ed25519")
     ap.add_argument("--ssh-port", type=int)
     ap.add_argument("--cpu", type=int, default=2)
     ap.add_argument("--period", type=int, default=100003,

@@ -87,7 +87,7 @@ or, failing that, an environment variable of the same name.
 | `E2K_8C2_HOST`, `E2K_8C2_PORT` | e2k-8c2 | default `claude@geofront.lan` |
 | `E2K_2C3_HOST`, `E2K_2C3_PORT` | e2k-2c3 | required; keep them out of the repository |
 | `E2K_SSH_HOST`, `E2K_SSH_PORT` | e2k-ssh | required host, optional port |
-| `E2K_SSH_KEY` | ssh | identity file. Default `secrets/id_ed25519` of this checkout if present (then with `IdentitiesOnly=yes`), else ssh's own |
+| `E2K_SSH_KEY` | ssh | identity file, always used with `IdentitiesOnly=yes`. Default `$RELCC2_SSH_KEY`, else `secrets/id_ed25519` of this checkout or of the main checkout (from a git worktree). Without one the board refuses to load: it never lets ssh offer its own keys |
 | `E2K_SSH_OPTS` | ssh | more ssh options (a Tcl list) |
 | `E2K_REMOTE_DIR` | ssh | work directory on the remote, relative to its home; default `relcc2/dejagnu` |
 | `E2K_TIMEOUT` | all | seconds; sets the board's `gcc,timeout` (GCC's limit for compiling and for running a test; GCC's default is 300) |
@@ -213,8 +213,8 @@ are gone afterwards.
   most on the 4C and 8C2, `-j2` on the 2C3 (two cores);
   `run-gcc-tests.sh` enforces it. Each run works only in its own
   `~/relcc2/dejagnu/run-HOST-PID`. A run that is interrupted leaves that
-  directory behind; remove only your own, e.g. `ssh claude@ringo.lan rm
-  -rf relcc2/dejagnu/run-HOST-PID`.
+  directory behind; remove only your own, e.g. `tools/setup/e2k-ssh
+  claude@ringo.lan rm -rf relcc2/dejagnu/run-HOST-PID`.
 - The 2C3 belongs to a contact: give its address and port in
   `E2K_2C3_HOST` and `E2K_2C3_PORT`, never in a file under version
   control.

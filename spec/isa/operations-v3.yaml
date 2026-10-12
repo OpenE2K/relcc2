@@ -442,10 +442,11 @@ groups:
     (speculation.md); these operations matter to protected mode.
   rules:
   - ops: gettag{s,d} puttag{s,d}
+    lat: "1; a 64-bit reader of a `gettag*` or `puttags` result waits 4 under `dbl = 0` (timing.md, Formats)"
     does: "`gettag*`: the tags of a (`gettagd` both halves, 0–15; `gettags` the low half's, 0–3) as a 32-bit result; no trap on a diagnostic a. `puttag*`: a with tags b (its low 4 bits; `puttags` 2); SIGILL `ILL_PRVOPC` when asked for a diagnostic half (tag 1 with bit 30 set) or a pointer tag (2, 3) not next to an empty half (`puttags`: any 2 or 3); `,sm` gives a diagnostic value (bit 30 set) instead. `puttag* a, 0` clears without checking a; a diagnostic b is `ILL_ILLOPN`."
     see: semantics.md, "Tag operations"; speculation.md, "Diagnostic values"
   - ops: movt{s,d,q}
-    lat: "9 (`movtd` to `ct`)"
+    lat: "2; 9 (`movtd` to `ct`)"
     does: "Copy keeping tags (`movtq` every tag, `movtd` turns a tag-3 half into 0, `movts` keeps only tag 1: semantics.md, \"Tag operations\"); `movtd a, %ctprN` prepares a transfer to the address in a (9 cycles to `ct`; ALC0)."
     use: "Indirect calls and jumps (`movtd` + `ct`/`call`)."
     see: control-transfer.md

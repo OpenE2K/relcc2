@@ -230,4 +230,5 @@ groups:
     does: "128-bit forms of the segment, protected-mode and privileged accesses: they fault in ordinary user mode (SIGILL, SIGSEGV or SIGBUS) as the v3 forms do."
     see: semantics.md, "Memory, tag and descriptor operations"
   - ops: puttagqp
+    lat: "1 (4 to `addd` reading its low half)"
     does: "Set the tags of a 128-bit value, 2 bits per 32-bit word (the low 8 bits of b): tag 1 as asked (diagnostic where the word's bit 30 is set, empty where it is clear), 2 and 3 give 0; never traps, `,sm` or not (semantics.md, \"Tag operations\"); lcc gives speculatively loaded blocks tag 0 with it before testing them in string functions."

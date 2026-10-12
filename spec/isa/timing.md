@@ -177,8 +177,9 @@ files (`v3op_*`, `v3st_*`).
 | Latency to its own kind | To an integer op | Operations |
 |---|---|---|
 | 1 | — | scalar logic, shifts and rotates (`scl`, `scr`), `getfd`, `merges`, `popcnts`, `bitrevs`, `sub` |
+| 1 | 1 | the tag operations (`tools/isa-probes/tagx.c`, `lat` section; 4C, 8C2, 2C3 alike): `puttagd` through either operand (+1 to the other cluster, as any integer result), `puttags`, `gettags`, `gettagd` (to a 32-bit consumer; a 64-bit one waits 4, Formats) |
 | 1 | 4 | every packed integer operation except the multiplies: add and subtract (also saturating), compares, min/max, averages, shifts (`psllqh` …), packs and unpacks, `pshufh`, `pshufw`, `pmerge`, `pinsh`, `pextrh`, `pmovmsk*`, `psign*`, horizontal add and subtract, logic |
-| 2 | 2 | the x86 flag forms (`*_fb`, `_fh`, `_fw`, `_fd`); combined integer operations through any operand (`and_addd`, `add_xord`, `merge_addd` …); an integer compare, `cmpand*` or `cctop*` → `merge` (v6: 1) |
+| 2 | 2 | the x86 flag forms (`*_fb`, `_fh`, `_fw`, `_fd`); combined integer operations through any operand (`and_addd`, `add_xord`, `merge_addd` …); an integer compare, `cmpand*` or `cctop*` → `merge` (v6: 1); the tag-keeping moves `movts`, `movtd`, `movtq` between registers (`tagx.c`; `movtd` → `ct` is 9, Latencies) |
 | 2 | 4 | FP compares into a register (`fcmp*s`, `fcmp*d`, `pfcmp*`), FP min/max (`fmins`, `pfmax*`, `pfmin*`), packed multiplies (`pmulh*`, `pmadd*`, `pmulubhh`), `phminposuh` |
 | 4 | 4 | the FP flags compares `fcmp{ud,od}{s,d}f` (to `cctop` as to any integer op) |
 | 4 | — | FP compares into a predicate (`fcmp*b`, `fxcmp*b`) → predicated op or `merge` |
@@ -213,7 +214,10 @@ What this adds to the table above:
   timed that path (semantics.md, "80-bit operations"); the 16 above
   comes from `sregs.c` `latg`, with valid operands in their roles.
 - `pextrh`'s own chain reads its 32-bit result as 64 bits; its 4 to
-  `adds` is the cleaner figure. `pmovmsk*` were chained as packed
+  `adds` is the cleaner figure. `puttags`, `gettags` and `gettagd`
+  write 32-bit results too: `gettagd` → `gettagd` measures 4 because
+  the second reads 64 bits of the first's result (Formats, "32-bit
+  integer results read as 64 bits"). `pmovmsk*` were chained as packed
   integers (1), their result being an integer mask: 4 to an integer op.
 
 **The divider.** Every ALC5 operation that divides, takes a root or
@@ -289,6 +293,26 @@ latencies below are of this kind (with a consumer of their format,
 ("Crossings with 128-bit values", below) may be the same effect.
 `tools/isa-score` uses 4 for every conversion and does not model the
 penalty.
+
+**32-bit integer results read as 64 bits.** Under `setwd dbl = 0` a
+32-bit integer operation writes only the low half of its destination
+([registers.md](../abi/registers.md), `dbl`). An operation that reads
+the whole 64-bit register gets the result 4 cycles after the producer
+issues instead of 1, in the same cluster or the other one (the crossing
+adds nothing): `adds`, `ands`, `shls` → `addd`, `andd`, `shld`, `movtd`,
+`gettagd`, from ALC0 or ALC3 to ALC0–4, and `gettagd` → `gettagd`, whose
+result is 32-bit. A reader of the 32-bit operand gets it in 1 (`adds`,
+`sxt 2`), and a producer slower than 4 is not delayed further (`muls` →
+`addd` 6, as `muls` → `adds`). Under `dbl = 1`, which zero-extends the
+result into the whole register, the 64-bit readers get it in 1 (2 from
+the other cluster) [hw: `tools/isa-probes/tagx.c` `adds_addd`,
+`ands_andd`, `shls_shld`, `adds_addd1`, `adds_addd3`, `adds3_addd4`,
+`adds_movtd`, `adds_gettagd`, `gettagd`, `adds_sxt`, `muls_addd`,
+`*_dbl1`; the 4C, the Elbrus-8C2 and the 2C3 alike; other 32-bit
+integer operations and other 64-bit consumers, such as an address or
+store data, inferred]. So lcc's `adds` + `sxt` under `dbl = 0` costs
+nothing extra, while a 64-bit use of a 32-bit result without the `sxt`
+waits 4. `tools/isa-score` does not model it.
 
 ## Clusters
 
@@ -836,7 +860,7 @@ What v5 adds or changes:
 
   | Latency | Operations |
   |---|---|
-  | 1 | packed integer add/sub (also saturating), logic, shifts (`qpsll*`, `qpsrl*`, `qpsra*`, `qpsrc*`), compares (`qpcmp*`), min/max, averages, signs, horizontal adds (`qphadd*`, `qphsub*`), packs (`qpack*`), shuffles and permutes (`qpshufb`, `qppermb`, `qpmerge`, `qpswitch*`), `qpmsk2sgnb`, `qppackdl`, `plog`/`qplog`, `addcd`/`subcd` (with carry), `getfz*`, `psrc*` |
+  | 1 | packed integer add/sub (also saturating), logic, shifts (`qpsll*`, `qpsrl*`, `qpsra*`, `qpsrc*`), compares (`qpcmp*`), min/max, averages, signs, horizontal adds (`qphadd*`, `qphsub*`), packs (`qpack*`), shuffles and permutes (`qpshufb`, `qppermb`, `qpmerge`, `qpswitch*`), `qpmsk2sgnb`, `qppackdl`, `plog`/`qplog`, `addcd`/`subcd` (with carry), `getfz*`, `psrc*`; `puttagqp` (`tools/isa-probes/tagx.c`, 8C2 and 2C3: 1 to `qpand`, 4 to `addd` reading its low half, as `qpaddd`) |
   | 2 | packed integer multiplies (`qpmul*`, `qpmadd*`, `qpsadbw`, `qpmpsadbh`, `pmullw`), packed FP compares (`qpfcmp*`), `qpfmax*`/`qpfmin*` |
   | 4 | packed FP add, subtract, multiply, horizontal and add-subtract forms, round to integral (`qpfdtoifd`, `qpfstoifs`), `qphminposuh`, `qpsgn2mskb` (to an integer register and back) |
   | 5 | packed conversions (`qpfdtoid`, `qpfstoid`, `qpfstofd`, `qpfstois`, `qpidtofd`, `qpistofd`, `qpistofs`, and the `tr` forms), chained into themselves; 4 to a consumer of their result's format (Formats) |

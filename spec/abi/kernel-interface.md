@@ -18,10 +18,12 @@ cancellation), `pgprof.c` (`-pg`), `sanitize.c` (`lcc -S`), `ctlcost.cc`
 (what the calls on the hardware stacks cost), `hwscan.c` with
 `hwscan.s` (what the copies of the stacks hold), `ctxsig.c` with
 `ctxsig.s` (user contexts, edited signal frames, globals across system
-calls and in handlers, the chain stack seen from a handler) and
+calls and in handlers, the chain stack seen from a handler),
 `stackregs.c` with `stackregs.s` (the stack registers, how the data
-stack grows, a context's stack overflowing), built by each machine's
-own lcc 1.29.16.
+stack grows, a context's stack overflowing) and `abileft.c` with
+`abileft.s` (signals in made contexts, switching from handlers, data
+stack overflow in threads and the main thread), built by each
+machine's own lcc 1.29.16.
 
 ## System calls
 
@@ -334,6 +336,75 @@ returning an error** (kernel `kernel/signal.c:1504-1545`,
 context only when it no longer needs any saved state of the context's
 earlier run.
 
+**Signals in a made context** [hw: `abileft.c` parts 1 and 2; the 4C,
+8C2 and 2C3 agree apart from addresses and counts]:
+
+- **A handler runs on the stacks of the context it interrupts.** Its
+  frame goes below the context's `USD` inside `uc_stack`, as on the
+  main stack ("Signals"; the handler's local was 4,369 bytes below the
+  interrupted `usd.ptr`), and its window and chain frames go on the
+  context's own procedure and chain stacks (same `psp.base` and
+  `pcsp.base` as in the context). With `SA_ONSTACK` only the data frame
+  moves to the alternate stack. Returning from the handler resumed the
+  context, whose loop values were intact, and the context then left
+  through `uc_link`.
+- **A frame that does not fit makes the kernel grow the context's
+  stack.** When less than the 4,272-byte frame is free, the kernel
+  extends the stack by the missing part plus a page, through the same
+  `expand_user_data_stack` as for a `getsp` (`kernel/signal.c:1169-1186`;
+  "The data stack" below), into the memory below `uc_stack`. A context
+  left 1 KiB free at the bottom of a 16 KiB `uc_stack` in the middle of
+  a mapping and took a timer signal:
+
+  | Below `uc_stack` | Result |
+  |---|---|
+  | the rest of the mapping | no error; the frame and the handler changed 2,644 bytes below `uc_stack`, the lowest 3,760 bytes below it (8C2: 2,676 and 3,872) |
+  | 512 KiB unmapped | SIGSEGV kills the process (kernel log: `expand_user_data_stack(): user data stack overflow … free size 0x400`, then `setup signal rt frame failed, error -14`) |
+  | the rest of the mapping, handler with `SA_ONSTACK` | nothing below `uc_stack` changed |
+
+  So a fiber library should run its handlers with `SA_ONSTACK`, or keep
+  room for the frame and the handler's frames below each context's
+  deepest use.
+- **A signal that arrives during a switch is delivered on the switch's
+  return, in the context switched to.** Under a 500 µs timer, 100,000
+  `swapcontext` round trips took signals on both sides (4C: 601 and 611
+  in the main context, 614 and 620 in the made one, in two runs), and
+  91 to 97% of them interrupted glibc's `swapcontext`, the system call
+  (two runs on each machine; the 4C took 1,215 and 1,231 signals, the
+  8C2 about 530, the 2C3 about 390). No switch failed (no `EINTR`) and
+  each side kept its rounding mode. With ALRM added to the made
+  context's `uc_sigmask` after `makecontext_e2k`, that context took none
+  and the main context took all of them (4C: 1,352 and 1,348 in 0.68 s).
+- **A handler can switch contexts.** Each context runs under its own
+  mask. With TERM blocked in main, a USR1 handler (USR1 + TERM blocked)
+  `swapcontext`ed to a made context A, which ran with nothing blocked.
+  A second USR1 raised in A ran the handler nested, on A's `uc_stack`,
+  with USR1 blocked. When A switched back, the first handler had
+  USR1 + TERM again, and after its return main had TERM. Main later
+  resumed A's saved state and A finished through `uc_link`.
+- **The kernel keeps the interrupted states in a `[signal stack]` per
+  context.** This privileged mapping holds a copy of each interrupted
+  state for `sigreturn`. It is mapped at a context's first signal
+  (4 KiB) and grows when needed (`kernel/signal.c:646-735`). A switch
+  swaps it with the context (`proc_context.c:1392, 1426`). A
+  `setcontext` out of a handler to an earlier `getcontext` point is a
+  kernel `longjmp`, which drops the entries of the frames it unwinds
+  (`kernel/signal.c:1361-1412`). 1,000 such exits after `raise`, and
+  200 after a timer signal, left the mapping at 4 KiB, and the mask was
+  the one saved at the `getcontext` point (nothing blocked). A
+  `setcontext` from a handler to a made context whose `uc_link` is that
+  point also worked 200 times, and the context never ran with USR1
+  blocked.
+- **A preemptive scheduler works.** A 2 ms ALRM handler that
+  `swapcontext`s round robin among three made contexts ran 20 million
+  iterations in each (4C: 329 switches in 0.66 s; 8C2: 164; 2C3: 122).
+  All loop values and each context's own rounding mode were intact,
+  and each context started with nothing blocked. `freecontext_e2k` of
+  each context, all three suspended inside their handlers, returned 0.
+  The 12 KiB of `[signal stack]` were still mapped right after, since
+  the kernel frees a context's signal stack with its hardware stacks,
+  later (`proc_context.c:285-300, 351-360`).
+
 A context's hardware stacks, a 16 KiB `[procedure stack]` and a 4 KiB
 `[chain stack]`, are mapped by `makecontext_e2k` itself, before the
 first switch (kernel `kernel/process.c:714-718`) [hw:
@@ -406,15 +477,17 @@ with `CONFIG_PROTECTED_MODE`, whose 16-byte-aligned members pad the
 4,256-byte frame (kernel `include/asm/ucontext.h:62-83`; computed). It
 holds 64 bytes for the handler's incoming arguments, `siginfo_t` (128
 bytes) at +64 and `ucontext_t` (0xfd8 bytes) at +192 [hw: the handler's
-`uc` is its `si` + 128], then the original return IP. The main stack is
-grown if needed.
+`uc` is its `si` + 128], then the original return IP. If less than the
+frame is free, the kernel grows the stack first, a thread's or a made
+context's too (`signal.c:1169-1186`; "User contexts").
 
 The handler is entered as if called from `[trampolines]+0x100`, with
 `%dr0` = signal, `%dr1` = `&info` with `SA_SIGINFO`, else
 `&uc.uc_mcontext`, and `%dr2` = `&uc` or 0 [hw: `sysabi.c` section 3],
 and its stack top at the frame (kernel `kernel/signal.c:932-1040`). Its
 window and chain frames go on the **thread's own hardware stacks**, also
-with `SA_ONSTACK` (`signal.c:1064-1116`).
+with `SA_ONSTACK` (`signal.c:1064-1116`); in a made context they go on
+the context's hardware stacks [hw: `abileft.c`; "User contexts"].
 
 `%g16`–`%g31` read 0 with tag 5, the kernel's "empty" value [hw: read
 with `gettagd` in an assembly handler before any compiled code, for
@@ -829,10 +902,10 @@ drivers expect anyway. A static link with an ifunc crashes ld
 - `sigreturn` with an edited `uc_mcontext.cr0_hi` (resuming elsewhere)
   and `uc_extra.bgr`; all of `uc_extra.g[]` (only `%g16`–`%g19` were
   edited); `%bgr` as a handler finds it (source only).
-- Signals delivered while a made context runs; switching to a context
-  suspended in another thread; `freecontext_e2k` of a context running in
-  another thread (the kernel checks only the calling thread's context,
-  so presumably it is freed: source).
+- Switching to a context suspended in another thread;
+  `freecontext_e2k` of a context running in another thread (the kernel
+  checks only the calling thread's context, so presumably it is freed:
+  source).
 - lcc's sanitizers on hardware (MCST's map predates the 6.1 layout,
   above).
 - A thread's data stack overflowing past glibc's guard page ("Threads":

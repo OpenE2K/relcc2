@@ -277,6 +277,13 @@ hardware-stack positions from `access_hw_stacks` modes 4 and 5 instead
   it as a hack). Compiled code does a `setbn` before it uses `%b[]` (lcc
   does), so only code that relies on an inherited base would see the
   difference (inferred).
+- **A signal handler runs on the stacks of the context it interrupts**
+  [hw: `abileft.c`]. In a `makecontext_e2k` context its window and chain
+  frames go on that context's procedure and chain stacks and its data
+  frame below the context's `USD`; `SA_ONSTACK` moves only the data
+  frame. A scan of an interrupted context finds the handler's frames on
+  the context's own stacks ([kernel-interface.md](kernel-interface.md),
+  "User contexts").
 
 ### v7 [source]
 

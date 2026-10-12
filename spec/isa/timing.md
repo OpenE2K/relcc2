@@ -961,6 +961,19 @@ reach 23 (v3 code) to 30 bytes a cycle (v5 code). So reading more than
 16 bytes from one area in one instruction costs a cycle per extra 16
 bytes (isa-score models this).
 
+Where the areas sit matters for column walks. With 4 KiB pages (bound
+by TLB misses, inferred), two areas in one half of the buffer are
+9–40% slower than one area in each half, on all three machines and at
+any area size; with 2 MiB pages the half matters only on the 2C3
+(apb.md, "Which half an area is in"; `pocchk3.c` `col`).
+
+On the 4C, an area streaming beside plain loads that miss L1 slows
+those loads. A loop at II 4 that reads one array through an area and
+another with `ldd` runs at 5.25 cycles an iteration from L2 (2C3
+4.5–5.25, 8C2 at most 4.2), whichever way either array runs. With both
+arrays in areas it keeps 4 cycles from L1, L2 and memory (apb.md,
+"Plain loads beside an area"; `pocchk3.c` `bk`).
+
 ## Hazards (interlocking)
 
 | Producer → consumer | Interlocked? | Detail |

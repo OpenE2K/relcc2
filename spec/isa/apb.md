@@ -22,9 +22,12 @@ Status markers, in addition to bundle.md's:
   and `apb-lcc.c` (lcc's loops); the cases added on 2026-10-05 (stores,
   `dpl`, `dcd`, `%aabf`, `loopF`, `apb-stream.c`) also on the
   Elbrus-8C2, with the same results unless a table shows both; the
-  AAU's loads and MAS forms by `tools/isa-probes/memleft.c` on the 4C,
-  the 8C2 and the 2C3. The emulators model almost none of this; see the
-  end of the page.
+  AAU's loads and MAS forms by `tools/isa-probes/memleft.c`, and the
+  `mrng` limits, the halves areas sit in and plain loads beside an area
+  by `tools/isa-probes/pocchk3.c` (cases from `gen_pocchk3.py`; the
+  proof-of-concept back end's I47–I49), on the 4C, the 8C2 and the
+  2C3. The emulators model almost none of this; see the end of the
+  page.
 - **[guide]**: MCST programming guide, 6.6 (prefetch), 6.3.6 and
   10.9.5, 10.11.6–9, 10.12.3–4
 - **[lcc]**: observed in lcc 1.29.16 and 1.31.05 `-O2`/`-O3` output
@@ -81,7 +84,7 @@ APS fields (APLS is the 32-bit `disp`):
 | 30 | `si` | Secondary index, v1 only; gas rejects it on v2+ |
 | 28–29 | `dcd` | "Data cache disabled" (kernel `aau_context.h`; the guide's "cd", flag disabling the cache memories): 0 all caches; 1 reserved; 2 DCACHE2 off; 3 DCACHE2 and ECACHE off [guide]. Values 1–3 return the same data as 0; a stream with 2 (4C) or 3 (both) leaves other cached data alone, where 0 evicts it (Timing) [hw]. lcc always writes 0: also under `#pragma vector nontemporal`, `-fcache-opt`, `-fcache-opt-l2` and `-floop-st-dcache-mode=nocache_wc_force`, in 1.29.16 for v3, v5, v6 and in 1.31.05 [lcc]; it bypasses caches only per access, through the MAS (timing.md, "Memory") |
 | 25–27 | `fmt` | Element format: 1 byte, 2 half, 3 word, 4 double, 5 quad, 7 quad packed (both qemus accept 7 as a 16-byte format; on the 4C, the Elbrus-8C2 and the 2C3 any `mova` from an area with `fmt` 7, `movaqp` or `movad`, is SIGILL `ILL_ILLOPC` at the `mova`, while `bap` itself doesn't trap (`tools/isa-probes/tagx.c` `movaqp7`, `movad7`, `nomova7`; on the 8C2 also with `mrng` 32), so it is a format of none of them). Used to scale the increment and to check alignment |
-| 20–24 | `mrng` | Bytes a `mova` may read per step, from 1 to 31; 0 means 32 |
+| 20–24 | `mrng` | Bytes a `mova` may read per step, from 1 to 31; 0 means 32. On v3 at most 24 + *g*, where *g* is the largest of 1, 2, 4 and 8 that divides both the area's start (base + `%aaind` + `disp`) and its step in bytes; above that every `mova` from the area is diagnostic ("Diagnostic results") [hw: 4C]. The 8C2 and the 2C3 take any `mrng` [hw] |
 | 15–19 | `d` | Descriptor `%aadN` (0–31) |
 | 12–14 | `incr` | Increment register `%aaincrN` (0–7); `%aaincr0` is always 1 |
 | 8–11 | `ind` | Start-index register `%aaindN` (0–15); `%aaind0` is always 0 |
@@ -158,7 +161,7 @@ and each step adds `size(fmt) × AAINCR[incr]` bytes. A `mova` reads
 | Behaviour | Observed |
 |---|---|
 | `am = 1` | Advances the area by one step after the instruction; several `am = 1` movas on one area in one instruction advance it once. Without `am` the area stays put |
-| `ind` | Byte offset inside the step, 0–31: `mrng = 32` with `movad` at `ind` 0, 8, 16, 24 reads four consecutive doubles |
+| `ind` | Byte offset inside the step, 0–31: `mrng = 32` with `movad` at `ind` 0, 8, 16, 24 reads four consecutive doubles. On v3 it must be a multiple of the `mova`'s size ("Diagnostic results") |
 | `movab`, `movah`, `movaw` | Zero-extended |
 | `be = 1` | Byte-swapped; for `movaq` the whole 16 bytes |
 | `movaq,0 ind=I` | Low half from `I`, high half from `I + 8` (gas writes it as two AAS entries, `ind` I and I + 8, in channels 0 and 1); `movaq,2` likewise in channels 2 and 3 (4C, 8C2, 2C3: `tagx.c` `movaq`; with `fmt` 5 the area steps 16 bytes) |
@@ -175,6 +178,8 @@ operand. Cases seen:
 | Case | Result |
 |---|---|
 | `ind + size > mrng` | diagnostic |
+| v3: `mrng` > 24 + *g*, where *g* is the largest of 1, 2, 4 and 8 dividing both the area's start (base + `%aaind` + `disp`) and its step in bytes | **every** `mova` from the area is diagnostic, `ind` 0 included. An area stepping one element from an aligned start takes `mrng` ≤ 25 for bytes, 26 for halves, 28 for words and 32 for doublewords: 24 + the element size is always safe, since v3 already needs the start aligned to the element. A byte area stepping 8, 24 or 40 bytes from a doubleword boundary takes 32, stepping 2 bytes 26, stepping 4 or 12 bytes 28. A start 1, 2 or 4 bytes past a doubleword, set through the base, `%aaind` or `disp`, allows 25, 26 or 28. Backward areas (steps −1, −2, −8 bytes) behave as forward ones. The 8C2 and the 2C3 give data in all of these (`tools/isa-probes/pocchk3.c` `m_*`: 321 areas, each read by eight wide instructions of two movas, at `ind` 0 and at `ind` = `mrng` − size; the rule predicts every one on the 4C; the proof-of-concept back end's I48) |
+| v3: a `mova` at an `ind` that is not a multiple of its own size (`movah` at `ind` 1, `movaw` at 2, `movad` at 4, in areas of their own format) | diagnostic. The 8C2 and the 2C3 return the bytes there (`m_*`, the reads at `ind` = `mrng` − size). Narrow movas at offsets aligned to their own size inside a wider element work (`movab` at 3, `movah` at 6, `movaw` at 4 in a doubleword area: `apb.c` `narrow`) |
 | `mova` wider than `fmt` (`movad` on `fmt = 3`) | diagnostic |
 | Base not aligned to `fmt` (v3) | diagnostic. lcc versions loops or needs `-faligned` [lcc]; v5 allows unaligned 2, 4, 8 bytes and v6 16 bytes [guide, lcc-doc] |
 | Two areas whose `abs`/`asz` overlap | diagnostic |
@@ -354,8 +359,15 @@ NUMA node; reproducible within 1%):
   3.05 at 4, 1.64 at 5); `dcd` 2 with consecutive elements costs
   nothing. So `dcd` 0, as lcc writes, is never faster for the stream
   itself; the other values pay off for the data around it (below).
-- lcc gives each half of the buffer 32 units (2 KiB): with three
-  arrays, areas of 512 B, 512 B and 1 KiB.
+- lcc fills each half of the buffer with 32 units (2 KiB) and gives
+  arrays to the halves by turns. One array gets 2 KiB in the left half.
+  Two arrays get 2 KiB each, one per half (read in channels 1 and 3).
+  Three get 1 KiB + 1 KiB in one half and 2 KiB in the other, and four
+  get 1 KiB each. Three areas in one half get 512 B, 512 B and 1 KiB
+  (five or six arrays). PolyBench gramschmidt's loop of 18 areas gets
+  128 B, 128 B and seven of 256 B in each half [lcc 1.29.16 `-O3` for
+  v3.4c (`-faligned`), v5.8c2 and v6.2c3, and 1.31.05 for v3: sums over
+  2–6 global arrays of `double`; gramschmidt with M = 500, N = 600].
 
 Several arrays at once (`multi*` cases: K areas 64 MiB apart, one
 `movad` from each per iteration, areas 0 and 1 in the left half, 2 and
@@ -375,6 +387,47 @@ every 3.2–3.75 cycles: about 14 GB/s on the 4C (0.8 GHz, two of three
 memory channels populated) and 27 GB/s on the 8C2, for one core. Larger
 areas still help when several streams compete (4 × 1 KiB against
 4 × 512 B).
+
+**Which half an area is in** (`tools/isa-probes/pocchk3.c` `col`,
+cases from `gen_pocchk3.py`; the proof-of-concept back end's I47). The
+probe is a one-instruction `loop_mode` loop that reads one or two
+arrays of `long`, one `movad` from each per iteration, through areas of
+512 B, 1 KiB or 2 KiB. LL puts both areas in the left half, LR one in
+each half. "Columns" means all 600 columns of R × 600 matrices, 4,800
+bytes a step. Each cell gives one area / LL / LR, in cycles per
+iteration (columns: best of three passes, the same for every area size
+within 5%, so one figure each; consecutive elements: best of five; the
+4C on one NUMA node):
+
+| Loop | Pages | 4C | 8C2 | 2C3 |
+|---|---|---|---|---|
+| Columns, R = 500 | 4 KiB | 2.3 / 26.8 / 19.1 | 2.0 / 29.1 / 21.4 | 1.7–1.8 / 65–68 / 51.4 |
+| Columns, R = 4,000 | 4 KiB | 17.5 / 35.6 / 32.4 | 19.7 / 46.6 / 39.5 | 47.1 / 95.0 / 86.9 |
+| Columns, R = 500 | 2 MiB | 2.3 / 2.7 / 2.7 | 2.0 / 2.3 / 2.3 | 1.3 / 2.8 / 2.0 |
+| Columns, R = 4,000 | 2 MiB | 2.5 / 2.9 / 2.9 | 2.1 / 2.8 / 2.8 | 1.5 / 2.8 / 1.9 |
+| Consecutive elements from memory, 1 KiB areas | 4 KiB | 1.17 / 1.26 / 1.24 | 1.21 / 1.28 / 1.27 | 1.13 / 1.21 / 1.21 |
+| The same, 2 KiB areas | 4 KiB | 1.05 / — / 1.10 | 1.21 / — / 1.27 | 1.13 / — / 1.22 |
+
+- With 4 KiB pages the column walks are bound by TLB misses (inferred):
+  2 MiB pages make them 7–46 times faster. The exception is one array
+  of 500 rows (2.3 MiB, 586 pages, presumably few enough for the TLB),
+  which the 4C and the 8C2 walk as fast either way and the 2C3 1.4
+  times slower.
+- With 4 KiB pages, two areas in one half run 9–40% slower than one in
+  each half, on all three machines, **at any area size**. Areas of
+  512 B, 1 KiB and 2 KiB give the same times within 5%, so a deeper
+  prefetch doesn't hide the misses. Each half presumably handles its
+  own misses (inferred).
+- With 2 MiB pages the half doesn't matter on the 4C and the 8C2. On
+  the 2C3 one area in each half stays faster (1.9–2.0 against 2.8
+  cycles), presumably v6's line rate per half ("v6", below).
+- Consecutive elements from memory don't depend on the half. They
+  depend on the area size, and only on the 4C, where 2 KiB areas are
+  5–13% faster than 1 KiB ones (as the single-area table above shows).
+
+So spread a few areas over both halves, as lcc does. It costs nothing,
+lets each area be 2 KiB, and avoids the slowdown of two column walks in
+one half.
 
 **Several cores** (`apb-stream one CASE T`: copies pinned to cores,
 starting together, the timed loop only, mean of 40 runs from memory; a
@@ -410,6 +463,50 @@ large array read once, `dcd` 2 on the 4C (consecutive elements: no
 cost) and `dcd` 3 on the 8C2 (no cost at all) protect the rest of the
 cache; lcc never does this. Data read with them is not cached for a
 later loop either.
+
+**Plain loads beside an area** (`pocchk3.c` `bk`; the proof-of-concept
+back end's I49). The probe is a one-instruction `loop_mode` loop at
+II 4 summing `a[i] × b[…]` with `fmuld` and `faddd`. Each array is read
+through an area (A) or by an `ldd` into the rotating registers 12
+iterations (48 cycles) before its use (P), and b runs backward
+(`b[n − 1 − i]`) unless marked forward. Arrays are 8 KiB (L1), 160 KiB
+(L2) or fresh stretches of 32 MiB (memory). Cycles per iteration (L2:
+best of five warm runs; memory: best of three stretches), the range
+covering 4 KiB and 2 MiB pages; every sum checked:
+
+| a, b | 4C L2 | 4C memory | 8C2 L2 | 8C2 memory | 2C3 L2 | 2C3 memory |
+|---|---|---|---|---|---|---|
+| P, P | 4.00 | 7.8–7.9 | 4.00 | 14.8–14.9 | 4.00 | 15.7–16.0 |
+| P, P forward | 4.00 | 6.9–7.0 | 4.00 | 12.6–12.8 | 4.00 | 12.5–12.8 |
+| —, P (b alone) | 4.00 | 6.7 | 4.00 | 11.1–11.6 | 4.00 | 11.8–12.0 |
+| A, P | **5.25** | 7.2–7.3 | 4.00–4.19 | 11.4 | 4.50 | 12.9–13.0 |
+| A, P forward | **5.25** | 7.5–7.6 | 4.00–4.16 | 11.6–12.1 | 5.25 | 12.0–12.1 |
+| P, A | **5.25** | 7.5 | 4.00–4.13 | 11.5–11.6 | 5.25 | 12.9–13.0 |
+| A, `ldd` of one address (an L1 hit) | 4.00 | 4.05 | 4.00 | 4.02 | 4.00 | 4.02 |
+| A, A (b's base at its lowest element, the start in `%aaind`, increment −1) | 4.00 | 4.05 | 4.00 | 4.02 | 4.00 | 4.02 |
+| P, P, 24 iterations (96 cycles) ahead | 4.00 | 5.8–5.9 | 4.00 | 10.8–11.3 | 4.00 | 12.2–12.5 |
+| A, P, 24 ahead | **5.25** | 6.4–6.5 | 4.00–4.17 | 10.3–10.4 | 4.50 | 11.7–12.1 |
+
+- From L1 every variant runs at II 4 (4.01).
+- On the 4C, an area streaming beside plain loads that miss L1 costs
+  those loads 1.25 cycles an iteration in L2 (about 10 for each 64-byte
+  line they miss, inferred). This holds whichever way either stream
+  runs, for a 512 B or a 2 KiB area, and with the load in ALC2, 3 or 5.
+  Plain loads that hit L1 pay nothing. From memory such a loop runs no
+  faster than its plain stream alone (A, P 7.2–7.3 against 6.7), and
+  with the plain loads 24 iterations ahead it is still 10% slower than
+  two plain streams (6.4–6.5 against 5.8–5.9). The 2C3 pays 0.5–1.25
+  cycles an iteration in L2, the 8C2 at most 0.2 (nothing with 2 MiB
+  pages).
+- With every stream in an area, the backward one included, the loop
+  keeps II 4 from L1, L2 and memory on all three machines. From memory
+  that is 1.4–4 times faster than any variant with a plain stream.
+
+So read all of a loop's streams through areas where possible. On v3,
+when a loop must keep one stream in plain loads (alignment unknown, a
+gather), areas for the other streams gain little or nothing once that
+stream misses L1.
+
 ## AAU stores [lcc, source, hw]
 
 `staa{b,h,w,d,q}` (channels 2 and 5) store to `AAD[d].base +
@@ -545,6 +642,32 @@ result is the swapped high doubleword). An area with `fmt` 7 makes the
   check was seen, although lcc's changelog mentions versioning).
   On v5 and v6 it uses APB for the same loops without any of these.
   Byte arrays never got APB in our probes.
+- On v3 it keeps to the `mrng` limit ("Diagnostic results"). A loop
+  reading the first and last element of 32-byte records of bytes,
+  halves or words reads each record through an area of `mrng` 32,
+  because the start and the step are doubleword-aligned. For bytes 3
+  and 28 of 32-byte records (a start 3 bytes off a doubleword, so at
+  most 25) its loop, unrolled by two, reads two records through three
+  areas of `mrng` 1, 8 and 1 (the middle one holds byte 28 of the first
+  record and byte 3 of the second), where its v5 and v6 code uses an
+  area of `mrng` 26 per record (`disp` 3 and 35) [lcc 1.29.16 `-O3` for
+  v3.4c, v5.8c2 and v6.2c3, and 1.31.05 for v3; global arrays of
+  structures].
+- Backward streams (`b[n − 1 − i]`) go through areas too. On v3 the
+  descriptor's base is the lowest element read, the start goes in
+  `%aaind` and `%aaincr` gets −1 by `aaurw`. On v5 and v6 the
+  descriptor's base is 0, the start goes in `%aaind` and the increment
+  is written by `aaurwd` of −1. A forward and a backward array get one
+  area per half [lcc 1.29.16 `-O3`, `s += a[i] * b[n - 1 - i]` over
+  global arrays; PolyBench durbin's two loops with `-faligned` on v3,
+  and as is on v5]. On v3 an array whose alignment lcc can't prove
+  stays with plain loads beside the other arrays' areas in the same
+  loop: for `g[i] * p[n - 1 - i]` (and `g[i] * p[i]`) with `g` global
+  and `p` a pointer, `g` goes through an area and `p` is read by `ldd`
+  scheduled for L1, at II 4 [lcc 1.29.16 `-O3` for v3.4c]. On the 4C
+  that costs the plain loads' L2 hits 1.25 cycles an iteration ("Plain
+  loads beside an area"). Without `-faligned` durbin's two loops get no
+  APB on v3.
 - It always writes `dcd = 0` (`-O3`, `-O4`, `-ffast`, `#pragma vector
   nontemporal`; v3, v5, v6).
 - Prologue: `ldisp`, the AAU writes, `rwd %lsr`, the first iterations'
@@ -593,6 +716,8 @@ the halves and the areas agree. Differences:
 | Signal handler during a `loop_mode` APB loop | correct | **wrong data**: `sigreturn` restarts every area from its start (`linux-user/e2k/signal.c`); lcc's loops in `apb-lcc.c` give 600 wrong results of 900 | correct |
 | Trap between movas outside loop mode | position from the loop counters | continues | continues |
 | `ind + size > mrng`, `mova` wider than `fmt` | diagnostic | diagnostic (other bits) | data; SIGILL |
+| `mrng` above 24 + *g*; a `mova` at an `ind` not a multiple of its size | diagnostic | data | data; other bytes at a misaligned `ind` (`pocchk3.c` `m_*`) |
+| Backward byte areas (steps −1, −2, −8) | data (diagnostic above the `mrng` limit) | data | other bytes from the second element on (`m_*`) |
 | Misaligned base, overlapping areas | diagnostic (the 8C2, v5: a misaligned base gives the unaligned data; of two overlapping areas the first gives data, the second diagnostic) | data | misaligned: invalid value without a tag; overlap: data |
 | `mova` after `eap`, after a write to `%ctpr2` | SIGILL | data | data |
 | `mova` after a call | SIGILL | aborts (no signals for hardware exceptions) | SIGILL |
@@ -640,6 +765,11 @@ dot product 7× faster on a 64 MiB array there.
   `movad` from an `fmt` 3 area gives data ("v6").
 - Why only `%aabfN` with bit 1 of N clear act (the encodings are
   `0x30 | N << 7`).
+- Why two areas in one half walk columns more slowly with 4 KiB pages
+  ("Which half an area is in"; TLB misses handled per half is a guess,
+  no TLB events were counted), and why plain loads that miss L1 slow
+  down beside an area on the 4C and the 2C3 ("Plain loads beside an
+  area").
 - AAU loads ("AAU loads"): `ldaab`, `ldaah` and `ldaaw` with a MAS (on
   v6 also with `,sm` mod 4 or 7), `,sm` with a cache hint or `be`,
   misaligned AAU loads, and what misaligned AAU loads and stores cost.

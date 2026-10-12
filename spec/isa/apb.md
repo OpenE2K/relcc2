@@ -106,8 +106,8 @@ exactly 32 units (`asz` 3 + 3 + 4 above = 8 + 8 + 16).
 | `%aaindN` | 16 | 32 (v3, v4), 64 (v5+) | Start index in bytes; `%aaind0` = 0. Checked (`ind64`: base = array − 2³², index 2³²): the 8C2 reads the array, the 4C uses the low 32 bits and gets diagnostic values [hw] |
 | `%aaincrN` | 8 | 32, sign-extended (v3, v4), 64 (v5+) | Step in elements; `%aaincr0` = 1. Checked (`incr64`: bytes, increment 2³² + 1): the 8C2 reads from `a + 2³² + 1`, the 4C from `a + 1` [hw] |
 | `%aastiN` | 16 | as `%aaind` | Index for `staa` and `ldaa` |
-| `%aaldiN`, `%aaldaN`, `%aaldv`, `%aaldm`, `%aafstr`, `%aasr` | | | Current positions and state; the kernel saves them on traps |
-| `%aabfN` | 16 | | Write-only; "value for modification of AAU load flags" (binutils). A write of any value to one with bit 1 of N clear (0, 1, 4, 5, 8, 9, 12, 13) **stops the program at the next trap**: the running program goes on, but after any later trap or interrupt every `mova` gives a diagnostic value, in both halves; the others (2, 3, 6, 7, …) do nothing [hw, 4C and 8C2] |
+| `%aaldiN`, `%aaldaN`, `%aaldv`, `%aaldm`, `%aafstr`, `%aasr` | | | Current positions and state; the kernel saves them on traps. `%aasr` has `stb` (bit 5), `iab` (bit 6) and the unit's state `lds` (bits 7–9: 0 none, 1 ready, 3 active, 5 stopped) [source: kernel `aau_regs_types.h:31-43`] |
+| `%aabfN` | 16 | | Write-only; "value for modification of AAU load flags" (binutils). `aaurw,2 v, %aabfN` sets `%aasr.iab` to bit 1 of N and `%aasr.stb` to bit 0 of N; v and bits 2–3 of N don't matter, a write in channel 5 changes nothing, and `%aaldv`/`%aaldm` are untouched [hw: `isaleft.c` `bf*_sg`, the `aasr` the kernel saved in `uc_extra` at a later SIGSEGV; 4C, 8C2, 2C3]. The kernel saves and restores `%aad`, `%aaind` and `%aaincr` at a trap only while `iab` is set, and `%aasti` only while `stb` is [source: kernel `ttable.c:616-618`, `ttable-inline.h:600-605`, `aau_regs_access.h:593-603`, `:644-649`]. So a write to one with bit 1 of N clear (0, 1, 4, 5, 8, 9, 12, 13) **stops the program at the next trap**: the running program goes on, but after any later trap or interrupt every `mova` gives a diagnostic value, in both halves; the others (2, 3, 6, 7, …) leave `iab` set and change nothing visible. Writing a `%aad`, `%aaind` or `%aaincr` sets `iab` and writing a `%aasti` sets `stb` (with no program too); `bap`, `eap` and `ldisp` set neither (`bf0_aad_sg`, `bf0_aasti_sg`, `bf0_bap_sg`, `aa_*_sg`) |
 
 `aaurwd` to a `%aad` sets the base and the rw bits and clears the high
 half (qemu). User code can execute `aaurrd` on the 4C, but every
@@ -115,7 +115,10 @@ register read that way returned 0 [hw]; `aaurrq` of a `%aad` does read
 the descriptor back: after `aaurwq` of (0x0123456789abcdef, 0x10) its
 low half is `0x1800456789abcdef`, the base's 48 bits with bits 59–60
 set (semantics.md, "Memory, tag and descriptor operations"; 4C and
-8C2). The positions the unit keeps (`%aaldi`, ...) stay unobservable.
+8C2). The positions the unit keeps (`%aaldi`, ...) can't be read
+directly; a signal handler finds what the kernel saved at the trap in
+`uc_extra` (`aasr`, `aaldv`, `aaldm`, `aaldi[]`, `aalda[]`, `aafstr`;
+`isaleft.c` prints them).
 
 How lcc sets them up:
 
@@ -225,7 +228,7 @@ stored value.
 | `eap` | **SIGILL** |
 | `eap` ... `bap` | continues where it stopped |
 | `disp %ctpr1, ...` | continues |
-| `aaurw 0, %aabf0` | continues, until the next trap; after it, diagnostic |
+| `aaurw 0, %aabf0` | continues, until the next trap; after it, diagnostic (it clears `%aasr.iab`, Registers above) |
 | a page fault or a signal handler | continues, but see "Traps" below |
 
 A call or return resets the AAU [source: qemu `translate-ct.c`; kernel
@@ -236,13 +239,21 @@ are reached through calls anyway). The kernel itself is built with
 lcc's `-fno-loop-apb` and keeps `%ctpr2` free in trap code.
 
 After the loop lcc writes `{ disp %ctpr2, disp=0x0; aaurw,2 0, %aabf0 }`
-and never uses `eap`. The `%aabf0` write marks the program finished for
-the kernel's restart: any value, written to `%aabf0` (or 1, 4, 5, 8, 9,
-12, 13), leaves the running stream alone, but after the next trap the
-unit doesn't resume and every `mova` is diagnostic, in both halves of
-the buffer (`aabf*_pf_*`, `aabfr*`, `aabf_signal`, with a page fault or
-a signal handler between movas; written before `bap` it changes nothing
-visible). A compiler should end every APB loop as lcc does.
+and never uses `eap`. The `%aabf0` write clears `%aasr.iab` and
+`%aasr.stb` (Registers, above), the flags that make the kernel save and
+restore the AAU registers at a trap, so later traps skip that work
+(inferred). Any value, written to `%aabf0` (or 1, 4, 5, 8, 9, 12, 13),
+leaves the running stream alone, but after the next trap the unit
+doesn't resume and every `mova` is diagnostic, in both halves of the
+buffer (`aabf*_pf_*`, `aabfr*`, `aabf_signal`, with a page fault or a
+signal handler between movas). Written before `bap`, after the register
+writes, it changes nothing visible until a trap, and then kills the
+stream the same way (`isaleft.c` `bf_pre_sg`); the next loop's `%aad`,
+`%aaind` or `%aaincr` writes set `iab` again. A compiler should end
+every APB loop as lcc does, after the loop's last `mova` and AAU store:
+written earlier, a trap loses the descriptors, and a cleared `stb`
+would lose live `%aasti` indices in the same way (inferred from the
+kernel source).
 
 ## Traps, signals and the loop counter [hw, source]
 
@@ -799,8 +810,6 @@ dot product 7× faster on a 64 MiB array there.
 ## Not checked yet
 
 - v6 on the Elbrus-16C; v7.
-- Why only `%aabfN` with bit 1 of N clear act (the encodings are
-  `0x30 | N << 7`).
 - Why two areas in one half walk columns more slowly with 4 KiB pages
   ("Which half an area is in"; TLB misses handled per half is a guess,
   no TLB events were counted), and why plain loads that miss L1 slow

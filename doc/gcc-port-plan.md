@@ -718,8 +718,15 @@ incoming ones, and `INCOMING_REGNO`/`OUTGOING_REGNO` map between them
 **Recommended trick, from lcc**: make the outgoing registers a separate
 set of 8 hard registers printed as `%b[0..7]`, and in the prologue
 `setbn rbs=W, rsz=3` with `W` = number of pairs used by locals, and call
-with `wbs=W`. Then `%b[i]` is the i-th outgoing register *whatever the
-window size*, so nothing needs renaming after register allocation.
+with `wbs=W`. `W` is at least 4, also in a function whose locals need
+fewer registers: the 4 pairs of incoming arguments (`%r0`–`%r7`) stay
+below the callee, used or not, because a `call` whose `wbs` is smaller
+than the number of pairs the function was itself handed traps (SIGSEGV
+`SEGV_BNDERR` at the `call`, system calls included;
+`spec/abi/registers.md`, "Window size limits"). The proof of concept's
+small leaves called `getpid` with `wsz = 5`, `wbs = 1` and died. Then
+`%b[i]` is the i-th outgoing register *whatever the window size*, so
+nothing needs renaming after register allocation.
 (ia64 instead renames registers in its printed output, `ia64.cc:3566`;
 that is not needed here.) Results come back in the same `%b[0..7]`.
 Caveat: rotating loops (M7) also want `%b[]`. lcc keeps `%b[0..7]` as
@@ -900,7 +907,10 @@ first (ia64's `alloc` pattern, ia64.md:4734, attribute `first_insn`).
 Leaf functions without calls need no outgoing area. Varargs functions
 need their incoming registers (the callee stores them, or reads the
 caller's memory copy: see `calling-convention.md`, variadic section, for
-which arguments are in memory).
+which arguments are in memory). A function that calls puts its outgoing
+area at pair 4 or above (D1), so with the convention's 4 outgoing pairs
+its `wsz` is at least 8; a leaf needs `wsz ≥ 4`, the pairs its caller
+handed over (a smaller `setwd` is SIGILL, registers.md).
 
 What a window costs (registers.md, "What windows cost"): nothing while
 the active calls' windows fit the register file; beyond that a call and
@@ -1265,11 +1275,18 @@ Same registers as integers (no separate FP class). `long double`
 (`XFmode`) lives in one register: mantissa in the ordinary 64 bits, sign
 and exponent in the 16-bit extended part (`movif`/`movfi` pack and
 unpack it; loads and stores are `ldd`+`ldh`, `std`+`sth`). A function
-that keeps one in a window register, across a call or not, must set
-`nfx=0`: the extended part is lost when the window spills, at a deep
-call (measured on the 4C and 8C2) or at a signal (`spec/abi/registers.md`,
-"Extended parts and `long double`"; the proof of concept's measurement,
-A26); lcc sets `nfx=0` in every function that uses `long double`.
+that holds one in a window register, across a call or not, even for a
+few instructions between a `movif` and a `movfi`, must set `nfx=0`.
+With `nfx=1` the extended part is lost when the window spills in a deep
+call, whenever a signal handler runs meanwhile on the 8C2 and 2C3 (on
+the 4C when the handler's frames push the window out), and now and then
+at an interrupt; system calls and page faults keep it
+(`spec/abi/registers.md`, `nfx`, measured on all three machines; the
+proof of concept's A26). lcc sets `nfx=0` in every function that
+computes with an 80-bit value, leaves included; one that only copies or
+passes a `long double` as its two parts keeps `nfx=1`, unless it
+directly follows such a function in the file (an lcc artifact,
+registers.md).
 80-bit operations follow `%fpcr`/`%fpsr` (x87 control and status
 words), not `%pfpfr`, so rounding-mode patterns and `fenv` support must
 handle both (`spec/abi/registers.md`, "Floating-point control and
@@ -1290,19 +1307,22 @@ packing with `movif` before and unpacking with `movfi` after each
 lcc on the 4C, but `x` operands then need an extended register
 assembled before the asm and split after it. The pair model needs
 `nfx = 0` too: between an operation's `movif` and its `movfi` the value
-is in an extended register, and a signal arriving then spills the
-window and loses the 16-bit part under `nfx = 1` (the proof of concept
-counted 104 and 143 wrong results in 8.2 million on the 4C and 8C2 with
-its operands kept in window registers, none with `nfx = 0`; A26), so
-every function that holds an extended value in a window register,
-however briefly, needs it. lcc sets `nfx = 0` in every function that
-touches `long double`, also in a leaf without calls whose 80-bit value
-only ever sits in `%g16`, a global that never spills [lcc 1.29.16 `-O2`
-and `-O3`, v3.4c, v5.8c2, v6.2c3, and 1.31.05:
-`tools/abi/probes/pocplan.c` `ld_leaf`]. Pick one model before M3; both
-cost `nfx = 0`; lcc's adds two-part spills (`std` + `sth` of `movfi`'s
-result), the pair model a `movif`/`movfi` (4 cycles) around every
-operation.
+is in an extended register, and a signal arriving then loses the 16-bit
+part under `nfx = 1` (the proof of concept counted 104 and 143 wrong
+results in 8.2 million on the 4C and 8C2 with its operands kept in
+window registers, none with `nfx = 0`; A26), so every function that
+holds an extended value in a window register, however briefly, needs
+it. Building the packed operands in `%g16`–`%g31` would avoid the loss
+at signals, since the kernel restores those registers' extended parts
+after a handler (`spec/abi/registers.md`, `long double`), but not
+across calls and system calls, which clobber them. lcc puts short-lived
+80-bit values there and still sets `nfx = 0`: in every function that
+computes with one, also in a leaf without calls whose 80-bit value only
+ever sits in `%g16` [lcc 1.29.16 `-O2` and `-O3`, v3.4c, v5.8c2,
+v6.2c3, and 1.31.05: `tools/abi/probes/pocplan.c` `ld_leaf`,
+`pocabi2_nfx.c`]. Pick one model before M3; both cost `nfx = 0`; lcc's
+adds two-part spills (`std` + `sth` of `movfi`'s result), the pair model
+a `movif`/`movfi` (4 cycles) around every operation.
 
 The port's programs link MCST's libm, which misbehaves once a program
 clears the sticky FP flags or rounds down (`spec/abi/registers.md`,
@@ -1558,9 +1578,11 @@ each one cost it a debugging session:
      asm needs the 4 outgoing pairs and the `setbn` that lcc gives it
      (`wsz = %# + 4`; lcc 1.29.16 `-O3`: `wsz = 0x9`, `setbn rsz = 0x4,
      rbs = 0x4, rcur = 0x1`, `wbs = 0x5`; `tools/abi/probes/pocplan.c`
-     `sys_getpid`). A system call also needs `wbs` of 4 or more (the
-     proof of concept's probes got SIGSEGV with 0–3, and so did its
-     first leaves, small windows with `wbs` 1; A25). Decide which
+     `sys_getpid`). A system call, like any call, needs a `wbs` of at
+     least the pairs the function was handed, 4 for a C function, so
+     `%#` is never below 4 (the `call` itself is SIGSEGV `SEGV_BNDERR`
+     otherwise: D1; the proof of concept's first leaves, small windows
+     with `wbs` 1, died so, A25). Decide which
      functions need the area from the asm, not from its RTL, which
      doesn't show the `%b[]` the text writes or the call it makes: lcc
      sets the area up for every `asm volatile` and for any asm with a

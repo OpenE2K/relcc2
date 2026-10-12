@@ -552,6 +552,26 @@ Patterns (`-O3`, v3; `-O4` gave the same):
   each under its own RLP. `min`/`abs`/`clamp`: an unpredicated default
   in a low channel and predicated overrides in higher ones of the same
   instruction.
+- **Conditional loads**: the load runs `,sm` before the compare and only
+  the copy is predicated. `if (a < b) x = *p` is (v3.4c `-O3`) `ldd,3,sm
+  %r0, 0x0, %g16` in the function's first instruction and `addd,3,sm
+  0x0, %g16, %r0 ? %pred0` four cycles after `fcmpltdb,0 %r1, %r2,
+  %pred0` (the FP compare's latency, "Timing"), so `x` is ready one
+  cycle after the predicate; `c ? *a : *b` loads both in the first
+  instruction and selects them with a `merged` or with copies under
+  opposite predicates. In a pipelined loop the predicate's latency
+  overlaps other iterations and the forms vary, each kernel one wide
+  instruction: `x = a[i] < t ? b[i] : x` takes a `merged` under the
+  rotating predicate (v3 `-O3`; v5, v6 `-O2`, loads through APB),
+  predicated copies (v5, v6 `-O3`) or a predicated `ldd,sm` (v3 `-O2`).
+  A rare arm is predicated too: Linpack's `idamax` keeps its new maximum
+  and index with `merged`/`merges` under the `fcmpltdb` predicate (v3
+  `-O3`: unrolled by two, predicated copies). A `volatile` or atomic
+  load is never speculated: it stays a plain predicated load, in
+  pipelined loops too ([speculation.md](speculation.md), "What lcc
+  speculates") [lcc 1.29.16 `-O2` and `-O3`, v3.4c, v5.8c2, v6.2c3;
+  1.31.05 `-O3`, v3, v6.2c3; `tools/abi/probes/pocplan.c` `sel_once`,
+  `sel_ab`, `sel_loop`, `idamax`, `vol_once`, `vol_loop`].
 - **If-conversion with stores and calls**: the values computed `,sm`
   ahead, both arms' stores under opposite predicates two to an
   instruction, the call itself conditional (`call %ctpr2, wbs = 0x4 ?

@@ -679,6 +679,17 @@ Compiling small patterns at `-O3` (v3.4c, v6.2c3) separates them:
   (Lua's `lua_tolstring`). If that predicate is diagnostic, the store is
   still done, with corrupted data (above): a fault the program would
   have taken becomes a silent bad store.
+- **Volatile and atomic loads are never speculated.** Under a condition
+  lcc predicates them: `if (c) s = *v` is `ldd,0 %r0, 0x0, %g16 ?
+  ~%pred0` after the compare for `volatile long *v` and for a relaxed
+  `atomic_load_explicit`, where an ordinary pointer gets `ldd,5,sm %r0,
+  0x0, %g16` in the function's first instruction; in a `loop_mode` loop
+  likewise (`ldd,5 %r3, 0x0, %b[5] ? ~%pred1`) [lcc 1.29.16 `-O2` and
+  `-O3`, v3.4c, v5.8c2, v6.2c3; 1.31.05 `-O3`, v3, v6.2c3;
+  `tools/abi/probes/pocplan.c` `vol_once`, `atomic_once`, `vol_loop`,
+  `plain_once`]. An ordinary load in a converted arm is speculated and
+  only its copy predicated ([predicates.md](predicates.md), "How lcc
+  uses predicates", conditional loads).
 
 **Tag clearing.** lcc's `puttag*` always clears (tag operand 0: all
 2,282 `puttagd` and 123 `puttags` in its v3 system libraries) [lcc]. In

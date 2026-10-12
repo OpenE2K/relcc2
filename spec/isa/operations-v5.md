@@ -73,13 +73,32 @@ In its v5 sysroot libraries (`lcc-usage.yaml`, disassembled):
 
 Its code generator is more conservative: at `-O3` the loops tried
 (`tools/isa-probes` aside: integer, float and double array arithmetic,
-saturating byte adds, `short` min and dot products, rotates, selects)
-mostly keep the 64-bit packed operations of v3 with 64-bit `mova`,
-adding `pmullw` for 32-bit multiplies and `psrcw` for rotates; 128-bit
-operations appear in some (`qpaddusb` with `movaqp`/`staaqp`,
-`qpfmuld` + `qpfaddd` for `a = b × c + a` on doubles). `__int128`
-addition stays scalar (no `addcd`), and a 16-byte `memcpy` of unknown
-alignment is `qppackdl`, `qpswitchd` and 16 byte stores.
+saturating byte adds, `short` min and dot products, rotates, selects,
+logic, shifts, multiplies, conversions) mostly keep the 64-bit packed
+operations of v3 with 64-bit `mova`, adding `pmullw` for 32-bit
+multiplies and `psrcw` for rotates. 128-bit operations, with
+`movaqp`/`staaqp`, appear in byte loops (`qpaddusb`, `qpor`, `qpxor`,
+`qpsubb`, `qpcmpgtb`, `qppermb`; byte multiplies and shifts with
+`qpmullh`, `qpmulhh`, `qpsllh`, `qpand`, `qplog`), in FP selects and
+counts (`qpfcmplts`, `qpfcmpltd` + `qpmerge`) and as `qpfmuld` +
+`qpfaddd` for `a = b × c + a` on doubles. **`-faligned`** (lcc's
+`--help`: allow optimizations that rely on aligned memory accesses
+only) moves the other loops to 128 bits as well: they then use
+`movaqp`/`staaqp` with `qpand`, `qpandn`, `qplog`, `qpxor`,
+`qpmullh`, `qpmullw`, `qpsll*`, `qpsrl*`, `qpsra*`, `qpsrcw`,
+`qpsrcd`, `qpfmax*`, `qpfmin*`, `qpfcmp*` + `qpmerge` for masks, and
+the same-width conversions (`qpistofs`, `qpfstoistr`, `qpidtofd`,
+`qpfdtoidtr`, `qpfdtoid`). `-ffast` turns `-faligned` on: in these
+loops `-ffast` gives the `-faligned` code and `-ffast -fno-aligned`
+the plain `-O3` code byte for byte (elsewhere `-ffast` does more: it
+drops `sqrt`'s `errno` path and inlines `sqrtl`). Even with
+`-faligned`, `!=`, unordered and `isless` compares, width-changing
+conversions, `floor` and friends, high-half multiplies, sums of
+absolute differences, per-lane shift counts and `long` arithmetic
+right shifts stay scalar, and `short` dot products keep the 64-bit
+`pmaddh`. `__int128` addition stays scalar (no `addcd`), and a
+16-byte `memcpy` of unknown alignment is `qppackdl`, `qpswitchd` and
+16 byte stores.
 
 ## What v3 code does instead
 

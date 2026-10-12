@@ -14,8 +14,9 @@ and the 2C3 (Elbrus Linux 9.5.5, kernels `6.1.0-1.17-e8c2` and
 `6.1.0-1.18-e2c3`) agree, unless a row names one of them. The probes are
 `tools/abi/probes/sysabi.c` (sections 1–10; `./sysabi maps` for the PIE
 and static builds), `sigeh.cc` with `sigeh-c.c` (exceptions and
-cancellation), `pgprof.c` (`-pg`) and `sanitize.c` (`lcc -S`), built by
-each machine's own lcc 1.29.16.
+cancellation), `pgprof.c` (`-pg`), `sanitize.c` (`lcc -S`) and
+`ctlcost.cc` (what the calls on the hardware stacks cost), built by each
+machine's own lcc 1.29.16.
 
 ## System calls
 
@@ -87,6 +88,47 @@ slow on the 4C and 8C2: their clock source is `lt`, a timer behind an
 I/O read, while the 2C3 uses `sclkr` (`/sys/devices/system/clocksource`),
 which advances in steps of about 330 ns. `%clkr` is cheap but per core
 (below, "Time").
+
+Calls on the hardware stacks [hw: `tools/abi/probes/ctlcost.cc`,
+`%clkr` cycles, median of 7. Each call is made from one C function
+through glibc's `syscall ()`; `getppid ()` costs 531, 493 and 468
+there. At depth 10 the chain stack has 19 frames and the procedure
+stack 3.4 KB; at depth 100, 109 frames and 17.8 KB]:
+
+| Call | 4C | 8C2 | 2C3 |
+|---|---|---|---|
+| `access_hw_stacks` mode 4 or 5 (a stack size) | 585–610 | 555–575 | 550–570 |
+| mode 6 `READ_CHAIN_STACK_EX`, the top frame | 1,370 | 1,342 | 1,410–1,440 |
+| mode 6, the top 32 frames (of 109) | 10,686 | 12,216 | 13,798 |
+| mode 6, the whole chain stack, 19 / 109 frames | 6,598 / 33,509 | 7,426 / 38,980 | 8,320 / 43,671 |
+| mode 6, the bottom 32 of 109 frames | 17,875 | 19,679 | 22,993 |
+| mode 7 `READ_PROCEDURE_STACK_EX`, the top 1 KiB | 2,390 | 2,250 | 2,630–2,660 |
+| mode 7, the bottom 1 KiB, under 19 / 109 frames | 3,411 / 12,223 | 3,449 / 13,465 | 3,916 / 15,562 |
+| mode 7, the whole stack, 19 / 109 frames | 3,640 / 14,100 | 3,550 / 14,560 | 4,030 / 16,680 |
+| mode 8 `WRITE_PROCEDURE_STACK_EX`, 8 bytes 1 KiB below the top | 2,200 | 2,160 | 2,530–2,560 |
+| `get_backtrace`, 10 addresses | 2,170 | 2,330 | 2,820–2,850 |
+
+The cost depends on where the range is: for chain reads and for
+procedure-stack reads and writes alike, the kernel walks the chain stack
+one frame at a time from the top down to the requested range (kernel
+`kernel/e2k_syswork.c`: `____parse_chain_stack` 1413-1436,
+`__read_current_chain_stack` 2534-2600, `copy_current_proc_stack`
+2712-2866). Each chain frame passed on the way
+costs about 93 (4C), 97 (8C2) or 119 (2C3) cycles in a chain read, and
+98, 111 or 129 in a procedure-stack read. Each chain frame copied costs
+296, 348 or 388 more: the kernel builds every copy field by field and
+checks whether its return address is in the trampoline page (inferred).
+Procedure-stack bytes cost about 0.1 cycle each or less: at depth 100
+the 16.8 KB between the bottom 1 KiB and the whole stack add 1,860
+cycles on the 4C and 1,100 on the 8C2 and 2C3. A chain read costs about
+1,000 to 1,100 cycles plus these. So the size queries and the reads near
+the top cost the same at any depth. Reading a whole stack costs about
+300 to 390 (chain) or 100 to 130 (procedure) cycles per frame of the
+stack. A read or write deep in the stack pays for every frame above it;
+this includes libgcc's mode-8 writes into a landing frame d frames down
+(inferred from the source, not timed). What `longjmp` (`e2k_longjmp2`),
+exceptions and backtraces cost is in
+[stack-and-unwinding.md](stack-and-unwinding.md).
 
 ## Fast system calls (entry 6)
 

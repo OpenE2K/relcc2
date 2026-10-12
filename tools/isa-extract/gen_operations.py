@@ -107,6 +107,8 @@ PROBES = {
     "ctlleft6.s": ("ctlleft.c", "2C3"),
     "isaleft.s": ("isaleft.c", "4C, 8C2, 2C3"),
     "isaleft-v5.s": ("isaleft.c", "8C2, 2C3"),
+    "apbleft.s": ("apbleft.c", "4C, 8C2, 2C3"),
+    "apbleft-v5.s": ("apbleft.c", "8C2, 2C3"),
     "pocabi2.s": ("abi/pocabi2.s", "4C, 8C2, 2C3"),
     "kernleft.s": ("abi/kernleft.s", "4C, 8C2, 2C3"),
 }

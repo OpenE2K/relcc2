@@ -1278,17 +1278,18 @@ unconditional through a target macro it reads in tree-call-cdce.cc, ran
 NPB EP class A about 1% faster on all three machines (P85).
 
 GCC's default is the other shape. The pass that makes it is call DCE
-(`tree-call-cdce.cc`; its header comment, :96-102, shows the result:
-`if (x < 0) y = sqrt (x); else y = IFN_SQRT (x);`). `use_internal_fn`
-(:1185-1260) adds the internal function `.SQRT` (only when the port
-has a `sqrt<mode>2` pattern, which then expands it:
-`internal-fn.def:408`, `builtins.cc:2304`) and keeps the libm call for
-out-of-range operands only; `shrink_wrap_one_built_in_call_with_conds`
-(:918; its `bi_newcall` part, :1050-1088) moves `.SQRT` into the
-in-range arm and joins the two results with a PHI. On the error path nothing raises invalid before the
-call, so with `FE_INVALID` clear `sqrt (-1.0)` dies with SIGILL inside
-libm (`libmchk.c` `rootlast`). The pass reads no target hook, so the
-shape above needs a change to it (inferred).
+(`tree-call-cdce.cc`; its header comment, :96–103, shows the result:
+`if (__builtin_isless (x, 0)) y = sqrt (x); else y = IFN_SQRT (x);`,
+a quiet test). `use_internal_fn` (:1185–1260) adds the internal
+function `.SQRT` (only when the port has a `sqrt<mode>2` pattern,
+which then expands it: `internal-fn.def:408`, `builtins.cc:2304`) and
+keeps the libm call for out-of-range operands only;
+`shrink_wrap_one_built_in_call_with_conds` (:918; its `bi_newcall`
+part, :1050–1088) moves `.SQRT` into the in-range arm and joins the
+two results with a PHI. On the error path nothing raises invalid
+before the call, so with `FE_INVALID` clear `sqrt (-1.0)` dies with
+SIGILL inside libm (`libmchk.c` `rootlast`). The pass reads no target
+hook, so the shape above needs a change to it (inferred).
 
 lcc's own expansion has the same problem. Its call path traps the same
 way, and at `-O3` its root is `fsqrttd,sm`, which returns a diagnostic
@@ -1517,7 +1518,11 @@ Written in `.md` with `define_automaton`, `define_cpu_unit`,
   `exclusion_set`s. Add a `cs1` unit for `setwd`/`setbn`/`setbp`, `wait`
   and `call`, excluded with every load or store that carries a MAS, and
   let `ibranch` and `rbranch` take both `ctp` (CS0 holds their
-  displacement) and `ct` (D10; bundle.md).
+  displacement) and `ct` (D10; bundle.md). `setwd`, `setbn` and
+  `setbp` share one CS1 (opcodes 0, 1 and 4 carry the `setbn`/`setbp`
+  bits, bundle.md), as in lcc's first instructions (M1), so they must
+  not exclude one another: emit them as one insn (D2) or give each its
+  own unit.
 - **Reservations**: one per class of operation, e.g. "simple integer op in
   any of ALC0–5", "load in ALC0, 2, 3, 5", "store in ALC2 or 5", "divide in
   ALC5", "128-bit op in a channel pair". Which channels each operation may
@@ -1885,13 +1890,13 @@ load needs no `BEGIN_CONTROL` check. The exceptions, all measured:
   a label (sched-ebb.cc:640-650), so it never moves a load from a
   branch's target into the branch's block. lcc does: Lua's
   `luaH_getshortstr` loads a node's key value (`ldd,sm`) in the block
-  that tests the key's type, so the compare follows the type test by 3
-  cycles instead of a load latency after the branch (9 cycles with the
-  2C3's 5-cycle loads) [lcc 1.29.16 `-O3`, v5.8c2 and v6.2c3]. The
-  proof of concept copies the loads that start a block reached by
-  conditional branches into those branches' blocks as `,sm` loads,
-  where their register is dead on the other edge: Lua's k-nucleotide
-  2% and spectral-norm 1.3% faster on the 2C3.
+  that tests the key's type [lcc 1.29.16 `-O3`, v5.8c2 and v6.2c3], so
+  the value is ready when the test resolves. The proof of concept,
+  loading it after the branch, counted 9 cycles a test on the 2C3
+  (5-cycle loads) against lcc's 3. It now copies the loads that start a
+  block reached by conditional branches into those branches' blocks as
+  `,sm` loads, where their register is dead on the other edge: Lua's
+  k-nucleotide 2% and spectral-norm 1.3% faster on the 2C3.
 - *Interpreter dispatch* (P72; Lua 5.4's `vmfetch`, the proof of concept
   on the 2C3). A handler that ends in `if (trap) {...} i = *pc++; goto
   *disptab[op]` reaches the shared dispatch block by a conditional
@@ -2419,11 +2424,12 @@ check-free semi-speculative form works.
   Combine DAM with array prefetch as lcc does: return from the
   compensation code with `ibranch`, which writes no CTPR, where a
   `disp %ctpr2` + `ct` back would stop the APB program (apb.md; "Keep
-  `%ctpr2` free" below). With CS1 modelled per channel (D10), the lock
-  far ahead and APB, the proof of concept's IS.A timed part took 0.17 s
-  on the 8C2 (lcc 0.18), 0.32–0.35 s on the 2C3 (lcc 0.30–0.32) and
-  0.61 s on the 4C (lcc 0.53–0.61), against 0.74 s on the 8C2 at II 2
-  without the last two (P69).
+  `%ctpr2` free" below). With MAS accesses no longer excluding one
+  another (D10, one MAS field per channel), the lock far ahead and APB,
+  the proof of concept's IS.A timed part took 0.17 s on the 8C2 (lcc
+  0.18), 0.32–0.35 s on the 2C3 (lcc 0.30–0.32) and 0.61 s on the 4C
+  (lcc 0.53–0.61), against 0.74 s on the 8C2 at II 2 without the last
+  two (P69).
 - **Several lock/check pairs in one loop** (P58; lcc's PolyBench
   floyd-warshall at `-O3`, v3, v5 and v6 alike): in `path[i][j] = min
   (path[i][j], path[i][k] + path[k][j])` the store may hit `path[i][k]`
@@ -2822,11 +2828,12 @@ check-free semi-speculative form works.
   for every earlier store (:1769–1771); before reload nothing crosses a
   call (:3843–3848). So `-fno-math-errno`, which makes `log` const
   (builtins.def:279–289, :548), doesn't free the loads after it.
-  `tree-call-cdce` turns `y = sqrt (x)` into `if (x < 0) y = sqrt (x);
-  else y = .SQRT (x)` (tree-call-cdce.cc:91–104), so the inline root
-  sits in the arm opposite the call and if-conversion predicates it
-  (D8 gives the shape to use instead: the root on every path, then the
-  call for errno only). lcc (1.29.16, `-O2` and `-O3`, v3, v5, v6)
+  `tree-call-cdce` turns `y = sqrt (x)` into `if (__builtin_isless (x,
+  0)) y = sqrt (x); else y = .SQRT (x)` (tree-call-cdce.cc:96–103), so
+  the inline root sits in the arm opposite the call and if-conversion
+  predicates it (D8 gives the shape to use instead: the root on every
+  path, then the call for errno only). lcc (1.29.16, `-O2` and `-O3`,
+  v3, v5, v6)
   issues `fsqrtid,sm` on every path with `fcmpledb 0, x` into a
   predicate in the same or the next wide instruction, calls `sqrt` when
   that test fails (for errno, taking its result on that path) between

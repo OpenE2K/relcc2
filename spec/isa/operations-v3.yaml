@@ -513,8 +513,9 @@ groups:
     does: "`ipd N` instruction prefetch depth of a preparation (0–3; it matters only for code not in the instruction cache: control-transfer.md); `nop N` N empty cycles after the instruction; `wait` orders memory (`ld_c`, `st_c`, …: atomics.md, fences; the v5+ and v6+ fields: bundle.md, CS1): 6–7 cycles with nothing outstanding, about 14 after a store, 20–33 with `ma_c`, 2 and 6–7 with a v5+ soft modifier (timing.md, \"Every v3 operation\"); `wait trap = 1` never returns in user mode."
     use: "`ipd` as lcc; `wait st_c` for C11 seq_cst stores; `nop` for delays under `.ignore strict_delay`."
   - ops: setwd setbn setbp vfrpsz
-    does: "`setwd` sets the window size, `nfx` and `dbl`; `setbn`/`setbp` the rotating register and predicate areas; `vfrpsz rpsz = N` checks the parameter area size (`rpsz = 0` in a plain function is SIGILL `ILL_ILLOPC`)."
-    see: spec/abi/registers.md; loops.md
+    does: "`setwd` sets the window size, `nfx` and `dbl`; `setbn`/`setbp` the rotating register and predicate areas. A `setwd wsz` smaller than the parameter area the caller handed over (the caller's wsz − its `call`'s wbs, in pairs) is SIGILL `ILL_ILLOPC`. `vfrpsz rpsz = N` checks that area: more than N pairs is SIGSEGV `SEGV_BNDERR` (the window-bounds exception), N or fewer runs, in the function's first instruction or its second (the only ones tried; `ctlleft.c` `vfrpsz`: N 0–8, 12, 16, 31 against 0–8 and 12 pairs; 4C, 8C2, 2C3). gas encodes `vfrpsz` only together with a `setwd` (CS1 opcode 1) and writes `wsz = 0` when none is given, so a lone `vfrpsz` in a function that was handed anything gets the window check's SIGILL (the earlier `ctlops.c` result); when both checks fail only the SIGILL is seen."
+    use: "`vfrpsz`: the kernel's entries only (`rpsz = 4`, protected mode 8; kernel `trap_table.S`); a compiler has no use for it."
+    see: spec/abi/registers.md; loops.md; spec/abi/kernel-interface.md, "System calls"
   - ops: loop_mode alc abn abp abg
     does: "Loop mode and counters: `loop_mode` marks the loop, `alc` advances the loop counters, `abn`/`abp` rotate the register and predicate areas, `abg` the global registers (`%bgr`)."
     see: loops.md

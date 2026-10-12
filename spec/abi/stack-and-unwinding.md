@@ -623,6 +623,11 @@ procedure stack:
    A program that keeps a heap pointer only in `%g0`–`%g15` (a global
    register variable) must also keep it in a root the collector sees.
 
+MCST's LeakSanitizer reads neither hardware stack, so it reports blocks
+held only in registers as leaks [hw: `abileft-san.c` cases `reach` and
+`threadreg`, all three machines; [kernel-interface.md](kernel-interface.md),
+"Sanitizers"].
+
 ## Debug information (gdb, lcc)
 
 MCST's gdb 15.2 (`OpenE2K/gdb`, and ALT's gdb on the 4C) walks the

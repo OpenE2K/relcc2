@@ -20,10 +20,10 @@ cancellation), `pgprof.c` (`-pg`), `sanitize.c` (`lcc -S`), `ctlcost.cc`
 `ctxsig.s` (user contexts, edited signal frames, globals across system
 calls and in handlers, the chain stack seen from a handler),
 `stackregs.c` with `stackregs.s` (the stack registers, how the data
-stack grows, a context's stack overflowing) and `abileft.c` with
+stack grows, a context's stack overflowing), `abileft.c` with
 `abileft.s` (signals in made contexts, switching from handlers, data
-stack overflow in threads and the main thread), built by each
-machine's own lcc 1.29.16.
+stack overflow in threads and the main thread) and `abileft-san.c`
+(lcc's sanitizers), built by each machine's own lcc 1.29.16.
 
 ## System calls
 
@@ -871,12 +871,17 @@ MCST's sanitizers assume an older layout: a fixed maximum user address
 0xc2ff_ffff_ffff, the stack below 0xc2df_ffff_f000, the heap from
 0x4555_5555_6000, PIE images at 0x8aaa_aaaa_a000 (compiler-rt
 `sanitizer_linux.cpp:1057-1059`, `msan/msan.h:219-262`); on the 2C3's
-lower layout even the stack is outside their map.
+lower layout even the stack is outside their map. In practice only MSan
+breaks, and only on the lower layout, where it refuses to start; on the
+upper layout the 6.1 ranges fit its table, and ASan and LSan work on
+both ("Sanitizers") [hw].
 
 **User pointers use bit 47.** PIE images and the main stack lie above
 0x8000_0000_0000; all user addresses are below 2⁴⁸. Schemes that assume
-47-bit user pointers (x86-64-style tagging, 47-bit NaN-boxing, MCST LSan's
-`p >> 47 == 0`, compiler-rt `lsan_common.cpp:139-141`) break; 48 bits work.
+47-bit user pointers (x86-64-style tagging, 47-bit NaN-boxing) break; 48
+bits work. MCST LSan's `p >> 47 == 0` (compiler-rt
+`lsan_common.cpp:139-141`) loses nothing, since it only filters
+candidate heap pointers and its heap lies below 2⁴⁷ ("Sanitizers").
 
 ## Time [hw, `sysabi.c` section 7]
 
@@ -913,7 +918,7 @@ three machines a `-pg` program, dynamic and static PIE, writes
 `gmon.out`, and the system's `gprof` prints the right call counts and
 callers (500 calls of `leaf`, 400 from `twice`, 100 from `main`).
 
-## Sanitizers [lcc: `sanitize.c`]
+## Sanitizers [lcc: `sanitize.c`; hw: `abileft-san.c`]
 
 lcc's valid `-fsanitize=` values are `address`, `leak`, `memory`, `all`
 (`thread` is refused; `undefined` is accepted and adds nothing), and it
@@ -929,8 +934,54 @@ exceptions, `LICENSE.TXT`). Its E2K changes: no fast unwinder (return
 addresses are in the chain stack; `sanitizer_stacktrace.h:23-26`), the
 instruction before a return address is `pc - 8` (`:88-92`), PC and SP
 from `cr0_hi` and `usd_lo` as above, write faults from the trap cell. A
-GCC port sharing it needs `TARGET_ASAN_SHADOW_OFFSET` 0x7fff8000. Not
-run.
+GCC port sharing it needs `TARGET_ASAN_SHADOW_OFFSET` 0x7fff8000.
+
+**On hardware** [hw: `abileft-san.c`, each machine's lcc 1.29.16, with
+and without `-fPIE -pie`, every case once per build; MSan also started
+20 times on the 4C and the 8C2]:
+
+| | ASan (`address`) | LSan (`leak`) | MSan (`memory`) |
+|---|---|---|---|
+| Starts | on all three | on all three | on the 4C and 8C2; **never on the 2C3** (exit 77, below) |
+| Reports, with file and line | heap overflow (also in a thread), use after free, stack overflow, global overflow, a leak at exit; exit status 1 | a leak at exit; exit status 23 | a branch on an uninitialised heap or stack value (also in a thread); exit status 77 |
+| A block held only in a register of a live frame | **reported as a leak** | **reported as a leak** | |
+
+On the 2C3's lower layout MSan stops at startup with `FATAL: Memory
+range 0x8baaaaaaa000 - 0xc2cfffffffff is not available` and
+`MemorySanitizer can not mmap the shadow memory`. Its table calls that
+range invalid and reserves it (`msan/msan.h:219-262`,
+`msan_linux.cpp:137-153`), but on that layout it holds the main stack,
+the hardware stacks, `[trampolines]` and `[cut]` ("Address space").
+MSan's own allocator takes 0.5 TiB wherever `mmap` finds room
+(`msan_allocator.cpp:64-78`): in the runs it landed in MSan's
+"dsos-and-heap" range or in its "pie-code-and-data" range (at
+0x8aae_aaac_0000, or above a PIE image), and every run worked. That range ends at 0x4655_5555_6000 while the
+`mmap` area's random base goes up to 0x4655_5560_0000, so with the
+largest offsets the libraries would lie in a range MSan reserves and it
+would not start (inferred; not seen).
+
+**LSan reports blocks held only in registers as leaks.** A 160-byte
+block whose only pointer was in a window register (`%r2`) of a function
+four calls up was reported by `__lsan_do_recoverable_leak_check`, and a
+224-byte block held so by a thread still blocked when `main` returned
+was reported at exit, on all three machines and in every build. Blocks
+held by a global (also in a PIE) or by a data-stack slot (also the
+blocked thread's) were found. LSan scans the data stacks, TLS, globals
+and the registers that `PTRACE_GETREGS` returns (`lsan_common.cpp:225-319`,
+`sanitizer_stoptheworld_linux_libcdep.cpp:511-515, 540-559`). On E2K
+those are `%g0`–`%g31` and control registers, no window registers
+(kernel `include/asm/user.h:26-204`), and it never reads the procedure
+stack, which holds the callers' windows
+([stack-and-unwinding.md](stack-and-unwinding.md), "Scanning for
+roots"). So leak checks made during a run, and the exit check for
+threads still alive, report such false leaks (inferred).
+
+The 47-bit pointer test (`lsan_common.cpp:139-141`) loses nothing. The
+ASan and LSan primary allocators are fixed at 0x6000_0000_0000
+(`asan_allocator.h:150`, `lsan_allocator.h:80`; small blocks seen at
+0x602…–0x603…) and large blocks are `mmap`ed below 2⁴⁷ (0x455…–0x465…).
+PIE globals and the stacks above 2⁴⁷ are still scanned: the test only
+filters the values found there.
 
 ## Static PIE [hw]
 
@@ -959,8 +1010,6 @@ drivers expect anyway. A static link with an ifunc crashes ld
   `freecontext_e2k` of a context running in another thread (the kernel
   checks only the calling thread's context, so presumably it is freed:
   source).
-- lcc's sanitizers on hardware (MCST's map predates the 6.1 layout,
-  above).
 - Why the 4C's ALT kernel reports a failed growth of the data stack as
   `SEGV_ACCERR` rather than `SEGV_BNDERR`, for contexts, threads and the
   main thread alike ("User contexts", "Threads"; its source is not at

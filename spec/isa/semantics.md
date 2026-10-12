@@ -537,15 +537,18 @@ C1, which is below):
   where x87's `flds`/`fldl` would set it (x87's `fdiv` itself would
   not). **lcc uses them** [lcc 1.29.16 `-O3`, v3 and v5]: `1 / x`,
   `-1.0L / x` and `2.5L / x` (a constant exact as a single) become
-  `fxdivtsx` with the constant as a 32-bit literal; `f / x` (`float` ÷
-  `long double`) becomes `fxdivtsx`, `d / x` `fxdivtdx`, and `(float)
-  (f / x)` and `(double) (d / x)` one `fxdivtss` or `fxdivtdd`, whose
-  double rounding is what C requires (at `-O0` lcc uses `fxdivxx`).
-  Its v3 libraries use them 20 times (`lcc-usage.yaml`; libm's
-  `atanl`, `remainderl`, `fmodl` and libgcc's `__powixf2` compute 1/x
-  this way, `tanl` −1/x). (`semfx.c` had passed the 80-bit value as
-  src1, which made most results invalid; this section said so until
-  2026-10-12.)
+  `fxdivtsx` of the constant as a single, which an `adds 0, c` puts in
+  a register first (src1 takes no long literal, bundle.md; `0.1L / x`,
+  not exact as a single, is an 80-bit constant and `fxdivxx`); `f / x`
+  (`float` ÷ `long double`) becomes `fxdivtsx`, `d / x` `fxdivtdx`, and
+  `(float) (f / x)` and `(double) (d / x)` one `fxdivtss` or
+  `fxdivtdd`, whose double rounding is what C requires (at `-O0` lcc
+  uses `fxdivxx`). Its v3 libraries use them 20 times
+  (`lcc-usage.yaml`; libm's `atanl`, `remainderl`, `fmodl` and libgcc's
+  `__powixf2` compute 1/x this way, `tanl` −1/x; the other 14 are in
+  libgfortran and lcc's `libsanopt`). (`semfx.c` had passed the 80-bit
+  value as src1, which made most results invalid; this section said so
+  until 2026-10-12.)
 - **`%fpsr.c1`** [hw: `tools/isa-probes/sregs.c` `c1` (8,920 lines),
   `dc` and `fp`, the same on the 4C, 8C2 and 2C3; `check_sregs.c`]:
   only a non-speculative divide or square root writes it. `fxdiv*` and

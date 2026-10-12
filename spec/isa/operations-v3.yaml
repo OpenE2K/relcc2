@@ -256,10 +256,11 @@ groups:
   - match: 'fxdiv(ss|sx|dd|dx|xs|xd|xx)'
     lat: "16; 18 to an integer op; 8C2: 18 into the single or double b"
     does: a ÷ b as above, ALC5.
+    use: "`divxf3` `fxdivxx`. lcc uses a float or double divisor as it is (`a / d` = `fxdivdx a, d`; a constant exact as a single goes in as a 32-bit literal, `a / 3.0L` = `fxdivsx a, 0x40400000`, and `a / 4.0L` stays a division), rounds a narrower quotient in the same operation, as x87 `fdiv` then a narrow `fstp` (`(double) (a / b)` `fxdivxd`, `(float) (a / b)` `fxdivxs`, `(double) (a / d)` `fxdivdd`), and converts an integer divisor first (`istofx`). A float or double dividend takes `fxdivt*`."
   - ops: fxdivt{ss,sx,dd,dx}
     lat: "16, as `fxdiv*` (8C2: 18 through the single or double src1)"
     does: "src1 ÷ src2 with src1 a single (`s`) or double (`d`) and src2 80-bit; the result as the second letter. x87 `fld src1; fld src2; fdivrp; fstp` exactly, rounded to the precision control, then to a single or double result; ALC5."
-    use: "lcc: `1 / x` and other constants exact as a single (`fxdivtsx` with a 32-bit literal), `float` or `double` ÷ `long double` (`fxdivtsx`, `fxdivtdx`), and the same narrowed (`fxdivtss`, `fxdivtdd`)."
+    use: "`divxf3` with a single or double dividend. lcc: `float` or `double` ÷ `long double` (`fxdivtsx`, `fxdivtdx`), the same narrowed back (`fxdivtss`, `fxdivtdd`), and constants exact as a single (`1.0L / x`: `adds 0, 0x3f800000` puts the single in a register, as src1 takes no long literal, then `fxdivtsx`; `0.1L / x` is an 80-bit constant and `fxdivxx`)."
     see: semantics.md, "80-bit operations"
     status: "sregs (4C, 8C2, 2C3); semfx ran them with the operands swapped"
   - match: 'fxsqrt[iut][sdx]x'
@@ -269,12 +270,15 @@ groups:
   - match: 'fxcmp(eq|lt|le|uod|neq|nlt|nle|od)[sdx]b'
     lat: "4 to a predicated op"
     does: Predicate compare of a (80-bit) with b; quiet and signalling as the scalar compares.
+    use: "`cbranchxf4`, `cstorexf4` (then `merged 0, 1` under the predicate) and `long double` selects. lcc: `==` `fxcmpeqxb`, `!=` `fxcmpneqxb`, `<` `fxcmpltxb`, `<=` `fxcmplexb`, `>` and `>=` the same with the operands swapped; `!(a < b)` uses the predicate inverted, so it needs no `nlt` or `nle` form, and unordered tests go through `fxcmpudxf` (lcc uses neither `uod` nor `od`). The `d` and `s` forms take a double or float b without a conversion (`a < d` = `fxcmpltdb a, d`) and constants exact as a single (`a < 1.5L` = `fxcmpltsb a, 0x3fc00000`); no form puts the narrow operand first, so `a > d` is `fdtofx d` then `fxcmpltxb`. lcc puts the `ct` 5 cycles after the compare."
   - match: 'fxcmp(ud|od)[sdx]f'
     lat: "6 to an integer op or `cctop`"
     does: x86 flag layout as `fcmp*f`; `ud` quiet, `od` signalling.
+    use: "Quiet `long double` compares (GCC's UNLT, UNLE, UNGT, UNGE, LTGT, UNEQ, ORDERED, UNORDERED: `isless` and friends, `isunordered`, `isnan`): `fxcmpudxf a, b, t`, then an integer compare of t. lcc: less `cmpesb t, 1`, greater `cmpesb t, 0`, unordered `cmpesb t, 0x45` (`isnan` compares a with itself), less or greater `cmpbesb t, 1`, `islessequal` t = 1 or t = 0x40 (two `cmpesb` and an `andp`). lcc converts a narrow operand first (`fdtofx`) and uses neither the `ud[sd]f` forms nor the signalling `od` ones (its v3 libraries: 225 `fxcmpudxf`, no other)."
   - ops: fxtof{s,d} fxto{is,id,istr,idtr} fdtofx fstofx idtofx istofx
     lat: "5; 7 to an integer op"
     does: "Conversions to and from 80-bit as x87 loads and stores (`fld`, `fstp`, `fild`, `fistp`, `fisttp` for `tr`)."
+    use: "lcc: `fix_truncxfsi2` `fxtoistr` (`short` and `char` too, then narrowed by `sxt`), `fix_truncxfdi2` `fxtoidtr`, `fixuns_truncxfsi2` `fxtoidtr` and a 32-bit zero-extension (`getfd`; lcc 1.31.05 `sxt 6`), `fixuns_truncxfdi2` `fxcmpltsb x, 0x5f000000` (2⁶³) choosing between `fxtoidtr x` and `fxtoidtr (fxsubsx x, 0x5f000000)` + `addd 0x8000000000000000`; `lrintxfdi2` `fxtoid` (also for `(int) lrintl`; lcc never uses `fxtois`); `floatsixf2` `istofx`, `floatdixf2` `idtofx`, `floatunssixf2` `sxt 6` then `idtofx`, `floatunsdixf2` `idtofx`, or for a value with the top bit set `idtofx (x − 2⁶³)` then `fxaddsx 0x5f000000`; `extendsfxf2` `fstofx`, `extenddfxf2` `fdtofx`, `truncxfsf2` `fxtofs`, `truncxfdf2` `fxtofd`. `rintl`, `floorl`, `truncl`, `nearbyintl` and `lroundl` stay library calls, also under `-ffast`."
   - ops: movx movxa movxc
     lat: "4; 6 to an integer op"
     does: 80-bit copy, copy with the sign cleared (`fabs`), copy with the sign flipped (`fchs`); no flags.

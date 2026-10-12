@@ -1913,7 +1913,15 @@ the FP-side operations of the last two cycles. Keeping only the
 channel's latest one missed the conflict in the proof of concept: with
 two `smulx_fw` back to back in ALC0, an `addd` placed in ALC0 two cycles
 after the first stalled every iteration 4 cycles, 1.5 instead of 1 cycle
-an element.
+an element. The cycles are those of the schedule as written
+(instructions and their `nop`s): a stall the hardware inserts between
+the two, or in the integer operation's own instruction, doesn't remove
+the conflict, so a scheduler needs no stall model to check it. The
+proof of concept's Linpack daxpy kernel (I35) lost a third of its speed
+this way: at II 4 the bundler put the x pointer's `addd,1` 2 cycles
+after an `fmuld,1` whose product a `faddd` in the other cluster read
+exactly at its latency, and every other iteration stalled (6 cycles an
+iteration instead of 4; timing.md, "Write-back conflicts").
 
 ### 7.6 Speculation
 

@@ -292,6 +292,12 @@ the guide's example says, 6.3.2): with `rsz` 3 (4 pairs from `%dr16`),
 iterations writing `%b[0]` filled `%dr16`, `%dr22`, `%dr20`, `%dr18`,
 `%dr16`, … `setbp psz = P` and `abp` do the same for `%pred0..P`: the
 old `%pred0` is the new `%pred1`, the old `%predP` the new `%pred0`.
+Reading through `%b[]` costs nothing beyond the operation's latency,
+with 0 to 5 rotations between the write and the read (the most
+measured): a pipelined daxpy's store bases read 0 to 5 rotations (3 to
+21 cycles) after their `addd`, its load bases 0 to 5, and the same
+values read through a fixed `%dr` all time the same
+(`tools/isa-probes/stbase.c`, 4C, 8C2; timing.md, "Clusters").
 
 **Early exits and while loops.** `ct %ctpr1 ? ~%pred0 &&
 %NOT_LOOP_END` leaves when `%pred0` becomes true or the count runs out:

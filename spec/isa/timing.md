@@ -471,7 +471,21 @@ Only an `addd` producer was tried.
 A store's address operands pay the integer crossing (+1, as a load's
 address does): two stores a cycle after the `addd`s that advance their
 bases take 4.66 cycles an instruction when one base comes from the other
-cluster (`t_st2_std_inc_*`).
+cluster (`t_st2_std_inc_*`). In a pipelined loop that crossing stalls
+every iteration: a daxpy kernel at II 4 whose stores read a base that
+an `addd` in the other cluster wrote one cycle before runs 8.00 cycles
+an iteration instead of 4.00, one stall step an iteration counted in
+`BUB_E2_ALUn_OPND` of the waiting store's channel, 2 or 5
+(`tools/isa-probes/stbase.c` `age_p_m4`, `dr_*`; 4C, 8C2). Otherwise it
+costs nothing which instance of its base register a store reads: in
+that kernel the base read through `%b[]` 0 to 5 rotations (3 to 21
+cycles) after its `addd`, the same value in a fixed `%dr`, a store
+pointer of its own, offsets from −4,240 to +1,016 bytes, 2 or 4 stores
+an iteration, `loop_mode`, and `,sm` on the other operations or not
+all give 4.00 cycles an iteration without a write-back conflict and
+6.00 with one ("Write-back conflicts"; 4C, 8C2). This settled the
+proof-of-concept back end's finding I35, which had suspected the
+stores' rebased base registers.
 
 ## Stalls cost more than the latency
 
@@ -572,6 +586,74 @@ integer operation or load it places against the FP-side operation
 issued in the same channel two cycles earlier, not only against the
 channel's latest one.
 
+**The schedule as written decides it** [hw: `tools/isa-probes/stbase.c`
+`wb_*`; 4C, 8C2 and 2C3 alike; found while settling the
+proof-of-concept back end's I35]. What counts is the integer operation
+being written 2 cycles after the producer (instructions and their
+`nop`s). A stall step that holds an instruction between them, or the
+integer operation's own instruction, doesn't remove the conflict, and a
+consumer in the integer operation's own instruction gets the late
+result too. Loops of a few instructions on fixed registers, the product
+read by `faddd,3` in the other cluster (6 cycles), cycles an iteration:
+
+| Loop | Cycles | Stall steps (`BUB_E2`) |
+|---|---|---|
+| `fmuld,1` in I1, `faddd,3` in I3 (2 cycles later: it waits one step) | 8 | 1 |
+| the same and `addd,1` in I3 (written 2 after the `fmuld`, issued 6 after) | **12** | 2 |
+| the same, the product read by `faddd,0` (the producer's cluster) instead | 8 | 1 |
+| `fmuld,1` in I0, `addd,1` and `faddd,3` in I3 (written 3 after) | 8 | 1 |
+| `fmuld,1` with `nop 1` in I1, `addd,1` and `faddd,3` in I2 (one instruction, 2 cycles after) | **12** | 2 |
+| `fmuld,0` in I1, `ldd,0` and `faddd,3` in I3 (a load as the integer-side operation) | **12** | 2 |
+| a load in I0 used too early in I2 (one step there), `fmuld,1` in I1, `faddd,3` in I3 (on time after the step) | 8 | 1 |
+| the same and `addd,1` in I3 | **12** | 2 |
+| the same and `addd,1` in I2 instead (written 1 after) | 8 | 1 |
+| the same with `fmuld,0` and `ldd,0` in I3 (the early load and its use in ALC2) | **12** | 2 |
+
+`CONF_ALUn_OUT` counts one conflict an iteration in each bold row
+([monitors.md](monitors.md)). So a scheduler counts the 2 cycles on the
+schedule it writes, and a model applies the delay as written, also to
+consumers in the integer operation's instruction (`tools/isa-score`
+does).
+
+**In a software-pipelined loop** such a conflict can cost 2 cycles an
+iteration on average rather than 4 [hw: `stbase.c`, pipelined daxpy
+kernels `y += a x`, four elements an iteration at II 4; 4C and 8C2, and
+the `l5_*` forms on the 2C3]. The proof-of-concept back end's kernel
+(its finding I35) has `fmuld,1` in I1, whose product `faddd,3` reads in
+the next iteration's I3, exactly 6 cycles later, and the x pointer's
+`addd,1` in I3, written 2 cycles after the `fmuld`. It runs 6.00 cycles
+an iteration (`BUB_E2` 0.50, all `BUB_E2_ALU3_OPND`; `CONF_ALU1_OUT`
+1.00). Every iteration's product is a cycle late, but the stall step
+one causes also holds back the next iteration's consumer, whose product
+was issued before the stall and so arrives in time: only every other
+iteration stalls (inferred from the counts; isa-score's simulation with
+the rule above gives exactly this). Where nothing stalls between a
+producer and its consumer, every iteration pays the step: an 8-instruction loop with the
+product read 6 cycles later in the same iteration takes 12 cycles with
+the conflicting `addd,1` and 8 without (`wb_far_*`), as the chains above
+do. One change at a time on the kernel:
+
+| Kernel | Cycles an iteration |
+|---|---|
+| as the proof of concept bundled it (`rebased`) | 6.00 |
+| the x pointer's `addd,1` and I3's `faddd,4` swapping channels (`rebased_fix`) | 4.00 |
+| the x pointer's `addd` one instruction earlier, in ALC4 | 4.00 |
+| the late product read in ALC0, the producer's cluster | 4.00 |
+| the late product read in ALC4, still the other cluster | 6.00 |
+| `fmuld` 2 and 3 swapped (the late product read by `faddd,4`) | 6.00 |
+| no stores at all | 6.00 |
+| the other kernel of I35 (`plain`, 4.00) with its x pointer's `addd` moved to ALC1 in I3, 2 cycles after its `fmuld,1` | 6.00 |
+| a separate store pointer advanced by `addd,4` 2 cycles after `fmuld,4` | 6.00 |
+
+The stores of I35 (which pointer instance they read, their offsets)
+change nothing ("Clusters"). In Linpack, whose matrix doesn't fit L1,
+the proof of concept measured 4.78 and 6.13 cycles an iteration for the
+two kernels; the fraction above 4 and 6 is presumably cache misses
+(inferred). On the 2C3 loads take 5 cycles, so the kernels as bundled
+for v3 wait for their x loads there (8.00 either way); with the
+multiplies, adds and stores 4 cycles later in the same channels and
+kernel positions (`l5_*`) it gives the 4C's and 8C2's 4.00 and 6.00.
+
 ## Throughput
 
 Measured by `bench.py`'s `tp` kernels: 32 or 64 wide instructions, each
@@ -631,8 +713,11 @@ kernels store to two fixed places every instruction): in a run of 32
 instructions storing to the same two places 8 or 256 bytes apart, a
 pair costs 1.41 cycles on the 4C and 8C2 and 1.53 on the 2C3 (64 apart:
 1); when the addresses move on every instruction, as in a stream loop,
-two stores cost 1 cycle at any distance (8, 64, 256), and so do a store
-and a load. AAU stores (`staad`) behave exactly as `std` in all of these
+two stores cost 1 cycle at any distance (8, 64, 256; also
+`tools/isa-probes/stbase.c`'s pipelined daxpy, whose two store
+instructions each store two doublewords 8 bytes apart, one bank, runs
+at its II, 4.00 cycles an iteration, on all three machines, the 2C3 in
+its `l5_` form), and so do a store and a load. AAU stores (`staad`) behave exactly as `std` in all of these
 (`pocchk2.c` `t_st2_*`, `t_stld_*`; the proof-of-concept back end's
 finding I28).
 
@@ -1406,3 +1491,8 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
   8C2. A separate L1 per cluster doesn't explain the streams (two loads
   in one cluster leave what one in each does); one L1 fill per wide
   instruction is only a guess.
+- Why the schedule as written, not the issue cycles, decides a
+  write-back conflict ("Write-back conflicts"; no mechanism found), and
+  why `STALL_DTLB` counts 1.00 an iteration in `stbase.c`'s `age_p_m4`
+  (a store's base crossing clusters, read through `%b[]`) but 0 in
+  `dr_plain` (the same stall through `%dr`) on all three machines.

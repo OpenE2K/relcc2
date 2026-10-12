@@ -92,7 +92,7 @@ empty loop (`pmu.c`).
 | `BUB_B` (0x219) | cycles phase B is held (nops, stalls) | |
 | `BUB_E2` (0x211) | **interlock stall steps; each costs 4 cycles** | `ldd` used 2 cycles early: 1 step, +4 cycles; `muld` used 3 early: 2 steps, +8 |
 | `BUB_E2_MEM`, `BUB_E2_ALUn_MEM` (0x230, 0x231…) | steps waiting for a load result | `ld_use`: 1 |
-| `BUB_E2_OPND`, `BUB_E2_ALUn_OPND` (0x23c, 0x248…) | steps waiting for an arithmetic result, by consumer channel | `mul_use`: 2 in ALC1 |
+| `BUB_E2_OPND`, `BUB_E2_ALUn_OPND` (0x23c, 0x248…) | steps waiting for an operand, by consumer channel (load results too, below) | `mul_use`: 2 in ALC1 |
 | `CONF_ALUn_OUT` (0x240–0x242, 0x350–0x352) | write-back conflicts in ALC n (timing.md) | `muld,0` then `addd,0` 2 cycles later: 1; `addd,2` instead: 0 |
 | `IB_NO_COMMAND` (0x218) | cycles without an instruction to issue: taken `ibranch`es (6 each) and taken `ct`s waiting for their CTPR, nothing else in cached code (control-transfer.md, "Instruction fetch") | two taken `ibranch`: 12; a taken `ct` 1 cycle after its `disp`: 3 |
 | `NO_CT_TAKEN` (0x220/0x320) | executed instructions without a taken transfer, so EXEC − `NO_CT_TAKEN` = taken transfers | gcc-claude CoreMark: 1.136 G sampled at transfer sites, 1.137 G from `perf stat` |
@@ -104,6 +104,24 @@ empty loop (`pmu.c`).
 | `DAM_OVFL` (0x121) | lock loads that evicted an entry | 33 locks after a clear: 1; 48: 16 |
 | `L1_QUERY` (0x000), `L1_HIT` (0x100), `L1_ST_QUERY` (0x101), `L1_ST_HIT` (0x001), `DTLB_QUERY` (0x010) | L1 and DTLB accesses | one `ldd`: 1 query, 1 hit |
 | `COND_ALU_FALSE` (0x225) | **not** what its description says (operations cancelled by their predicate) | 4 per ordinary instruction, 0 for one with four operations predicated off, 5 with one off, 2 with six: unexplained, don't use |
+
+Also measured with `tools/isa-probes/stbase.c` (pipelined daxpy
+kernels and short loops, timing.md "Write-back conflicts"; 4C, 8C2 and
+2C3 alike):
+
+- `CONF_ALUn_OUT` counts a conflict whether or not it delays anything:
+  a product going to a store, to an FP operation in its own cluster, or
+  with time to spare counts too (`plain`, on the 2C3 `l5_plain`;
+  `rebased_add2_ch0`, `wb_own_same`: 1.00 an iteration, no stall). A conflict whose
+  integer operation waits in a stalled instruction counts once (`wb_*`).
+- `BUB_E2_ALUn_OPND` counts load-use waits as well: a load used too
+  early (one step) is one step in both `BUB_E2_ALUn_MEM` and `BUB_E2_ALUn_OPND` of
+  the consumer's channel, and one in `BUB_E2` (`wb_mid_none`,
+  `wb_ld_mid_none`). A store waiting for its base register counts in
+  its own channel's, ALU2 or ALU5 (`age_p_m4`, `dr_*`).
+- `TICKS_E2` (0x22f; v5 and v6 only, perf refuses it on the 4C) counts
+  3 per `BUB_E2` step in these kernels, and 4 per step when the stalled
+  instruction follows one with `nop 1` (`wb_nop_*`).
 
 Facts these gave about the core (also in the other spec files):
 

@@ -673,14 +673,15 @@ two accesses a wide instruction (`h_*`), plus lcc's v5/v6 `#pragma
 vector nontemporal` shape (`staad` in a `loop_mode` loop with the APB
 program running, `k_staad_*`). A 256 KiB hot set, ns per line before →
 after a 32 MiB stream (the 4C run was perhaps not pinned to one node;
-each before/after pair comes from one run):
+each before/after pair comes from one run; **kept**: the same before
+and after, `staad` / `ldaad`):
 
 | MAS | 4C `staad` / `ldaad` | 8C2 `staad` / `ldaad` | 2C3 `staad` / `ldaad` |
 |---|---|---|---|
-| 0 | 9.1 → 72.1 / 63.5 | 5.2 → 60.8 / 5.8 → 59.1 | 3.8 → 53.0 / 45.7 |
-| 0x20 | 9.1 → 72.9 / 62.9 | 4.6 → 59.8 / 59.1 | 3.8 → 53.0 / 45.7 |
-| 0x40 | **kept** (9.1 / 9.1) | 4.6 → 57.9 / 57.8 | **kept** (3.8 / 3.8) |
-| 0x60 | **kept** | **kept** (4.6 / 4.6) | **kept** |
+| 0 | 9.1 → 72.1 / 9.1 → 63.5 | 5.2 → 60.8 / 5.8 → 59.1 | 3.8 → 53.0 / 3.8 → 45.7 |
+| 0x20 | 9.1 → 72.9 / 9.1 → 62.9 | 4.6 → 59.8 / 4.6 → 59.1 | 3.8 → 53.0 / 3.8 → 45.7 |
+| 0x40 | **kept** (9.1 / 9.1) | 4.6 → 57.9 / 4.6 → 57.8 | **kept** (3.8 / 3.8) |
+| 0x60 | **kept** (9.1 / 9.1) | **kept** (4.6 / 4.6) | **kept** (3.8 / 3.8) |
 
 These match `std` and `ldd` in the same runs, and `k_staad` matches
 `h_staad`, so lcc's nontemporal `staad … mas=0x60` protects the cache

@@ -170,7 +170,12 @@ section 2; [kernel-interface.md](kernel-interface.md), "Signals"].
 
 Three 32-bit registers, read with `rrs` and written with `rws`
 (kernel `cpu_regs_types.h`: `e2k_pfpfr_t`, `e2k_fpcr_t`, `e2k_fpsr_t`;
-glibc `sysdeps/e2k/fpu`). The exception bits are in the x87 order in
+glibc `sysdeps/e2k/fpu`). Which bits each one keeps was found by
+writing and reading them on the 4C, 8C2 and 2C3 [hw:
+`tools/isa-probes/sregs.c` `write` (with `es2`) and `fp`]; MCST's qemu
+keeps the same bits of `%pfpfr` and `%fpcr`, but stores `%fpsr`'s `es`
+and `bf` and never computes them or C1 [source: qemu
+`target/e2k/cpu-sregs.h`]. The exception bits are in the x87 order in
 all three: invalid, denormal, divide by zero, overflow, underflow,
 precision (inexact); glibc's `FE_*` values are those bits (`FE_INVALID`
 0x01, `FE_DIVBYZERO` 0x04, `FE_OVERFLOW` 0x08, `FE_UNDERFLOW` 0x10,
@@ -178,9 +183,9 @@ precision (inexact); glibc's `FE_*` values are those bits (`FE_INVALID`
 
 | Register | Used by | Bits |
 |---|---|---|
-| `%pfpfr` | `float`, `double`, packed | 0–5 flags (`ie de ze oe ue pe`); 6 `daz` (denormals are zero; the kernel's `e2k_pfpfr_t` calls it `zero1`, MCST's qemu `daz`) [hw]; 7–12 masks (`im dm zm om um pm`, 1 = masked, i.e. flag << 7); 13–14 rounding (0 nearest, 1 down, 2 up, 3 toward zero: `FE_DOWNWARD` 0x2000 ...); 15 `fz` (flush to zero) [hw]; 26–31 `die dde dze doe due dpe`. Bits 0–15 are x86 MXCSR's layout, and the operations follow SSE exactly ([semantics.md](../isa/semantics.md), "Rounding modes, flush to zero and denormals are zero") |
-| `%fpcr` | 80-bit (x87 control word) | 0–5 masks (`im` ... `pm`); 6 always 1; 8–9 precision control; 10–11 rounding (`FE_FPCR_DOWNWARD` 0x400 ...); 12 `ic` |
-| `%fpsr` | 80-bit (x87 status word) | 0–5 flags; 7 `es` (error summary); 9 `c1`; 15 `bf` |
+| `%pfpfr` | `float`, `double`, packed | 0–5 flags (`ie de ze oe ue pe`); 6 `daz` (denormals are zero; the kernel's `e2k_pfpfr_t` calls it `zero1`, MCST's qemu `daz`) [hw]; 7–12 masks (`im dm zm om um pm`, 1 = masked, i.e. flag << 7); 13–14 rounding (0 nearest, 1 down, 2 up, 3 toward zero: `FE_DOWNWARD` 0x2000 ...); 15 `fz` (flush to zero) [hw]; 16–25 read 0; 26–31 `die dde dze doe due dpe` can be written, but nothing sets, clears or reads them ([speculation.md](../isa/speculation.md), "Speculative operations"). Bits 0–15 are x86 MXCSR's layout, and the operations follow SSE exactly ([semantics.md](../isa/semantics.md), "Rounding modes, flush to zero and denormals are zero") |
+| `%fpcr` | 80-bit (x87 control word) | 0–5 masks (`im` ... `pm`); 6 always 1; 7 and 13–15 read 0; 8–9 precision control; 10–11 rounding (`FE_FPCR_DOWNWARD` 0x400 ...); 12 `ic` can be written but has no effect: infinities stay affine (with `ic` set `fxcmpudxf` still orders them: `inf` > 1, `-inf` < `inf`), as on x87 since the 387 |
+| `%fpsr` | 80-bit (x87 status word) | 0–5 flags; 9 `c1` ([semantics.md](../isa/semantics.md), "80-bit operations"). 7 `es` (error summary) and 15 `bf` are **not stored**: both read 1 exactly when a flag in bits 0–5 is set whose mask in `%fpcr` is clear (checked with each mask cleared alone), and they follow `%fpcr` writes alone (`%fpsr` 0x3f reads 0x80bf under `%fpcr` 0x340 and 0x003f under 0x37f). x87's C0, C2, C3 and TOP (8, 10–14) do not exist and read 0. Bit 6 (x87's stack fault) is stored on the 2C3 only, does not set `es`, and no operation sets it |
 
 glibc keeps the two sets in step: `fenv_t` is `{ __fpcr, __fpsr,
 __pfpfr }`; `feholdexcept` saves all three, then sets every mask in
@@ -193,6 +198,36 @@ uses `%fpcr`/`%fpsr`. Processes start with all six flags set
 (`%pfpfr` 0x1fbf, `%fpsr` 0x3f; speculation.md), so code (and tests)
 must not assume clear flags at startup. (Found by the proof-of-concept
 backend, `docs/spec-poc-findings.md` P7.)
+
+**Traps** [hw: `tools/isa-probes/sregs.c` `fp`, the three machines;
+kernel `arch/e2k/kernel/traps.c:1845-1885`]. `float`, `double` and
+packed operations raise SIGFPE when the exception's mask in `%pfpfr` is
+clear, whatever `%fpcr` says. 80-bit operations raise it when the mask
+in `%fpcr` is clear, whatever `%pfpfr` says. Neither kind reads or sets
+the other register's flags. The trap is precise: `si_addr` is the wide
+instruction that holds the operation, and the handler finds the new
+flag set. There is no x87-style deferred trap: an exact `fx*` operation
+runs normally when an unmasked flag is already set in `%fpsr`. With an
+underflow unmasked, an 80-bit operation traps on a tiny result even if
+it is exact, as x87 does. The kernel's `do_fp` derives `si_code` from
+every flag that is set, not from the one that trapped. If `%fpsr.es` is
+set it decodes `%fpsr`; otherwise it decodes `%pfpfr`:
+
+| Exception | `%pfpfr` trap, flags clear before | `%fpcr` trap, flags clear before | any trap, all six flags set before |
+|---|---|---|---|
+| invalid | `FPE_FLTINV` 7 | 7 | `FPE_FLTRES` 6 |
+| divide by zero | `FPE_FLTDIV` 3 | 3 | 6 |
+| overflow (the trap leaves inexact clear) | `FPE_FLTOVF` 4 | 4 | 6 |
+| underflow | 6 (`fmuld` sets underflow and inexact) | `FPE_FLTUND` 5 | 6 |
+| denormal | 5 | 5 | 6 |
+| inexact | 6 | 6 | 6 |
+
+A `%pfpfr` trap taken while `%fpsr` holds an unmasked flag gets
+`%fpsr`'s code (`faddd` inexact with `%fpsr` = 0x01 and `%fpcr` 0x340
+reports `FPE_FLTINV`). So `si_code` is reliable only when the flags
+were clear before the operation. Processes start with all of them set,
+so a handler that needs the cause should read the flags itself
+(inferred).
 
 **Flush to zero and denormals are zero** [hw: `tools/isa-probes/fenvlib.c`,
 all three machines]. MCST's libgcc has a `crtfastmath.c` whose

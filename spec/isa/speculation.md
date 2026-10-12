@@ -168,6 +168,9 @@ system libraries) [lcc].
 | `fdivd,sm` | an **unmasked** exception (`%pfpfr` mask bit clear: divide by zero, inexact), flag set or not | diagnostic; the flag is not changed |
 | `fdivd` (not speculative) | an unmasked exception, flag set or not | SIGFPE (`FPE_FLTDIV` 3, `FPE_FLTRES` 6) |
 | `faddd` (not speculative) of that diagnostic result | | SIGILL `ILL_ILLOPN` |
+| `fxaddxx,sm`, `fxmulxx,sm`, `fxdivxx,sm`, `fxdivtsx,sm` [hw: `tools/isa-probes/sregs.c` `fp` and `dc`, the three machines] | the same rules, with **`%fpsr`'s flags and `%fpcr`'s masks** (`%pfpfr` doesn't matter): a new 80-bit flag, or any exception unmasked in `%fpcr` (with underflow unmasked, an exact tiny result too) | diagnostic; `%fpsr` unchanged |
+| same | the `%fpsr` flag already set, masked | the normal result; `%fpsr` unchanged, C1 included (a divide that rounds up leaves C1 alone, where its plain form sets it) |
+| `pfadds,sm`, `fdtoid,sm` | as `faddd,sm` (`%pfpfr`) | |
 
 So a speculative FP operation never has a side effect: if it would set
 a sticky flag or trap, it yields a diagnostic value instead. A program
@@ -183,6 +186,15 @@ first non-speculative use. lcc's `-fspec-fp` (its default) "may hide
 some exceptional situations" [lcc-doc]; in fact lcc speculates FP
 operations, divisions included, in most loops, and its code then dies
 this way ("What lcc speculates" below).
+
+Nothing records a suppressed exception [hw: `sregs.c` `fp`; qemu
+`target/e2k/cpu-sregs.h`]. `%pfpfr` bits 26–31 (`die` … `dpe`, which
+MCST's qemu calls deferred flags but never uses) stay unchanged both
+when a speculative operation yields a diagnostic and when a later
+non-speculative use traps (SIGILL `ILL_ILLOPN` at the using
+instruction, with `%pfpfr` and `%fpsr` unchanged). Setting them changes
+no result, flag or trap: the 136 `fp` lines run with them set match the
+lines without them.
 
 ## Speculative loads [hw, source]
 

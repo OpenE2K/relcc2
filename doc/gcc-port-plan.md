@@ -346,7 +346,10 @@ mainline libgcc this way, `docs/spec-poc-findings.md` A7, A10, A11):
   (`libgo/runtime/runtime.h:494-500`), which E2K's glibc lacks: it needs
   `makecontext_e2k` and `freecontext_e2k`, each goroutine gets its own
   kernel hardware stacks, and every switch is a system call
-  (`spec/abi/kernel-interface.md`, "User contexts").
+  (`spec/abi/kernel-interface.md`, "User contexts"). Goroutines move
+  between threads; the kernel's rules for that (keep the threads that
+  run goroutines alive, reach TLS only through functions that read it)
+  are in the same file, "Contexts and threads".
 - DWARF: MCST's gdb ignores CFI and misreads `DW_OP_call_frame_cfa`, so
   `DW_AT_frame_base` must be a register expression
   (stack-and-unwinding.md, "Debug information").

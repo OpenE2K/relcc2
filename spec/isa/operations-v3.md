@@ -209,7 +209,7 @@ Registers carry tags (diagnostic values, protected-mode pointers). Ordinary C co
 
 | Operations | ISA | ALC | Does | Lat | lcc v3 / v5 | Run on hardware |
 |---|---|---|---|---|---|---|
-| `gettags`, `gettagd`, `puttags`, `puttagd` | 1–8 | 2,5 | `gettag*`: the tag bits of a; `puttag*`: a with tags b (SIGILL for some inputs). (semantics.md, "Memory, tag and descriptor operations") |  | 2.4k / 2.2k | abg, abi/ctxsig.s, abi/hwscan.s, apb-loop… (4C, 8C2, 2C3) |
+| `gettags`, `gettagd`, `puttags`, `puttagd` | 1–8 | 2,5 | `gettag*`: the tag bits of a; `puttag*`: a with tags b (SIGILL, `ILL_PRVOPC`, when a half would become diagnostic: tag 1 with bit 30 set). (semantics.md, "Memory, tag and descriptor operations"; speculation.md, "Diagnostic values") |  | 2.4k / 2.2k | abg, abi/ctxsig.s, abi/hwscan.s, apb-loop… (4C, 8C2, 2C3) |
 | `movts`, `movtd`, `movtq` | 1–8 | 0,1,3,4 | Copy keeping tags; `movtd a, %ctprN` prepares a transfer to the address in a (9 cycles to `ct`; ALC0). **Use:** Indirect calls and jumps (`movtd` + `ct`/`call`). (control-transfer.md) | 9 (`movtd` to `ct`) | 7.6k / 7.4k | abg, abi/ctpr.s, abi/ctxsig.s, abi/dbl.s… (4C, 8C2, 2C3) |
 | `movtcs`, `movtcd`, `movtcq`, `movtrs`, `movtrd`, `movtrq`, `movtrcs`, `movtrcd`, `movtrcq` | 1–8 | 0,1,3,4 | Tag-converting moves; plain copies of untagged values. |  |  | semc (4C, 8C2, 2C3) |
 | `gettc`, `gettst`, `invtc`, `puttc`, `puttst` | 1–8 | 0,3 | Tag/trap-cell state: `gettc`, `puttc`, `puttst` SIGILL `ILL_ILLOPC` in user mode, `gettst` leaves its destination, `invtc` returns an undecoded value. |  |  | semc (4C, 8C2, 2C3) |

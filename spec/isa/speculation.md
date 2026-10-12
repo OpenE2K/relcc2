@@ -34,8 +34,9 @@ Status markers, in addition to bundle.md's:
 ## Diagnostic values [hw, source]
 
 A register holds a 2-bit tag per 32-bit half (kernel `tags.h`): 0 is a
-number, 1 marks the half as diagnostic (the guide simplifies this to one
-bit per half; the other values are protected-mode pointers). Memory has
+number, 1 marks the half as empty or diagnostic (below; the guide
+simplifies this to one bit per half; the other values are
+protected-mode pointers). Memory has
 the same tags, one per 32-bit word, written by `,sm` stores and read
 back only by the fill MAS ("Spill and fill" below). A diagnostic double
 has tag 5 (both halves). The 4C fills
@@ -47,10 +48,41 @@ except for a `faddd,sm` whose result becomes diagnostic, from a
 diagnostic operand or an inexact result: high half `7ff80000` (a quiet
 NaN with bit 30) where the 4C has `40000000`), and a
 speculative operation on a
-diagnostic operand computes on its bits as usual (`addd,sm` of
-`4afafafa4afafafa` and 1 gives `…4afafafb`). Predicates have one tag
+diagnostic operand computes on its bits as usual and then sets bit 30
+of each half (`addd,sm` of `4afafafa4afafafa` and 1 gives `…4afafafb`;
+`andd,sm` of it and 0 gives `4000000040000000`). Predicates have one tag
 bit: a **diagnostic predicate** comes from a speculative compare of a
 diagnostic value.
+
+**Empty and diagnostic.** A half tagged 1 is diagnostic only when **its
+bit 30 is set**. With bit 30 clear it is an *empty* value, which
+non-speculative operations read as a number. The kernel defines both the
+empty and the diagnostic single as tag 1 (`ETAGEWS`, `ETAGDWS`) and the
+double as tag 5, with the internal-tag mask `0x4000000040000000` (kernel
+`include/asm/tags.h`) [hw, `tools/abi/probes/ctxsig.c` section 3; the
+4C, 8C2 and 2C3 agree].
+
+`puttagd` refuses to make a diagnostic half: SIGILL, `ILL_PRVOPC` (the
+`priv_action` exception, kernel `traps.c:935-941`), at the `puttagd`
+itself. With tag 5 it refused 0x40000000, 0x4000000000000000,
+0x4000000040000000 and 0x4afafafa4afafafa, and accepted 0, 1,
+0x0afafafa0afafafa and 0xbfffffffbfffffff. Tag 1 (the low half) refused
+0x40000000 and accepted 0x4000000000000000; tag 4 (the high half) did
+the reverse. A non-speculative `addd` of an accepted value does not trap
+and gives the value with tag 0. The kernel's empty registers are of this
+kind: 0 with tag 5, in `%g16`–`%g31` after a system call and in a signal
+handler ([kernel-interface.md](../abi/kernel-interface.md), "System
+calls", "Signals").
+
+The hardware keeps bit 30 set in every diagnostic value it makes. A
+failed load gives `4afafafa`, a failed operation its result with bit 30
+set, and a speculative operation on a diagnostic operand sets bit 30 of
+each half of its result. `andd,sm` of `4afafafa4afafafa` with 0 gives
+`4000000040000000`, with `0xbfffffffbfffffff` gives `4afafafa4afafafa`,
+and with `0x0000ffff0000ffff` gives `4000fafa4000fafa`; `ord,sm` with 0
+gives `4afafafa4afafafa`; each result traps a non-speculative `addd`. So
+user code can neither make a diagnostic value with `puttagd` nor turn a
+diagnostic value into an empty one.
 
 What happens to a diagnostic operand ([hw] unless marked):
 
@@ -72,8 +104,8 @@ What happens to a diagnostic operand ([hw] unless marked):
 | 32-bit operation reading only a clean half | no trap (calling-convention.md) | |
 
 The store rows come from `spec.c`'s `st_*` cases (4C, 8C2 and 2C3
-alike). In a register the tag is what makes a value diagnostic and its
-bits don't matter; after a `,sm` store, an ordinary load of the word
+alike). In a register a half tagged 1 is diagnostic when its bit 30 is
+set (above); after a `,sm` store, an ordinary load of the word
 returns those bits with tag 0, so through an ordinary load a diagnostic
 value becomes an ordinary number; memory keeps the tag, and only the
 fill MAS reads it back (below). A store under a diagnostic predicate

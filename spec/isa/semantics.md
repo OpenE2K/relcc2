@@ -308,9 +308,11 @@ beat six scalar channels. Where the hardware differs:
   overflow, underflow or inexact; the values are the IEEE ones), where
   the scalar `fdivs`/`fdivd`/`fsqrts` do: code that needs `fenv` flags
   must not use them.
-- `puttagd`/`puttags` raise SIGILL for some inputs (tag operations, not
-  studied here); MCST's qemu aborts at them and also gets `pfdivs` and
-  `pfsqrts` wrong in every case.
+- `puttagd`/`puttags` raise SIGILL for some inputs: `puttagd` raises
+  `ILL_PRVOPC` when it would make a diagnostic half, tag 1 with bit 30
+  set ([speculation.md](speculation.md), "Diagnostic values"); MCST's
+  qemu aborts at them and also gets `pfdivs` and `pfsqrts` wrong in
+  every case.
 
 ## Square root and reciprocals [hw]
 

@@ -757,6 +757,33 @@ a return, `eap` or a `%ctpr2` write: all as on the 8C2. What differs:
 | `mova` → consumer | (see Timing) | 5 cycles; a consumer 1–4 cycles after it stalls 4 |
 | First `mova` without a stall after `bap` | 20 cycles of `nop` (`gap20`) | 18 (`gap18`) |
 
+(`gapN` puts the first `mova` N + 2 cycles after the `bap`: 22 and 20.)
+
+**lcc's loops enter too early on the 2C3** [hw: `tools/isa-probes/bapent.py`
+and `bapent.c`, two runs, 2026-10-12]. lcc's v6 `-O3` code of
+isa-score's validation kernels (`tools/isa-score/validate/kernels.c`)
+issues the loop's first instruction 17 cycles after the `bap` (`sum` of
+`long`s: two `movaqp` of one area an iteration; `copy` of `int`s: two
+`movad` of one area) or 19 (`saxpy`: one `movaqp` from each of two
+areas, one per half); the loop's `mova`s are in that instruction.
+Adding empty cycles after the `bap` shows what the early start costs
+(cycles a call at n = 512, less the cost had the loop started without a
+stall):
+
+| Loop's first instruction after `bap` | 17 | 18 | 19 | 20 | 21 | 22 to 25 (`saxpy` 27) |
+|---|---|---|---|---|---|---|
+| `sum`, `copy`: stall | 8 | 4 | 0 | 0 | 0 | 0 |
+| `saxpy`: stall | — | — | 4 | 4 | 0 | 0 |
+
+So these loops need 19 cycles (one area) or 21 (two areas) from `bap`,
+and lcc's v6 placement loses 6 cycles a call in `sum` and `copy` and 2
+in `saxpy` against the best entry (the same at n = 2048, where
+`saxpy`'s figure is now and then 4 cycles off). On the 4C
+(`copy`, its only APB loop at `-O3`) and the 8C2 (all three, entered
+at 17) the same sweep over entries 17–25 moves each loop by at most 3
+cycles, mostly with a period of 4, so there entering later gains at
+most 3.
+
 lcc's loops pass on the 2C3: 0 wrong of 900 results under about 10,000
 timer signals, and the guard page case; APB makes its sum 19× and its
 dot product 7× faster on a 64 MiB array there.

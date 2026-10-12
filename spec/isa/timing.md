@@ -1170,10 +1170,16 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
 ## Not measured yet
 
 - v4, v7; v6 on the Elbrus-16C (the 2C3 is the v6 machine measured).
-- Loop mode registers other than `%lsr` (`%ilcr`); APB throughput.
-- Throughput of 128-bit and packed FP operations, `mova`, AAU stores,
-  and loads and stores of other sizes; whether the store bank rule
-  involves physical address bits.
+- How soon a write of a loop-mode register other than `%lsr` takes
+  effect (`%lsr1`, `%ilcr`; a `%lsr` write also sets `%ilcr`,
+  loops.md).
+- Throughput of the pipelined 64-bit packed FP operations (`pfadd*`,
+  `pfmul*`, `pfcmp*` …; the packed divides and square roots are in
+  "Every v3 operation", "The divider") and of byte and halfword loads
+  and stores; whether the store bank rule involves physical address
+  bits. (Measured on this page: 128-bit operations, "Elbrus-8C2 (v5)"
+  (`v5tp_*`); array prefetch areas and `mova`, "Array prefetch"; word
+  loads and AAU stores, "Throughput".)
 - Why a stream of loads that miss leaves only part of its lines in L1
   (Memory, "Not every load that misses fills L1"), and why a chase
   in the other cluster finds fewer of a chase's lines on the 4C and

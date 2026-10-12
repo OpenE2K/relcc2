@@ -167,15 +167,15 @@ Lanes of 8 (b), 16 (h), 32 (w) or 64 (d) bits, little-endian. Mostly 1 cycle (mu
 
 ## Packed FP (64-bit registers)
 
-`pf*s` treat the register as two singles, `pf*d` as one double (identical to the scalar operation, kept for encoding symmetry). 4 cycles (min, max and compares 2), 6 to an integer op; flags as the scalar operations (semantics.md, "Packed operations of v3").
+`pf*s` treat the register as two singles, `pf*d` as one double (identical to the scalar operation, kept for encoding symmetry); `pfdivs`, `pfsqrts` and the conversions other than `pfstoifs` work on one lane (semantics.md, "Packed operations of v3"). 4 cycles (min, max and compares 2), 6 to an integer op; flags as the scalar operations (semantics.md, "Packed operations of v3").
 
 | Operations | ISA | ALC | Does | Lat | lcc v3 / v5 | Run on hardware |
 |---|---|---|---|---|---|---|
 | `pfadds`, `pfaddd`, `pfsubs`, `pfsubd`, `pfmuls`, `pfmuld`, `pfmaxs`, `pfmaxd`, `pfmins`, `pfmind` | 1–8 | 0–5 | Lane-wise add, subtract, multiply, x86-style max and min. **Use:** `V2SF` arithmetic. | 2, 4 |  | fpcost, fpenv, semp (4C, 8C2, 2C3) |
-| `pfdivs`, `pfdivd`, `pfsqrts`, `pfsqrttd` | 1–8 | 5 | `pfdivs`, `pfdivd`: IEEE values but **no flags**; `pfsqrts` = `fsqrts` of the low single (not packed), `pfsqrttd` = `fsqrttd`. From v5 `pfdivd` and `pfsqrttd` take 2 cycles more than `fdivd` and `fsqrttd`. (semantics.md, "Packed operations of v3") | 11 (`pfdivs`), 12 (`pfsqrts`), 14 (`pfdivd`, `pfsqrttd`; 16 on v5 and v6) |  | semp, sqrt (4C, 8C2, 2C3) |
+| `pfdivs`, `pfdivd`, `pfsqrts`, `pfsqrttd` | 1–8 | 5 | `pfdivs`, `pfdivd`: IEEE values but **no flags**; `pfdivs` divides the low singles only (not packed, as `pfsqrts` = `fsqrts` of the low single); `pfsqrttd` = `fsqrttd`. From v5 `pfdivd` and `pfsqrttd` take 2 cycles more than `fdivd` and `fsqrttd`. (semantics.md, "Packed operations of v3") | 11 (`pfdivs`), 12 (`pfsqrts`), 14 (`pfdivd`, `pfsqrttd`; 16 on v5 and v6) |  | semp, sqrt (4C, 8C2, 2C3) |
 | `pfcmpeqs`, `pfcmpeqd`, `pfcmplts`, `pfcmpltd`, `pfcmples`, `pfcmpled`, … (16 operations) | 1–8 | 0,1,3,4 | All-ones lanes where the compare holds; eq, neq, od, uod quiet (also on qemu's error list), lt/le signal. | 2 |  | semp (4C, 8C2, 2C3) |
 | `pfhadds`, `pfhsubs`, `pfaddsubs` | 3–8 | 0–5 | Horizontal add/subtract (a's pair low, b's high); `pfaddsubs` (a0 − b0, a1 + b1). | 4 |  | semp (4C, 8C2, 2C3) |
-| `pfdtofs`, `pfdtois`, `pfdtoistr`, `pfstofd`, `pfdtoifd`, `pfstoifs` | 1–8 | 0,1,3,4 | Scalar conversions under packed names (`pfdtofs` = `fdtofs`, …); `pfstoifs` rounds both singles to integral with mode a. | 4 |  | semp (4C, 8C2, 2C3) |
+| `pfdtofs`, `pfdtois`, `pfdtoistr`, `pfstofd`, `pfdtoifd`, `pfstoifs` | 1–8 | 0,1,3,4 | One lane, as the scalar operation of the same name (`pfdtofs` = `fdtofs`, …): `pfdtofs`, `pfdtois`, `pfdtoistr` write one 32-bit result, `pfstofd` reads the low single, `pfdtoifd` rounds one double; only `pfstoifs` is packed, rounding both singles to integral with mode a. | 4 |  | semp (4C, 8C2, 2C3) |
 
 ## Memory
 

@@ -300,6 +300,17 @@ beat six scalar channels. Where the hardware differs:
   wraps, qemu leaves `src1` unchanged). **`pextrh src1, src2, imm`** gives
   halfword `imm` of `src1:src2` for imm ≤ 7; above 7 (gas: "undefined")
   the result differs between the 4C and the 8C2.
+- **Some `pf` operations work on one lane** [hw: `semp.c`, all 40
+  input sets on the 4C and the 8C2, the destination preset to
+  0x5555…]: `pfdivs` divides the low singles and keeps the upper half,
+  as `pfsqrts` does ("Square root and reciprocals"); `pfdtofs`,
+  `pfdtois` and `pfdtoistr` convert the double to one 32-bit result and
+  keep the upper half, `pfstofd` converts the low single to a double,
+  and `pfdtoifd` rounds one double. Only `pfstoifs` of these rounds both
+  singles. binutils gives them the matching operand sizes
+  (`binutils-ops.yaml`: `pfdivs` sss, `pfdtofs` ds, `pfstofd` sd,
+  `pfstoifs` and `pfdtoifd` ddd), and the community qemu computes them
+  so.
 - **NaN choice** in `pfhadds`/`pfhsubs` when both lanes are NaN: the
   hardware returns the low lane's NaN, qemu the high one's.
 - **Flags.** Packed FP operations set the denormal flag (as the scalar

@@ -370,7 +370,9 @@ groups:
 - title: Packed FP (64-bit registers)
   intro: >
     `pf*s` treat the register as two singles, `pf*d` as one double
-    (identical to the scalar operation, kept for encoding symmetry).
+    (identical to the scalar operation, kept for encoding symmetry);
+    `pfdivs`, `pfsqrts` and the conversions other than `pfstoifs` work
+    on one lane (semantics.md, "Packed operations of v3").
     4 cycles (min, max and compares 2), 6 to an integer op; flags as the
     scalar operations (semantics.md, "Packed operations of v3").
   rules:
@@ -379,14 +381,14 @@ groups:
     use: "`V2SF` arithmetic."
   - ops: pfdiv{s,d} pfsqrts pfsqrttd
     lat: "11 (`pfdivs`), 12 (`pfsqrts`), 14 (`pfdivd`, `pfsqrttd`; 16 on v5 and v6)"
-    does: "`pfdivs`, `pfdivd`: IEEE values but **no flags**; `pfsqrts` = `fsqrts` of the low single (not packed), `pfsqrttd` = `fsqrttd`. From v5 `pfdivd` and `pfsqrttd` take 2 cycles more than `fdivd` and `fsqrttd`."
+    does: "`pfdivs`, `pfdivd`: IEEE values but **no flags**; `pfdivs` divides the low singles only (not packed, as `pfsqrts` = `fsqrts` of the low single); `pfsqrttd` = `fsqrttd`. From v5 `pfdivd` and `pfsqrttd` take 2 cycles more than `fdivd` and `fsqrttd`."
     see: semantics.md, "Packed operations of v3"
   - ops: pfcmp{eq,lt,le,uod,neq,nlt,nle,od}{s,d}
     does: All-ones lanes where the compare holds; eq, neq, od, uod quiet (also on qemu's error list), lt/le signal.
   - ops: pfhadds pfhsubs pfaddsubs
     does: "Horizontal add/subtract (a's pair low, b's high); `pfaddsubs` (a0 − b0, a1 + b1)."
   - ops: pfdtofs pfdtois pfdtoistr pfstofd pfdtoifd pfstoifs
-    does: "Scalar conversions under packed names (`pfdtofs` = `fdtofs`, …); `pfstoifs` rounds both singles to integral with mode a."
+    does: "One lane, as the scalar operation of the same name (`pfdtofs` = `fdtofs`, …): `pfdtofs`, `pfdtois`, `pfdtoistr` write one 32-bit result, `pfstofd` reads the low single, `pfdtoifd` rounds one double; only `pfstoifs` is packed, rounding both singles to integral with mode a."
 
 - title: Memory
   intro: >

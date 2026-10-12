@@ -3,8 +3,9 @@
 What a compiler must provide, beyond the binary interface, so that code
 and headers written for lcc build unchanged: predefined macros,
 inline-assembly constraints and register names, and the lcc options and
-behaviours that change generated code. Probes: `tools/abi/probes/asmops.c`;
-macros from `lcc -dM -E -xc /dev/null`.
+behaviours that change generated code. Probes: `tools/abi/probes/asmops.c`,
+`tools/abi/probes/execstack.sh` (nested functions, Fortran internal
+procedures); macros from `lcc -dM -E -xc /dev/null`.
 
 ## Predefined macros (lcc, unipro, lcc-doc)
 
@@ -327,18 +328,51 @@ Register names for `-ffixed-<reg>` and `-fcall-used-<reg>` (as in GCC):
   delays (default with `-mtune=elbrus-48c`), so those delays differ on
   that CPU.
 
-## GNU extensions lcc lacks (lcc)
+## GNU extensions lcc lacks (lcc, lcc-doc, unipro)
 
-lcc 1.29.16 rejects GNU nested functions (and so nonlocal `goto` out of
-them; `error #65: expected a ";"`), `__builtin_setjmp` /
-`__builtin_longjmp` and `__builtin_apply` ("unknown built-in function").
-No E2K code depends on them and there is no ABI to match, so a new
-compiler may leave them out at first. Implementing them needs
-trampolines (an executable stack, `%g12` loaded before a jump through a
-CTPR) and, for nonlocal `goto` and `__builtin_longjmp`, unwinding the
-chain stack, which glibc's `longjmp` does through the kernel; a
-`jmp_buf` whose saved IP is replaced by a label's address re-enters the
-frame there ([stack-and-unwinding.md](stack-and-unwinding.md)).
+lcc 1.29.16 and 1.31.05 (v3, v5.8c2, v6.2c3, `-O2`) reject GNU nested
+functions in every form: one that is only called, one whose address
+escapes and that uses its parent's variable, and one whose address
+escapes but uses nothing from its parent. All three stop at the nested
+definition with `error #65: expected a ";"`
+(`tools/abi/probes/execstack/nested-*.c`, compiled by
+`tools/abi/probes/execstack.sh`). `-fnested-functions`, `-ftrampolines`
+and `-ftrampoline-impl=heap` are "unrecognized command line option"s,
+and the manual lists `-Wtrampolines` as ignored (lcc-doc,
+`lcc_options.htm`). So there is no nonlocal `goto` out of a nested
+function either. Unipro's clang rejects nested functions too ("function
+definition is not allowed here"). `__builtin_setjmp`,
+`__builtin_longjmp` and `__builtin_apply` are "unknown built-in
+function"s (lcc 1.29.16 and 1.31.05). No E2K code depends on any of
+them and there is no ABI to match, so a new compiler may leave them out
+at first. A nested function whose address escapes needs a trampoline
+([gcc-port-plan.md](../../doc/gcc-port-plan.md), D1, "Trampolines"),
+and a trampoline on the stack needs an `"x"` GNU-stack note
+([elf.md](elf.md), "Executable stack"). Nonlocal `goto` and
+`__builtin_longjmp` also need the chain stack unwound, which glibc's
+`longjmp` does through the kernel. A `jmp_buf` whose saved IP is
+replaced by a label's address re-enters the frame there
+([stack-and-unwinding.md](stack-and-unwinding.md)).
+
+lcc's output never needs an executable stack (inferred from these
+probes and from lcc never writing the note). Its Fortran (`lfortran`,
+1.29.16 and 1.31.05) passes an internal procedure as an actual argument
+(Fortran 2008) without a trampoline. It passes a static thunk
+(`__outer__add__thunk_1`), which reaches the host's variables through a
+`.bss` slot (`__outer__add__ext_1`); before the call the host stores
+there the address of the variable (`total`). The slot stays static with
+`-frecursive` and `-fopenmp`, so two threads in the host share it
+(inferred). By default lfortran rejects such an argument in a
+`recursive` host ("Internal procedure 'add' is used as actual argument
+at (1) in recursive procedure 'outer'"). That is MCST's check
+`-ffortran-check-internal-func` (lcc-doc; that it is on by default is
+inferred from this error). `-fno-fortran-check-internal-func` accepts
+the host, and the code still uses the one static slot, so a recursive
+activation would overwrite its caller's (inferred)
+(`tools/abi/probes/execstack/internal.f90`, `internal-rec.f90`). GCC's
+gfortran has no such error, only an F2008 notice
+(`gcc/fortran/resolve.cc:2142-2149`). It lowers internal procedures to
+nested functions, so passing one needs a trampoline (inferred).
 
 **Labels as values** are different in lcc: `&&label` is the label's
 index among the address-taken labels of its function (0, 1, 2, ...),

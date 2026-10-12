@@ -420,7 +420,7 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None):
                     # is assumed taken.
                     if key[0] == "c" and op.unit == "ct" and op.preds \
                             and not taken \
-                            and p.name in ("disp", "sdisp"):
+                            and p.name in model.CTP_NOT_TAKEN_PREPARES:
                         lat = min(lat, model.CTP_LAT_NOT_TAKEN)
                     r = pis + lat + slow.get((id(p), pis), 0)
                     # A write-back conflict delays an FP-side result to an

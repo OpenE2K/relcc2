@@ -178,6 +178,23 @@ not 5. Measured with the performance monitors (`tools/isa-probes/pmu.c`,
 So a compiler may put the `disp` of a rarely taken exit late, without
 cost on the fall-through path.
 
+The same holds after `return`: a not-taken `ct %ctpr3 ? pred` (lcc's
+early exits) does not wait for the 6 cycles a taken return needs
+(`tools/isa-probes/aaurwct.c`, `ct_return_dK` against `ct_disp_dK`:
+median cycles of a call of a function whose body ends with the prepare
+and, K cycles later, a `ct` whose condition is false; 4C and 8C2
+identical):
+
+| Distance K | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|---|
+| after `return` | 41 | 45 | 42 | 43 | 44 | 49 | 46 |
+| after `disp` | 41 | 41 | 46 | 43 | 48 | 45 | 46 |
+
+Beyond the 1-cycle wait at distance 1 after `disp`, the totals grow by a
+cycle per cycle of distance, except for repeatable 4-cycle bumps at some
+distances (2 and 6 after `return`, 3 and 5 after `disp`) that we can't
+explain; isa-score models both prepares like the `disp` row above.
+
 Cost of the transfer itself (cycles per block in a loop of 16 identical
 blocks, compared with a block of `nop`s of the same shape; the loop adds
 about 0.4 per block):

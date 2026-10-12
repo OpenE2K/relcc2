@@ -111,8 +111,12 @@ MOVA_BYTES = {"movab": 1, "movah": 2, "movaw": 4, "movad": 8, "movaq": 16,
 
 CTP_LAT = {"disp": 5, "sdisp": 5, "return": 6, "movtd": 9, "ldisp": 3}
 # A conditional ct that is not taken waits for its CTPR only this long
-# after a disp (monitors.md, ct_false_dK in tools/isa-probes/gen_pmu.py).
+# after a disp (monitors.md, ct_false_dK in tools/isa-probes/gen_pmu.py)
+# or a return (tools/isa-probes/aaurwct.c ct_return_dK against ct_disp_dK,
+# 4C and 8C2; lcc's early exits `ct %ctpr3 ? cond` a few cycles after the
+# return; control-transfer.md).
 CTP_LAT_NOT_TAKEN = 2
+CTP_NOT_TAKEN_PREPARES = ("disp", "sdisp", "return")
 
 BAP_TO_MOVA = 22    # apb.md, data in the caches
 V6_BAP_TO_MOVA = 20  # the 2C3: the first mova may issue 2 cycles sooner
@@ -442,6 +446,11 @@ def parse_line(line, unknown):
     if name.startswith(("aaurw", "apurw")):
         op.srcs = regs_of(operands[0])
         op.dsts = regs_of(operands[-1])
+        # It takes its register like a store's data: an integer result
+        # from either cluster the next cycle (tools/isa-probes/aaurwct.c,
+        # 4C and 8C2; timing.md "Clusters"; lcc's `aaurw,2 %g, %aabf0`
+        # after an `adds,3` ending its APB loops).
+        op.data = list(op.srcs)
         return op
     if store:
         regs = [regs_of(o) for o in operands]

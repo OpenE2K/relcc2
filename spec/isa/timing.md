@@ -389,6 +389,14 @@ back end, I44):
 | `faddd`, `fmuld` | 4 (not the 6 an integer op waits) | 6 |
 | `fdivd` (ALC5) | — | 16 (14 + 2) |
 
+`aaurw`/`aaurwd` (writing `%aaind`, `%aaincr` or `%aabf`, ALC2 or ALC5)
+take their operand the same way: an `addd` result from either cluster
+the next cycle, with no crossing cost, where an `addd` consumer in the
+other cluster stalls (`tools/isa-probes/aaurwct.c`, 16 producer–consumer
+pairs: 66 cycles with `aaurw(d)` or a store after `addd,3` or `addd,0`,
+134 with `addd,2` after `addd,3`; 4C and 8C2 alike; isa-score models it).
+Only an `addd` producer was tried.
+
 A store's address operands pay the integer crossing (+1, as a load's
 address does): two stores a cycle after the `addd`s that advance their
 bases take 4.66 cycles an instruction when one base comes from the other

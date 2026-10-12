@@ -372,7 +372,18 @@ special values:
   operation does), and `pfsqrttd` gave `fsqrttd`'s results in every case
   tried.
 - lcc emits `fsqrtid` + `fsqrttd` for `sqrt` and `fsqrts` for `sqrtf`,
-  with a library call kept for `errno` unless `-ffast`.
+  with a library call kept for `errno` unless `-ffast`. With `errno` it
+  issues `fsqrtid,sm` on every path and `fcmpledb 0, x` into a predicate
+  in the same or the next wide instruction, and calls `sqrt` when that
+  test fails, taking the call's result as the root on that path
+  ([control-transfer.md](control-transfer.md), "How lcc uses it"). In
+  NPB EP's loop (`sqrt (-2.0 * log (t1) / t1)`) the call sits between
+  `fsqrtid` and `fsqrttd,sm` (at `-O3` the next two points' loads
+  follow it, beside `fsqrttd`) [lcc 1.29.16 `-O2` and `-O3`, v3, v5,
+  v6]. For a negative operand nothing raises invalid before the call,
+  which then traps in MCST's libm when `FE_INVALID` is clear
+  ([registers.md](../abi/registers.md), "MCST's libm needs the sticky
+  FP flags set").
 
 ## Other scalar operations [hw]
 

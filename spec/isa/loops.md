@@ -245,6 +245,37 @@ prefetch unit (`staad … %aad0[ %aasti1 ]` with `incr`). Example,
        staad,5 %b[12], %aad0[ %aasti1 ]; incr,5 %aaincr0 }
 ```
 
+The peeled prologue is list-scheduled, not run as copies of the
+kernel: in NPB CG's row loop (`sum += a[k] * p[colidx[k]]`, kernel II
+4, `colidx` and `a` through array prefetch on v5 and v6, plain loads on
+v3) lcc uses the gathered `p[colidx[k]]` 13 iterations after loading it
+on v5 and v6 and 8 on v3, and issues the first 14 iterations' loads
+(45, up to four a wide instruction) in 23 wide instructions, 27 cycles,
+before the kernel (v5; v6: 47 loads in 22) [lcc 1.29.16 `-O3`, NPB CG
+class W].
+
+Big counted loops are not overlapped: NPB LU's `jacld`, `jacu` and
+`blts` are one-stage `loop_mode` kernels, `alc` and `ct %ctpr1 ?
+%NOT_LOOP_END` with no `abn`, the count only in `%lsr` (written in the
+preheader) [lcc 1.29.16 `-O3`, NPB LU class W; cycles are the wide
+instructions plus their `nop` cycles]:
+
+| Loop | v3 (`e2k-v3.4c`) | v5 (`e2k-v5.8c2`) and v6 (`e2k-v6.2c3`) |
+|---|---|---|
+| `jacld`, `jacu` | 116 wide instructions, 118 cycles; 467 operations, 20 `movad` | 105–106 wide instructions, 106 cycles; 465 operations, 20 `movad` |
+| `blts` | 129 wide instructions, 239 cycles; 341 operations, 94 plain loads | 112 wide instructions, 253 cycles; 322 operations, 85 `movad` |
+
+`jacld` stores 100 elements an iteration (75 `staad`, 25 `std`, all in
+ALC2 and ALC5) with no frame access, re-reads all 20 `u` elements it
+needs through array prefetch rather than carrying the previous
+iteration's, and names 177 distinct registers in the v5 kernel (98
+`%b[]` under `setwd wsz = 0x60; setbn rsz = 0x3f, rbs = 0x20`, 63 `%r`,
+`%g16`–`%g31`); it stores 29 of its 34 constant zeros in its first 52
+wide instructions and 51 of its 66 computed values in its last 26, two
+a cycle. `blts` carries `v[i][j-1][k][0..4]` in registers; 5 of its 9
+`fdivd` are on that recurrence, which bounds its operations to 209
+cycles an iteration on all three versions (isa-score's `score.py`).
+
 Loops without a trip count (`while`, early exits): `%lsr` without `vlc`
 (`0x20ff0000000000`: `ldovl` 255, `strmd` 1), the same `loop_mode`,
 `alc`, `abn` and `abp`, and an exit through a rotated predicate

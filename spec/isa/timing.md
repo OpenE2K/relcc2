@@ -682,7 +682,11 @@ lcc outside pipelined loops. Inside them lcc issues the loads array
 prefetch doesn't serve far ahead of their use: 40–90 cycles in 31 of the
 155 v3 PolyBench kernels with such loads (mvt's column walk: 22
 iterations at II 4), 40–76 on v5 and v6, 22–47 in CoreMark's
-`matrix_test` (lcc 1.29.16 `-O3`; the proof-of-concept back end's P44).
+`matrix_test`, and NPB CG's gather `p[colidx[k]]` 52 cycles (13
+iterations at II 4) on v5 and v6 and 32 (8 iterations) on v3, in rows
+of 72.6 elements (class W) whose length it doesn't know (lcc 1.29.16
+`-O3`; the proof-of-concept back end's P44 and P74; loops.md, "How lcc
+builds loops").
 Longer latencies cannot be scheduled for and are left to the interlock,
 prefetching and APB, so `bench.py` measures them only with `--memory`
 (pinned with `--numa CPU:MEM`). For reference, on the 4C (64 KiB L1D and

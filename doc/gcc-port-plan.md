@@ -1686,8 +1686,10 @@ gas accepts `nop 0`). Never shorten a wait: an operand early by e
 cycles stalls 4 × ceil(e/4), so the PoC, which capped waits at `nop 7`,
 ran `x = x / d + k` at 21 cycles an iteration instead of 16 (P35).
 
-For correctness, the only non-interlocked hazard measured on the 4C is
-`rwd %lsr` → `rrd %lsr` (4 cycles); loop-mode code (7.7) must respect it.
+For correctness, the only non-interlocked hazards measured on the 4C
+are the loop-register writes: `rwd %lsr` (and v5+ `%lsr1`) → `rrd` of
+either or the loop's first instruction (4 cycles), → `rrd %ilcr` (5;
+timing.md, loops.md); loop-mode code (7.7) must respect them.
 Privileged state registers (which gas pads) don't appear in user code.
 
 If later passes could insert labels inside a group, wrap each group in a
@@ -2067,8 +2069,10 @@ check-free semi-speculative form works.
   (ia64.md:3957). What the pattern must emit (`spec/isa/loops.md`,
   measured on the 4C):
   - `rwd` the trip count with `vlc` (bit 37) into `%lsr` **at least 4
-    cycles before the loop** (sooner, the loop runs one iteration too
-    many), and `disp %ctpr1, head` 5 cycles before the back edge;
+    cycles before the loop** (sooner, the iterations issued before the
+    write lands count down the old `%lsr`, so the loop runs a count
+    that depends on what `%lsr` held), and `disp %ctpr1, head` 5 cycles
+    before the back edge;
   - `alc alcf=1, alct=1` and `ct %ctpr1 ? %NOT_LOOP_END` in the last
     instruction; the loop runs `lcnt` times (once for 0 or 1, so guard
     a zero trip count before it);
@@ -3079,7 +3083,9 @@ a few ways, a guide to what an `-march=elbrus-v5` mode needs first:
 - **More FP channels**: `faddd`/`fmuld`/`fmul_add*` also in ALC2/5 (6 a
   cycle); lcc uses them sparingly (19 of 399 FP operations in Linpack).
   Watch the one conflicting pattern with the divider (timing.md).
-- **`%lsr1`** for loop counts (written after `%lsr`, loops.md).
+- **`%lsr1`** for loop counts (written after `%lsr`, loops.md; it
+  takes effect after 4 cycles like `%lsr`, and the two writes may be in
+  consecutive instructions).
 - **128-bit data**: two `ldd` + `qppackdl` for loads (`ldqp` goes to L2,
   latency 11), `stqp` for 16-byte stores, `qp*` operations with their
   64-bit latencies; `ldqp`/`stqp` loops for 16-byte atomics.
@@ -3122,8 +3128,6 @@ Measured on an Elbrus-2C3 (timing.md "Elbrus-2C3 (v6)", semantics.md
   shifts, `clmull`/`clmulh` for carry-less multiplies.
 - **APB**: 32 bytes a cycle per area, so two `movaqp` from one area per
   iteration cost nothing extra.
-- **`%lsr` written too late** ends a v6 loop after one iteration (v3/v5:
-  one extra); the 4-cycle rule covers both.
 - **Atomics**: lcc's v6 code is its v3 code (`wait` + plain accesses).
   v6's load-acquire / store-release MAS forms (0x13) run, and a release
   store that way costs about a quarter of `wait` + store on the 2C3,

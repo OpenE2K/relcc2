@@ -28,6 +28,8 @@
 # machine's own readelf, and prints the personality and the [stack] and
 # [heap] permissions of the system's cat (a program without PT_GNU_STACK)
 # from /proc/self; over SSH, it reads files and writes nothing there.
+# It prints to stdout; the runs elf.md cites (4C, 8C2, 2C3, 2026-10-12)
+# were saved as toolchains/execstack/remote-{4c,8c2,2c3}.txt.
 
 root=$(cd "$(dirname "$0")/../../.." && pwd)
 

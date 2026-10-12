@@ -175,21 +175,18 @@ What the segment does at run time (kernel, glibc):
   `sysdeps/unix/sysv/linux/dl-execstack.c:33-80`). MCST didn't change this
   behaviour; its only edit there is a pragma for lcc's protected mode
   (`dl-load.c:1387-1393`).
-- [hw] On the 8C2 (kernel `6.1.0-1.17-e8c2-nn`; `execstack.sh
-  --remote`), the system's `cat` and `grep` have no `PT_GNU_STACK`,
-  `cat`'s personality is 0, and `/proc/self/maps` shows `[stack]` and
-  `[heap]` as `rw-p`. The saved run read the maps through `grep` (the
-  script now reads them with `cat`; not re-run). The 4C
-  (`6.1.158-mcst-e4c`) and the 2C3 (`6.1.0-1.18-e2c3`) gave the same in
-  hand-run checks whose output was not saved.
+- [hw] On the 4C (kernel `6.1.158-mcst-e4c-alt1.9.1`), the 8C2
+  (`6.1.0-1.17-e8c2-nn`) and the 2C3 (`6.1.0-1.18-e2c3`), the system's
+  `cat` has no `PT_GNU_STACK`, its personality is 0, and its own
+  `/proc/self/maps` shows `[stack]` and `[heap]` as `rw-p`
+  (`execstack.sh --remote` on each, 2026-10-12).
 
 The systems' own files have no `RWE` anywhere, and most have no segment
-at all [hw: readelf on the machines; the loop in `execstack.sh --remote`,
-run by the script on the 8C2 and by hand on the 4C and the 2C3]. The
-scan covers only the top level of each directory and only readable
-files. The `RW` ones include OpenSSH, OpenSSL, NSS, FFmpeg, x265, perf,
-7-Zip, Qt5Core, ICU, TBB, zstd, libsodium, LuaJIT and sudo's
-`cvtsudoers`. Why they are `RW` (`-Wl,-z,noexecstack`, or assembly
+at all [hw: the machines' own readelf, `execstack.sh --remote` on the
+4C, the 8C2 and the 2C3]. The scan covers only the top level of each
+directory and only readable files. The `RW` ones include OpenSSH,
+OpenSSL, NSS, FFmpeg, x265, perf, 7-Zip, Qt5Core, ICU, TBB, zstd,
+libsodium, LuaJIT and sudo's `cvtsudoers`. Why they are `RW` (`-Wl,-z,noexecstack`, or assembly
 sources with the note) was not established.
 
 | Machine | Directory | ELF files | No `PT_GNU_STACK` | `RW` | `RWE` |

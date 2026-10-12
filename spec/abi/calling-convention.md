@@ -24,6 +24,11 @@ callee:
 - The first argument register must be even (`wbs` counts pairs). Both
   compilers point `%b[0]` at it with `setbn rbs = wbs` and write arguments
   as `%db[i]`.
+- `wbs` lies between the pairs the caller was itself handed (4 for a
+  C function) and its `wsz` − 1: a smaller `wbs`, a larger one, or one
+  equal to `wsz` (no pair handed over) is SIGSEGV `SEGV_BNDERR`, at the
+  `call` or at the callee's first instruction (guide 9.5.3;
+  [registers.md](registers.md), window size limits [hw]).
 - The C convention's parameter area is **4 pairs = 8 registers** (kernel
   `C_ABI_PSIZE_UNPROT`).
 - Tail calls: `ct` to a function without `call` keeps the current window, so

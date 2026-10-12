@@ -52,12 +52,34 @@ proof-of-concept backend's probe, `docs/spec-poc-findings.md` A2):
   of the register file), also after spills; 113 traps. Registers above
   `%r63` are reachable only through `%b[]`.
 - **A function may not call with a `wbs` smaller than what it
-  inherited**: one that inherited P pairs from its caller must call with
-  `wbs ≥ P`, or its callee's window would start inside the caller's
-  caller's window. In a recursion with one window size W and one `wbs`,
-  `wbs ≥ W / 2` works and every smaller `wbs` gets SIGSEGV
-  (`si_code` 3) at the second nested call (W 16: `wbs` 8 works, 7 dies;
-  W 32: 16 works, 15 and 12 die; depth 1 always works; 4C, 8C2, 2C3,
+  inherited** (guide 9.5.3, "Переключение регистровых файлов": `wbs`
+  may be neither larger than the current window nor smaller than its
+  initial size, the parameter area). A function that inherited Q pairs
+  must call with Q ≤ `wbs` < `wsz`. A smaller or larger `wbs` makes the
+  `call` itself raise the window-bounds exception (TIR bit 9): SIGSEGV
+  `SEGV_BNDERR` (`si_code` 3) with `si_addr` and the interrupted IP at
+  the `call`, so nothing of the callee runs, and a system call fails
+  exactly like an ordinary call. With `wbs` = `wsz` (no pair handed
+  over) the same signal comes at the callee's first instruction [hw:
+  `tools/abi/probes/pocabi2.c` `wbs` and `cross`: frames that inherited
+  Q = 1–4 pairs call with `wbs` = W = 0–5 or 8, handing over P = 1–4
+  pairs to `getpid` and `close` (entry 3), fast calls 6 and 2 (entry
+  6) and ordinary functions; all 337 cases are SIGSEGV exactly when
+  W < Q, whatever P; 4C, 8C2, 2C3. TIR bit 9 is kernel
+  `include/asm/trap_def.h:36`; `kernel/traps.c:1097-1118` sends SIGKILL
+  instead when the trap is at a kernel IP]. A C function
+  inherited 4 pairs, so all its calls, system calls included, need
+  `wbs ≥ 4`, and a function that makes a system call has a window of at
+  least 4 + the pairs it hands over (8 for the usual 4). lcc never goes
+  lower: its `%#` is 4 at `-O0` and 5 above
+  ([source-compat.md](source-compat.md)), and the smallest `wbs` among
+  the 51,808 `call`s in lcc 1.29.16's v3 `libc.so.6`, `libm.so.6` and
+  `libstdc++.so.6` is 4 [lcc]. (The proof-of-concept back end's leaves
+  called `getpid` with `wsz = 5`, `wbs = 1` and died: its A25.) In a
+  recursion with one window size W and one `wbs` the callee inherits
+  W − `wbs`, so `wbs ≥ W / 2` works and every smaller `wbs` gets the
+  signal at the second nested call (W 16: `wbs` 8 works, 7 dies; W 32:
+  16 works, 15 and 12 die; depth 1 always works; 4C, 8C2, 2C3,
   `tools/isa-probes/pocchk2.c` `rec*`; the proof-of-concept back end's
   I32). The convention (hand over 4 pairs, call with `wbs ≥ 4`) never
   breaks it.

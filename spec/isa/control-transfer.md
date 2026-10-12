@@ -74,7 +74,7 @@ mode or the kernel.
 | Operation | Notes |
 |---|---|
 | `ct %ctprN [? cond]` | branch or return (whatever the CTPR was prepared for) |
-| `call %ctprN, wbs = W [? cond]` | call: the callee's window starts at pair W of the caller's window (registers.md); conditional calls exist |
+| `call %ctprN, wbs = W [? cond]` | call: the callee's window starts at pair W of the caller's window; W from the pairs the caller was handed to its `wsz` − 1, else SIGSEGV `SEGV_BNDERR` (registers.md, window size limits [hw]); conditional calls exist |
 | `ibranch label [? cond]` | instant branch, IP-relative like `disp`; no CTPR |
 | `rbranch label` | `ibranch label ? %MLOCK` (the atomic retry loop, atomics.md) |
 | `ibranchd`, `icalld` | v6+: instant branch or call to a register target |

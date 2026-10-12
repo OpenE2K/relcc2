@@ -187,6 +187,12 @@ So `wsz − %#` is 4 in every case. The asm may write `%b[0]`–`%b[7]` and
 read results from `%b[0]`; lcc reserves no stack argument area for it (no
 `getsp`).
 
+`%#` is never below 4 either: a C function inherited 4 pairs, and a
+`call` whose `wbs` is smaller than that is SIGSEGV `SEGV_BNDERR` at the
+`call`, system calls included ([registers.md](registers.md), window size
+limits [hw: `pocabi2.c`]). A compiler that prints `%#` itself must keep
+the asm's outgoing pairs at pair 4 or above.
+
 When lcc sets up that area: for every `asm volatile`, with or without
 `%#` and whatever its clobbers (also `asm volatile ("")`), and for a
 non-volatile asm with a `"call"` or `"b[N]"` clobber. A non-volatile asm

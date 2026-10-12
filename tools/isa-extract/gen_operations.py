@@ -107,6 +107,7 @@ PROBES = {
     "ctlleft6.s": ("ctlleft.c", "2C3"),
     "isaleft.s": ("isaleft.c", "4C, 8C2, 2C3"),
     "isaleft-v5.s": ("isaleft.c", "8C2, 2C3"),
+    "pocabi2.s": ("abi/pocabi2.s", "4C, 8C2, 2C3"),
 }
 ABI_PROBES = "tools/abi/probes"
 

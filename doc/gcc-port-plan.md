@@ -388,7 +388,11 @@ written up in `spec/abi/source-compat.md` and `spec/abi/atomics.md`:
   or built from the submodule with `tools/setup/build-binutils.sh`.
 - Sysroot: lcc's, which has glibc's `crt1.o`/`crti.o`/`crtn.o`, `libc`,
   `libm`, the dynamic linker, and MCST's `libgcc_s.so.1` and
-  `libstdc++.so.6`: `/opt/mcst/lcc-1.29.16.e2k-v3.linux-6.1/fs`.
+  `libstdc++.so.6`: `/opt/mcst/lcc-1.29.16.e2k-v3.linux-6.1/fs`. Take
+  the `e2k-v3` one: every file in a CPU tree such as `e2k-v5.8c2` is
+  marked for that CPU, so a program linked against it runs only there
+  whatever `-march` its objects have (`spec/abi/elf.md`, "Mixing targets
+  in one program"; the same holds for native links on Elbrus Linux).
 - Host compiler: any recent GCC on the build machine; GCC's own
   prerequisites (GMP, MPFR, MPC; `contrib/download_prerequisites` fetches
   them into the source tree).
@@ -3024,8 +3028,12 @@ Decided by the owner:
   1,853 tests) under MCST's qemu as v5, v6 and v7, and the suite
   passes on the Elbrus-8C2 (v5) for every pair; the community can test
   v4. The suite also passes on an Elbrus-2C3 (v6, lcc's 2C3 build,
-  every pair). Registers a window gains hold an empty value on all three
-  machines (0 with tag 5 on v5 and v6, as under qemu; on the 4C the
+  every pair), and lcc's v3 code linked with its 8C2 or 2C3 code, or
+  with Unipro's `-march=elbrus-v3`/`v5`/`v6` code, passes it on those
+  machines (`run.py --target v3,v5.8c2`, `v3,v6.2c3`: the convention
+  doesn't depend on the target, so `-march` variants of the port can
+  call each other). Registers a window gains hold an empty value on all
+  three machines (0 with tag 5 on v5 and v6, as under qemu; on the 4C the
   stale bits with bit 30 cleared, tag 5), which a plain `std` stores
   without a trap (`spec/abi/calling-convention.md`, "Unused parts of a
   slot"). v6 has longer load latencies (performance only).

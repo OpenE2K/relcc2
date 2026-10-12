@@ -366,7 +366,10 @@ written up in `spec/abi/source-compat.md` and `spec/abi/atomics.md`:
   and the plain-GCC branch is the one that suits the port.
 - Inline asm: `r` is one register or an even-aligned pair (9–16 bytes),
   `x` one extended register; operands print as the bare register name
-  (`%r2`). Register variables use `%xgN` for extended registers.
+  (`%r2`). Register variables use `%xgN` for extended registers. The
+  system-call asm of glibc and the uapi headers needs `%#`, the
+  `"call"` and `"b[N]"` clobbers and a memory clobber the tree
+  optimizers see: D10, "lcc's system-call asm".
 - Atomics (`sync.md`): read-modify-write = a lock-wait load (MAS `0x7`,
   ALC0) and a wait-unlock store (MAS `0x2`) with `rbranch` back, which
   gas assembles as `ibranch ? %MLOCK`; fences = `wait ld_c = 1,
@@ -960,11 +963,16 @@ the output dependence between two writes of one register under
 opposite predicates (`sched_insns_conditions_mutex_p`) and puts both in
 one wide instruction, which the hardware accepts. Post-reload
 if-conversion (ce3) is the only user. The gain is small (zlib and xz
-4%, CoreMark none, `MAX_CONDITIONAL_EXECUTE` 6), and under an FP
-compare's predicate it can lose (the compare's latency joins a loop's
-recurrence): lcc's lead on branchy code comes from whole loops turned
-into predicated blocks and pipelined (7.7, "Branchy loops"), not from
-diamonds.
+4%, CoreMark none, `MAX_CONDITIONAL_EXECUTE` 6). Under an FP compare's
+predicate it lost while the arms' loads were predicated (each waits 4
+cycles for the predicate, then its own latency: Linpack 7% slower in
+the proof of concept), and it gains in lcc's form, a speculative load
+and a predicated copy (7.6, item 3, "Loads in a converted arm"; P86).
+Where the select feeds the next compare (`idamax`'s maximum) the
+compare's latency joins the loop's recurrence, which pipelining the
+loop outweighed there (the proof of concept). lcc's lead on branchy
+code comes from whole loops turned into predicated blocks and pipelined
+(7.7, "Branchy loops"), not from diamonds.
 
 **Predicated calls** (P67; lcc 1.29.16 `-O3`, control-transfer.md,
 "How lcc uses it"). lcc predicates most calls: 12,999 of 20,519 in
@@ -1118,6 +1126,28 @@ appears with the epilogue, after postreload CSE. 127 of Lua's 1,398
 return prepares went, each a 6-cycle wait: Lua 0.7–1.0% fewer cycles,
 speedtest1 1.4%, LAME 0.2% on the 8C2.
 
+**Sibling calls** (P91; `spec/abi/calling-convention.md`, "Tail calls").
+lcc makes `return g (x)` a jump at `-O2` and `-O3`: `disp %ctpr1, g`,
+the arguments in the caller's own `%dr0`… (a `ct` keeps the window) and
+`ct %ctpr1`, also from functions with a frame or stack arguments. It
+passes stack slots in an area of its own frame even where the incoming
+one would do, and releases neither that area nor its frame before the
+jump, so a chain of tail calls grows the data stack until the last
+callee returns (16 bytes a call for one argument, measured on the 4C,
+8C2 and 2C3). GCC's `gcc.dg/sibcall-3.c` and `sibcall-9.c`, which check
+that a local's address stays put across sibling calls, therefore abort
+with lcc's code; `sibcall-4.c` and `-10.c`, without arguments, pass.
+GCC's sibling calls reuse the incoming area (a callee needing more stack
+slots than the caller got is refused, calls.cc:2631-2641) and need a
+`sibcall_epilogue` pattern or the `emit_epilogue_for_sibcall` hook
+(calls.cc:2564-2571); a function with a frame gives it back before the
+jump with a positive `getsp`, which lcc uses to free a VLA at the end of
+its scope [lcc 1.29.16 `-O2`] (before a jump: inferred, not checked);
+that would pass all four tests (inferred). The proof of concept turns
+sibling calls off (`TARGET_FUNCTION_OK_FOR_SIBCALL`, target.def:3147),
+so sibcall-3, -4, -9 and -10 fail for it: they are xfailed only on the
+targets they list (gcc.dg/sibcall-3.c:8).
+
 Two hardware facts shape this (`spec/isa/control-transfer.md`, measured
 on the 4C):
 
@@ -1235,13 +1265,15 @@ Same registers as integers (no separate FP class). `long double`
 (`XFmode`) lives in one register: mantissa in the ordinary 64 bits, sign
 and exponent in the 16-bit extended part (`movif`/`movfi` pack and
 unpack it; loads and stores are `ldd`+`ldh`, `std`+`sth`). A function
-that keeps one in a window register across a call must set `nfx=0`, or
-the extended part is lost when the window spills (measured on the 4C);
-lcc sets `nfx=0` in every function that uses `long double`. 80-bit
-operations follow `%fpcr`/`%fpsr` (x87 control and status words), not
-`%pfpfr`, so rounding-mode patterns and `fenv` support must handle both
-(`spec/abi/registers.md`, "Floating-point control and status", which
-also gives the bit layouts). `TARGET_ATOMIC_ASSIGN_EXPAND_FENV` (C11
+that keeps one in a window register, across a call or not, must set
+`nfx=0`: the extended part is lost when the window spills, at a deep
+call (measured on the 4C and 8C2) or at a signal (`spec/abi/registers.md`,
+"Extended parts and `long double`"; the proof of concept's measurement,
+A26); lcc sets `nfx=0` in every function that uses `long double`.
+80-bit operations follow `%fpcr`/`%fpsr` (x87 control and status
+words), not `%pfpfr`, so rounding-mode patterns and `fenv` support must
+handle both (`spec/abi/registers.md`, "Floating-point control and
+status", which also gives the bit layouts). `TARGET_ATOMIC_ASSIGN_EXPAND_FENV` (C11
 `_Atomic float x; x += y` must drop the exceptions of failed CAS
 iterations) has to hold, clear and update both pairs, as glibc's
 `feholdexcept`/`feupdateenv` do. Cross-domain and cross-cluster latency
@@ -1254,12 +1286,23 @@ asm's `x` constraint and `%xgN` register variables name
 (`spec/abi/source-compat.md`). The proof-of-concept backend instead kept
 `long double` in a pair of ordinary registers (mantissa, exponent),
 packing with `movif` before and unpacking with `movfi` after each
-80-bit operation: no `nfx = 0`, ordinary 64-bit spills, and results
-bit-identical to lcc on the 4C, but `x` operands then need an extended
-register assembled before the asm and split after it. Pick one before
-M3; lcc's model costs `nfx = 0` and two-part spills (`std` + `sth` of
-`movfi`'s result), the pair model costs a `movif`/`movfi` (4 cycles)
-around every operation.
+80-bit operation: ordinary 64-bit spills and results bit-identical to
+lcc on the 4C, but `x` operands then need an extended register
+assembled before the asm and split after it. The pair model needs
+`nfx = 0` too: between an operation's `movif` and its `movfi` the value
+is in an extended register, and a signal arriving then spills the
+window and loses the 16-bit part under `nfx = 1` (the proof of concept
+counted 104 and 143 wrong results in 8.2 million on the 4C and 8C2 with
+its operands kept in window registers, none with `nfx = 0`; A26), so
+every function that holds an extended value in a window register,
+however briefly, needs it. lcc sets `nfx = 0` in every function that
+touches `long double`, also in a leaf without calls whose 80-bit value
+only ever sits in `%g16`, a global that never spills [lcc 1.29.16 `-O2`
+and `-O3`, v3.4c, v5.8c2, v6.2c3, and 1.31.05:
+`tools/abi/probes/pocplan.c` `ld_leaf`]. Pick one model before M3; both
+cost `nfx = 0`; lcc's adds two-part spills (`std` + `sth` of `movfi`'s
+result), the pair model a `movif`/`movfi` (4 cycles) around every
+operation.
 
 The port's programs link MCST's libm, which misbehaves once a program
 clears the sticky FP flags or rounds down (`spec/abi/registers.md`,
@@ -1269,7 +1312,18 @@ then set `errno` to `EDOM`, which only the library call does.
 
 Compute the root on every path with plain `fsqrtid`/`fsqrttd` (not
 `,sm`, unless FP speculation is allowed; section 7.6), and call `sqrt`
-after it for errno only, ignoring its result. The root then raises
+after it for errno only, ignoring its result. Keep the call after the
+root explicitly: after reload the scheduler orders a call against an
+operation on registers only through the registers they share and the
+call's clobbers (sched-deps.cc:3836-3907), and orders a trapping
+operation (any FP arithmetic under `-ftrapping-math`,
+rtlanal.cc:3259-3262) only after an *earlier* call that may not return
+(sched-deps.cc:2951-2955). So once ce3 has predicated the call into the
+root's block (D3), sched2 may issue it first, and with `FE_INVALID`
+clear libm then traps (the proof of concept; registers.md, "MCST
+glibc's FP bugs"). The proof of concept makes the call read the root's
+result: a copy into `%b[1]`, which `sqrt` ignores, listed as a use of
+the call (P91). The root then raises
 invalid before the call, so libm's own 0/0 is an ordinary NaN and the
 call returns; the root's NaN for −1.0 is the one libm returns [hw:
 `tools/abi/probes/libmchk.c` `rootfirst`, 4C, 8C2, 2C3]. The inline
@@ -1486,6 +1540,82 @@ each one cost it a debugging session:
   them. A bundler that lets anti-dependent insns share an instruction
   put such a load beside its store in the proof of concept (a
   miscompiled vector shuffle).
+- **lcc's system-call asm** (P87; `spec/abi/source-compat.md`, "Inline
+  assembly"; `spec/abi/kernel-interface.md`, "System calls"). glibc's
+  `INTERNAL_SYSCALL` (`call %%ctpr1, wbs = %#`, clobbers `"call",
+  "memory"`) and the kernel's uapi `__E2K_SYSCALL_*` macros (clobbers
+  `"ctpr1"`–`"ctpr3"` and `"b[0]"`–`"b[7]"`, no `"memory"`) need five
+  things that GCC's defaults don't give:
+  1. **`%#`**: accept `#` in `TARGET_PRINT_OPERAND_PUNCT_VALID_P`
+     (final.cc:3572-3575 then calls `TARGET_PRINT_OPERAND` without an
+     operand) and print, in hex, the window base the function's own
+     calls use. Inside an asm, final sets `this_is_asm_operands`
+     (final.cc:2632, cleared at :2657) and leaves `current_output_insn`
+     null (it is set only for recognised insns, :2780, and cleared after
+     each, :2869), so a printer that must tell an asm's `%#` from a `%#`
+     in the port's own templates tests `this_is_asm_operands`; simpler
+     to keep `#` out of the port's templates. A function with such an
+     asm needs the 4 outgoing pairs and the `setbn` that lcc gives it
+     (`wsz = %# + 4`; lcc 1.29.16 `-O3`: `wsz = 0x9`, `setbn rsz = 0x4,
+     rbs = 0x4, rcur = 0x1`, `wbs = 0x5`; `tools/abi/probes/pocplan.c`
+     `sys_getpid`). A system call also needs `wbs` of 4 or more (the
+     proof of concept's probes got SIGSEGV with 0–3, and so did its
+     first leaves, small windows with `wbs` 1; A25). Decide which
+     functions need the area from the asm, not from its RTL, which
+     doesn't show the `%b[]` the text writes or the call it makes: lcc
+     sets the area up for every `asm volatile` and for any asm with a
+     `"call"` or `"b[N]"` clobber (source-compat.md, "`%#`"); a `%#` in
+     `ASM_OPERANDS_TEMPLATE` finds the rest.
+  2. **`"call"`**: GCC accepts as a clobber only a register name, an
+     `ADDITIONAL_REGISTER_NAMES` or `OVERLAPPING_REGISTER_NAMES` alias,
+     `"memory"`, `"cc"` or `"redzone"` (varasm.cc:1013-1093); anything
+     else is "unknown register name" (cfgexpand.cc:3499-3504). The proof
+     of concept makes `"call"` an `ADDITIONAL_REGISTER_NAMES` alias of a
+     register no asm names otherwise (the argument pointer; any register
+     in `accessible_reg_set` other than the PIC register may be
+     clobbered, cfgexpand.cc:3347-3371), and its `TARGET_MD_ASM_ADJUST`
+     (target.def:4573-4590, called at cfgexpand.cc:3830-3833 with the
+     clobbers and `clobbered_regs`) replaces that clobber with what a
+     call clobbers: every call-clobbered register that isn't fixed
+     (`%g16`–`%g31` included, which a system call empties),
+     `%ctpr1`–`%ctpr3`, and a memory clobber (`(mem:BLK (scratch))`,
+     what `"memory"` makes, cfgexpand.cc:3506-3509), leaving out the
+     registers the asm's own operands are in. Give `b[0]`–`b[7]` as
+     register names or aliases so that `"b[0]"` and `"%b[0]"` decode
+     (GCC strips one `%`, varasm.cc:978-987), and treat a `"b[N]"`
+     clobber like `"call"` with `nfx = 0`, as lcc does.
+  3. **Memory at the GIMPLE level**: the tree optimizers see an asm write
+     memory other than its `m` outputs only when its clobbers include
+     the literal `"memory"` or it is a non-empty basic asm
+     (`gimple_asm_clobbers_memory_p`, gimple.cc:3058-3074, read by
+     tree-ssa-operands.cc:753-755), volatile or not, so FRE reuses a
+     value loaded before it (host GCC 16.2.1 `-O2` reads `buf[0]` once
+     across such an `asm volatile`); a memory clobber added by
+     `TARGET_MD_ASM_ADJUST` reaches only RTL, too late
+     (source-compat.md, "What lcc assumes an asm does"). glibc lists
+     `"memory"`; the uapi macros rely on lcc treating every `asm
+     volatile` as a memory barrier (lcc loads `buf[0]` again after a
+     uapi-style `read`, `pocplan.c` `sys_read_twice`). Either change GCC
+     (a target hook consulted by `gimple_asm_clobbers_memory_p`; the
+     proof of concept added a macro there) or accept that the uapi
+     macros don't clobber memory with GCC, as GCC's manual says of any
+     asm.
+  4. **The return prepare**: a leaf whose `return %ctpr3` is hoisted to
+     its first instructions (D4, M5) must not have it before an asm that
+     clobbers `%ctpr3`, `"call"` or a `"b[N]"`: the prepare is then dead
+     to dataflow, DCE deletes it, and the `ct %ctpr3` traps (SIGILL; the
+     proof of concept). lcc prepares the return after every `asm
+     volatile` (`sys_getpid`: `return %ctpr3` in the instruction after
+     the asm; source-compat.md, "What lcc assumes an asm does").
+  5. A port pass that moves values out of `%b[]` (D1) must leave an
+     asm's `%b[]` clobbers and the `setbn` they need alone (the proof of
+     concept's pass renamed them and dropped the `setbn`).
+
+  With these the proof of concept's uapi and glibc-style `getpid`,
+  `read` and `write` returned the right results at `-O0`, `-O2`, `-O3`
+  and `-O2 -fPIC` on the 4C, 8C2 and 2C3, reloaded memory a `read`
+  wrote and kept values live across the call in window registers (its
+  runs, not rechecked).
 
 ---
 
@@ -1806,7 +1936,26 @@ load needs no `BEGIN_CONTROL` check. The exceptions, all measured:
   region traps into the kernel once (about 5,000 cycles), and a load
   from a valid page not touched yet is paged in even if never used.
 - `volatile` and atomic accesses, and loads with a MAS (lock loads):
-  never speculated.
+  never speculated, in any of the steps of item 3 (P88). lcc predicates
+  them instead: `if (c) s = *v` with `volatile long *v` is `ldd ... ?
+  ~%pred0` after the compare where an ordinary pointer gets `ldd,sm` in
+  the function's first instruction, a relaxed atomic load the same, and
+  in a pipelined loop too (`ldd,5 %r3, 0x0, %b[5] ? ~%pred1`)
+  (`spec/isa/speculation.md`, "What lcc speculates"). GCC's own passes
+  leave them alone: noce refuses operands with side effects
+  (`noce_operand_ok`, ifcvt.cc:3844-3854), the interblock schedulers
+  class a volatile load as risky (`may_trap_exp`, haifa-sched.cc:445-449;
+  sched-ebb's `add_deps_for_risky_insns` then keeps its jump
+  dependence, sched-ebb.cc:417) and Haifa's speculation refuses side
+  effects (`sched_insn_is_legitimate_for_speculation_p`,
+  sched-deps.cc:682). `may_trap_p` does not count a volatile access as
+  trapping (only stack-check probes, rtlanal.cc:3148-3156), so only the
+  port's own steps can break this: with step 1 below unguarded, the
+  proof of concept read `*v` in `for (...) if (i & 1) s += *v` in the
+  instructions of the jumps that skip it, and loaded the stack
+  protector's guard, a volatile global (`__stack_chk_guard`,
+  targhooks.cc:956), with `ldd,sm`. Test with `volatile_refs_p`
+  (rtlanal.cc:2980) and the port's atomic and MAS patterns.
 - FP operations: a speculative FP operation that would raise a flag
   not already set, or an exception that is unmasked, gives a diagnostic
   instead. That is harmless while the flags are sticky-set and all
@@ -1850,6 +1999,68 @@ load needs no `BEGIN_CONTROL` check. The exceptions, all measured:
   plus a way to mark it `,sm`) or a port-specific if-conversion pass
   after ifcvt. With predication (`define_cond_exec`) the remaining
   stores and calls stay predicated, as lcc does.
+- *Loads in a converted arm* (P86; lcc 1.29.16 `-O2` and `-O3` for
+  v3.4c, v5.8c2 and v6.2c3, lcc 1.31.05 for v3 and v6.2c3;
+  `tools/abi/probes/pocplan.c`). lcc loads an arm's value before the
+  compare, speculatively, and predicates only the copy: `if (a < b) x =
+  *p` is `ldd,sm` in the function's first instruction, `fcmpltdb` into
+  `%pred0`, and at `-O3` `addd,3,sm 0x0, %g16, %r0 ? %pred0` four cycles
+  later (an FP compare reaches a predicated operation in 4,
+  `spec/isa/predicates.md`, "Timing"), so `x` is ready one cycle after
+  the predicate. `c ? *a : *b` loads both before the compare. A
+  predicated load instead issues only once its predicate is ready and
+  delivers 3 cycles later (5 on v6) (inferred from the latencies). In a
+  pipelined loop the predicate's latency overlaps other iterations, and
+  lcc's one-instruction kernels for `x = a[i] < t ? b[i] : x` use a
+  `merged`, predicated copies or (v3 `-O2`) a predicated `ldd,sm`
+  (`spec/isa/predicates.md`, "How lcc uses predicates"). ce3 makes the
+  predicated load once FP loads are predicable; a pass after it can
+  rewrite each predicated load that is its arm's last write of a
+  register live after the arm as `ld,sm` into a free register (one that
+  nothing later in the block writes, or the next load into it waits for
+  the copy) plus a predicated copy, as the proof of concept does.
+  Volatile and atomic loads stay plain predicated loads, as in lcc (item
+  2). Such an arm raises no FP flag (the compare runs on every path as
+  the branch's condition, and the load and the copy are not FP
+  operations), so it needs no FP speculation.
+
+  lcc predicates under an FP compare whatever the arm's frequency:
+  Linpack's `idamax` (`if (fabs (dx[i]) > dmax) { itemp = i; dmax = fabs
+  (dx[i]); }`, a new maximum being rare) keeps both updates under the
+  `fcmpltdb` predicate in every build (`merged`/`merges`; v3 `-O3`
+  unrolls by two with predicated copies). The proof of concept had
+  refused such arms because predicated loads made Linpack 7% slower; in
+  lcc's form it converts them, using an FP compare's predicate only
+  where GCC estimates the arm at 30% or more (its own threshold, not
+  lcc's). Its select chains (ns an element on the 8C2 / 4C / 2C3):
+  `isless` 7.71 / 15.47 / 6.78 → 6.19 / 12.42 / 4.76 (lcc 4.69 / 9.40 /
+  3.01), `<` 6.70 / 13.46 / 6.03 → 4.85 / 9.74 / 4.14; Linpack 19.47 →
+  18.85 s on the 8C2, where `idamax`'s update became two merges under
+  the compare and the loop pipelined (the proof of concept's figures,
+  not rechecked). ce3's predication path weighs no probability: it
+  counts insns against `MAX_CONDITIONAL_EXECUTE` (ifcvt.cc:5852) and
+  only copies the branch probability into the `REG_BR_PROB` notes of
+  predicated calls (ifcvt.cc:637-646, :429-433); only its fallback for
+  an arm that ends in a jump elsewhere (`find_if_case_1`/`_2`) scales
+  the arm's cost by it (`cheap_bb_rtx_cost_p`, ifcvt.cc:142, :6331,
+  :6447). A rule like that threshold belongs in `IFCVT_MODIFY_TESTS`
+  (ifcvt.cc:627-635), which sees the test block, whose jump carries the
+  `REG_BR_PROB` note, and cancels the conversion by clearing the test.
+- *Selects of two loads* (P91): phiopt in mainline GCC (17) turns `c ?
+  *a : *b` into one load from a PHI of the two pointers when both arms
+  load from the same memory state (`factor_out_conditional_load`,
+  tree-ssa-phiopt.cc:4187-4460, tried on diamonds at :4507-4511;
+  volatile loads excepted, :4212-4215; two different pointers only after
+  the early pass, and before vectorization not when a pointer is an
+  induction variable of the loop, :4314-4322). No option or param turns
+  off this transformation alone (`-fno-ssa-phiopt` turns off all of
+  phiopt, :5078). On E2K that load then waits for the compare and the
+  pointer select (4 cycles from an FP compare to a `merge`, then 3 or 5
+  for the load). lcc loads both before the compare with `ldd,sm` and
+  selects the values (`tools/abi/probes/pocplan.c` `sel_ab`, every
+  build). The proof of concept adds a param (`phiopt-factor-loads`) to
+  switch the transformation off; a port needs such a GCC change (or a
+  later pass that splits the load again, inferred).
 - *Interblock scheduling* (`sched-rgn`, `-fsched-spec-load-dangerous`)
   moves loads above branches only when told they can't trap; the same
   "can be made non-trapping" answer plus emitting `,sm` on moved insns
@@ -1867,7 +2078,9 @@ load needs no `BEGIN_CONTROL` check. The exceptions, all measured:
      register is dead on the jump's other path. Don't use `MEM_NOTRAP_P`
      for this: GCC sets it on jump-table loads (`gen_const_mem` in
      `do_tablejump`, expr.cc:14348), which do trap above their range
-     check.
+     check. Keep the dependences of volatile and atomic loads: the
+     risky-insn pass gives a volatile load its jump dependence for that
+     reason (item 2).
   2. Record each insn's block before sched2 and print `,sm` on every
      insn that ended up in an earlier block.
   3. In the same hook, make every insn without a speculative form (FP,
@@ -1898,17 +2111,17 @@ load needs no `BEGIN_CONTROL` check. The exceptions, all measured:
   a call's `CALL_INSN_FUNCTION_USAGE` (argument registers aren't in its
   pattern), and stop at a later use of the register as half of a pair.
 - *Loads at the head of a branch's target* (P71): sched-ebb grows an
-  extended block only through a fall-through edge into a block without
-  a label (sched-ebb.cc:640-650), so it never moves a load from a
-  branch's target into the branch's block. lcc does: Lua's
-  `luaH_getshortstr` loads a node's key value (`ldd,sm`) in the block
-  that tests the key's type [lcc 1.29.16 `-O3`, v5.8c2 and v6.2c3], so
-  the value is ready when the test resolves. The proof of concept,
-  loading it after the branch, counted 9 cycles a test on the 2C3
-  (5-cycle loads) against lcc's 3. It now copies the loads that start a
-  block reached by conditional branches into those branches' blocks as
-  `,sm` loads, where their register is dead on the other edge: Lua's
-  k-nucleotide 2% and spectral-norm 1.3% faster on the 2C3.
+  extended block only through a fall-through edge into a block without a
+  label (sched-ebb.cc:640-650), so it never moves a load from a branch's
+  target into the branch's block. lcc does: Lua's `luaH_getshortstr`
+  loads a node's key value (`ldd,sm`) in the block that tests the key's
+  type [lcc 1.29.16 `-O3`, v5.8c2 and v6.2c3], so the value is ready
+  when the test resolves. The proof of concept, loading it after the
+  branch, counted 9 cycles a test on the 2C3 (5-cycle loads) against
+  lcc's 3. It now copies the loads (never a volatile or atomic one) that
+  start a block reached by conditional branches into those branches'
+  blocks as `,sm` loads, where their register is dead on the other edge:
+  Lua's k-nucleotide 2% and spectral-norm 1.3% faster on the 2C3.
 - *Interpreter dispatch* (P72; Lua 5.4's `vmfetch`, the proof of concept
   on the 2C3). A handler that ends in `if (trap) {...} i = *pc++; goto
   *disptab[op]` reaches the shared dispatch block by a conditional
@@ -2456,13 +2669,20 @@ check-free semi-speculative form works.
   say which failed. On v3/v5 a check runs 14 or 15 iterations after its
   lock, so about 29 of the 32 DAM entries are in use (v6: 2 iterations).
   Don't version for such an element: `path[i][k]` lies in the row the
-  loop stores, so the run-time test always fails. The PoC forwards the
-  stored `path[i][k]` through a register instead, a recurrence that
-  holds its kernel to II 5 (74.7 s against lcc's 47 on the 8C2).
-  Splitting the `j` loop at `j == k` would make `path[i][k]` invariant on
-  both sides, with no check; GCC's loop splitting splits only at a
-  relational test in the body, or `==` with the first or last value
-  (tree-ssa-loop-split.cc:122).
+  loop stores, so the run-time test always fails. Split the `j` loop
+  after the iteration whose store writes `path[i][k]` (`j == k`, found
+  at run time from the two addresses): `path[i][k]` is then invariant in
+  both halves and needs no check. GCC's loop splitting can't find that
+  point: it splits only at a test in the body, relational or `==` with
+  the first or last value (tree-ssa-loop-split.cc:120-160), and here the
+  point comes from aliasing, not from a test. The CFG work is GCC's
+  `loop_version` (cfgloopmanip.cc:1888) and `connect_loops` (static in
+  tree-ssa-loop-split.cc:369), the test the port's own. The proof of
+  concept does this (`-mav-split`; P91): both halves pipeline at II 1,
+  17.6 s on the 8C2 (lcc 47.2) and 13.3 s on the 2C3 (lcc 35.6);
+  forwarding the stored element through a register instead, its earlier
+  way, held the kernel to II 5 (74.7 s on the 8C2) (the proof of
+  concept's figures, not rechecked).
 - **Alias queries after register allocation** (P31): `may_alias_p` in
   machine reorg reads `reg_base_value`, which only `init_alias_analysis`
   computes; `end_alias_analysis` keeps the old vector, so a pass there
@@ -2805,6 +3025,12 @@ check-free semi-speculative form works.
   lcc reads all 37 loads of that loop through APB on v5 and v6, the five
   `rhs` planes it updates in place included (a store to an element
   already read is fine, apb.md, "Stores into a prefetched array").
+- **Address chains after combine** (P91; the proof of concept's
+  observation, not rechecked): combine can leave an address as a chain
+  of dependent additions inside a loop; the proof of concept's
+  `e2k_addr_height` pass after combine rebuilds such a chain from its
+  terms, adding the loop-invariant ones once on the loop's entry, after
+  which bzip2's `generateMTFValues` loop pipelined again.
 - **After register allocation, analyse addresses per definition**
   (P57): one hard register holds several values of a loop body
   (addresses and doubles share one register file), so a post-RA

@@ -253,7 +253,7 @@ read with `git show`:
 | `e2k-modes.def` | Extra modes if needed (e.g. condition modes) | `loongarch-modes.def` |
 | `e2k.opt` | `-m` options (`-march=elbrus-vN`, `-mtune=`, ...) | `or1k.opt` |
 | `elbrus-v3.md` … | Pipeline (DFA) descriptions per CPU generation (section 7) | `ia64/itanium2.md`, `c6x/c6x.md` |
-| `linux.h` | `GLIBC_DYNAMIC_LINKER "/lib64/ld-linux.so.2"`, link spec, OS macros; `CPP_SPEC "%{pthread:-D_REENTRANT}"` (lcc's `-pthread` defines it, and autoconf's `AX_PTHREAD` rejects `-pthread` without it; `riscv/linux.h:40`, `aarch64/aarch64-linux.h:39`; the PoC's P39) | `or1k/linux.h` |
+| `linux.h` | `GLIBC_DYNAMIC_LINKER "/lib64/ld-linux.so.2"`, link spec, OS macros; `CPP_SPEC "%{pthread:-D_REENTRANT}"` (lcc's `-pthread` defines it, and autoconf's `AX_PTHREAD` rejects `-pthread` without it; `riscv/linux.h:40`, `aarch64/aarch64-linux.h:39`; the PoC's P39); `TARGET_ASM_FILE_END file_end_indicate_exec_stack` (as `or1k/linux.h:47` and `loongarch/linux.h:58`): the GNU-stack note, `"x"` only in objects with a stack trampoline (`spec/abi/elf.md`, "Executable stack"; D1, "Trampolines") | `or1k/linux.h` |
 | `t-e2k` | Makefile fragment (multilibs, generated `.md`) | `or1k/t-or1k`, `c6x/t-c6x` |
 | `gcc/common/config/e2k/e2k-common.cc` | Option defaults per `-O` level (e.g. enable scheduling at `-O1`) | `common/config/tilegx/`, `common/config/c6x/` |
 
@@ -284,7 +284,7 @@ compiler), with E2K files in `lib/GNU/gcc-11/libgcc/config/e2k/`:
 |---|---|---|
 | `unwind-dw2-e2k.c` | 1192 | The unwinder: walks the chain stack instead of interpreting CFI; copyright AO MCST and FSF |
 | `sfp-machine.h`, `t-softfp`, `tf-signs.c`, `sfp-exceptions.c` | ~200 | Soft-float for `__float128` |
-| `clear-cache.c` | 79 | `__e2k_clear_cache` |
+| `clear-cache.c` | 79 | `__e2k_clear_cache`, which `__clear_cache` calls through `CLEAR_INSN_CACHE` in `gcc_objdir/tm.h` (D1, "Trampolines") |
 | `crtalign.S`, `crtfastmath.c` | 29 | Extra crt objects |
 | `libgcc-glibc.ver` | 63 | Symbol versions glibc expects from libgcc |
 | `t-e2k`, `t-eh-e2k`, `t-linux`, `t-crtalign` | 12 | Makefile fragments; `t-linux` links `libgcc_s.so` with lcc's `-llcc` (for `__builtin_cpu_is`) |
@@ -645,6 +645,110 @@ in its frame, the jump writes the label's address over the saved IP
 (byte 8) and calls `longjmp`; the frame resumes at the label with the
 registers of its latest call (`spec/abi/stack-and-unwinding.md`,
 checked on the 4C; the proof of concept implements both this way).
+
+**Trampolines.** MCST's libffi has the model (`src/e2k/ffi.c:316-342`):
+two wide instructions, 40 bytes. The `__ptr32__` form uses `getpl` and
+32-bit literals and is 32 bytes.
+
+```
+	{
+	  movtd,0	_f64,_lts0 0x0, %ctpr1		! the nested function
+	  addd,1	0x0, _f64,_lts2 0x0, %dg12	! the static chain
+	}
+	{
+	  ct	%ctpr1
+	  ipd	2
+	}
+```
+
+gas assembles this text, with zero literals or with real ones, to
+exactly libffi's words on v3, v5 and v6
+(`tools/abi/probes/execstack/tramp-text.s`; `execstack.sh` compares the
+bytes). So `TARGET_ASM_TRAMPOLINE_TEMPLATE` can print it. The chain
+literal is bytes 16–23 and the function's is bytes 24–31, each with its
+high half first (`spec/abi/elf.md`, "Literal fields").
+`TARGET_TRAMPOLINE_INIT` therefore copies the template and stores each
+value rotated by 32 bits as one doubleword, which gives libffi's two
+words. It must then flush the 40 bytes itself, as
+`loongarch_trampoline_init` does (`loongarch.cc:8525-8582`).
+
+MCST's libgcc builds `__clear_cache` from GCC's `libgcc2.c`, with
+`CLEAR_INSN_CACHE` defined as a call to `__e2k_clear_cache` (GCC 11
+runtime tarball, `gcc_objdir/tm.h:71-80`; its comment says that a fast
+version, if ever needed, should be inline code for v3 and later).
+`__e2k_clear_cache` is `wait st_c`, a MAS 0xf store per 256-byte line,
+then `wait fl_c` (`config/e2k/clear-cache.c:55-77`; on v1–v2 it is a
+kernel call; `spec/isa/x86-support.md` has its cost). lcc's
+`__builtin___clear_cache` is a call to `__clear_cache` (`execstack.sh`).
+The port needs the same `CLEAR_INSN_CACHE` definition or a `clear_cache`
+pattern, because without either GCC expands `__builtin___clear_cache` to
+nothing (`builtins.cc:6056-6083`).
+
+- `TRAMPOLINE_SIZE` 40 and `TRAMPOLINE_ALIGNMENT` 64 bits, the
+  alignment of a wide instruction. libffi reserves 56 bytes
+  (`ffitarget.h:54`).
+- The `movtd` and the `ct` must be in separate instructions. In one
+  instruction, v3 and v5 jump to the CTPR's old target and v6 doesn't
+  jump at all, yet gas accepts the pair on every version. It rejects
+  only `disp` + `ct` through one CTPR before v6
+  (`spec/isa/control-transfer.md`, "Restrictions"). With the `ct` one
+  instruction after the `movtd`, the pair costs max(1, 9) + 1 = 10
+  cycles instead of 2, so each call through a trampoline loses 8 cycles
+  (control-transfer.md's rule; not measured for a trampoline).
+- The trampoline writes only `%ctpr1` and `%g12`, both call-clobbered,
+  and touches no window register. Like a PLT entry (`spec/abi/elf.md`),
+  it runs in the callee's new window and passes the arguments through
+  unchanged.
+- (inferred) The kernel doesn't restore `%g12` after a signal handler
+  (`spec/abi/registers.md`). Suppose a handler calls through another
+  trampoline or a libffi closure between this trampoline's `addd` and
+  the nested function's first read of `%g12`: the nested function then
+  gets the wrong chain. libffi has the same window.
+- A trampoline on the stack needs an executable stack. With
+  `TARGET_ASM_FILE_END file_end_indicate_exec_stack` (`linux.h`, 3.1),
+  every object that builds one gets an `"x"` note
+  (`trampolines_created`, `builtins.cc:6183-6185`), and ld marks the
+  program `RWE` with a warning (`spec/abi/elf.md`, "Executable stack").
+  Without such a note, or with `-z noexecstack`, the stack is not
+  executable and the call is `SIGSEGV` (kernel
+  `arch/e2k/mm/fault.c:3224-3226`; inferred, not run).
+- (inferred) `CODE_PLACEMENT` (`spec/isa/hwbugs.md`): a trampoline's
+  entry is a call target written at run time, out of reach of gas's NOP
+  padding. On the CPUs the erratum lists, it can therefore land at a bad
+  page offset: 0xdc0–0xdff, and the kernel's BPF JIT also avoids
+  0xee0–0xfff. The listed CPUs are the v3–v6 models E2S, E8C, E1C+,
+  E8C2, E12C, E16C and the E2C3 up to rev 1, which covers all three of
+  our machines. A safe port reserves some slack in the frame and lets
+  `TARGET_TRAMPOLINE_ADJUST_ADDRESS` and `TARGET_TRAMPOLINE_INIT` both
+  move the entry off those offsets; a heap allocator skips those slots.
+  MCST's libffi doesn't bother (`ffi.c:276, 316-325`), and no failure
+  has been seen.
+- **Heap trampolines** (`-ftrampoline-impl=heap`, GCC 14) need no
+  executable stack. The compiler side is generic: the function calls
+  `__gcc_nested_func_ptr_created (chain, func, &slot)` on entry and
+  `__gcc_nested_func_ptr_deleted ()` on every exit
+  (`tree-nested.cc:3607-3640`), and no `"x"` note is written. The
+  runtime is in libgcc, but only for x86 (Linux and Darwin) and AArch64
+  (Linux and GNU/Hurd) (`libgcc/config.host:429, 439, 734, 741, 791,
+  809`). E2K would need three things. First,
+  `libgcc/config/e2k/heap-trampoline.c`, modelled on
+  `config/aarch64/heap-trampoline.c`: per-thread pages from
+  `mmap (PROT_WRITE | PROT_EXEC)`. The E2K kernel allows such private
+  write-execute mappings (`arch/e2k/mm/init.c:71-72`), and generic
+  libffi tries the same mapping for its closures
+  (`src/closures.c:840-852`); neither was run. Each slot holds the
+  40-byte template with both literals filled in, followed by
+  `__builtin___clear_cache`. Second, a `t-heap-trampoline` that adds the
+  file to `LIB2ADDEH` and `LIB2ADDEHSHARED`. Third, a `config.host` line
+  for E2K Linux. The two symbols are already exported under
+  `GCC_14.0.0` (`libgcc-std.ver.in`). Heap trampolines stay opt-in
+  unless `config.gcc` sets `HEAP_TRAMPOLINES_INIT` for E2K, which today
+  only Darwin does (`config.gcc:1229-1237`). As GCC's manual warns, they
+  leak when `longjmp` skips the cleanup.
+- MCST's `libgcc_s` also exports `__enable_execute_stack`
+  (`GCC_3.4.2`), but it is the empty generic one (MCST's libgcc
+  `config.host:363-365`; its code is only a return). On Linux,
+  `PT_GNU_STACK` does that job.
 
 **Call-clobbered**: globals (except `%g13`, fixed; `%g12` as the static chain), the outgoing
 registers, `%ctpr1–3`, `%lsr`. Window registers `%r*` are preserved by

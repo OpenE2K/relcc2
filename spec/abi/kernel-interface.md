@@ -19,7 +19,7 @@ and 6.1-1.18 (`/proc/config.gz`). `OpenE2K/linux` is at 6.1-1.19-open,
 and its history holds 6.1-1.9 (commit 6a2673970ea0) and 6.1-1.17-open
 (d639a5da9813); line numbers here are 6.1-1.19's unless a commit is
 named. Where the 4C differs, the older tree is the reason ("Overflow
-signals", the trampoline page). The probes are
+signals", the trampoline page, "Contexts and threads"). The probes are
 `tools/abi/probes/sysabi.c` (sections 1–10; `./sysabi maps` for the PIE
 and static builds), `sigeh.cc` with `sigeh-c.c` (exceptions and
 cancellation), `pgprof.c` (`-pg`), `sanitize.c` (`lcc -S`), `ctlcost.cc`
@@ -33,8 +33,10 @@ stack grows, a context's stack overflowing), `abileft.c` with
 stack overflow in threads and the main thread) and `abileft-san.c`
 (lcc's sanitizers), built by each machine's own lcc 1.29.16, and
 `accerr.c` with `getsp.s` (the `si_code` and `si_addr` of stack
-overflows and bad accesses), built by the cross lcc 1.29.16 for each
-CPU (`e2k-v3.4c`, `v5.8c2`, `v6.2c3`).
+overflows and bad accesses) and `ctxthr.c` (contexts shared between
+threads, `fork` and thread exits), built by the cross lcc 1.29.16 for
+each CPU (`e2k-v3.4c`, `v5.8c2`, `v6.2c3`); `ctxtls.c` (thread-local
+storage across a switch) is read with `lcc -S`.
 
 ## System calls
 
@@ -222,7 +224,7 @@ which the 4C, 8C2 and 2C3 agree apart from addresses.
 | `int setcontext (const ucontext_t *)` | system call 369 `(ucp, 8)` |
 | `int swapcontext (ucontext_t *, const ucontext_t *)` | system call 371 `(oucp, ucp, 8)`: saves and loads the signal mask, `%cr0`/`%cr1`, the stack registers and the three FP control registers (`proc_context.c:1515-1548, 1828`) |
 | `int makecontext_e2k (ucontext_t *, void (*)(void), int argc, ...)` | system call 370 `(ucp, makecontext_helper, 8 * (argc + 4), buf, 8)`; allocates a procedure and a chain stack, so it can fail (−1, errno ENOMEM, EINVAL or EFAULT; `EINVAL` for a 0- or 16-byte stack [hw]) |
-| `int freecontext_e2k (ucontext_t *)` | system call 372 `(ucp)`: frees them; `ENOENT` for an unknown context, `EBUSY` only for the calling thread's own running context (`proc_context.c:1264-1295`) [hw: a made context freeing itself and the main context freed from main both gave `EBUSY`. The main context freed from inside a made context while it was suspended gave 0, and the later return through `uc_link` to it failed with `ESRCH`. A finished context gave 0 and a second free `ENOENT`. A made context that never ran, freed through a `memcpy` copy, gave 0, and freeing the original then gave `ENOENT`] |
+| `int freecontext_e2k (ucontext_t *)` | system call 372 `(ucp)`: frees them; `ENOENT` for an unknown context, `EBUSY` only for the calling thread's own running context (`proc_context.c:1264-1295`; a context running in another thread is freed under it: "Contexts and threads" below) [hw: a made context freeing itself and the main context freed from main both gave `EBUSY`. The main context freed from inside a made context while it was suspended gave 0, and the later return through `uc_link` to it failed with `ESRCH`. A finished context gave 0 and a second free `ENOENT`. A made context that never ran, freed through a `memcpy` copy, gave 0, and freeing the original then gave `ENOENT`] |
 
 - The context runs on `uc_stack` (base and size aligned to 256,
   `proc_context.c:1132-1138`). Its top is the context's **key**, which
@@ -332,7 +334,7 @@ Contexts and their keys [hw]:
 | Starting a made context through a `memcpy` of its `ucontext_t`; resuming a suspended context through a copy of the state `swapcontext` saved | works |
 | `makecontext_e2k` again on a suspended context's stack (same key) | returns 0 and reuses the context; switching to it starts the function again from the top. The state saved at the suspension now names the new context: **switching to that state kills the process (SIGKILL)** |
 | `makecontext_e2k` on the running context's own stack, from inside it | returns 0. The new context takes the key (the kernel drops the running one from its table; the comment names gccgo, `proc_context.c:1143-1222`) and runs when switched to. Switching back to the old context's saved state kills the process (SIGKILL) |
-| A switch to a context that is running in another thread | −1, `EBUSY` |
+| A switch to a context that is running in another thread | −1, `EBUSY`; a switch that lost such a race can still succeed later, from the state it read before ("Contexts and threads" below) |
 | `setcontext` or `swapcontext` to a key that no context has | −1, `ESRCH`. The same for a context freed with `freecontext_e2k`: after the suspended main context was freed, the return through `uc_link` to it ended with the trampoline's exit status 3 (`ESRCH`) |
 | `getcontext` before the thread's first switch | the key is the top of the thread's data stack (the end of `[stack]`). `freecontext_e2k` of it gives `ENOENT`: the kernel creates the main context at the first switch (`save_main_coroutine`, `proc_context.c:1736-1746`) |
 
@@ -375,7 +377,9 @@ earlier run.
 
   So a fiber library should run its handlers with `SA_ONSTACK`, or keep
   room for the frame and the handler's frames below each context's
-  deepest use.
+  deepest use. A handler that switches contexts needs the second way
+  when the context may resume in another thread or the thread may take
+  another `SA_ONSTACK` signal first ("Contexts and threads" below).
 - **A signal that arrives during a switch is delivered on the switch's
   return, in the context switched to.** Under a 500 µs timer, 100,000
   `swapcontext` round trips took signals on both sides (4C: 601 and 611
@@ -477,6 +481,233 @@ kernel (MCST's 6.1-1.9, commit 6a2673970ea0) maps it wherever
 `cr1.pm` in their copy of such frames, "useful for JITs to distinguish
 frames with actual user data" (kernel `kernel/backtrace.c:43,176`,
 `kernel/e2k_syswork.c:2581-2584`; hw: "Access" below).
+
+### Contexts and threads [source: kernel `kernel/proc_context.c`; hw: `ctxthr.c`]
+
+What a program that moves contexts between threads can rely on: a fiber
+library with a pool of worker threads, or libgo, which runs goroutines
+on whatever thread is free. [hw] here means
+`tools/abi/probes/ctxthr.c`, built by the cross lcc 1.29.16 `-O3` for
+each CPU (`e2k-v3.4c`, `v5.8c2`, `v6.2c3`), on the 4C, 8C2 and 2C3.
+They agree apart from addresses and race counts, except where a row
+names the 4C, whose older kernel frees hardware stacks twice where the
+others don't (below). Line numbers without a file are
+`proc_context.c`'s.
+
+**Contexts belong to the process, not to a thread.** The kernel keeps
+one table of contexts per process (`mm->context.hw_contexts`, lines
+13-14; lookup at 804-823), so any thread may switch to any suspended
+context [hw]:
+
+| Case | Result |
+|---|---|
+| A context made in main, first run by thread B | runs in B and returns through `uc_link` to B's saved state |
+| One context resumed 2,001 times by A (`swapcontext`) and B (`setcontext` to a `getcontext` point) in turn | no switch failed. Each time the context ran as the resuming thread (its thread id and TLS) on its own data and hardware stacks (the same `usd.ptr`, `psp.base` and `pcsp.base` every time), with its own rounding mode and signal mask; A and B kept theirs, and the context's loop values stayed intact |
+| 3,000 nested calls started in A, suspended at the deepest one, resumed by B | B unwound them to the right result. The procedure stack had grown to 384,992 bytes and the chain stack to 96,256, and the kernel had moved both while they grew (`psp.base` 0xc2e0_0007_8000 → 0xc2e0_0017_1000 on the 4C and 8C2); B resumed on the moved stacks |
+| A runs a made context C; B switches to the state A saved when it entered C | B runs A's code with B's TLS on A's own hardware stacks. When C ended, its return through `uc_link` to that state brought A back |
+
+A switch (`switch_hw_contexts`, 1347-1434) exchanges the two contexts'
+data-stack bounds, hardware stacks, `[signal stack]` and per-context
+flags (1390-1393, 1424-1428), old chain-stack areas and data-stack
+growth records (1407-1410), and the stack registers, `%cr0`/`%cr1` and
+`%wd` (1412-1418). It loads the FP control registers (1420-1422) and
+the signal mask (1857-1859, or through `do_longjmp`, 1840-1851) from
+the target `ucontext_t`. It does not touch the global registers, so
+**`%g13`, the thread pointer, stays with the thread**: TLS and `errno`
+are those of the thread that runs the context (the table above).
+
+**Compilers assume the thread pointer does not change within a
+function.** `tools/abi/probes/ctxtls.c` reads a `__thread` variable
+`tv`, its address or `errno` before and after `swapcontext` [lcc:
+1.29.16 `-O3 -S`; GCC 16.2.1 for x86_64, `-O2` and `-O3`, for
+comparison]:
+
+| Before and after the switch | lcc | lcc `-fPIC` | GCC (with or without `-fPIC`) |
+|---|---|---|---|
+| `&tv` | folded into one value | `__tls_get_addr` called again | folded |
+| `tv` | reloaded through `%g13` | read after the switch through the address `__tls_get_addr` gave before it: the old thread's variable | reloaded through `%fs`; with `-fPIC`, read through the address from before the switch |
+| `errno` (`__errno_location` is declared const: glibc `stdlib/errno.h:37`) | `__errno_location` called again | the same | called once: the value read after the switch is the old thread's |
+| `&tv` returned by a `noinline` function | the function called again | the same | folded (GCC finds the function const); called again when it is `noipa` |
+| `tv` returned by a `noinline` function | called again | the same | called again |
+
+[hw, the second row of the first table: `&tv` taken before a switch in
+B equalled `&tv` taken after A had resumed the context, so it was B's
+variable; a `noinline` function there returned A's.] libgo reads its
+`__thread` variable `g` only through such a function for this reason
+(GCC's `libgo/runtime/proc.c:198-206`); its `runtime_g` returns the
+value, the form GCC does not fold. A GCC port inherits this folding
+from the middle end (inferred).
+
+**A context runs in one thread at a time, but a switch can resume it
+from an old state** [source; hw]. A switch marks the target busy with a
+compare-and-swap (`take_reference`, 311-335; `coroutine_lookup_and_get`,
+804-823), and a switch to a context that runs elsewhere fails with
+`EBUSY`. In the race below (two threads meet at a barrier, then both
+switch to one suspended context, which runs about 300 loop steps and
+switches back to whichever thread runs it; 420,000 rounds a run) no two
+threads ever ran the context at once, and the context was entered
+exactly once per successful switch.
+
+The switch reads the target `ucontext_t`, though, before it marks the
+context busy: the mask, the FP control registers, `%cr0`/`%cr1` and the
+chain-stack position (`LOAD_CTX`, 1515-1527, read at 1763-1805; marked
+at 1815). A thread whose switch read the `ucontext_t` while another
+thread's run of the context was ending can succeed after that run and
+resume the context with what it read, which may be the state from
+before that run. The table counts resumptions that came back with the
+rounding mode of the previous suspension, per run (three or four runs
+each):
+
+| Rounds | 4C | 8C2 | 2C3 |
+|---|---|---|---|
+| 20,000 | 0–1 | 0 | 0–1 |
+| 200,000, the context suspending at two call depths in turn | 1–5 | 0–1 | 0–1 |
+| 200,000, two depths, each thread first waiting 0–4,095 loop steps at random (both threads ran the context, one after the other, in 77–80% of the rounds) | 1,814–1,855 | 0–1 | 289–306 |
+
+So a scheduler must give a suspended context to one thread only, and
+only after the switch away from it has returned in the thread it
+switched to.
+
+**Freeing or remaking a context that runs in another thread.**
+`freecontext_e2k` refuses only the calling thread's own context (1276)
+and removes any other from the table (1279). `makecontext_e2k` on the
+stack (key) of a context that is busy drops that context from the table
+to make the new one (1203-1222, "for programs like gccgo"). Neither
+stops the thread that runs the old context [hw]:
+
+| Case | Result |
+|---|---|
+| `freecontext_e2k` of a context running in B | 0. The context went on in B and switched back to B's state. The state it saved then named no context: a switch to it gave `ESRCH`, a second free `ENOENT`. Its stacks stayed mapped (the stack cache, kernel `kernel/process.c:541-576`) |
+| `makecontext_e2k` on the stack of a context running in B | 0; the new context ran when switched to. The old one went on in B; a switch to its saved state then killed the process (SIGKILL, as in "Contexts and their keys") |
+| Either, then B exits while still in the context | **the context's hardware stacks are freed twice.** Of four new contexts, two got the same procedure and chain stacks and one of them computed a wrong result; of two new threads (after a free), both got the same stacks and one computed 20 of 20 deep recursions wrongly |
+| B exits while in a context nobody freed or remade (control) | 8C2, 2C3: the stacks are freed once (distinct stacks and right results afterwards). 4C: freed twice, as above |
+
+B's busy reference keeps a freed context alive (`context_free_rcu`,
+363-374). When B exits, `hw_context_deactivate_mm` (408-441, called
+from kernel `kernel/process.c:1908`) drops that reference, and
+`release_reference` frees the context's hardware stacks at once
+(`free_hw_context`, 285-309). The exit path then frees B's current
+hardware stacks (`kernel/process.c:1924`), which are the same ones.
+Only `context_free` clears the thread's copy of them (380-388), and
+this path does not call it; it does for a context nobody freed, which
+is why the control is freed once. Both frees put the stacks in the
+per-process cache, and the next two allocations take the same stacks
+(kernel `kernel/process.c:479-576`).
+
+**The 4C's kernel frees a thread's hardware stacks twice at every exit
+after its first switch** [source; hw]. MCST's 6.1-1.9 (commit
+6a2673970ea0) has no lines 380-388 in `context_free`; 6.1-1.17
+(d639a5da9813) added them ("to avoid double free"). A thread's own
+context, created at its first `setcontext` or `swapcontext`
+(`save_main_coroutine`, 911-947), holds a copy of the thread's hardware
+stacks (254); the exit frees them through that context and again as
+the thread's own. On the 4C, after a thread had only done `getcontext`
+and `setcontext` to that point and exited normally, two of four new
+contexts got the same stacks (one result wrong), and so did two new
+threads (one computed 20 of 20 recursions wrongly); after a thread had
+run a made context to its end, returned home and exited, two of four
+new contexts did. The 8C2 and 2C3 gave distinct stacks and right
+results in the same cases. ALT's newer `kernel-image-mcst-e4c` 6.1.180
+package carries MCST's 6.1-1.17 `arch/e2k` ("Overflow signals" below),
+so it has the fix [source].
+
+**Threads that exit.** A thread's own context is keyed by the top of
+its data stack (`context_current_key`, 164-178; `save_main_coroutine`).
+At exit the kernel removes and frees whatever context the thread is
+running (`hw_context_deactivate_mm`) [hw]:
+
+| Case | Result |
+|---|---|
+| A made a context, ran it until it suspended, and exited; main resumes it | runs in main |
+| A exits while main runs a context A made | the context goes on and returns to main |
+| A makes the `exit` system call inside a made context | that context is gone (`freecontext_e2k`: `ENOENT`). A's own context stays in the table, suspended, with its hardware stacks. The next thread, which glibc put on A's stack (same key), failed its first switch with **`EEXIST`** (the insert at 935-939). After `freecontext_e2k` of the state A had saved (0), the thread after it switched normally |
+| A calls `pthread_exit` inside a made context | glibc's unwinder reaches the end of the context's stack and longjmps to the thread's start (glibc `nptl/unwind.c:59-62, 102`), which the kernel does as a switch (`coroutine_switch_and_longjmp`, 1442-1512). A ends in its own context and the made context stays suspended (`freecontext_e2k`: 0). 8C2, 2C3: later threads on A's stack ran. 4C: the next one died at its first switch into a new context (SIGSEGV with the IP in its data stack, 5 runs of 5), which the double free above explains (inferred: it can give the thread and its first new context the same stacks) |
+| `uc_link` names the state A saved; A has exited | the return found no context: `ESRCH`, the trampoline's exit status 3. When a new thread ran on A's old stack (same key), the return switched to that thread's own context at A's old position: SIGKILL on the 8C2 and 2C3; on the 4C the process went on |
+
+**A thread that exits in a context with a `[signal stack]` unmaps it
+twice** [source; hw]. A context's kernel record keeps the
+`[signal stack]` it had when it was last switched out (1392), and the
+thread takes it over when the context is switched in (1426); nothing
+clears the record. When a thread exits in a context that had a
+`[signal stack]` when it was last switched out (a made context that
+took a signal before, or the thread's own context after the thread took
+a signal and then switched out and back), the exit unmaps the thread's
+copy at once (kernel `kernel/process.c:1931`), and a kernel worker
+unmaps the record's copy again about an RCU grace period later
+(`context_free`, 376-406; `context_free_work_fn`, 351-361;
+`free_hw_context`, 299). The kernel maps `[signal stack]`s, like
+hardware stacks, in the privileged area from `USER_HW_STACKS_BASE` up
+(kernel `kernel/signal.c:655-672`, `include/asm/stacks.h:124`), so the
+second unmap removes whatever it has mapped there in between. In the
+test a new thread T3 took a signal right after `pthread_join`, waited
+300 ms and took another (at least four runs on each machine):
+
+| Case | 4C | 8C2 | 2C3 |
+|---|---|---|---|
+| B makes the `exit` system call in a made context that took a signal in A | T3's new `[signal stack]`, mapped at the freed address, was unmapped; T3's second signal killed the process (SIGSEGV) | a chain stack that had grown into the freed page during T3's first signal lost it; T3 ended without any signal after its wait, before its second signal, and the process went on (exit 0) | a chain stack that had grown into the freed page lost it; SIGSEGV |
+| A takes a signal, switches into a made context and back, and exits | as above | the first page of T3's procedure stack was unmapped; SIGSEGV | the same; SIGSEGV (once a hang) |
+| No contexts; or the context holding the `[signal stack]` stays suspended while its thread exits at home; or T3 starts 300 ms after the exit | T3 ran | T3 ran | T3 ran |
+
+**Signals and contexts that move** [hw]:
+
+| Case | Result |
+|---|---|
+| A signal sent (`pthread_kill`) to the thread running a context that came from another thread | the handler runs in that thread on the context's stacks, its local in `uc_stack` ("Signals in a made context") |
+| A context's handler, in A, switches out; B switches to the handler's state | the handler goes on in B and returns there. `sigreturn` restores the context with its own mask and rounding mode: the interrupted state is in the context's `[signal stack]`, which the switch carries (1392, 1426). The process had one `[signal stack]` throughout |
+| The same with `SA_ONSTACK` (the frame on A's alternate stack) | works, but B's `sigreturn` makes A's alternate stack B's own (`restore_altstack`, kernel `kernel/signal.c:513`) |
+| The same, and A takes another `SA_ONSTACK` signal before B resumes the handler | A is no longer on its alternate stack (kernel `kernel/signal.c:1146`), so the new frame went at its top, over the suspended one. The first handler's locals changed, and its `sigreturn` gave the context A's mask instead of its own |
+
+**fork** [hw; `hw_contexts_init`, 486-599]. The child gets the contexts
+that were suspended at the fork; one that is running cannot be locked
+for copying and is skipped (514-517). It also gets the forking thread's
+current context (557-582).
+
+- The child resumed and freed a suspended context; the parent's copy
+  was unaffected (its local variable had its value from before the
+  fork).
+- `fork` inside a made context goes on in each process's copy of it.
+- A context running in another thread at the fork is missing in the
+  child: a switch to its saved state gives `ESRCH`, a free `ENOENT`.
+  That thread's own context, suspended at the fork, is there.
+
+**`longjmp` across contexts** [hw; 1442-1512, 836-901]. A `longjmp`
+from B into a `jmp_buf` set in a suspended context switches B into that
+context; B's own context is left suspended, reachable only through a
+state B saved. A `longjmp` into a context running in another thread
+kills the process (SIGKILL; 857-866, 893-899).
+
+**Rules for a fiber library or a runtime such as libgo** (from the
+above):
+
+1. Give a suspended context to one thread only: publish it as runnable
+   from the thread it switched to, after that switch has returned
+   there, and never let two threads race to switch to it (treat
+   `EBUSY` as a bug).
+2. After a switch that may resume in another thread, reach TLS and
+   `errno` only through an out-of-line function that the compiler
+   cannot fold: with lcc a `noinline` one; with GCC one that returns
+   the value, or a `noipa` one. Never keep a TLS address, a
+   `__tls_get_addr` result or `&errno` across such a switch.
+3. Free or remake (on the same stack) only a context that is suspended
+   and that no thread will switch to.
+4. Keep the threads that run contexts alive until the process exits. A
+   thread that exits inside a context someone freed or remade, or in a
+   context that had a `[signal stack]` when it was last switched out,
+   corrupts later threads and contexts; on the 4C any exit after the
+   thread's first switch does. A thread that must exit should end in
+   its own original context, never inside a made one: an `exit` there
+   leaves the next thread on its stack failing with `EEXIST`.
+5. Point `uc_link`, and every saved state you will switch to, at
+   contexts that outlive their use. Never use a state saved by a thread
+   that may have exited.
+6. Do not switch contexts from a handler running on an alternate stack
+   if the context may resume in another thread or the thread may take
+   another `SA_ONSTACK` signal first; such a handler should run on the
+   context's own stack, with room left below each context ("Signals in
+   a made context").
+7. Never `longjmp` across contexts.
+8. After `fork`, keep only the records of contexts that were suspended
+   at the fork, plus the current one.
 
 ## Signals
 
@@ -798,7 +1029,9 @@ the whole mapping above glibc's guard page from the start, so a
 thread's recursion never traps [hw, above; `stackregs.c` section 4: the
 bottom is the start of the mapping]. `%sbr` in a thread is its top
 rounded down to a page: [stack-and-unwinding.md](stack-and-unwinding.md),
-"Stack registers".
+"Stack registers". Threads that share user contexts, and what a
+thread's exit after context switches does to later threads: "Contexts
+and threads" above.
 
 **Overflow** [hw: `abileft.c` part 3; the 4C, 8C2 and 2C3 agree apart
 from addresses, except that the 4C reports `SEGV_ACCERR` where the
@@ -1077,7 +1310,8 @@ drivers expect anyway. A static link with an ifunc crashes ld
 - `sigreturn` with an edited `uc_mcontext.cr0_hi` (resuming elsewhere)
   and `uc_extra.bgr`; all of `uc_extra.g[]` (only `%g16`–`%g19` were
   edited); `%bgr` as a handler finds it (source only).
-- Switching to a context suspended in another thread;
-  `freecontext_e2k` of a context running in another thread (the kernel
-  checks only the calling thread's context, so presumably it is freed:
-  source).
+- Whether a switch to a context that another thread ran last costs more
+  than one between two contexts of one thread (not timed); what ends a
+  thread without a signal when the second unmap of a `[signal stack]`
+  takes a page of its chain stack (the 8C2 row in "Contexts and
+  threads").

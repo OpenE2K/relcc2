@@ -14,7 +14,7 @@ code.
 | [elf.md](elf.md) | ELF header, sections, the executable-stack note, relocations, PIC and PLT, TLS |
 | [atomics.md](atomics.md) | Atomic read-modify-write, memory orders, 16-byte atomics |
 | [source-compat.md](source-compat.md) | Predefined macros, inline-asm constraints, modifiers and clobbers, register names, lcc options that change code |
-| [kernel-interface.md](kernel-interface.md) | System calls, auxiliary vector, contexts, signals and their frames, hardware and data stacks, address space, `-pg`, sanitizers, static PIE |
+| [kernel-interface.md](kernel-interface.md) | System calls, auxiliary vector, contexts (also shared between threads), signals and their frames, hardware and data stacks, address space, `-pg`, sanitizers, static PIE |
 
 ## Sources
 

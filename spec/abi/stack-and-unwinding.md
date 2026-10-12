@@ -370,7 +370,11 @@ unmapped memory below it ([kernel-interface.md](kernel-interface.md),
 parked goroutine holds in window registers. `getcontext` saves no
 window registers, and `access_hw_stacks` reads only the calling
 context's own stacks, so each goroutine would have to copy its own
-procedure stack (mode 7) before it parks (inferred).
+procedure stack (mode 7) before it parks (inferred). Goroutines also
+move between threads: what the kernel allows there, and what breaks it
+(TLS addresses kept across a switch, threads that exit after running
+contexts), is in [kernel-interface.md](kernel-interface.md), "Contexts
+and threads".
 
 ## Exceptions (libgcc `unwind-dw2-e2k.c`)
 

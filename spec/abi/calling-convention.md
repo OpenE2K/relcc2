@@ -242,9 +242,38 @@ covers memory slots too: lcc writes a narrow argument in slot 8 and up as
   that read the earlier fixed arguments from memory would read garbage
   when called from lcc. (Unipro's variadic callees store their incoming
   registers to the slots themselves, so they work either way.)
-- `va_list` is a plain pointer to the next slot; `va_start(ap, last)` sets
-  it to the slot after `last`. It can be passed to a function built by
-  another compiler (compat: `valist` unit).
+- **The last fixed argument is the last declared parameter.** A hidden
+  result pointer (C++ classes that are not trivially copyable, below)
+  takes slot 0 and moves every argument up a slot, but it is not a
+  declared parameter. For `S f (long a, long b, ...)` lcc's caller stores
+  slot 2 (`b`) and the variadic slots, but not slots 0 and 1, and its
+  callee reads `b` from slot 2 of memory; for `S g (int n, ...)` the
+  caller stores from slot 1. A member function's `this` follows the
+  pointer, so `S X::m (int n, ...)` stores from slot 2. With no declared
+  parameter (C++ `S h (...)`, `long k (...)`) the caller stores every
+  slot, the hidden pointer's slot 0 included [lcc: l++ 1.29.16 and
+  1.31.05 `-O3`, v3; compat-style run: `tools/abi/probes/pocabi1_va.cc`,
+  every pair of lcc `-O3`, lcc `-O0` and Unipro callers and callees,
+  under MCST's qemu and on the 4C: all right]. A caller that leaves the
+  last fixed argument's slot unwritten makes lcc's callees (`-O3` and
+  `-O0`) read whatever the slot held, while Unipro's callees read the
+  register (`pocabi1_va.cc -DGARBAGE`, its control line). Found by the
+  proof-of-concept back end, whose callers counted the declared
+  parameters without the pointer (`docs/spec-poc-findings.md` A24).
+- `va_list` is `char *`, a plain pointer to the next slot (lcc's
+  `__builtin_va_list`: `__builtin_types_compatible_p (va_list, char *)` is
+  1, with `void *` or `signed char *` 0); `va_start(ap, last)` sets it to
+  the slot after `last`. It can be passed to a function built by another
+  compiler (compat: `valist` unit). In C++ the type is part of the mangled
+  name: lcc's `long sum (int, va_list)` is `_Z3sumiPc`, `va_list *` is
+  `PPc`, and `std::va_list` and `const va_list` are `Pc` too. Unipro's
+  clang uses `void *` (`_Z3sumiPv`; in C `va_list` is compatible with
+  `void *`), so a C++ function with a `va_list` parameter doesn't link
+  between the two (`undefined reference to sum(int, char*)`) [lcc
+  1.29.16 v3 and v6.2c3, 1.31.05 v3; Unipro 20.1.8 `-march=elbrus-v3`:
+  `tools/abi/probes/pocabi1_valist.cc`, linked both ways and run under
+  MCST's qemu; found by the proof-of-concept back end,
+  `docs/spec-poc-findings.md` A27].
 - `va_arg` of any type larger than 8 bytes (`__int128`, `long double`,
   `__float128`, `_Complex double`, aggregates of any size; checked with a
   24-byte struct) first rounds the pointer up to a 16-byte **address**
@@ -300,6 +329,14 @@ registers, because it must stay at one address:
   `%r0` and the arguments in `%r1`, `%r2`); the callee constructs the
   object there. The caller uses its own copy of the address afterwards,
   not `%dr0`. A class with only a non-trivial destructor counts too.
+  In a member function the pointer comes first and `this` second: for
+  `S X::m (long a)` the callee gets the address in `%r0`, `this` in `%r1`
+  and `a` in `%r2` [lcc: l++ 1.29.16 `-O3`;
+  `tools/abi/probes/pocabi1_va.cc` for the variadic form]. GCC orders
+  them the same way: it puts `.result_ptr` before `this` in the parameter
+  list (function.cc:2474-2496). In a variadic call the pointer counts as
+  a slot but not as the last fixed argument ("Variadic functions",
+  above).
 - **Argument**: passed by invisible reference: the caller makes a
   temporary and passes its address in the argument's own slot
   (`take (long, S, long)`: `%r1` points to the copy). This part comes

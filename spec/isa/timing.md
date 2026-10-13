@@ -1393,6 +1393,21 @@ and memory (apb.md, "Plain loads beside an area"; `pocchk3.c` `bk`,
 | **`rwd %lsr` or `%lsr1` → the loop's `alc`** | **no** | iterations issued 1–3 cycles after the write count down the old `%lsr`, the new count applies from 4 ([loops.md](loops.md), "Registers") |
 | anything in the same wide instruction | — | every operation reads the state from before the wide instruction (distance 0 sees the old value) |
 
+**Other stalls** the performance monitors found [hw:
+`tools/isa-probes/pmu2.c`, 4C, 8C2, 2C3, two runs; the events in
+[monitors.md](monitors.md), "Pipeline repeats and the rest"]:
+
+| Case | Cost |
+|---|---|
+| **a call whose callee's `setwd` makes the window larger than the caller's, while a load is outstanding** | the callee waits for every outstanding load, whatever its destination register (`BUB_E2_SETWD`): a load from memory into the caller's own register, then a call, 68.5 / 104–112 / 112–113 cycles (4C / 8C2 / 2C3) against 27.0 when the callee's window fits in the caller's; a pending `sdivd` or `fdivd` costs nothing (25 cycles either way). So a load that may miss is better issued after such a call, or early enough to finish before it |
+| `getsp` 1 or 2 cycles after another `getsp` (`getsp 0` too) | +2 (an E0 repeat, `BUB_E0_USD`); 3 cycles apart: free |
+| FP compare, then an integer compare into a predicate in the same channel 2 cycles later (ALC0 tested) | +2 on v3 and v5 (an E0 repeat), +4 on v6 (an E2 step); other channels, 1 or 3 cycles apart, or the integer compare first: free |
+| FP compare into a predicate in a call's instruction or the one before it, and a compare into a predicate in the callee's first instruction | +2 |
+| combined FP operation, then `rws %pfpfr` in the next instruction | +4 (`BUB_E2_PFPFR_COMB`); `rws %pfpfr` before a combined operation, or after `faddd`: free |
+
+isa-score doesn't model these (it treats two `getsp`s as a 2-cycle
+dependence through the stack pointer, `tools/isa-score/model.py`).
+
 gas, for operations written outside braces (its `strict_delay` mode,
 `gas/config/tc-e2k.c`), inserts `nop 2` after compares and `ccto*`,
 `nop 5` or `wait all_e=1` after writes to the system registers flagged

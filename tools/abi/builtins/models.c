@@ -7,6 +7,13 @@
 
      lcc -O2 models.c -o models && ./models     (on hardware)
 
+   A compiler that lacks some of these (a port adds them one at a
+   time) still builds this file: each check is compiled only if the
+   compiler has one builtin or helper of each family the check tests,
+   and otherwise prints "missing CHECK".  A builtin counts if
+   __has_builtin knows it or a macro of its name exists (lcc's
+   <e2kintrin.h> defines some builtins as macros).
+
    The 128-bit parts need __iset__ >= 5.  Nothing here writes to memory
    through a MAS other than byte swapping and cache hints, and nothing
    locks: __builtin_e2k_clflush (a MAS 0xf store) and lock loads are
@@ -14,7 +21,20 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <e2kintrin.h>
+#if defined __has_include
+# if __has_include (<e2kintrin.h>)
+#  include <e2kintrin.h>
+#  define HDR 1
+# else
+#  define HDR 0
+# endif
+#else
+# include <e2kintrin.h>
+# define HDR 1
+#endif
+#ifndef __has_builtin
+# define __has_builtin(x) 1
+#endif
 
 typedef unsigned long long u64;
 typedef unsigned int u32;
@@ -22,7 +42,14 @@ typedef unsigned short u16;
 typedef unsigned char u8;
 typedef long long v2di __attribute__ ((vector_size (16)));
 
-static int fails, checks;
+static int fails, checks, missed;
+
+static void __attribute__ ((unused))
+missing (const char *what)
+{
+  printf ("missing %s\n", what);
+  missed++;
+}
 
 #define CHECK(name, cond, ...)                                          \
   do {                                                                  \
@@ -81,6 +108,7 @@ m_punpck (u64 a, u64 b, int size, int high)
 static void
 check_punpck (void)
 {
+#if (defined __builtin_e2k_punpcklbh || __has_builtin (__builtin_e2k_punpcklbh))
   for (int i = 0; i < 200; i++)
     {
       u64 a = rnd (), b = rnd ();
@@ -91,6 +119,9 @@ check_punpck (void)
       P (punpckhhw, 2, 1) P (punpcklwd, 4, 0) P (punpckhwd, 4, 1)
 #undef P
     }
+#else
+  missing ("check_punpck");
+#endif
 }
 
 /* pshufh: halfword K of the result is halfword (imm >> 2K) & 3 of A, as
@@ -107,6 +138,7 @@ m_pshufh (u64 a, int imm)
 static void
 check_pshufh (void)
 {
+#if (defined __builtin_e2k_pshufh || __has_builtin (__builtin_e2k_pshufh))
   for (int i = 0; i < 50; i++)
     {
       u64 a = rnd ();
@@ -115,11 +147,15 @@ check_pshufh (void)
       S (0) S (1) S (0x1b) S (0x4e) S (0xe4) S (0xff) S (0x93) S (0x100) S (0x1e4)
 #undef S
     }
+#else
+  missing ("check_pshufh");
+#endif
 }
 
 static void
 check_align64 (void)
 {
+#if defined E2K_ALIGN_DATA
   for (int i = 0; i < 400; i++)
     {
       u64 s1 = rnd (), s2 = rnd ();
@@ -167,11 +203,15 @@ check_align64 (void)
       CHECK ("E2K_ALIGN_DATA_INSF32", (u32) d == want,
              "al %d %08llx %08llx -> %016llx", al4, w1, w2, d);
     }
+#else
+  missing ("check_align64");
+#endif
 }
 
 static void
 check_ptr (void)
 {
+#if defined E2K_ALIGN_PTR
   for (int i = 0; i < 200; i++)
     {
       char *p = (char *) (rnd () & 0xffffffffffffULL);
@@ -184,6 +224,9 @@ check_ptr (void)
       A (4) A (8) A (16) A (64) A (4096)
 #undef A
     }
+#else
+  missing ("check_ptr");
+#endif
 }
 
 static int clz64 (u64 x) { int n = 0; while (n < 64 && !(x >> (63 - n) & 1)) n++; return n; }
@@ -192,24 +235,34 @@ static int ctz64 (u64 x) { int n = 0; while (n < 64 && !(x >> n & 1)) n++; retur
 static void
 check_clzb (void)
 {
+#if defined __CLZB && defined __CTZB
   for (int i = 0; i < 300; i++)
     {
       u64 x = rnd () >> (i % 65 == 64 ? 63 : i % 64);
       x = i % 7 == 0 ? x << (i % 64) : x;
       if (i == 0)
         x = 0;
-      int n, m;
+      int n, m __attribute__ ((unused));
       __CLZB (n, x);
       CHECK ("__CLZB", n == clz64 (x) / 8, "%016llx -> %d", x, n);
       __CTZB (n, x);
       CHECK ("__CTZB", n == ctz64 (x) / 8, "%016llx -> %d", x, n);
+      /* The E2K_ names are not in lcc 1.29's header.  */
+#if defined E2K_CLZB && defined E2K_CTZB
       E2K_CLZB (m, x);
       __CLZB (n, x);
       CHECK ("E2K_CLZB", m == n, "%016llx -> %d", x, m);
       E2K_CTZB (m, x);
       __CTZB (n, x);
       CHECK ("E2K_CTZB", m == n, "%016llx -> %d", x, m);
+#endif
     }
+#if !(defined E2K_CLZB && defined E2K_CTZB)
+  missing ("check_clzb E2K_CLZB, E2K_CTZB");
+#endif
+#else
+  missing ("check_clzb");
+#endif
 }
 
 /* Memory helpers on a buffer.  */
@@ -225,6 +278,9 @@ fill (void)
 static void
 check_mem64 (void)
 {
+#if HDR \
+    && (defined __builtin_e2k_ld_64s_be || __has_builtin (__builtin_e2k_ld_64s_be)) \
+    && __has_builtin (__builtin_loadmas_64u)
   for (int i = 0; i < 100; i++)
     {
       fill ();
@@ -275,6 +331,9 @@ check_mem64 (void)
       __builtin_storemas_8u ((u8) y, w, __LCC_MAS_SPEC, 2);
       CHECK ("storemas_8u spec", *(u8 *) w == (u8) y, "");
     }
+#else
+  missing ("check_mem64");
+#endif
 }
 
 #if __iset__ >= 5
@@ -322,6 +381,8 @@ qbyte2 (v2di s1, v2di s2, int i)
 static void
 check_q (void)
 {
+#if (defined __builtin_e2k_qppackdl || __has_builtin (__builtin_e2k_qppackdl)) \
+    && defined E2K_ALIGN_DATA128
   for (int i = 0; i < 200; i++)
     {
       v2di a = qmk (rnd (), rnd ()), b = qmk (rnd (), rnd ());
@@ -349,7 +410,8 @@ check_q (void)
         want = qsetlane (want, 1, k, k >= al ? qlane (a, 1, k - al)
                                               : qlane (b, 1, 16 + k - al));
       CHECK ("E2K_ALIGN_DATA128_BE", qeq (d, want), "al %d", al);
-      /* Transposes: rows in, columns out.  */
+#if defined E2K_TRANSPOSE2_64F && defined E2K_TRANSPOSE4_32F
+      /* Transposes: rows in, columns out (not in lcc 1.29's header).  */
       v2di t[4], r[4];
       for (int k = 0; k < 4; k++)
         r[k] = qmk (rnd (), rnd ());
@@ -362,12 +424,21 @@ check_q (void)
         for (int col = 0; col < 4; col++)
           ok &= qlane (t[col], 4, row) == qlane (r[row], 4, col);
       CHECK ("E2K_TRANSPOSE4_32F", ok, "");
+#endif
     }
+#if !(defined E2K_TRANSPOSE2_64F && defined E2K_TRANSPOSE4_32F)
+  missing ("check_q transposes");
+#endif
+#else
+  missing ("check_q");
+#endif
 }
 
 static void
 check_mem128 (void)
 {
+#if (defined __builtin_e2k_ld_128_be || __has_builtin (__builtin_e2k_ld_128_be)) \
+    && __has_builtin (__builtin_loadmas_128v)
   for (int i = 0; i < 100; i++)
     {
       fill ();
@@ -415,6 +486,9 @@ check_mem128 (void)
       CHECK ("pst_128_be", qeq (*p, want), "mask %04x: got %016llx %016llx",
              mask, q0 (*p), q1 (*p));
     }
+#else
+  missing ("check_mem128");
+#endif
 }
 #endif
 
@@ -423,6 +497,9 @@ extern const u32 __cpu_info[2] __attribute__ ((visibility ("hidden")));
 static void
 info (void)
 {
+#if __has_builtin (__builtin_cpu_name) \
+    && (defined __builtin_e2k_get_cpu_iset || __has_builtin (__builtin_e2k_get_cpu_iset)) \
+    && defined __GETPFPFR
   static const char *const cpus[] = {
     "elbrus", "elbrus-2c+", "elbrus-4c", "elbrus-8c", "elbrus-1c+",
     "elbrus-8c2", "elbrus-12c", "elbrus-16c", "elbrus-2c3", "elbrus-48c",
@@ -452,6 +529,9 @@ info (void)
   __asm__ volatile ("getsp,0 0, %0" : "=r" (sp));
   CHECK ("rrq usd", (u64) usd >> 32 == 0 || ((u64) usd & 0xffffffffffffULL) <= sp + 4096,
          "usd.lo %016llx, sp %016llx", (u64) usd, sp);
+#else
+  missing ("info");
+#endif
 }
 
 /* (In info () itself lcc 1.31.05 for v3 stops with "internal error:
@@ -459,10 +539,14 @@ info (void)
 static void __attribute__ ((noinline))
 barriers (void)
 {
+#if (defined __builtin_e2k_barrier || __has_builtin (__builtin_e2k_barrier))
   __builtin_e2k_read_barrier (0x30);
   __builtin_e2k_write_barrier (0x30);
   __builtin_e2k_mem_barrier (0x30);
   __builtin_e2k_barrier (0x30);
+#else
+  missing ("barriers");
+#endif
 }
 
 int
@@ -480,6 +564,9 @@ main (void)
 #endif
   info ();
   barriers ();
-  printf ("%d checks, %d failed\n", checks, fails);
-  return fails != 0;
+  printf ("%d checks, %d failed", checks, fails);
+  if (missed)
+    printf (", %d missing", missed);
+  printf ("\n");
+  return fails != 0 || missed != 0;
 }

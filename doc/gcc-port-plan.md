@@ -3473,7 +3473,11 @@ lcc-builtins-check.yaml) and binutils-ops.yaml; the page lists the rest.
 The port also needs x86's six `__float128` builtins (`__builtin_fabsq`,
 …), which lcc supports. `tools/abi/builtins/run.py --cc gcc=…` is the
 acceptance test: it compares every builtin's results with lcc's on
-hardware. **Owner's decision (2026-10-06): the port provides
+hardware, and reports the ones the compiler lacks as missing, so it
+can be run while the port adds them (it finds a builtin with
+`__has_builtin` or as a macro, so one that the port's header defines
+as an inline function, as lcc's does `puttagd`, counts as missing).
+**Owner's decision (2026-10-06): the port provides
 these compatible builtins, and no x86 or NEON intrinsics and no
 predefined x86 feature macros**; programs with x86 SIMD paths take their
 generic ones. (Upstream GCC's precedent for an emulation layer, should

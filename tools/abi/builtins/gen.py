@@ -10,6 +10,10 @@ does that, with models.c (the builtins that are not one operation).
   python3 tools/abi/builtins/gen.py [-o DIR]
 
 Builtins of a later ISA than the target are left out by #if __iset__.
+A builtin the compiler lacks (neither __has_builtin nor a macro, as
+<e2kintrin.h> defines some) prints "OP missing" instead of a hash, and
+<e2kintrin.h> is included only if it exists, so a port that has some of
+the builtins can already be compared.
 Memory builtins (ld_*, st_*, pst_*, prefetch, clflush) and the tag
 builtins are in models.c instead.  Arguments lcc requires as constants
 are called with several values it accepts.
@@ -99,9 +103,13 @@ def function(op, iset, ret, args, consts):
             calls.append(f"      {{ {ret} r = {call}; h = mix (h, &r, "
                          f"{'10' if ret == 'long double' else 'sizeof r'}); }}\n")
     return (f"#if __iset__ >= {iset}\nstatic void\nt_{op} (void)\n{{\n"
+            f"#if defined __builtin_e2k_{op} "
+            f"|| __has_builtin (__builtin_e2k_{op})\n"
             f"  u64 h = FNV;\n  for (int i = 0; i < {NV}; i++)\n    {{\n"
             + "".join(calls) + "    }\n"
-            f"  printf (\"{op} %016llx\\n\", h);\n}}\n#endif\n")
+            f"  printf (\"{op} %016llx\\n\", h);\n"
+            f"#else\n  printf (\"{op} missing\\n\");\n#endif\n"
+            f"}}\n#endif\n")
 
 
 HEAD = r"""/* SPDX-License-Identifier: GPL-3.0-or-later */
@@ -109,7 +117,16 @@ HEAD = r"""/* SPDX-License-Identifier: GPL-3.0-or-later */
    each register-only operation builtin of lcc over fixed inputs.  */
 #include <stdio.h>
 #include <string.h>
-#include <e2kintrin.h>
+#if defined __has_include
+# if __has_include (<e2kintrin.h>)
+#  include <e2kintrin.h>
+# endif
+#else
+# include <e2kintrin.h>
+#endif
+#ifndef __has_builtin
+# define __has_builtin(x) 1
+#endif
 
 typedef unsigned long long u64;
 typedef unsigned int u32;

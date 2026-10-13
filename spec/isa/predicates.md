@@ -479,7 +479,7 @@ are interlocked unless the table says otherwise:
 |---|---|---|
 | integer compare, `cctop*`, predicate logic → predicated operation or `merge` | 2 | **1** |
 | integer compare or predicate logic → `ct`/`call`/`ibranch` condition | 3 | 3 |
-| FP compare (`fcmp*b`; `fxcmp*b` not measured, gas pads 4) → predicated operation; → `ct` | 4; 5 | 4; 5 |
+| FP compare (`fcmp*b`; `fxcmp*b` in any format, ALC0 or ALC3) → predicated operation or `merge`; → `ct` | 4; 5 | 4; 5 |
 | packed compare into a predicate → predicated operation; → `ct` | — | 4; 5 |
 | compare → ELP (`pass %predN`) | 1 | 1 |
 | CLP → CLP in the same instruction | 0 (two levels) | 0 |
@@ -488,6 +488,14 @@ are interlocked unless the table says otherwise:
 | an operation under a false predicate → a reader of its destination | no wait | no wait |
 | compare or logic one instruction before a **taken return** → predicated operation or `merge` in the return's instruction | **not interlocked**: a `merge`, or anything after predicate logic, read the old value; an `addd` after a compare read the new one in 4 of 4 runs on the 4C and 1 of 4 on the 8C2; keep 2 instructions | reads the new value |
 | `%spred` on a consumer of a late operand | no wait (the operation gets a diagnostic operand) | the same |
+
+A predicated operation or `merge` that reads its predicate too early
+stalls in 2-cycle steps on v3 and v5 (an integer compare 1 cycle
+early: 2; an FP compare 3, 2, 1 early: 4, 2, 2), not in the 4-cycle
+steps of other operands, and in 4-cycle steps on v6; a `ct` waits
+exactly; true and false predicates alike [hw:
+`tools/isa-probes/timeleft.c` `lat`, `timeleftv.c` `pr`; 4C, 8C2, 2C3;
+timing.md, "Stalls cost more than the latency"].
 
 gas's implicit `nop`s for a compare written outside braces (when
 `.ignore strict_delay` is off) are 2 for integer and packed compares and

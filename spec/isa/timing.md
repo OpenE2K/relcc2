@@ -124,7 +124,7 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | `andp` → `andp` | 0.5 | 0 inside one wide instruction (`@p4` → next CLP), 1 through a `%pred` | — |
 | `andp` → predicated ALU op | 2 | 2 | — |
 | `andp` → `ct ? pred` | 3 | 3 | — |
-| FP compare (`fcmpltdb`) → predicated ALU op | — | 4 | — |
+| FP compare (`fcmpltdb`; `fxcmp*b` in any format, `timeleft.c`) → predicated ALU op or `merge` | — | 4 (an early reader stalls in 2-cycle steps on v3 and v5: "Stalls cost more than the latency") | — |
 | FP compare → `ct ? pred` | — | 5 | — |
 
 **Integer divides take longer for larger quotients** (`pocchk.c`, the
@@ -534,6 +534,21 @@ instruction delivers its result at its normal latency from the
 instruction's real issue; two loads in one instruction, 0 to 256 bytes
 apart, don't delay each other. Transfers wait exactly, not in steps
 ([control-transfer.md](control-transfer.md)).
+
+**A predicate read too early stalls in 2-cycle steps on v3 and v5**,
+not 4 [hw: `tools/isa-probes/timeleft.c` `lat`, the `cmpesb0p` …
+`fxcmpeqsb0p` rows; `tools/isa-probes/timeleftv.c` `pr`, true and
+false predicates and seven kinds of predicated consumer; 4C, 8C2,
+2C3]. An operation under
+`? %predN` or `? ~%predN` (`addd` in ALC0 or ALC3, `faddd`, `ldd`,
+`std`) or a `merge` placed `e` cycles before its predicate is ready
+stalls `2 × ceil(e / 2)` cycles: an integer compare one cycle early 2,
+an FP compare (`fcmpltdb`, `fcmpledb`, `fxcmp*b` in any format, ALC0
+or ALC3) 3, 2 and 1 cycles early 4, 2 and 2. The 2C3 keeps 4-cycle
+steps here too (an FP compare 3, 2 or 1 cycles early: 4; its integer
+compare is ready the next cycle). A `ct` under the predicate waits
+exactly, on all three. Whether the predicate is true or false makes no
+difference.
 
 ## Write-back conflicts
 

@@ -122,7 +122,7 @@ kernels and short loops, timing.md "Write-back conflicts"; 4C, 8C2 and
   the consumer's channel, and one in `BUB_E2` (`wb_mid_none`,
   `wb_ld_mid_none`). A store waiting for its base register counts in
   its own channel's, ALU2 or ALU5 (`age_p_m4`, `dr_*`).
-- `TICKS_E2` (0x22f; v5 and v6 only, perf refuses it on the 4C) counts
+- `TICKS_E2` (0x22f/0x32f; v5 and v6 only, perf refuses it on the 4C) counts
   3 per `BUB_E2` step in these kernels, and 4 per step when the stalled
   instruction follows one with `nop 1` (`wb_nop_*`).
 

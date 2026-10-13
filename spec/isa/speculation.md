@@ -564,8 +564,9 @@ What the v6 lock forms cost [hw: 2C3, `tools/isa-probes/timeleft.c`
 costs drop out]: a dependent chain of `ldd,sm` loads takes 5 cycles a
 load with MAS 0x17, as with 0x4, 0x7, 0x11, 0x13 and 0x31 and as a
 plain load (an acquire load, 0x13 without `,sm`, 11: the 10.4 and 4.8
-of the table above include fixed costs), and the check-and-unlock load
-0x33 in ALC2 takes 5 too. A lock (0x4, 0x7, 0x11 or 0x17 with `,sm`),
+of the table above are a 32-load chain's time divided by 32, `mas6.c`,
+the timing's fixed part included), and the check-and-unlock load 0x33
+in ALC2 takes 5 too. A lock (0x4, 0x7, 0x11 or 0x17 with `,sm`),
 two empty cycles, its check (0x3) and a use take 9.3 cycles a step for
 every lock encoding. A successful wait-unlock store with 0x33 or 0x73
 costs exactly what 0x2 does: a lock-wait load, 0–3 empty cycles and

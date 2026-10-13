@@ -1581,11 +1581,21 @@ each one cost it a debugging session:
 - **Short label-difference tables** crash MCST gas when a `.text`
   label follows them (`spec/isa/bundle.md`, "Known gas bugs"): keep
   `CASE_VECTOR_SHORTEN_MODE` at `SImode` or wider.
-- **A reload right after its store** (a spill and its fill, a stack
-  argument read back) in the very next instruction gets its value about
-  8 cycles late; one cycle of distance removes it. Matching is per
-  aligned doubleword (`spec/isa/timing.md`, "Memory"); give the
-  scheduler that dependence a latency of 2 rather than 1.
+- **A load soon after a store to the same place** (a spill and its
+  fill, a stack argument read back, a field beside one just written)
+  is served by L2 and gets its value 6–8 cycles late
+  (`spec/isa/timing.md`, "Store to load"). v3: a load of the stored
+  aligned doubleword in the very next instruction; give the scheduler
+  that dependence a latency of 2 rather than 1. v5 (the 8C2) adds any
+  load of the store's 32-byte line 2 or 3 cycles after it that reads a
+  byte the store didn't write; v6 (the 2C3) a load of the stored
+  doubleword at another width up to 4 cycles after it. sched-deps links
+  a load to an earlier store only when they may overlap
+  (`true_dependence`, sched-deps.cc:2675), so the v5 case (another
+  field of the line, through the same base) has no dependence to carry
+  a latency; it needs a check where instructions are formed. lcc
+  doesn't avoid it either: its v5 `core_list_reverse` kernel pays it on
+  CoreMark's lists, and so did the proof of concept's (I45).
 - **Memory accesses in one wide instruction** are ordered (ALC2 before
   ALC5, a load before a store in its cluster; `spec/isa/bundle.md`): a
   load in ALC5 sees a store in ALC2 of its own instruction, and of two

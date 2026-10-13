@@ -53,8 +53,11 @@ loop around a **locked load** and an **unlocking store**. lcc's
   (`addd`; for compare-exchange `cmpesb` and `merges`). Sizes: `ldb`/
   `ldh`/`ldw`/`ldd` with the matching store; 16 bytes `ldqp`/`stqp` (v5+).
 - The memory order does not change the loop: relaxed and seq_cst
-  read-modify-writes are identical, with no `wait` around them, so the
-  locked pair itself orders memory.
+  read-modify-writes have no `wait` around them, so the locked pair
+  itself orders memory.
+  An exchange with its unlock store in ALC2 after a plain store, read
+  with lcc's acquire, never failed message passing on any machine
+  ("Memory ordering on hardware").
 - Compare-exchange stores in both outcomes: on a mismatch it writes the
   old value back (`merges` chooses the value to store), so the store
   always ends the lock. Test-and-set stores 1 and returns the old byte.
@@ -236,8 +239,9 @@ lcc's `wait` + store (but MCST's kernel lists the MAS store-release as
 broken on E2C3 up to revision 2, ours included, and the E12C/E16C,
 and uses `wait` + store there: hwbugs.md), and an acquire load 10.4 cycles in a dependent
 chain against 4.8 (speculation.md, "v6 encodings"); whether they order
-exactly as their names say isn't observable there, since the hardware
-already keeps every order but store → load.
+exactly as their names say was not checked: litmus.c's setup shows only
+store → load reordering, and the message-passing setups that do reorder
+("Memory ordering on hardware") were not run with them.
 
 `wait` waits for the completion of earlier loads (`ld_c`) and stores
 (`st_c`). lcc 1.31 also has `__builtin_e2k_read_barrier`,
@@ -283,8 +287,9 @@ same 6 cycles, yet give 212 and 0. MCST's kernel takes the soft bits
 to work on our 2C3: it drops them only on E2C3 revision 0, ours being
 revision 1 (`CPU_NO_HWBUG_SOFT_WAIT` in `asm/cpu_features.h`, used by
 `__E2K_WAIT` in `asm/e2k_api.h`; hwbugs.md) [source]. What the pattern
-means is open, and MP and LB with the soft bits were not run (the
-hardware keeps those orders anyway). On the 8C2 every `wait` gives 0
+means is open, and MP and LB with the soft bits were not run (MP does
+fail without fences when the reader holds the lines, "Memory ordering
+on hardware"). On the 8C2 every `wait` gives 0
 (320 without one in 1,000,000 tries), the soft ones included,
 presumably because its reordering window is shorter than any `wait`
 (inferred; below). v5 ignores `las`, `lal` and `mt`, so the kernel's
@@ -303,16 +308,17 @@ each access in its own wide instruction unless noted:
 | SB: `x = 1; r1 = y` ‖ `y = 1; r2 = x` | `r1 = r2 = 0` | 23 and 41 times |
 | SB, store and load in one wide instruction | same | 5,540 and 15 |
 | SB with `wait ld_c = 1, st_c = 1` or `wait st_c = 1` between | same | never |
-| MP: `x = 1; y = 1` ‖ `r1 = y; r2 = x` | `r1 = 1, r2 = 0` | never (also with the loads in one instruction, `wait`, or lcc's release/acquire) |
+| MP: `x = 1; y = 1` ‖ `r1 = y; r2 = x`, both lines starting in the writer's cache | `r1 = 1, r2 = 0` | never (also with the loads in one instruction, `wait`, or lcc's release/acquire); but see below for a reader that holds the lines |
 | MP, both stores in one wide instruction | same | 2 in 20 million (one per channel order) |
 | LB: `r1 = x; y = 1` ‖ `r2 = y; x = 1` | `r1 = r2 = 1` | never (also in one instruction) |
 
-So across wide instructions v3 behaves like TSO (x86): the only
-reordering is a later load passing an earlier store (a store buffer),
-and `wait st_c = 1` before the load prevents it. Loads are not
-reordered with loads, stores not with stores, and a load not with a
-later store. Within one wide instruction a load may see memory before
-the instruction's store, and two stores may become visible in either
+In this setup (litmus.c's writer resets `x` and `y`, so both lines
+start in its cache) the only reordering across wide instructions is a
+later load passing an earlier store (a store buffer), which `wait st_c =
+1` before the load prevents. That is not TSO, though: when the reader
+already holds the lines, MP fails on all three machines (below).
+Within one wide instruction a load may see memory before the
+instruction's store, and two stores may become visible in either
 order (rare, since they need another core reading between them). The
 counts are low because the two threads rarely overlap closely, so
 "never" means not seen in 4 million tries per variant. The Elbrus-8C2
@@ -335,12 +341,73 @@ would show 0 even if they ordered nothing (inferred). It is no rule a
 compiler can use, since a store that misses the cache may stay
 buffered longer (inferred): seq_cst still needs the fence.
 
-For a compiler on v3 that means: seq_cst stores and fences need the
-`wait` (or a locked read-modify-write); acquire loads and release
-stores need only that the compiler keeps their order and does not put
-the release store in one instruction with an earlier store (lcc still
-emits `wait` before a release store and a dummy use after an acquire
-load, which is safe).
+**Message passing when the reader holds the lines** [hw:
+`tools/abi/probes/pocabi1_mp.c` with `pocabi1_mp.s`, lcc 1.29.16 builds
+for each machine, 1,000,000 tries a variant, 1 to 5 runs; in the final
+version the writer stores a new value each try, so a value left from an
+earlier try would show, and none did]. The writer stores `x` then `y`
+in consecutive wide instructions, the reader loads `y` then `x`. In setup R the reader
+resets `x` and `y` before each try, so both lines start in its own
+cache; in setup S the writer resets them and the reader then reads `x`,
+so `x` starts shared and `y` in the writer's cache alone; W is
+litmus.c's setup. `r1 = 1, r2 = 0` per million:
+
+| Writer ‖ reader | 4C, one chip | 4C, two chips | 8C2 | 2C3 |
+|---|---|---|---|---|
+| R: plain stores (in any channels) or `y` by a lock-wait loop; plain loads | 0-9 (an earlier build: 216-567, the lock loop 0-2) | 29-98 | 28-886 | 0-48 |
+| R: the loads in one wide instruction | 178-794 | 54-89 | 4-93 | 0-6 |
+| S: plain stores and loads | 168,000-175,000 | 420,000-426,000 | 195,000-216,000 | 233,000-292,000 |
+| S: reader `wait ld_c = 1` between the loads | 0-1 | 2-8 | 0 | 2,600-21,300 |
+| S: reader's acquire, lcc's dummy use of `y` (`adds,sm r1, 0x0, %empty`) between the loads | 0-1 | 1-7 | 0-17 | 8,500-24,700 |
+| S: writer `wait st_c = 1` between the stores | 0-1 | 15-18 | 0 | 0-1 |
+| S: writer's release, lcc's `{ wait ld_c = 1, st_c = 1; std y }` | 2,400-2,600 | 428-443 | 0 | 0 |
+| R and S: writer's `wait` or release ‖ reader's `wait` or acquire | 0 | 0 | 0 | 0 |
+| R and S: `y` written by lcc's exchange loop (unlock store in ALC2) ‖ reader's acquire | 0 | 0 | 0 | 0 |
+| W: any of these | 0 | 0 | 0-2 | 0-1 |
+
+- The stores' channels (ALC2 or ALC5 for either store) made no
+  difference, and `y` written by a lock-wait loop with its unlock store
+  in ALC2 or ALC5 gave about the plain counts, except on one 4C chip in
+  setup R (0-2). With lcc's acquire reading, the ALC5
+  unlock store gave one outcome on the 2C3 in 2 million tries, the ALC2
+  one none (not enough to tell them apart; lcc uses ALC5 only for
+  relaxed and acquire read-modify-writes, which promise no release).
+- The counts follow the run's timing: they repeat for one binary and
+  seed and change with the build (the 8C2's plain R row was 29-45 in
+  two builds, 494-740 in a third).
+- So a load that hits a line its core holds can complete before an
+  earlier load that misses (the plain S rows, cut to almost nothing by
+  ordering the reader's loads on the 4C and 8C2), and on the 2C3 the
+  writer's store to a line another core shares can reach the reader
+  after its later store to a line it owns: a reader that waits for `y`
+  still reads the old `x` in up to 2.5% of tries, and only a `wait`
+  between the writer's stores prevents it (inferred from the rows;
+  whether the writer reorders the stores or the reader applies the
+  invalidation late can't be told apart here). Each side's fence alone
+  left outcomes on some machine (the reader's up to 2.5% on the 2C3 and
+  a few per million on the 4C and 8C2; the writer's, against plain
+  loads, up to 2,600 per million on the 4C); both together left none
+  anywhere.
+- MCST's kernel writes its pre-v6 acquire load as the load plus a dummy
+  use of the value ("Wait for the load to finish before issuing next
+  memory loads/stores": `__smp_load_acquire`, `asm/barrier.h:140-148`;
+  `E2K_RF_WAIT_LOAD`, `asm/e2k_api.h:5187-5198`) and its pre-v6 release
+  store as a `wait ld_c, st_c, sal, sas` before the store
+  (`smp_store_release_mt`, `asm/barrier.h:81-89`) [source]: lcc's forms.
+- litmus.c's MP never saw this because its writer resets the lines.
+  Found while rechecking the proof-of-concept back end's A29 (whether
+  the ALC5 unlock store means anything for ordering).
+
+For a compiler, on every version measured (v3, v5, v6), that means:
+
+- seq_cst stores and fences need the `wait` (or a locked
+  read-modify-write).
+- A release store needs a `wait` before it, as lcc's `wait ld_c = 1,
+  st_c = 1` (and never shares a wide instruction with an earlier store).
+- An acquire load needs its value used before any later load issues, as
+  lcc's dummy `adds,sm` does, or a `wait ld_c = 1` after it. Keeping the
+  order in the instruction stream is not enough on either side.
+- A read-modify-write orders as lcc's do without a `wait` (above).
 
 16-byte atomics on v3 (same probe): two threads doing
 `__atomic_fetch_add` and CAS loops on an `__int128` through libatomic

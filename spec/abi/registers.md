@@ -176,16 +176,22 @@ measured 0.54% of xz -6's cycles in `BUB_B_RF_SPILLFILL` on the 8C2
   as its two 64-bit parts (copies through memory, arguments returned,
   stored or passed on, call results returned) holds no extended value
   and keeps `nfx = 1`, except that from `-O1` on it inherits `nfx = 0`
-  from the function before it in the file when that one had it (a
-  function without a `long double` in a register between them stops
-  this) [lcc 1.29.16 `-O3`, v3, v5.8c2, v6.2c3, and 1.31.05:
-  `tools/abi/probes/pocabi2_nfx.c`]. Unipro's clang clears it in
+  from the function before it in the file when that one had it [lcc
+  1.29.16 `-O3`, v3, v5.8c2, v6.2c3, and 1.31.05:
+  `tools/abi/probes/pocabi2_nfx.c`]. The carry-over isn't about `long
+  double`: a function that only returns a constant or one loaded value
+  inherits `nfx = 0` too, whatever its types, and passes it on to the
+  next, while one that computes (an `int` `x + 3`, the sum of two loads)
+  or stores (a copy through memory) gets `nfx = 1` and stops it [lcc
+  1.29.16 `-O1` to `-O3` and 1.31.05 `-O3`, v3, v5.8c2, v6.2c3:
+  `tools/abi/probes/pocabi1_nfx.c`]. Unipro's clang clears it in
   exactly the functions that compute with an 80-bit value (unipro
-  20.1.8 `-O2 -march=elbrus-v3`, the same file). lcc's v5 and v6 code
-  also clears it in every function that uses a 128-bit register, leaves
-  included, and across a call it keeps a 128-bit value in its stack
-  frame, not in a register (lcc 1.29.16 `-O3`, small vector-type
-  functions).
+  20.1.8 `-O2 -march=elbrus-v3`, `pocabi2_nfx.c`). lcc's
+  v5 and v6 code also clears it in every function that uses a 128-bit
+  register, leaves included (16-byte atomics too: atomics.md, "16-byte
+  atomics"), with the same carry-over into the functions after it, and
+  across a call it keeps a 128-bit value in its stack frame, not in a
+  register (lcc 1.29.16 `-O3`, small vector-type functions).
 - **`dbl`** (v3+): with `dbl = 1`, 32-bit integer ALU operations
   zero-extend their result into the whole 64-bit register; with
   `dbl = 0`, they write only the low half and leave the upper half

@@ -45,16 +45,24 @@ loop around a **locked load** and an **unlocking store**. lcc's
   and sets a lock on the address.
 - The store has MAS `0x2`: "wait-unlock" store
   (`e2k_parse_mas_sts1`, mod 2). It writes only if the lock is still held,
-  then releases it. lcc puts it in ALC2.
+  then releases it. lcc puts it in ALC2, except in relaxed and acquire
+  exchanges, fetch-ops and test-and-sets for v5 and v6, at every size,
+  where it uses ALC5; consume, release, acq_rel and seq_cst ones, every
+  compare-exchange, and all of v3's and v4's use ALC2 [lcc 1.29.16 `-O3`:
+  `e2k-v5.8c2`, `v6.2c3`, `v6.16c` against `v3`, `v4.8c`, `v4.1c+`, and
+  1.31.05 `v5.8c2`: `tools/abi/probes/pocabi1_ord.c`; `pocabi1_atom16.c`
+  for 16 bytes]. ALC5 is SIGILL on v3 ("What breaks the lock"); in the
+  message-passing tests the channel made no measurable difference
+  ("Memory ordering on hardware").
 - `rbranch 1b` in the store's wide instruction is assembled as
   `ibranch 1b ? %MLOCK` (CT condition type 8, bundle.md): taken when the
   lock was lost and the store did not happen, so the loop retries.
 - Between the two, lcc's templates contain only ALU operations
   (`addd`; for compare-exchange `cmpesb` and `merges`). Sizes: `ldb`/
   `ldh`/`ldw`/`ldd` with the matching store; 16 bytes `ldqp`/`stqp` (v5+).
-- The memory order does not change the loop: relaxed and seq_cst
-  read-modify-writes have no `wait` around them, so the locked pair
-  itself orders memory.
+- The memory order does not change the loop (except the unlock store's
+  channel on v5 and v6, above): relaxed and seq_cst read-modify-writes
+  have no `wait` around them, so the locked pair itself orders memory.
   An exchange with its unlock store in ALC2 after a plain store, read
   with lcc's acquire, never failed message passing on any machine
   ("Memory ordering on hardware").
@@ -422,7 +430,7 @@ lock-free 1, because that system's libatomic is built for the 8C2
 | Target | Hardware 16-byte atomics | lcc's code | `__atomic_always_lock_free(16)` |
 |---|---|---|---|
 | v3, v4 | no (only loads and stores of protected-mode descriptors) | calls `__atomic_load_16`, `__atomic_compare_exchange_16`, ... in libatomic, which uses a lock, not lock-free | 0 |
-| v5+ | yes | inline `ldqp`/`stqp` loops with the same MAS; seq_cst load = `wait`, `ldqp`, dummy use | 1 |
+| v5+ | yes | inline `ldqp`/`stqp` sequences (below) | 1 |
 
 - Whether code that mixes the two on **one object** works depends on
   the system's libatomic. A libatomic built for v3/v4 (ALT Linux's on
@@ -440,10 +448,89 @@ lock-free 1, because that system's libatomic is built for the 8C2
   tables) with only protected-mode changes (`internal-lcc-libs`,
   `lib/GNU/gcc-11/libatomic`).
 
+**lcc's v5 and v6 sequences** [lcc 1.29.16 and 1.31.05 `-O3`,
+`e2k-v5.8c2` and `e2k-v6.2c3`: `tools/abi/probes/pocabi1_atom16.c`; the
+two versions differ only in scheduling around the templates; found by
+the proof-of-concept back end, `docs/spec-poc-findings.md` A29]. The
+value lives in one `qp` register: `qppackdl hi, lo` builds it (a
+constant too: `qppackdl 0x0, 0x0`), and `qpswitchd` (which swaps the
+halves) and `addd 0x0, q` take the high and low halves out. Every
+function that touches one gets `setwd nfx = 0` (registers.md, "nfx").
+The bracketed templates are lcc's inline-asm sequences, as for the
+narrower sizes:
+
+| Operation | v5 (8C2) | v6 (2C3) |
+|---|---|---|
+| relaxed load | two `ldd` (in one wide instruction through a pointer, in consecutive ones for a global) and `qppackdl`: **two accesses** | one `ldqp` |
+| consume, acquire load | `{ ldqp; nop 2 } { adds,s v, 0x0, %empty }` (the dummy use of "Loads, stores and fences") | the same with `nop 4` |
+| seq_cst load | `wait ld_c = 1, st_c = 1` in the `ldqp`'s instruction, then as acquire | the same |
+| relaxed store | `qppackdl`, `stqp` | the same |
+| release store | `{ nop } { wait ld_c = 1, sal = 1, st_c = 1, sas = 1; stqp }` | `{ wait ld_c = 1, st_c = 1; stqp }` |
+| seq_cst store | the release store, then `{ wait st_c = 1 }` | the same |
+| exchange | `1: { ldqp,0 a, old, mas = 0x7; nop 1 } { stqp a, new, mas = 0x2; rbranch 1b }`: a lock-wait loop of its own, with no compare | `1: nop 1`, then the same |
+| compare-exchange | `*expected` read with two `ldd` and packed, the desired value packed, then `1: { ldqp,0 a, old, mas = 0x7; nop 2 } { qpcmpeqd,0 old, exp, m } { qpswitchd,0 m, m2 } { qpand,0 m, m2, m } { qpmerge,0 old, des, m, m; andd,1 m, 0x1, ok; nop 3 } { stqp,2 a, m, mas = 0x2; rbranch 1b }` (the `andd` reads the mask in `qpmerge`'s own instruction, before `qpmerge` replaces it); afterwards the old value is written to `*expected` with two `std`, whatever the outcome | `*expected` read with one `ldqp`; `1: nop 1 { ldqp,0 a, old, mas = 0x7; nop 7 } { qpcmpeqdap,0 old, exp, %pred } { qpmrgp,0 old, des, new, %pred; merges,1 0x0, 0x1, ok, %pred } { stqp,2 a, new, mas = 0x2; rbranch 1b }`; the old value written back with one `stqp` |
+| fetch-op (add, sub, and, or, ...) | the old value read with two `ldd` (after the first failed round, with two `ldd,sm` issued right after the loop), the new one computed in halves (`cmpbdb` for the carry), then the compare-exchange loop above; on a mismatch, reload and repeat | the same around v6's compare-exchange |
+
+As with the narrower sizes, the compare-exchange stores on both outcomes
+(the old value when they differ), the `__sync_*` builtins are the
+seq_cst forms, and the unlock store goes in ALC5 for relaxed and acquire
+exchanges and fetch-ops, ALC2 otherwise ("Read-modify-write").
+`__atomic_always_lock_free (16, 0)` and `__atomic_is_lock_free` are 1.
+
+On hardware [`tools/abi/probes/pocabi1_a16run.c`, lcc `-O3`, two to
+four runs each: the 8C2 with 8C2 code; the 2C3 with 2C3 code, and with lcc's 8C2
+assembly assembled for the 2C3, since 8C2 programs don't run there
+("Exec format error")]:
+
+- Two threads each added 2^64 + 2^63 + 1 (a carry between the halves
+  every second add) a million times: relaxed against seq_cst fetch-add,
+  fetch-add against a weak compare-exchange loop, and add-fetch against
+  fetch-sub. Every count came out exact, and concurrent exchanges kept
+  every value (sum in = sum out).
+- A compare-exchange that fails in either half returns 0, leaves the
+  object and copies it to `*expected`.
+- A concurrent `stqp` never tore lcc's relaxed load through a pointer
+  (both `ldd` in one instruction: 16 million reads on the 8C2, 8 million
+  with 8C2 code on the 2C3), but tore its global form (the `ldd` in
+  consecutive instructions) once in 4 million reads on the 8C2. Two
+  `ldd` further apart tear often (`tools/abi/probes/pocabi1_tear.s`,
+  per million reads):
+
+| Halves read | 8C2 | 2C3 |
+|---|---|---|
+| in one wide instruction | 0 | 0 |
+| in consecutive instructions | 0-1 (1 in 10 million, lcc's global load included) | 0-1 |
+| 8 cycles apart | 1-3 | about 332,000 |
+| 32 cycles apart | 6-14 (cores 0, 4 and 2, 3), about 666,000 (cores 0, 1) | 894,000-999,000 |
+
+- Uncontended, in cycles per loop iteration: a call of a function doing
+  one operation plus the loop, whose empty iteration costs 25 on the 8C2
+  and 28 on the 2C3 (best of 5 × 1,000,000; every run alike):
+
+| Operation | 8C2 | 2C3 |
+|---|---|---|
+| load relaxed / acquire / seq_cst | 35 / 45 / 55 | 38 / 44 / 53 |
+| store relaxed / release / seq_cst | 34 / 48 / 53 | 38 / 44 / 59 |
+| exchange relaxed / seq_cst | 49 / 48 | 54 / 58 |
+| fetch-add relaxed / seq_cst | 73 / 74 | 64 / 60 |
+| compare-exchange that succeeds / fails | 68 / 58 | 58 / 56 |
+
 For a GCC port: under the default `-march=elbrus-v3` it must call
 libatomic for 16 bytes, as lcc does, and a v5+ mode should offer the same
 switch as `-mno-quad-memory-atomic`. Mixing v3 and v5 code that shares
-16-byte atomic objects is unsafe whichever compiler built it.
+16-byte atomic objects is unsafe whichever compiler built it. A v5+ mode
+can take lcc's sequences above with two changes. First, load with one
+`ldqp` at every order, as lcc's v6 code does: two `ldd` are one access
+only while they stay in one wide instruction, and even lcc's form in
+consecutive instructions tore once on the 8C2; a scheduler working on
+two `DImode` loads promises neither. Second, give exchange its own
+pattern (lcc's two-instruction loop). Without one, GCC builds exchange
+and every fetch-op as a compare-exchange loop (`expand_atomic_exchange`,
+optabs.cc:7504-7521, falls back to
+`maybe_emit_compare_and_swap_exchange_loop`, :7351-7364;
+`expand_atomic_fetch_op`, :8214, to the same loop, :8332): lcc's shape
+for fetch-ops, but not for exchange, whose loop is cheaper (48-49
+against 68 cycles a call on the 8C2, above).
 
 ## Other differences from GCC (lcc-doc)
 

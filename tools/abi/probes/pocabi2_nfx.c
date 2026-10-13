@@ -14,9 +14,10 @@
    functions that compute with an 80-bit value (leaf ... callpass), nfx = 1
    in those that only move the two 64-bit parts (cp ... tail), except
    pass2_after: a move-only function that follows one with nfx = 0 in the
-   file gets nfx = 0 as well (from -O1 on; a function without a long
-   double in a register between them, such as cp or an int function, stops
-   it).  Unipro 20.1.8: nfx = 0 in the computing functions only.  */
+   file gets nfx = 0 as well (from -O1 on; a function between them that
+   stores, such as cp, or computes stops it, while one that only returns
+   a constant or a loaded value inherits it too: pocabi1_nfx.c).
+   Unipro 20.1.8: nfx = 0 in the computing functions only.  */
 
 extern long double ext (long double);
 extern void ext2 (long double);

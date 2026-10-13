@@ -383,6 +383,12 @@ tools/abi/compat/   ABI compatibility suite: gen.py writes caller/callee
                     under qemu-e2k or, with --remote, on hardware over SSH
                     (removing the programs afterwards unless
                     --keep-remote); known.txt lists known differences
+tools/gcc-native/   native GCC builds on an Elbrus machine (draft): gcc-native.sh
+                    pushes a GCC commit (default: the PoC worktree
+                    toolchains/gcc-claude-native) to the 8C2, bootstraps
+                    it there (stage 1 by lcc, then by itself), runs
+                    check-gcc there and times lcc-built against
+                    self-built cc1plus; remote.sh is its machine side
 tools/dejagnu/      DejaGnu boards for GCC's testsuite: e2k-qemu (MCST
                     qemu-e2k, any -cpu), e2k-4c, e2k-8c2, e2k-2c3 (address
                     from the environment), e2k-ssh; run-gcc-tests.sh runs
@@ -396,7 +402,9 @@ toolchains/    untracked: installed toolchains, corpus builds, scratch output;
                gcc/ (GCC mainline, blobless clone) and gcc-tilegx/ (worktree
                at 54a5f478487, the last commit with TILE-Gx) as references;
                gcc-claude/ (experimental agent-written E2K backend, see
-               decision 2)
+               decision 2) and gcc-claude-native/ (a worktree of it on
+               branch native-build, for tools/gcc-native, so native
+               builds never touch the PoC agent's checkout)
 x86_64/        untracked: Unipro debs
 ```
 

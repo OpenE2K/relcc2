@@ -641,6 +641,16 @@ chain stack and has the DWARF CFI unwinder compiled out
 (`e2k-linux-tdep.c`, `#if 0` around `dwarf2_append_unwinders`). lcc
 emits no `.debug_frame` and, for C, no `.eh_frame` [lcc].
 
+lcc's 64-bit objects use DWARF version 2 in the **64-bit DWARF format**:
+`.debug_info`, `.debug_line` and `.debug_pubnames` start with
+`0xffffffff` and an 8-byte length, and section offsets are 8 bytes
+(`-mptr32` objects use the 32-bit format: [mode32.md](mode32.md), "C
+runtime") [lcc 1.29.16 and 1.31.05, `-g -c`; `readelf -x`,
+`--debug-dump`]. GCC's default is the 32-bit format and `-gdwarf64`
+selects lcc's (gcc `common.opt:3758-3764`); a consumer reads each
+unit's format from its own header (DWARF 5 section 7.4), so objects of
+both kinds can be linked together (inferred).
+
 For `DW_OP_call_frame_cfa` gdb returns its frame base, which for E2K
 frames is an offset into the procedure stack (`this_psp - psp_base`,
 `e2k_frame_this_id`), not a data-stack address. A `DW_AT_frame_base` of

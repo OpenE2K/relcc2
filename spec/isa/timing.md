@@ -699,7 +699,9 @@ operation every cycle, at full width:
 | 2 `paddw` (ALC0, 3 only on v3); 2 `popcntd` (ALC1, 4) | 1 |
 | 2 `add_addd` (ALC1, 4); 2 `add_addd` or `shl_addd` + 4 `addd`: **8 simple integer operations** (4C and 8C2) | 1 |
 | 4 `ldd` or `ldw`; 4 `ldd` + 2 `addd` | 1 |
+| 4 `ldb`, `ldh` or `ldw`, at fixed or moving addresses (4C, 8C2, 2C3: `timeleft.c` `tp`) | 1 |
 | 1 `std` (ALC2 or 5); a store with loads in any allowed channels, far apart | 1 |
+| 1 `stb` or `sth`; 2 `stb`, `sth`, `stw` or `std` in different banks (64 bytes apart) or at moving addresses; a byte, halfword or doubleword store in ALC2 with two loads of its size in ALC0 and ALC5, other blocks (4C, 8C2, 2C3: `timeleft.c` `tp`) | 1 |
 | 4 of any pipelined 64-bit packed FP operation (`pfaddd`, `pfadds`, `pfsubd`, `pfmuld`, `pfmuls`, `pfmaxd`, `pfmins`, `pfcmpeqd`, `pfcmplts`, `pfcmpuodd`, `pfhadds`, `pfaddsubs`, `pfmul_addd`, `pfmul_adds`, `pfadd_hadds`, `pfdtoifd`, `pfstoifs` and the conversions `pfstois`, `pfstofd`, `pistofs`, `pfdtois`, `pfdtofs`); 1 or 2 `pfaddd`; 4 `pfaddd` + 2 `addd`; 2 `pfmuls` + 2 `fmuld`; 4 `pfmul_addd` + 2 `ldd` (4C, 8C2, 2C3: `pf_*`) | 1 |
 
 The 64-bit packed FP operations (two singles or one double in a 64-bit
@@ -785,7 +787,16 @@ measured.
 **Two stores in one instruction** take 2 cycles when their addresses
 agree in bits 6–7 (the same 64-byte bank of four: 0, 8, 16, 32, 48, 256
 or 512 bytes apart), and 1 cycle otherwise (64, 80, 96, 128, 192, 320,
-384, 448 apart). `stw` pairs behave the same way. Alternating stores to
+384, 448 apart). `stw`, `sth` and `stb` pairs behave the same way, and
+two byte or halfword stores into one doubleword take 2 at fixed
+addresses (two `stb` moving on 2 bytes an instruction, so that four
+instructions in a row store into each doubleword: 1.28). The bank is
+address bits 6–7 and nothing else: two `std` or `stb` 4, 8, 16 or 64
+KiB apart take 2 cycles and 64 bytes more 1, with 4 KiB and with 2 MiB
+pages (1 MiB too, tried with 4 KiB pages), and 96 random pairs of 4 KiB pages
+of a 64 MiB region at one page offset all took 2, at 64 bytes more all
+1 [hw: `tools/isa-probes/timeleft.c` `tp`, `bank`; 4C, 8C2, 2C3; loops
+of 32 and 64 instructions storing to the same addresses]. Alternating stores to
 one bank in successive instructions cost nothing. **This holds only
 when instructions store to the same addresses again** (`bench.py`'s
 kernels store to two fixed places every instruction): in a run of 32
@@ -808,7 +819,13 @@ addresses) differ within one run and between runs, also pinned to one
 CPU, in contiguous stretches of the run, so some state left by earlier
 code decides it. Different 32-byte blocks never conflict, nor do two
 loads (0 to 512 bytes apart), nor a store followed by a load of the
-same bytes in the next instruction.
+same bytes in the next instruction. The addresses are compared modulo
+4 KiB: a store and a load of the same doubleword offset 4, 8, 12, 16
+or 64 KiB apart take 2 cycles in every run, with 4 KiB and 2 MiB pages
+(1 MiB too, tried with 4 KiB pages) and the load in ALC0 or ALC5,
+other doublewords of the block's
+offset take 1 or 2 by run as above (8C2: 1.65–2), and other blocks 1
+[hw: `tools/isa-probes/timeleft.c` `bank`, `alias`; 4C, 8C2, 2C3].
 
 A compiler cannot see most addresses, but it can for one base register
 (stack slots, structure fields): don't put two stores whose offsets
@@ -1155,7 +1172,12 @@ except where shown]:
 (A pair is the load and its consumer in the next instruction, here in
 the other cluster: 2 + 4 × ⌈(latency − 1) / 4⌉ cycles by the stall
 rule, so 6 means a latency of at most 5, 10 means 6–9, 14 means 10–13,
-18 means 14–17.)
+18 means 14–17. The gap method narrows two of these [hw:
+`tools/isa-probes/timeleft.c` `aau`, `ldd,5` or `ldaad,5` from a base
++0, +4 or +1, a doubleword inside a 32-byte line, → `addd,0`]: `ldd`
+crossing a doubleword has a latency of exactly 9 on the 4C and 11 on
+the 8C2 (5 on the 2C3), and `ldaad` 9, 11 and 13 at any of these
+offsets.)
 
 - On v3 and v5 a load inside a 32-byte line issues at full rate however
   it is aligned. Crossing a doubleword adds one stall step to its
@@ -1197,9 +1219,38 @@ written by the instruction before costs nothing: `pocchk2.c`
 `t_stbase_k*`, `t_stdata_k*`, all three machines.) The match is by aligned doubleword: a
 narrower or wider reload, and `stw` at +0 followed by `ldw` at +4 (no
 overlapping bytes), all pay it; the next doubleword, the next line or
-any other address doesn't. So keep a reload of a just-stored location
+any other address in the same 16 KiB doesn't (but see the next
+paragraph). So keep a reload of a just-stored location
 (a spill and its fill, a stack argument) at least one instruction away
 from the store.
+
+**Loads 16 KiB away from a store pay the reload penalty too**, and
+longer [hw: `tools/isa-probes/timeleft.c` `alias`, the `stld` lines,
+and `tools/isa-probes/timeleftv.c` `sl` at more distances and gaps; a
+store to `p`, `G` empty
+cycles, a load from `p + D` and its use feeding the next store; 2 MiB
+pages; 4C, 8C2, 2C3]. Cycles a step:
+
+| Load at `p + D`, `G` empty cycles after the store | `G` = 0 | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|---|
+| no conflict | 7.1 | 8.1 | 9.1 | 10.1 | 11.1 |
+| `D` = 0 (a true reload) | 15.1 | 8.1 | 9.1 | 10.1 | 11.1 |
+| `D` = 16, 32, 48, 64, 96, 128 or 192 KiB, or 1 MiB | 15.1 | 4C 14.0; 8C2, 2C3 16.1 | 4C 13.1; 8C2, 2C3 17.1 | 4C, 8C2 10.1; 2C3 18.1 | 11.1 |
+| `D` = 8, 16, 24 (another doubleword of the stored 32-byte block), 8C2 | 7.1 | 16.1 | 17.1 | 10.1 | 11.1 |
+
+`D` = 4, 8, 12, 20, 24, 28 or 40 KiB, 16 KiB plus 8, 32 or 64 bytes
+and 64 KiB plus 8 to 256 bytes or minus 8 cost nothing. So a load of the same offset in
+another 16 KiB pays the penalty until 3 empty cycles after the store (4
+on the 2C3), where a true reload pays only right after it. 16 KiB is
+one way of the 64 KiB 4-way L1, so the check presumably compares the
+set index and offset, address bits 3–13, and not the rest (inferred).
+With 4 KiB pages the distances that pay change from run to run (64 KiB
+paid in every run, 1 MiB in all but one, 32 KiB to 3 MiB and even
+64 KiB + 8 in some), which fits bits 12–13 being taken from the
+physical address (inferred; low confidence). For a compiler: keep a
+load that may be 16 KiB × k from a store just made, such as a spill
+reload or a strided access in a loop of stores, 3 cycles (v6: 4) after
+the store where the schedule allows it.
 
 **Loads whose value is never read** (`pocchk2.c` `t_dead_*`, the
 proof-of-concept back end's finding I37): a step of four independent
@@ -1439,7 +1490,10 @@ What v5 adds or changes:
   scheduling" is about).
 - **A store and a load in one 32-byte block** in one instruction take
   1.8–2 cycles in every run (the 4C sometimes runs them at 1); two
-  stores agreeing in address bits 6–7 take 2, as on the 4C.
+  stores agreeing in address bits 6–7 take 2, as on the 4C. A load of
+  another doubleword of a 32-byte block stored 1 or 2 cycles before
+  pays the reload penalty, which the 4C and 2C3 don't (Memory, "Loads
+  16 KiB away from a store").
 
 ## Elbrus-2C3 (v6) [hw]
 
@@ -1572,7 +1626,9 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
   (lcc 1.26); measured above: one conflicting pattern with the divider.
 - v6: the bypass from a store to a following load was removed (lcc 1.26),
   so a load that reads what a store just wrote waits longer. Not seen
-  on the 2C3: the reload penalty is the 8C2's (Elbrus-2C3, above).
+  on the 2C3: the reload penalty is the 8C2's (Elbrus-2C3, above); only
+  a load 16 KiB away pays it a cycle longer (Memory, "Loads 16 KiB away
+  from a store").
 - Elbrus-48C (v7): prepare-to-transfer delays differ;
   `-mset-prepare-ct-delays-e48c` applies them and is on with
   `-mtune=elbrus-48c` (lcc 1.31).
@@ -1585,11 +1641,9 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
   conflicts at distances that depend on its operand and on whether the
   gap is a `nop N` in its instruction, and what decides runs of four
   or more ("Throughput", "Divider").
-- Throughput of byte and halfword loads and stores; whether the store
-  bank rule involves physical address bits. (Measured on this page:
-  128-bit operations, "Elbrus-8C2 (v5)" (`v5tp_*`); 64-bit packed FP
-  operations, word loads and AAU stores, "Throughput"; array prefetch
-  areas and `mova`, "Array prefetch".)
+- Exactly which address bits the 16 KiB store-to-load alias compares
+  with 4 KiB pages, where the result changes from run to run (Memory,
+  "Loads 16 KiB away from a store").
 - Why a stream of loads that miss leaves only part of its lines in L1
   (Memory, "Not every load that misses fills L1"), and why a chase
   in the other cluster finds fewer of a chase's lines on the 4C and

@@ -113,6 +113,7 @@ PROBES = {
     "timeleft.s": ("timeleft.c", "4C, 8C2, 2C3"),
     "timeleft-v6.s": ("timeleft.c", "2C3"),
     "timeleftv.s": ("timeleftv.c", "4C, 8C2, 2C3"),
+    "damlist.s": ("damlist.c", "4C, 8C2, 2C3"),
     "pocabi2.s": ("abi/pocabi2.s", "4C, 8C2, 2C3"),
     "kernleft.s": ("abi/kernleft.s", "4C, 8C2, 2C3"),
     "pocabi1_mp.s": ("abi/pocabi1_mp.s", "4C, 8C2, 2C3"),

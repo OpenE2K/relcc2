@@ -1033,9 +1033,13 @@ What each MAS fills [hw: `pf.c` part 4: 128 lines prefetched, a
 | prefetch MAS 0x60 (lcc's locality 0) | **nothing** | nothing | nothing |
 
 So MAS 0x20 (the "not L1" hint, `dc_ch` 1) leaves the line in L2, 0x40
-in the 8C2's L3 and nowhere on the CPUs without one, and 0x60 fetches
-the line from memory and keeps it nowhere (as loads, these MAS values
-are the cache hints of "Cache hints in the MAS" above).
+in the 8C2's L3 and nowhere on the CPUs without one, and 0x60 keeps it
+nowhere (as loads, these MAS values are the cache hints of "Cache hints
+in the MAS" above). A 0x60 prefetch reads nothing at all: it makes one
+L2 lookup that misses and is dropped, with no memory read
+(`MAU_READS`, `MAU_LDB_LINE` and `L2_LINE` 0 against 1 per line for
+MAS 0 and 0x20; `pmu2.c` `pf0x*`, all three; [monitors.md](monitors.md),
+"MAU"), while a 0x60 load does read its line.
 
 The same holds for real loads and stores [hw:
 `tools/isa-probes/memleft.c` `fill`: 128 lines 64 bytes apart, evicted,
@@ -1101,10 +1105,18 @@ kept only 3–4 misses in flight (inferred). lcc's own `s += a[i]` at
 So: APB beats software prefetch 3–7× on v5 and v6; a prefetch whose
 data is used soon is best with MAS 0 (L1), and lcc's `0x20` costs a
 little (an L2 hit per line) for keeping L1 clean; a locality-0 prefetch
-as lcc emits it (0x60) only adds memory traffic and makes a stream 3–5×
-slower. Following lcc (decision 7) means emitting 0x20; the measurements
-favour 0x00 for data used soon and nothing for locality 0 (0x40 on the
-8C2): the owner's call.
+as lcc emits it (0x60) does nothing, and the loop lcc builds around it is
+3–5× slower than its loop without a prefetch call. On the 4C the
+locality-0 build reads as many lines from memory as the locality-3 one
+(`MAU_READS` 12.6 M each, 13.2 M without prefetch calls) and runs at the
+speed of the same assembly with the prefetches deleted (28.1 against
+27.6 cycles a line, 708 M against 696 M cycles), while `-fno-loop-apb`
+alone gives 8.8–9.3. What is slow is the loop lcc builds around a
+prefetch call, 16 wide instructions for 16 elements instead of 6
+(inferred) [hw: `pf-lcc.c`, `perf stat`, 4C, two runs]. Following lcc
+(decision 7) means emitting 0x20; the measurements favour 0x00 for data
+used soon and nothing for locality 0 (0x40 on the 8C2): the owner's
+call.
 
 **What GCC's parameters need** (GCC `params.opt:380-406`,
 `doc/params.texi:932-942`; GCC's defaults in brackets):

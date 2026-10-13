@@ -602,6 +602,7 @@ What keeps or loses an entry:
 | store to the same bytes, full or partial | lost | reload, `%MLOCK` |
 | store to other bytes | kept | at distances 8 B to 16 MiB + 8: no false conflicts |
 | a store before the lock load | — | no conflict |
+| a store **in the check's own wide instruction** whose address agrees with the checked one in bits 0–11 | the check fails, also for a store 4 KiB away (a false conflict) | `DAM_BELL_STORE_CONFLICT` and `DAM_BELL` 1, `rbranch` taken, 27 cycles an iteration against 8; a store to the next doubleword in that instruction, or 4 KiB away one instruction earlier, doesn't (`tools/isa-probes/pmu2.c` `dam_st_*`, 4C, 8C2, 2C3; the event's description: "determined by 12 bits"; [monitors.md](monitors.md)) |
 | a `call` (to a function that just returns) | kept | |
 | a call deep enough to spill the register file (64 levels) | lost | `DAM_BELL` 1 ([monitors.md](monitors.md)); 2 levels: kept |
 | a trap (page fault) | lost: the kernel clears the DAM on every page fault and context switch [source] | reload, `%MLOCK` |

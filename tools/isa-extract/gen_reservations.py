@@ -342,7 +342,9 @@ WIDE_INSTRUCTION = {
             "the 16-bit halves (ALES0, 1, 3, 4, then AAS) rounded up to whole words, "
             "then LTS, PLS and CDS words, the total rounded up to an even number "
             "(bundle.md, \"Overall layout\"; gas: \"wide instruction requires N "
-            "syllables which exceeds the maximal supported size of 16 ones\").",
+            "syllables which exceeds the maximal supported size of 16 ones\"); the LTS "
+            "count is 1 + the highest LTS used, PLS 1 + the highest PLS used, and "
+            "bundle.md, \"Counting the size\", has the whole rule.",
     "syllables": {
         "hs": {"words": 1, "fields": {"nop": "empty cycles after it, 0-7",
                                       "lm": "loop_mode", "sw": "set_mark"},
@@ -396,11 +398,15 @@ WIDE_INSTRUCTION = {
                       "note": "ALES0, ALES1, ALES3, ALES4: present when the channel's "
                               "operation has an ALES, default or not"},
         "aas": {"words": "1/2 each", "mova_channels": 4,
-                "note": "AAS0 (destinations of mova 0, 1) and AAS1 (mova 2, 3), then one "
-                        "half per mova (AAS2-AAS5); needs an SS of type 0"},
+                "note": "AAS0 (destinations of mova 0, 1) when mova channel 0 or 1 is used "
+                        "and AAS1 (mova 2, 3) when 2 or 3 is, then one half per mova channel "
+                        "used (AAS2-AAS5; a movaq two): a mova in channel 2 alone is AAS1 + "
+                        "AAS4, one word; needs an SS of type 0"},
         "lts": {"count": 4, "words": "1 each",
                 "note": "literals, LTS0 first, placed from the end backwards in whatever "
-                        "room is left; LTS0 is also setwd/vfrpsz/settr's (literals, below)"},
+                        "room is left; the count is 1 + the highest LTS used, not the number "
+                        "of literals (an explicit _lts2 alone takes three words); LTS0 is "
+                        "also setwd/vfrpsz/settr's (literals, below)"},
         "pls": {"count": 3, "words": "1 each",
                 "note": "PLS0 (ELP @p0, @p1; CLP0 -> @p4), PLS1 (ELP @p2, @p3; CLP1 -> @p5), "
                         "PLS2 (CLP2 -> @p6); using PLS N costs PLS0..N (predicates.md, "
@@ -571,9 +577,10 @@ RESTRICTIONS = [
      "rule": "movaq in mova channel 0 or 2, holding the next one too",
      "source": "gas parse_mova_args", "check": "checked"},
     {"id": "size",
-     "rule": "everything fits in 16 words (wide_instruction.size)",
-     "source": "bundle.md, \"Overall layout\"; predicates.md (\"HS + 6 ALS + 4 LTS + 2 PLS "
-               "+ 3 CDS = 16 assembles\")", "check": "encoding"},
+     "rule": "everything fits in 16 words, sized as wide_instruction.size says",
+     "source": "bundle.md, \"Overall layout\", \"Counting the size\"; predicates.md "
+               "(\"HS + 6 ALS + 4 LTS + 2 PLS + 3 CDS = 16 assembles\")",
+     "check": "checked"},
     {"id": "ct11-flags", "isets": [7],
      "rule": "ctcond type 11 is false when alc, abn or abp have different t and f bits in "
              "the instruction (gas refuses it)",

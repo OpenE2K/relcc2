@@ -68,6 +68,82 @@ ALES2 and ALES5 have no half-syllable slots. When needed, they share one
 The presence test: the word exists if `mdl` equals the current offset plus 4
 (no CS1) or plus 8 (with CS1).
 
+### Counting the size [checked: gas; decoded: lcc's code]
+
+A wide instruction holds at most 16 words; gas refuses a larger one
+("wide instruction requires 18 syllables which exceeds the maximal
+supported size of 16 ones"). gas sizes it by this rule (`tc-e2k.c`, the
+packing code after the `e2k_hs` struct), so a compiler that knows each
+operation's channel and literals can count it the same way:
+
+1. **Before the middle point**: HS; SS if any of its fields is used (a
+   transfer, an explicit `ipd`, `alc`/`abn`/`abp`, `bap`, any `mova`);
+   one ALS per busy channel; CS0; the ALES2/ALES5 word (v4+, only when
+   either value is not the default); CS1.
+2. **Half-syllables**, rounded up to whole words: one for each of
+   ALES0, 1, 3 and 4 that an operation marks (the default value counts:
+   `getsp` takes ALES0), then the AAS: AAS0 if `mova` channel 0 or 1 is
+   used, AAS1 if 2 or 3 is, and one half per `mova` channel used (a
+   `movaq` two). A `mova` in channel 2 alone is AAS1 + AAS4, one word
+   (AAS, below).
+3. **LTS: one more than the highest LTS used**, not the number of
+   literals (gas counts from the highest busy half). Left to gas the
+   slots are dense, in every order of 16-, 32- and 64-bit literals we
+   tried; an explicit `_f32s,_lts2` alone costs three words,
+   `_f16s,_lts1hi` alone two. What fits and what is free ("Literal
+   values"): a constant 0–31 written as `src1` takes no LTS and gas
+   never swaps operands, operations that use one value share its LTS,
+   and `setwd` takes LTS0.
+4. **PLS0 … PLSn** up to the highest one used: a `landp` of two
+   conditions one word, of three two, of four three
+   ([predicates.md](predicates.md)). **CDS**: two RLP/MRGC entries a
+   word.
+5. The total, rounded up to an even number of words.
+
+The control operations take what [reservations.yaml](reservations.yaml)
+lists: a lock load (MAS 0x4) or a check load (MAS 0x3) CS1, the check's
+`rbranch` SS and CS0 (with one ALS that is 6 words), `aaurr*`/`aaurw*`
+always CS1, which they share with MAS accesses.
+
+`tools/isa-extract/check_reservations.py` checks every wide instruction
+it decodes against this rule (with the PLS and CDS counts HS gives), and
+its `--selftest` assembles the cases of this section (`SIZE_CASES`) and
+compares gas's size or error with it. The rule gives the size of every
+one of the 1,661,756 wide instructions of lcc 1.29.16's code we
+checked (`libc.so.6` for v3, v5.8c2 and v6.2c3; SQLite 3.53.4's
+amalgamation at `-O3` for v3.4c and v5.8c2), of its CoreMark builds and
+of the decoder corpus (v3–v7), gas's padding aside. lcc names its
+literal slots itself and leaves a lower one empty (LTS0 and LTS2 used,
+LTS1 not) in 331–340 instructions of each `libc.so.6`.
+
+How close lcc's code comes to the limit [decoded: lcc 1.29.16, gas's
+padding left out; the counts are `check_reservations.py`'s notes]:
+
+| Code | Wide instructions | 14 words or more | 16 words | of them a function's first (`setwd`) | of them using 15 words |
+|---|---|---|---|---|---|
+| v3 `libc.so.6` | 409,374 | 0.44% | 182 (0.04%) | 31 | 142 |
+| v5.8c2 `libc.so.6` | 408,456 | 0.26% | 98 (0.02%) | 0 | 82 |
+| v6.2c3 `libc.so.6` | 405,944 | 0.30% | 127 (0.03%) | 0 | 107 |
+| SQLite, v3.4c `-O3` | 221,058 | 0.98% | 294 (0.13%) | 111 | 247 |
+| SQLite, v5.8c2 `-O3` | 216,924 | 0.63% | 142 (0.07%) | 0 | 115 |
+
+The v3 function entries at the limit have one shape (all 31 in
+`libc.so.6`, 110 of the 111 in SQLite): `setwd` (CS1, LTS0), a prepare
+with `ipd` (SS, CS0), `getsp` (ALS0 and its ALES0 half) and five more
+ALU operations with literals in LTS1–3: 15 words, rounded to 16. One
+more word still fits there (a CDS word for one or two predicated
+operations, or one `mova`'s AAS halves beside the ALES0 half); two more
+don't [checked: gas]. The other 16-word
+instructions are bodies heavy with predicates: 80–85% of them hold six
+ALU operations, 79–94% two or three PLS words, 69–86% a CDS word or
+more, and 52–80% three or four LTS. 78–84% of all 16-word instructions
+use 15 words and have a word to spare from the rounding.
+
+gas's own padding is separate empty wide instructions of 4–16 words
+before the labels it moves (about 2,000 in each `libc.so.6`, 82–85% of
+them starting at offsets 0x1c0–0x1ff of a 1 KiB block: `CODE_PLACEMENT`,
+[hwbugs.md](hwbugs.md)), so a count per instruction leaves it out.
+
 ## HS: header syllable [decoded]
 
 | Bits | Field | Meaning |
@@ -185,7 +261,11 @@ gas pitfalls (`check_literals.py`):
   the halves of LTS0 and LTS1, four 32-bit literals or two 64-bit ones;
   a fifth 16-bit value goes to a 32-bit LTS. More distinct values: error
   "literals cannot be packed into a wide command". `setwd` takes LTS0
-  (CS1, below) [source].
+  (CS1, below) [source]; after it 16-bit literals have only LTS1's two
+  halves (a third goes to a 32-bit LTS) and at most one 64-bit literal
+  fits, a second being "literals cannot be packed" [checked: gas,
+  `check_reservations.py --selftest`]. How many LTS words an instruction
+  takes: "Counting the size".
 
 lcc writes every literal that needs an LTS with its format and slot
 (`_f16s,_lts0lo 0x38`, `_f32s,_lts1 0xffffffa0`, `[ _f64,_lts0 sym ]`)
@@ -463,6 +543,13 @@ Present only with an SS of type 0, selected by `SS.aa0`–`aa3`.
   | 6–10 | `area` |
   | 1–5 | `ind` |
   | 0 | `am` |
+
+Which halves an instruction has [checked: gas]: AAS0 when `mova`
+channel 0 or 1 is used, AAS1 when 2 or 3 is, then AAS2+N for each
+`mova` channel N used (`movaq` takes N and N + 1), in that order;
+`SS.aa0`–`aa3` mark the channels. A `mova` in channel 2 alone brings
+AAS1 and AAS4, two halves: with one ALS and a 16-bit literal that is 6
+words, not 8 ("Counting the size").
 
 ## APB instructions [hw]
 

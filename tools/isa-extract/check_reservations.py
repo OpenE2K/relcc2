@@ -15,7 +15,10 @@ is claimed twice (CS0, the SS transfer and condition, CS1 groups, MAS
 fields, PLS slots, CDS entries, AAS channels), and the restrictions hold
 (loads and stores in ALC0/2/3/5, prepare and transfer through one CTPR
 before v6, %ctpr destinations in ALC0, %cmpN/%dt_alN/%clpN conditions,
-literal slots, the ALES2/ALES5 word before v4, ...). A violation means
+literal slots, the ALES2/ALES5 word before v4, ...), and that each
+instruction's size is the one gas's packing rule gives for its
+syllables (bundle.md, "Counting the size"; gas's empty padding
+instructions are counted apart). A violation means
 the data, the decoder or the compiler is wrong: each is printed with its
 address and the instruction as e2kdis.py prints it.
 
@@ -33,7 +36,9 @@ and the most any instruction uses of each resource.
 
 --selftest composes, from syllables MCST gas encodes, one wide
 instruction breaking each rule (gas refuses to write most of them) plus
-some that keep them, and checks that exactly the expected rules fire.
+some that keep them, and checks that exactly the expected rules fire;
+then it assembles the wide instructions of SIZE_CASES and checks the
+size gas gives each (or its error) and that the size rule agrees.
 
 Exit status 1 if any violation is found (or a self-test case fails).
 """
@@ -559,6 +564,32 @@ class Checker:
         if b.length // 4 > d.max_words:
             self.bad("size", addr, f"{b.length // 4} words", b)
 
+        # Size: what gas's packing rule gives (bundle.md, "Counting the
+        # size"). The LTS count is 1 + the highest LTS used; PLS and CDS
+        # counts are HS's. gas's CODE_PLACEMENT padding is an empty
+        # instruction of 4-16 words (hwbugs.md), counted apart.
+        size = b.length // 4
+        if (size > 2 and not b.als and ss is None and b.cs0 is None and b.cs1 is None
+                and not b.pls and not b.cds):
+            st["gas padding (empty instructions of 4-16 words)"] += 1
+            if 0x1c0 <= addr % 0x400 < 0x200:
+                st["gas padding at 0x1c0-0x1ff of a 1 KiB block"] += 1
+        else:
+            front = (1 + (ss is not None) + len(b.als) + (b.cs0 is not None) + ales25
+                     + (b.cs1 is not None))
+            halves = len(b.ales_marked & {0, 1, 3, 4}) + len(b.aas)
+            nlts = 1 + max(used) if used else 0
+            body = front + (halves + 1) // 2 + nlts + len(b.pls) + len(b.cds)
+            if nlts > len(used):
+                st["LTS slots left empty below the highest used"] += nlts - len(used)
+            if body + (body & 1) != size:
+                self.bad("size", addr, f"{size} words; the rule gives {body + (body & 1)}", b)
+            st["instructions of 14 words or more"] += size >= 14
+            if size == 16:
+                st["16-word instructions"] += 1
+                st["16-word instructions using 15"] += body == 15
+                st["16-word instructions with setwd"] += cs1op in (0, 1)
+
         # The data's control_operations.uses: no two operations found here
         # may claim one exclusive field. The encoding allows one of each, so
         # a clash means the data names the wrong syllable for one of them.
@@ -816,15 +847,15 @@ def selftest_cases(p):
         ("32-bit literal in a missing LTS1", 3,
          compose(als={0: v3[14].als[0] & ~0xff00 | 0xd9 << 8, 1: v3[11].als[1]},
                  lts=v3[14].lts[:1]),
-         {"lts-room"}),
+         {"lts-room", "size"}),
+        ("an LTS nothing reads", 3, compose(als={0: addd0}, lts=v3[0].lts), {"size"}),
         ("literal store data before v7", 3, compose(als={2: st_lit}, lts=v3[0].lts),
          {"literal-form"}),
         ("MAS for an empty channel", 3, compose(als={0: ldd0}, cs1=6 << 28 | 0x4 << 7),
          {"mas"}),
         ("ALES2 word on v3", 3, compose(als=p[4][0].als, ales=p[4][0].ales),
          {"ales25-before-v4", "channel"}),
-        ("stq without its ALC5 half", 5, compose(als={2: stq.als[2]}, ales={2: stq.ales[2]},
-                                                lts=v3[0].lts),
+        ("stq without its ALC5 half", 5, compose(als={2: stq.als[2]}, ales={2: stq.ales[2]}),
          {"one-op-per-channel"}),
         ("movaq pair from gas", 5, compose(ss=movaq.ss, aas=movaq.aas), set()),
         ("movaq in mova channel 1", 5, compose(ss=ss_aa1, aas=aas1), {"movaq-even"}),
@@ -832,6 +863,94 @@ def selftest_cases(p):
         ("ctcond 11 with alct != alcf", 7,
          compose(ss=v7[0].ss | 1 << 16, als=v7[0].als, cs0=v7[0].cs0), {"ct11-flags"}),
     ]
+
+
+# Self-test, sizes: wide instructions as gas writes them, and the size in
+# words gas gives each (or the start of its error message). The checker's
+# size rule (bundle.md, "Counting the size") must give the same, with no
+# violation. A = an addd in channel N; PRO = a function entry at the
+# limit (setwd, a prepare with ipd, getsp and five more operations, one
+# with a 64-bit literal: 15 words).
+_A = "addd,{} %dr0, %dr1, %dr{}"
+_MOVA = "movad,{} area=0, ind=0, am=1, be=0, %dr{}"
+_P1 = ["pass %pred0, @p0", "andp ~@p0, @p0, @p4", "pass @p4, %pred5"]
+_P2 = ["pass %pred0, @p0", "pass %pred1, @p1", "landp @p0, @p1, @p4", "pass @p4, %pred5"]
+_P3 = ["pass %pred0, @p0", "pass %pred1, @p1", "pass %pred2, @p2",
+       "landp @p0, @p1, @p4", "landp @p4, @p2, @p5", "pass @p5, %pred5"]
+_P4 = ["pass %pred0, @p0", "pass %pred1, @p1", "pass %pred2, @p2", "pass %pred3, @p3",
+       "landp @p0, @p1, @p4", "landp @p2, @p3, @p5", "landp @p4, @p5, @p6",
+       "pass @p6, %pred5"]
+_PRO = ["setwd wsz = 0x10, nfx = 0x1, dbl = 0x0", "disp %ctpr2, .Lt; ipd 2",
+        "getsp,0 _f16s 0xfff0, %dr2", "addd,1 %dr0, _f64 0x123456789a, %dr3",
+        "addd,2 %dr0, %dr1, %dr4", "addd,3 %dr0, %dr1, %dr5",
+        "addd,4 %dr0, %dr1, %dr6", "addd,5 %dr0, %dr1, %dr7"]
+_SIX_LIT = ["addd,0 %dr0, 0x10000, %dr10", "addd,1 %dr0, 0x20000, %dr11",
+            "addd,2 %dr0, 0x30000, %dr12", "addd,3 %dr0, 0x40000, %dr13",
+            "addd,4 %dr0, %dr1, %dr14", "addd,5 %dr0, %dr1, %dr15"]
+_SETWD = "setwd wsz = 0x10, nfx = 0x1, dbl = 0x0"
+_TOO_BIG = "wide instruction requires 18 syllables"
+_NO_ROOM = "literals cannot be packed"
+SIZE_CASES = [
+    # (name, ISA version, operations, words or gas's error)
+    ("one addd", 3, [_A.format(0, 2)], 2),
+    ("mova 0: AAS0 + AAS2", 3, [_MOVA.format(0, 8)], 4),
+    ("mova 2: AAS1 + AAS4", 3, [_MOVA.format(2, 8)], 4),
+    ("mova 2 + addd", 3, [_MOVA.format(2, 8), _A.format(0, 2)], 4),
+    ("mova 2 + two ALS + a 16-bit literal", 3,
+     [_MOVA.format(2, 8), _A.format(0, 2), "addd,1 %dr0, 0x1234, %dr3"], 6),
+    ("mova 0, 1 + addd", 3, [_MOVA.format(0, 8), _MOVA.format(1, 9), _A.format(0, 2)], 6),
+    ("mova 0, 2 + addd", 3, [_MOVA.format(0, 8), _MOVA.format(2, 9), _A.format(0, 2)], 6),
+    ("mova 0-3 + addd", 3, [_MOVA.format(c, 8 + c) for c in range(4)] + [_A.format(0, 2)],
+     6),
+    ("mova 2 + getsp (ALES0)", 3, [_MOVA.format(2, 8), "getsp,0 0x10, %dr2"], 6),
+    ("movaq 2 + addd, v5", 5, ["movaq,2 area=0, ind=0, am=1, be=0, %qb[0]",
+                               _A.format(0, 2)], 6),
+    ("andp of one condition", 3, _P1, 2),
+    ("landp of two", 3, _P2, 2),
+    ("landp of three", 3, _P3, 4),
+    ("landp of four", 3, _P4, 4),
+    ("lock load (CS1)", 3, ["ldd,0,sm %dr0, 0x0, %dr1, mas=0x4"], 4),
+    ("check load + rbranch (SS, CS0, CS1)", 3,
+     ["ldd,2 %dr0, 0x0, %dr1, mas=0x3", "rbranch .Lt"], 6),
+    ("aaurw (CS1)", 3, ["aaurw,2 %r0, %aaind1"], 4),
+    ("aaurrd (CS1)", 3, ["aaurrd,2 %aaind1, %dr0"], 4),
+    ("aaurw + lock load share CS1", 3,
+     ["aaurw,2 %r0, %aaind1", "ldd,0,sm %dr0, 0x0, %dr1, mas=0x4"], 4),
+    ("0x14 as src2", 3, ["addd,0 %dr0, 0x14, %dr1"], 4),
+    ("0x14 as src1", 3, ["addd,0 0x14, %dr0, %dr1"], 2),
+    ("0x14 as a load's src1", 3, ["ldd,0 0x14, %dr0, %dr1"], 2),
+    ("0x20 as src1", 3, ["addd,0 0x20, %dr0, %dr1"], "Invalid argument in position of SRC1"),
+    ("_lts2 alone", 3, ["ldd,0 %dr0, _f32s,_lts2 0x12345, %dr1"], 6),
+    ("_lts1hi alone", 3, ["ldd,0 %dr0, _f16s,_lts1hi 0x123, %dr1"], 4),
+    ("16, 16, 64-bit literals", 3, ["addd,0 %dr0, 0x1234, %dr3", "addd,1 %dr0, 0x1235, %dr4",
+                                    "addd,2 %dr0, _f64 0x123456789a, %dr2"], 8),
+    ("setwd + three 16-bit literals", 3,
+     [_SETWD, "addd,0 %dr0, 0x1234, %dr3", "addd,1 %dr0, 0x1235, %dr4",
+      "addd,3 %dr0, 0x1236, %dr5"], 8),
+    ("setwd + two 64-bit literals", 3,
+     [_SETWD, "addd,0 %dr0, _f64 0x123456789a, %dr2",
+      "addd,1 %dr0, _f64 0x223456789a, %dr3"], _NO_ROOM),
+    ("setwd + three 16-bit and a 64-bit literal", 3,
+     [_SETWD, "addd,1 %dr0, 0x1234, %dr3", "addd,3 %dr0, 0x1235, %dr4",
+      "addd,4 %dr0, 0x1236, %dr5", "addd,0 %dr0, _f64 0x123456789a, %dr2"], _NO_ROOM),
+    ("entry at the limit", 3, _PRO, 16),
+    ("entry at the limit, v5", 5, _PRO, 16),
+    ("entry + a CDS word", 3, _PRO[:-1] + ["addd,5 %dr0, %dr1, %dr7 ? %pred0"], 16),
+    ("entry + two predicated ops, one CDS word", 3,
+     _PRO[:-2] + ["addd,4 %dr0, %dr1, %dr6 ? %pred0", "addd,5 %dr0, %dr1, %dr7 ? %pred1"],
+     16),
+    ("entry + a mova", 3, _PRO + [_MOVA.format(0, 8)], 16),
+    ("entry + CDS + PLS", 3, _PRO[:-1] + ["addd,5 %dr0, %dr1, %dr7 ? %pred0"] + _P1,
+     _TOO_BIG),
+    ("entry + CDS + mova", 3,
+     _PRO[:-1] + ["addd,5 %dr0, %dr1, %dr7 ? %pred0", _MOVA.format(0, 8)], _TOO_BIG),
+    ("6 ALS, 4 LTS, 3 PLS", 3, _SIX_LIT + _P4, 14),
+    ("6 ALS, 4 LTS, 3 PLS, ct, disp", 3,
+     _SIX_LIT + ["ct %ctpr1 ? %pred5", "disp %ctpr2, .Lt"] + _P4, 16),
+    ("6 ALS, 4 LTS, 3 PLS, ct, disp, CDS", 3,
+     _SIX_LIT[:4] + ["addd,4 %dr0, %dr1, %dr14 ? %pred6", _SIX_LIT[5],
+                     "ct %ctpr1 ? %pred5", "disp %ctpr2, .Lt"] + _P4, _TOO_BIG),
+]
 
 
 def selftest(binutils, data_path):
@@ -885,6 +1004,28 @@ def selftest(binutils, data_path):
             for rule, ex in chk.examples.items():
                 for _, m, _ in ex:
                     print(f"      {rule}: {m}")
+    with tempfile.TemporaryDirectory(dir=ROOT / "toolchains") as tmp:
+        for name, iset, ops, want in SIZE_CASES:
+            src, obj, raw = (Path(tmp) / f"s.{x}" for x in ("s", "o", "bin"))
+            src.write_text("\t.ignore ld_st_style\n\t.text\n{\n"
+                           + "".join(f" {o}\n" for o in ops) + "}\n.Lt:\n{\n nop\n}\n")
+            r = subprocess.run([binutils / "e2k-linux-as", f"-mcpu=elbrus-v{iset}", "-o", obj,
+                                src], capture_output=True, text=True)
+            if r.returncode:
+                got = r.stderr.split("Error: ", 1)[-1].strip()
+                ok = isinstance(want, str) and got.startswith(want)
+            else:
+                subprocess.run([binutils / "e2k-linux-objcopy", "-O", "binary", "-j", ".text",
+                                obj, raw], check=True)
+                b = next(walk(raw.read_bytes(), [], ()))[1]
+                chk = Checker(data, iset)
+                chk.bundle(b, 0)
+                got = f"{b.length // 4} words" + "".join(
+                    f"; {rule}: {m}" for rule, ex in chk.examples.items() for _, m, _ in ex)
+                ok = want == b.length // 4 and not chk.viol
+            failed += not ok
+            print(f"{'ok  ' if ok else 'FAIL'} size, {name}: {got}"
+                  + ("" if ok else f" (expected {want})"))
     print(f"selftest: {failed} failed")
     sys.exit(1 if failed else 0)
 

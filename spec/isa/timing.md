@@ -728,11 +728,59 @@ instruction. Cycles per divide when one issues every `g` cycles:
 | `sdivd` | 5 | 3.4 | 3 | 4 | 5 | `g` |
 | `fsqrts` | 7 | 2.8 | 3 | 4 | **7** | `g` |
 
-So a scheduler should keep divides 2 cycles apart (3 for `sdivd` and
-`udivd` on v3, and for the 80-bit divides and square root steps) and
-not issue `fsqrts` exactly 5 cycles after another. Fractions are
-averages of a pattern of stalled and unstalled issues; the structure
-behind them (and behind `fsqrts` at 5) is not known.
+Fractions are averages of a pattern of stalled and unstalled issues.
+
+**Pairs** [hw: `tools/isa-probes/timeleft.c` `div`, the `dp` and `dq`
+lines: all 81 ordered pairs of `fdivd`, `fdivs`, `sdivd`, `fsqrts`,
+`fsqrttd`, `pfdivd`, `fxdivxx`, `fxsqrtuxx` and `smodx` 1–6 cycles
+apart, and some pairs to 16; `tools/isa-probes/timeleftv.c` `dp`:
+ten of them against themselves, `fdivd` and `fsqrts` at 1–14 cycles
+with the gap written both ways (below); 4C, 8C2, 2C3]. Two divider
+operations one cycle apart stall 4 cycles, whatever the two; further
+apart they don't,
+with two exceptions. After `smodx` (and presumably `umodx`) anything
+waits for its 9 cycles in 4-cycle steps: 8 at 1–4 cycles, 4 at 5–8.
+And a single-precision square root (`fsqrts`, `pfsqrts`) stalls a
+divider operation (any tried: `fsqrts`, `pfsqrts`, `fsqrtid`, `fdivd`,
+`fdivs`, `sdivd`, `fsqrttd`, `fxdivxx`) by 4 at two more distances,
+which depend on the root's operand and on how the gap is written,
+as empty instructions of their own (`{ fsqrts }` `{ nop 8 }`) or as a
+`nop N` in the root's instruction (`{ fsqrts; nop 7 }` `{ nop 1 }`):
+
+| The root's operand | Separate empty instructions | `nop N` in the root's instruction |
+|---|---|---|
+| 1.0 (also as `pfsqrts`'s low single, the one it takes) | 9, 10 | 2, 10 |
+| 0.0 (also as `pfsqrts`'s low single) | 3, 11, 12 (2C3: none) | 4 (stall 4 or 8), 12 (2C3: none) |
+
+The other operations conflict only at distance 1, both ways.
+
+**Runs** of one operation `G` cycles apart, then idle (stall of the
+run; [hw: `timeleft.c` `div`, the `dr` lines, and `timeleftv.c` `dr`,
+which writes each run both ways: only `fsqrts` differs; 4C, 8C2,
+2C3]):
+
+| Run (`G`) | ×3 | ×4 | ×5 | ×6 | ×8 | ×32: cycles an operation |
+|---|---|---|---|---|---|---|
+| `fdivd`, `pfdivd` (2) | 0 | 0 | 0 | 0 | 0 | 2 (8C2 `pfdivd`: 2.5, stalling only in runs longer than 8) |
+| `sdivd` (2), 4C | 0 | 4 | 4 | 4 | 8 | 3.3 (8C2, 2C3: never stalls) |
+| `fxdivxx`, `fxsqrtuxx` (2) | 0 | 4 | 4 | 4 | 8 | 3.3 |
+| `fxsqrtuxx` (3), 8C2 and 2C3 | 0 | 4 | 4 | 4 | 8 | 4.3 (4C: never stalls) |
+| `fsqrttd` (2), 4C and 8C2 | 0 | 0 | 0 | 0 | 12 | 3.9 (2C3: never stalls) |
+| `fsqrttd` (3), 4C and 8C2 | 0 | 0 | 8 | 8 | 8 | 4.8 (2C3: never stalls) |
+| `fsqrts` of 1.0 (2): separate / `nop N` | 4 / 4 | 4 / 4 | 4 / 4 | 12 / 12 | 16 / 8 | 4.6 / 2.9 |
+| `fsqrts` of 1.0 (5): separate / `nop N` | 8 / 8 | 12 / 4 | 16 / 12 | 20 / 8 | 28 / 12 | 9.0 / 6.9 |
+
+The ×32 rates with `nop N` are the table's above (`bench.py` writes its
+gaps that way), and triples of the same operation 2 or more cycles
+apart stall only for `fsqrts` (`dt` lines). The pair rules don't
+predict the runs (with separate empty instructions a third `fsqrts` 5
+cycles after the second lands 10 after the first and stalls, but so
+does a fourth), so the divider's reservation model is not known. For a scheduler: keep divider
+operations at least 2 cycles apart, take the spacing of long runs of
+one operation from the table above ("Every v3 operation" for the
+others), and keep divider operations off 2–4 and 9–12 cycles after a
+single-precision square root, which avoids every pair conflict
+measured.
 
 **Two stores in one instruction** take 2 cycles when their addresses
 agree in bits 6–7 (the same 64-byte bank of four: 0, 8, 16, 32, 48, 256
@@ -1533,6 +1581,10 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
 
 - v4; v6 on the Elbrus-16C (the 2C3 is the v6 machine measured). v7
   is out of scope (not in silicon).
+- The divider's reservation model: why a single-precision square root
+  conflicts at distances that depend on its operand and on whether the
+  gap is a `nop N` in its instruction, and what decides runs of four
+  or more ("Throughput", "Divider").
 - Throughput of byte and halfword loads and stores; whether the store
   bank rule involves physical address bits. (Measured on this page:
   128-bit operations, "Elbrus-8C2 (v5)" (`v5tp_*`); 64-bit packed FP

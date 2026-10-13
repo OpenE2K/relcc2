@@ -333,12 +333,31 @@ so a handler that needs the cause should read the flags itself
 
 **Flush to zero and denormals are zero** [hw: `tools/isa-probes/fenvlib.c`,
 all three machines]. MCST's libgcc has a `crtfastmath.c` whose
-constructor sets `%pfpfr` bits 6 and 15 ("mcstbug #149583"); lcc links
-`crtfastmath.o` for `-ffast-math` and `-Ofast` (not for its own
-`-ffast`), so such programs start with `%pfpfr` 0x9fff instead of
-0x1fbf. glibc's `fesetround`, `feclearexcept`, `feholdexcept`,
-`feupdateenv`, `feenableexcept`, `fegetenv` and `fesetenv` of a saved
-environment keep both bits; `fesetenv (FE_DFL_ENV)` and `fesetenv
+constructor (a `.ctors` entry: `rrs %pfpfr`, `ors 0x8040`, `rws`) sets
+`%pfpfr` bits 6 and 15 ("mcstbug #149583"; built by libgcc's
+`config.host:591-593`). lcc's driver links `crtfastmath.o`, just before
+`crtend.o`/`crtendS.o`, for `-ffast-math`, `-Ofast` and
+`-funsafe-math-optimizations`, **also with `-shared`**, and with
+`-static`. It doesn't for its own `-ffast`, nor for
+`-ffinite-math-only`, `-fno-math-errno`, `-freciprocal-math`,
+`-fassociative-math -fno-signed-zeros -fno-trapping-math` or `-O4`;
+`-ffast-math -fno-fast-math` and `-nostartfiles` drop it, `-ffast-math
+-fno-unsafe-math-optimizations` and `-ffast-math -fno-finite-math-only`
+keep it [lcc 1.29.16 v3 `-v`; 1.31.05 the same for the options tried].
+Such programs start with `%pfpfr` 0x9fff instead of 0x1fbf, and loading
+such a library changes the process [hw: `tools/abi/probes/pocabi1_fm.c`,
+lcc 1.29.16 v3 code on the 4C, 8C2 and 2C3, all alike]: after `dlopen`
+of an lcc `-ffast-math -shared` library, the thread that loaded it reads
+0x9fff and flushes `1e-310 * 1.0` and `1e-300 * 1e-10` to 0, threads it
+creates afterwards inherit that, a thread already running keeps 0x1fbf,
+and `dlclose` doesn't undo it; a program linked against such a library
+starts `main` with 0x9fff. GCC's ports leave `crtfastmath.o` out of
+shared objects for this reason (x86 since 2022, PR 55522;
+`doc/gcc-port-plan.md`, 3.1). The proof-of-concept back end found the
+`-shared` case (`docs/spec-poc-findings.md` A28). glibc's `fesetround`,
+`feclearexcept`, `feholdexcept`, `feupdateenv`, `feenableexcept`,
+`fegetenv` and `fesetenv` of a saved environment keep both bits;
+`fesetenv (FE_DFL_ENV)` and `fesetenv
 (FE_NOMASK_ENV)` clear them.
 
 ### MCST glibc's FP bugs

@@ -189,7 +189,7 @@ operand. Cases seen:
 | v3: `mrng` > 24 + *g*, where *g* is the largest of 1, 2, 4 and 8 dividing both the area's start (base + `%aaind` + `disp`) and its step in bytes | **every** `mova` from the area is diagnostic, `ind` 0 included. An area stepping one element from an aligned start takes `mrng` ≤ 25 for bytes, 26 for halves, 28 for words and 32 for doublewords: 24 + the element size is always safe, since v3 already needs the start aligned to the element. A byte area stepping 8, 24 or 40 bytes from a doubleword boundary takes 32, stepping 2 bytes 26, stepping 4 or 12 bytes 28. A start 1, 2 or 4 bytes past a doubleword, set through the base, `%aaind` or `disp`, allows 25, 26 or 28. Backward areas (steps −1, −2, −8 bytes) behave as forward ones. The 8C2 and the 2C3 give data in all of these (`tools/isa-probes/pocchk3.c` `m_*`: 321 areas, each read by eight wide instructions of two movas, at `ind` 0 and at `ind` = `mrng` − size; the rule predicts every one on the 4C; the proof-of-concept back end's I48) |
 | v3: a `mova` at an `ind` that is not a multiple of its own size (`movah` at `ind` 1, `movaw` at 2, `movad` at 4, in areas of their own format) | diagnostic. The 8C2 and the 2C3 return the bytes there (`m_*`, the reads at `ind` = `mrng` − size). Narrow movas at offsets aligned to their own size inside a wider element work (`movab` at 3, `movah` at 6, `movaw` at 4 in a doubleword area: `apb.c` `narrow`) |
 | `mova` wider than `fmt` (`movad` on `fmt = 3`) | diagnostic (v3, v5, whatever `mrng`; v6 reads data whenever `ind` + size ≤ `mrng`, "v6") |
-| Base not aligned to `fmt` (v3) | diagnostic. lcc versions loops or needs `-faligned` [lcc]; v5 allows unaligned 2, 4, 8 bytes and v6 16 bytes [guide, lcc-doc]. Whatever `UPSR.ac` says: with it set, misaligned areas give the same and never trap ([x86-support.md](x86-support.md); `isaleft.c` `ac_*`) |
+| Base not aligned to `fmt` (v3, and v4 by lcc's changelog) | diagnostic. lcc's code that assumes the alignment (`-faligned`, `__builtin_assume_aligned`) dies with SIGILL `ILL_ILLOPN` at the first non-speculative use of what it read (a dot product of doubles 1 or 4 bytes off: the copy of the sum into the result register), where the same v3 code runs right on the 8C2 and the 2C3 [hw: `tools/isa-probes/pocchk6.c` `align`, lcc 1.29.16 and 1.31.05]. lcc proves the alignment, versions long loops (1.31) or needs `-faligned` ("How lcc uses APB") [lcc]; v5 allows unaligned 2, 4, 8 bytes and v6 16 bytes [guide, lcc-doc]. Whatever `UPSR.ac` says: with it set, misaligned areas give the same and never trap ([x86-support.md](x86-support.md); `isaleft.c` `ac_*`) |
 | Two areas whose `abs`/`asz` overlap | diagnostic |
 | Element in an unmapped page | diagnostic; no signal. The prefetch running past the end of an array into an unmapped page is harmless (lcc's loops over arrays that end at a `PROT_NONE` page are correct) |
 
@@ -810,13 +810,27 @@ compiler sets `mrng` ≥ `ind` + 16, as lcc's 0 does [hw: `isaleft.c`
   loads); its v5 and v6 code reads more arrays through one descriptor
   with the start addresses in `%aaind` (that loop: all 37 loads, 22
   descriptors and 15 `%aaind` indices) [lcc; the PoC's P57].
-- On v3 it needs alignment of 2-, 4- and 8-byte elements: at `-O3` and
-  `-O4` it uses APB only where it can prove it (global arrays, a pointer
-  passed through `__builtin_assume_aligned`) or with `-faligned` or
-  `-ffast`, which let it assume it; a loop over a plain pointer gets no
-  APB (lcc 1.29.16 for v3 and v3.4c, 1.31.05; no run-time alignment
-  check was seen, although lcc's changelog mentions versioning).
-  On v5 and v6 it uses APB for the same loops without any of these.
+- On v3 and v4 it needs alignment of 2-, 4- and 8-byte elements: at
+  `-O3` and `-O4` it uses APB only where it can prove it (global arrays,
+  a pointer passed through `__builtin_assume_aligned`) or with
+  `-faligned` or `-ffast`, which let it assume it (also per function:
+  `__attribute__ ((optimize ("-faligned")))`); a loop over a plain
+  pointer gets no APB (lcc 1.29.16 for v3, v3.4c, v4.1c+ and v4.8c).
+  lcc 1.31 adds a run-time test, `-floop-apb-align-versioning`, on by
+  default, for innermost loops "with a sufficiently large number of
+  iterations", since V2–V4 can prefetch only reads whose alignment is
+  proven statically or dynamically [lcc-doc: changelog 1.30]. At `-O3`
+  (not `-O2`) a loop of 100,000 iterations over a pointer of unknown
+  alignment tests `p & 7` (`cmpandedb`) and branches to a copy of the
+  loop without APB when it isn't 0; a loop of unknown count gets no
+  test, and NPB gets none (the same programs with
+  `-fno-loop-apb-align-versioning`) [lcc 1.31.05 for v3 and v4.8c].
+  1.30.03 also added `-faligned-apb` (assume every read of an innermost
+  loop aligned, for APB only) and `#pragma apb_aligned` (the same for
+  the next loop) [lcc-doc]: with either, a dot product over two
+  pointers gets APB at `-O3`, the pragma also at `-O2` [lcc 1.31.05 for
+  v3]. On v5 and v6 it uses APB for the same loops without any of
+  these.
   Arrays of single bytes (`unsigned char a[]`, `signed char a[]`)
   never got APB in our probes, on v3, v5 or v6 [lcc 1.29.16 `-O3` for
   v3.4c, v5.8c2 and v6.2c3: sums over global byte arrays]; byte fields
@@ -858,11 +872,38 @@ compiler sets `mrng` ≥ `ind` + 16, as lcc's 0 does [hw: `isaleft.c`
   `#pragma noprefetch` or `#pragma loop count` to stop lcc from using it
   on short loops.
 
+### What lcc's alignment rule costs [lcc; hw: 4C]
+
+NPB 3.0 class W, lcc 1.29.16 `-O3` unless noted: array prefetch
+programs per benchmark and, on the 4C, seconds (`Time in seconds`,
+three runs and two more of CG and FT, under the timing lock; every run
+verified):
+
+| Build | CG | FT | MG | LU | SP | BT |
+|---|---|---|---|---|---|---|
+| v3.4c (and generic v3) | 7 | 5 | 14 | 73 | 267 | 58 |
+| v3.4c `-faligned` | 23 | 12 | 22 | 78 | 267 | 58 |
+| v3.4c `-O2` | 4 | 3 | 9 | 38 | 163 | 50 |
+| v5.8c2 and v6.2c3 (no alignment rule) | 22 | 13 | 22 | 78 | 266 | 58 |
+| 1.31.05 v3, with or without `-fno-loop-apb-align-versioning` | 5 | 6 | 15 | 74 | 262 | 62 |
+| 1.31.05 v3 `-faligned-apb` | 21 | 13 | 28 | 78 | 262 | 62 |
+| 4C, v3.4c | 3.00–3.11 s | 0.92–0.94 s | 1.97–1.98 s | | | |
+| 4C, v3.4c `-faligned` | 1.53–1.54 s | 0.62–0.63 s | 1.79–1.80 s | | | |
+
+SP and BT keep their arrays global, so the rule costs them nothing.
+CG's kernel `conj_grad` reads its vectors through pointer parameters and
+gets no program under the rule, 12 with `-faligned`. On the 4C
+`-faligned` makes CG 2.0× and FT 1.48× faster, and the gain is array
+prefetch's: with `-fno-loop-apb` the plain build takes 3.04–3.13,
+0.92–0.93 and 1.96 s and the `-faligned` one 3.03–3.11, 0.92–0.93 and
+1.87–1.92 s (part of MG's gain is not APB's). The price of assuming is
+the trap in "Diagnostic results" for data that isn't aligned.
+
 ## Generations [lcc-doc]
 
 | ISA | Capability |
 |---|---|
-| v2–v4 | Only loads aligned to their size; lcc proves alignment statically or by versioning the loop at run time |
+| v2–v4 | Only loads aligned to their size; lcc proves alignment statically or, from 1.30, versions long loops on it at run time ("How lcc uses APB") |
 | v5 | Unaligned loads; 64-bit `%aaind`; loads of different sizes from one array can share one prefetch area; `movaqp` |
 | v6 | Strides that are not a multiple of the load size; the head of a prefetch area can advance several times per iteration; the kernel saves `%aaldi` directly (lcc 1.31; all three checked on the 2C3: "v6", below) |
 

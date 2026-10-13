@@ -534,8 +534,21 @@ replaced first (inferred). The kernel defines no `dc_ch` value with
 That the acquire and release forms order memory can't be told on
 hardware that already keeps every order but store → load (atomics.md);
 lcc 1.29.16 uses none of the v6 forms. Not tried: 0x37, 0x57 and 0x77
-with `,sm`. Not measured: the cost of 0x17 with `,sm` and of a
-successful 0x33/0x73 store.
+with `,sm`.
+
+What the v6 lock forms cost [hw: 2C3, `tools/isa-probes/timeleft.c`
+`v6`; chains timed by the slope between 16 and 32 loads, so fixed
+costs drop out]: a dependent chain of `ldd,sm` loads takes 5 cycles a
+load with MAS 0x17, as with 0x4, 0x7, 0x11, 0x13 and 0x31 and as a
+plain load (an acquire load, 0x13 without `,sm`, 11: the 10.4 and 4.8
+of the table above include fixed costs), and the check-and-unlock load
+0x33 in ALC2 takes 5 too. A lock (0x4, 0x7, 0x11 or 0x17 with `,sm`),
+two empty cycles, its check (0x3) and a use take 9.3 cycles a step for
+every lock encoding. A successful wait-unlock store with 0x33 or 0x73
+costs exactly what 0x2 does: a lock-wait load, 0–3 empty cycles and
+the store (an exchange) take 19.6, 21.4, 19.1 and 20.1 cycles, and
+with 1, 4 or 5 empty cycles and an `addd` before the store (a
+fetch-and-add) 19.1, 22.1 and 19.4, for all three encodings.
 
 Not tried, on purpose, on the shared machines: mod 1 (no address
 translation), mod 7 in ALC2/5 and stores with mod 7 (MMU, cache and TLB

@@ -120,6 +120,8 @@ PROBES = {
     "kernleft.s": ("abi/kernleft.s", "4C, 8C2, 2C3"),
     "pocabi1_mp.s": ("abi/pocabi1_mp.s", "4C, 8C2, 2C3"),
     "pocabi1_tear.s": ("abi/pocabi1_tear.s", "8C2, 2C3"),
+    "lat32.s": ("abi/mode32/lat32.c", "4C, 8C2, 2C3"),
+    "lat32-v5.s": ("abi/mode32/lat32.c", "8C2, 2C3"),
 }
 ABI_PROBES = "tools/abi/probes"
 

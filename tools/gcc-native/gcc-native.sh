@@ -50,6 +50,17 @@
 #   compare OLD NEW     compare two fetched builds: status, step times,
 #                       testsuite (GCC's contrib/compare_tests)
 #   clean [--all]       remove build NAME (or the whole work directory)
+#   xcheck [--fresh] [--lcc DIR]
+#                       on this host, not the machine: compile all of
+#                       GCC's host code with lcc's x86-hosted cross
+#                       compiler (a canadian cross, make -k all-gcc in
+#                       toolchains/gcc-native/xcheck), the code stage 1
+#                       of a bootstrap compiles; lists what lcc rejects
+#                       in half an hour instead of hours into a stage 1.
+#                       Uses --src's working tree as it is, uncommitted
+#                       changes included; --lcc defaults to the
+#                       v5.8c2 tree, gmp, mpfr and mpc come from
+#                       --remote once
 #
 # Typical first run on the 8C2:
 #   gcc-native.sh check
@@ -72,7 +83,7 @@ name=
 jobs=4
 
 die() { echo "gcc-native.sh: $*" >&2; exit 1; }
-usage() { sed -n '4,57p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '4,68p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -235,6 +246,71 @@ compare)
         if [ -f "$o" ]; then
             echo "== $(basename "$s"): $1 -> $2"
             "$src/contrib/compare_tests" "$o" "$s" || true
+        fi
+    done
+    ;;
+xcheck)
+    fresh='' lccdir=/opt/mcst/lcc-1.29.16.e2k-v5.8c2.linux-6.1
+    while [ $# -gt 0 ]; do
+        case $1 in
+        --fresh) fresh=1; shift ;;
+        --lcc) lccdir=$2; shift 2 ;;
+        *) die "unknown xcheck option $1" ;;
+        esac
+    done
+    x=$root/toolchains/gcc-native/xcheck
+    deps=$x/deps bu=$lccdir/binutils/bin
+    [ -x "$lccdir/bin/l++" ] || die "no lcc in $lccdir"
+    if [ ! -f "$deps/include/gmp.h" ]; then
+        # The machine's own gmp, mpfr and mpc: lcc's sysroot has none.
+        mkdir -p "$deps/include" "$deps/lib64"
+        ssh_ "cd /usr/include && tar -c gmp.h mpfr.h mpf2mpfr.h mpc.h" \
+            | tar -C "$deps/include" -xmf -
+        ssh_ "cd /usr/lib64 && tar -c libgmp.so* libmpfr.so* libmpc.so*" \
+            | tar -C "$deps/lib64" -xmf -
+    fi
+    [ -n "$fresh" ] && rm -rf "$x/build"
+    mkdir -p "$x/build"
+    cd "$x/build"
+    if [ ! -f Makefile ]; then
+        echo "configuring $x/build"
+        "$src/configure" --build=x86_64-pc-linux-gnu \
+            --host=e2k-unknown-linux-gnu --target=e2k-unknown-linux-gnu \
+            --prefix="$x/inst" --enable-languages=c,c++,lto \
+            --disable-multilib --disable-nls --disable-libsanitizer \
+            --disable-libssp --disable-libitm --disable-libquadmath \
+            --disable-werror --disable-bootstrap --enable-checking=yes \
+            --with-gmp-include="$deps/include" --with-gmp-lib="$deps/lib64" \
+            --with-mpfr-include="$deps/include" --with-mpfr-lib="$deps/lib64" \
+            --with-mpc-include="$deps/include" --with-mpc-lib="$deps/lib64" \
+            CC="$lccdir/bin/lcc" CXX="$lccdir/bin/l++" \
+            CFLAGS=-O3 CXXFLAGS=-O3 LDFLAGS="-Wl,-rpath-link,$deps/lib64" \
+            AR="$bu/e2k-linux-ar" RANLIB="$bu/e2k-linux-ranlib" NM="$bu/e2k-linux-nm" \
+            CC_FOR_BUILD=gcc CXX_FOR_BUILD=g++ \
+            AS_FOR_TARGET="$bu/e2k-linux-as" LD_FOR_TARGET="$bu/e2k-linux-ld" \
+            NM_FOR_TARGET="$bu/e2k-linux-nm" OBJDUMP_FOR_TARGET="$bu/e2k-linux-objdump" \
+            AR_FOR_TARGET="$bu/e2k-linux-ar" RANLIB_FOR_TARGET="$bu/e2k-linux-ranlib" \
+            READELF_FOR_TARGET="$bu/e2k-linux-readelf" > ../configure.log 2>&1 \
+            || die "configure failed: $x/configure.log"
+    fi
+    echo "make -k -j$jobs all-gcc (log $x/make.log)"
+    start=$(date +%s)
+    touch ../make.start
+    # The specs file needs an x86-hosted e2k gcc, which a canadian cross
+    # lacks: the one failure every run has.
+    nice -n 19 make -k -j"$jobs" all-gcc > ../make.log 2>&1 || true
+    echo "$(( ($(date +%s) - start) / 60 )) min"
+    errs=$(grep -E '^lcc: ".*", line [0-9]+: (error|catastrophic error)' ../make.log \
+        | sed 's/^lcc: //' | sort | uniq -c)
+    echo "${errs:-no lcc errors}"
+    grep -E '\*\*\* \[' ../make.log | grep -v 'specs\] Error 127\|all-gcc\] Error' || true
+    for f in cc1 cc1plus lto1 xgcc; do
+        if [ ! -f "gcc/$f" ]; then
+            echo "gcc/$f MISSING"
+        elif [ "gcc/$f" -nt ../make.start ]; then
+            echo "gcc/$f linked"
+        else
+            echo "gcc/$f up to date"
         fi
     done
     ;;

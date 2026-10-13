@@ -15,7 +15,12 @@ Status: **draft** (2026-10-13). Checked so far, all on the 8C2:
 - stage 1's libiberty built by lcc `-O3` (80 s);
 - `fetch` and `clean`.
 
-No full bootstrap has run yet.
+The first full bootstrap (2026-10-13, `f5316cda77d`) stopped in stage
+1 after 57 minutes. lcc refused one file, `gcc/tree-data-ref.cc`: it
+passes a `vec<tree>` through `...` and fetches it with `va_arg` (EDG
+error #1291). `native-build` commit `76b0bd07e3c` gives `conflict_fn`
+fixed parameters instead. `xcheck` (below) then compiled every host
+object with lcc, and the bootstrap was restarted on 2026-10-14.
 
 ## What it is for
 
@@ -71,6 +76,26 @@ uncommitted changes are not sent (it warns about them).
 Use the 8C2. Don't build on the 2C3: it belongs to a contact and has two
 cores.
 
+## Checking a revision with lcc on this host first
+
+Stage 1 of a bootstrap is lcc compiling all of GCC's host code: hours
+on the 8C2. `xcheck` compiles the same code on this host instead, with
+lcc's x86-hosted cross compiler. It is a canadian cross (build x86_64,
+host and target e2k) running `make -k all-gcc` in
+`toolchains/gcc-native/xcheck`. lcc 1.29.16 `-O3` at `-j6` took 30
+minutes for the whole of `all-gcc` (`cc1`, `cc1plus`, `lto1`, `xgcc`).
+Later runs rebuild only what changed.
+
+`xcheck` compiles `--src`'s working tree as it is, uncommitted changes
+included, so a fix can be tried before it is committed and pushed. It
+lists every lcc error by file and line. The one failure every run has is
+`specs`, which needs an x86-hosted e2k `gcc` that a canadian cross
+doesn't have. The 8C2's gmp, mpfr and mpc headers and libraries are
+copied once into `xcheck/deps`, because lcc's sysroot has none.
+
+Run it after merging new PoC commits into `native-build`: the back end's
+own files are host code too, and lcc must accept them.
+
 ## Commands
 
 ```
@@ -88,6 +113,7 @@ $G bench NAME:stage1 NAME        # lcc-built against self-built cc1plus
 $G fetch                         # logs, .sum files, bench results here
 $G compare OLD NEW               # two fetched builds, contrib/compare_tests
 $G clean                         # remove build NAME; clean --all: everything
+$G xcheck                        # here: lcc compiles all host code (above)
 ```
 
 Global options go before the command: `--remote USER@HOST`,

@@ -35,7 +35,9 @@
 #                       one stage built by build OTHER's installed compiler
 #       BUILD-OPTIONS: --checking LIST (default yes; release for timing
 #       the compiler), --stage1-flags FLAGS (lcc's flags, default -O3),
-#       --stop-after configure|stage1
+#       --stop-after configure|stage1, --source NAME (build from
+#       src-NAME, e.g. a second build of a pushed revision under
+#       another --name: the same tree keeps the paths in the objects)
 #   status              every build on the machine: state, last step
 #   wait [MINUTES]      print status every MINUTES (default 10) until NAME
 #                       is no longer running
@@ -45,6 +47,15 @@
 #                       time cc1plus builds on those inputs under the
 #                       timing lock; SPEC is NAME, NAME:stage1, NAME:stage2
 #                       or NAME:inst (detached; see status, fetch)
+#   diffcc SPEC-A SPEC-B [FLAGS...]
+#                       compile GCC's C (with two NAME:inst also C++)
+#                       torture tests with both compilers and compare the
+#                       assembly: two builds of one revision must agree,
+#                       so a difference means one of them is miscompiled
+#                       (detached; result in bench/diffcc-*)
+#   triage REF          recompile build NAME's failing tests with the
+#                       installed REF and NAME compilers and compare
+#                       (detached; result in log-NAME/triage-REF)
 #   log [FILE]          tail a log of build NAME (default make.log)
 #   fetch               copy log-NAME and bench/ to toolchains/gcc-native/HOST/
 #   compare OLD NEW     compare two fetched builds: status, step times,
@@ -83,7 +94,7 @@ name=
 jobs=4
 
 die() { echo "gcc-native.sh: $*" >&2; exit 1; }
-usage() { sed -n '4,68p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { awk 'NR > 3 && /^#/ { sub(/^# ?/, ""); print; next } NR > 3 { exit }' "$0"; exit 2; }
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -109,9 +120,18 @@ ssh_() { "$root/tools/setup/e2k-ssh" ${port:+-p "$port"} "$remote" "$@"; }
 # Quote arguments for the remote shell.
 q() { printf '%q ' "$@"; }
 
-# Copy remote.sh and run it in the work directory.
+# Copy remote.sh (and the Python helpers it runs) to the work directory.
+# Each file is replaced with mv, never rewritten in place: bash reads a
+# running script as it goes, so a build started by an older remote.sh
+# would otherwise go on reading the new file at its old offset.
+upload() {
+    tar -C "$here" -c remote.sh diffcc.py \
+        | ssh_ "mkdir -p $rdir/.upload && tar -C $rdir/.upload -xf - && mv -f $rdir/.upload/remote.sh $rdir/.upload/diffcc.py $rdir/"
+}
+
+# Run remote.sh in the work directory.
 remote_sh() {
-    ssh_ "mkdir -p $rdir && cat > $rdir/remote.sh" < "$here/remote.sh"
+    upload
     ssh_ "bash $rdir/remote.sh $(q "$@")"
 }
 
@@ -123,8 +143,8 @@ remote_sh() {
 remote_bg() {
     local log=$1
     shift
-    ssh_ "mkdir -p $rdir && cat > $rdir/remote.sh" < "$here/remote.sh"
-    ssh_ "cd $rdir && mkdir -p $(dirname "$log") && { setsid nohup bash remote.sh $(q "$@") > $log 2>&1 < /dev/null & } && echo started: $log"
+    upload
+    ssh_ "cd $rdir && mkdir -p $(dirname "$log") && { ${SRCNAME:+SRCNAME=$(q "$SRCNAME")} setsid nohup bash remote.sh $(q "$@") > $log 2>&1 < /dev/null & } && echo started: $log"
 }
 
 commit=$(git -C "$src" rev-parse --verify "${rev:-HEAD}^{commit}" 2>/dev/null) \
@@ -132,7 +152,7 @@ commit=$(git -C "$src" rev-parse --verify "${rev:-HEAD}^{commit}" 2>/dev/null) \
 name=${name:-$(git -C "$src" rev-parse --short=11 "$commit")}
 
 build_cmd() {
-    local mode=$1 checking=yes s1=-O3 stop=all
+    local mode=$1 checking=yes s1=-O3 stop=all source=
     shift
     while [ $# -gt 0 ]; do
         case $1 in
@@ -140,12 +160,13 @@ build_cmd() {
         --stage1-flags) s1=$2; shift 2 ;;
         --stop-after) stop=$2; shift 2 ;;
         --with) mode=with:$2; shift 2 ;;
+        --source) source=$2; shift 2 ;;
         --) shift; break ;;
         *) die "unknown build option $1" ;;
         esac
     done
     [ "$mode" != with ] || die "selfbuild needs --with OTHER"
-    remote_bg "log-$name/driver.log" build "$name" "$mode" "$jobs" "$checking" "$s1" "$stop" "$@"
+    SRCNAME=$source remote_bg "log-$name/driver.log" build "$name" "$mode" "$jobs" "$checking" "$s1" "$stop" "$@"
 }
 
 case $cmd in
@@ -217,6 +238,14 @@ bench)
     done
     [ $# -ge 1 ] || set -- "$name:stage1" "$name"
     remote_bg "bench/driver-$name.log" bench "$cpu" "$rep" "$flags" "$@"
+    ;;
+diffcc)
+    [ $# -ge 2 ] || die "diffcc SPEC-A SPEC-B [FLAGS...]"
+    remote_bg "bench/diffcc-driver-${1//:/-}-${2//:/-}.log" diffcc "$1" "$2" "$jobs" "${@:3}"
+    ;;
+triage)
+    [ $# -eq 1 ] || die "triage REF"
+    remote_bg "log-$name/triage-driver.log" triage "$1" "$name" "$jobs"
     ;;
 log)
     ssh_ "tail -n 40 $rdir/log-$name/${1:-make.log}"

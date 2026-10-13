@@ -47,6 +47,42 @@ three new ways:
 installed compiler. It catches a newer revision being miscompiled by an
 older one, and the reverse.
 
+## Is GCC miscompiled?
+
+Two builds of one GCC revision must turn the same input into the same
+assembly, whoever compiled them. GCC's own bootstrap comparison rests on
+this. Here one build is compiled by lcc, taken as correct, and the other
+by the port under test. Any difference means the port miscompiled GCC
+somewhere on that input's path. Three checks follow from this:
+
+1. **The bootstrap comparison.** Stages 2 and 3 must compile GCC's own
+   sources identically.
+2. **`diffcc A B`** compiles GCC's C torture tests (`gcc.c-torture`,
+   `gcc.dg/torture`) with both compilers and compares the assembly, exit
+   status and diagnostics. The default flag sets are `-O0`, `-O2`, `-O3`
+   and `-O2 -march=elbrus-v5`. When both compilers are installed
+   (`NAME:inst`), it also compiles the C++ torture tests at `-O0` and
+   `-O2`. Each compile adds `-S -w -frandom-seed=0`. It is quick and
+   catches more than pass or fail does. The pairs to compare:
+   - `NAME:stage1` (lcc-built) against `NAME` (stage 3);
+   - or, between installed builds, an `lccbuild` against a `selfbuild`
+     of the same revision.
+3. **`triage REF`** handles build NAME's testsuite failures (`test`).
+   For each failing test it compiles the source with the options its
+   `.sum` line and its `dg-options` name, by the installed REF (lcc-built)
+   and NAME compilers. The same output means the failure is a back-end or
+   test problem; a different output points at a miscompiled GCC.
+
+`diffcc.py` does the work of both; its results are in `bench/diffcc-*/`
+and `log-NAME/triage-REF/`. Each has `summary.txt`, `diffs.txt` (one
+line per difference) and `cases/`, which holds both outputs of the first
+200 differences.
+
+To build a second copy of an already pushed revision, give it its own
+`--name` and `--source NAME`, for example
+`--name X-self selfbuild --with X --source X`. Sharing one source tree
+keeps the source paths in the objects equal.
+
 ## Where the source comes from
 
 `toolchains/gcc-claude-native` is a git worktree of the PoC repository on
@@ -114,6 +150,8 @@ $G fetch                         # logs, .sum files, bench results here
 $G compare OLD NEW               # two fetched builds, contrib/compare_tests
 $G clean                         # remove build NAME; clean --all: everything
 $G xcheck                        # here: lcc compiles all host code (above)
+$G diffcc NAME:stage1 NAME       # lcc-built and self-built: same assembly?
+$G triage REF                    # NAME's test failures, also with REF?
 ```
 
 Global options go before the command: `--remote USER@HOST`,

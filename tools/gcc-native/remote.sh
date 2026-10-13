@@ -34,8 +34,19 @@
 #   bash remote.sh bench CPU REPEAT FLAGS SPEC...
 #       SPEC  NAME (its last stage), NAME:stage1 (the lcc-built stage 1 of
 #             a bootstrap), NAME:stage2, or NAME:inst (the installed one)
+#   bash remote.sh diffcc SPEC-A SPEC-B JOBS [FLAGS...]
+#       compile GCC's C torture tests (and with two installed compilers
+#       the C++ ones) with both compilers at each FLAGS (default -O0,
+#       -O2, -O3, "-O2 -march=elbrus-v5") and compare the assembly
+#       (diffcc.py); SPEC as for bench, NAME:inst for C++ too
+#   bash remote.sh triage REF SUT JOBS
+#       recompile every test that failed in build SUT's testsuite with
+#       the installed REF and SUT compilers and compare (diffcc.py)
 #   bash remote.sh status [NAME]
 #   bash remote.sh clean NAME | --all
+#
+# A build's source is src-NAME, or src-$SRCNAME when SRCNAME is set (so
+# that builds of one revision share one tree and its paths).
 #
 # The builds run under nice -n 19 and take no lock (they last hours);
 # bench takes the machines' shared timing lock and pins one CPU.
@@ -87,12 +98,13 @@ cmd_build() {
     [ $# -ge 6 ] || die "build NAME MODE JOBS CHECKING STAGE1-FLAGS STOP [CONFIGURE-ARGS...]"
     local name=$1 mode=$2 jobs=$3 checking=$4 s1=$5 stop=$6
     shift 6
-    local src=$D/src-$name b=$D/build-$name inst=$D/inst-$name log=$D/log-$name
+    local src=$D/src-${SRCNAME:-$name} b=$D/build-$name inst=$D/inst-$name log=$D/log-$name
     [ -f "$src/configure" ] || die "no $src: push it first"
     mkdir -p "$log"
     exec 9> "$log/lock"
     flock -n 9 || die "$name is busy (another build or test of it is running)"
     echo $$ > "$log/pid"
+    echo "$src" > "$log/srcdir"
     echo running > "$log/status"
     : > "$log/times"
     ulimit -c 0
@@ -275,6 +287,71 @@ print("written", out)
 EOF
 }
 
+# The driver of a build, for C (or with c++ as $2, C++): NAME is its last
+# stage, NAME:stage1 and NAME:stage2 the earlier stages of a bootstrap
+# (C only: their libstdc++ isn't installed anywhere), NAME:inst the
+# installed compiler.
+driver_of() {
+    local spec=$1 lang=${2:-c} name=${1%%:*} which=${1#*:} d
+    [ "$which" = "$spec" ] && which=last
+    case $which in
+    inst)
+        d=$D/inst-$name/bin
+        [ "$lang" = c++ ] && echo "$d/g++" || echo "$d/gcc"
+        return ;;
+    stage1) d=$D/build-$name/stage1-gcc ;;
+    stage2) d=$D/build-$name/prev-gcc ;;
+    last)   d=$D/build-$name/gcc ;;
+    *)      return 1 ;;
+    esac
+    [ "$lang" = c ] || return 1
+    echo "$d/xgcc -B$d/"
+}
+
+# The source tree a build was made from.
+srcdir_of() {
+    local name=${1%%:*}
+    cat "$D/log-$name/srcdir" 2>/dev/null || echo "$D/src-$name"
+}
+
+cmd_diffcc() {
+    [ $# -ge 3 ] || die "diffcc SPEC-A SPEC-B JOBS [FLAGS...]"
+    local a=$1 b=$2 jobs=$3 ca cb xa xb ts out f
+    shift 3
+    ca=$(driver_of "$a") && cb=$(driver_of "$b") || die "bad compiler spec"
+    [ -x "${ca%% *}" ] || die "no compiler $ca"
+    [ -x "${cb%% *}" ] || die "no compiler $cb"
+    xa=$(driver_of "$a" c++) || xa=
+    xb=$(driver_of "$b" c++) || xb=
+    ts=$(srcdir_of "$a")/gcc/testsuite
+    out=$D/bench/diffcc-${a//:/-}-${b//:/-}-$(date +%Y%m%d-%H%M%S)
+    [ $# -gt 0 ] || set -- -O0 -O2 -O3 "-O2 -march=elbrus-v5"
+    local args=(compare --a "$ca" --b "$cb" --out "$out" --jobs "$jobs")
+    # "--flags=X": argparse would take a bare "-O2" for an option.
+    for f in "$@"; do args+=("--flags=$f"); done
+    if [ -n "$xa" ] && [ -n "$xb" ]; then
+        args+=(--a-cxx "$xa" --b-cxx "$xb" --cxx-flags=-O0 --cxx-flags=-O2)
+    fi
+    echo "$(stamp) diffcc $a $b -> $out"
+    python3 "$D/diffcc.py" "${args[@]}" \
+        "$ts/gcc.c-torture/compile" "$ts/gcc.c-torture/execute" \
+        "$ts/gcc.dg/torture" "$ts/g++.dg/torture"
+}
+
+cmd_triage() {
+    [ $# -eq 3 ] || die "triage REF SUT JOBS"
+    local ref=$1 sut=$2 jobs=$3 out
+    local sums=("$D/log-$sut"/*.sum)
+    [ -f "${sums[0]}" ] || die "no .sum files in log-$sut: test it first"
+    out=$D/log-$sut/triage-$ref
+    rm -rf "$out"
+    python3 "$D/diffcc.py" triage --jobs "$jobs" --out "$out" \
+        --testsuite "$(srcdir_of "$sut")/gcc/testsuite" \
+        --a "$(driver_of "$ref:inst")" --b "$(driver_of "$sut:inst")" \
+        --a-cxx "$(driver_of "$ref:inst" c++)" --b-cxx "$(driver_of "$sut:inst" c++)" \
+        "${sums[@]}"
+}
+
 cmd_status() {
     local log name st
     for log in "$D"/log-${1:-*}; do
@@ -313,7 +390,7 @@ cmd_clean() {
     echo "removed $1"
 }
 
-[ $# -ge 1 ] || die "usage: remote.sh check|build|test|bench-inputs|bench|status|clean ..."
+[ $# -ge 1 ] || die "usage: remote.sh check|build|test|bench-inputs|bench|diffcc|triage|status|clean ..."
 cmd=$1
 shift
 case $cmd in
@@ -322,7 +399,10 @@ build)        cmd_build "$@" ;;
 test)         cmd_test "$@" ;;
 bench-inputs) cmd_bench_inputs "$@" ;;
 bench)        cmd_bench "$@" ;;
+diffcc)       cmd_diffcc "$@" ;;
+triage)       cmd_triage "$@" ;;
 status)       cmd_status "$@" ;;
 clean)        cmd_clean "$@" ;;
 *)            die "unknown command $cmd" ;;
 esac
+exit

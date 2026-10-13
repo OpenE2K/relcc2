@@ -14,7 +14,8 @@ Usage:
   run.py GENDIR [-o OUTDIR] [--target T[,T...]] [--cc NAME[@T]=COMMAND]...
          [--cxx NAME=COMMAND]...
          [--runner COMMAND | --remote [USER@]HOST [--ssh-key FILE]
-          [--ssh-port N] [--remote-dir DIR] [--remote-jobs N]]
+          [--ssh-port N] [--remote-dir DIR] [--remote-jobs N]
+          [--keep-remote]]
          [--pairs CALLER:CALLEE,...] [--known FILE] [-j N]
 
 Failures listed in known.txt (known differences of the reference
@@ -59,10 +60,13 @@ compiler's C++ command: lcc's l++ and Unipro's clang by default, others
 from --cxx NAME=COMMAND. They are linked with l++ and skipped for a pair
 whose compiler has no C++ command.
 
-With --remote the programs are copied to REMOTE_DIR on HOST (default
-relcc2/compat in the remote home) and run there, at most --remote-jobs at
-a time (default 4: the test machines are shared). The SSH key defaults to
-secrets/id_ed25519 when it exists. -j still sets local compile jobs.
+With --remote the programs are copied to REMOTE_DIR/bin on HOST
+(REMOTE_DIR defaults to relcc2/compat in the remote home) and run there,
+at most --remote-jobs at a time (default 4: the test machines are
+shared). Afterwards REMOTE_DIR/bin is removed, and REMOTE_DIR too if
+that leaves it empty; --keep-remote keeps them, e.g. to rerun a program
+by hand. The SSH key defaults to secrets/id_ed25519 when it exists. -j
+still sets local compile jobs.
 """
 
 import argparse
@@ -186,8 +190,9 @@ class Remote:
     """Run programs on an Elbrus machine over SSH. One master connection
     is shared by all runs."""
 
-    def __init__(self, host, key, remote_dir, outdir, port=None):
+    def __init__(self, host, key, remote_dir, outdir, port=None, keep=False):
         self.host, self.dir, self.outdir = host, remote_dir, outdir
+        self.keep, self.uploaded = keep, None
         # A socket path must be short (about 100 bytes), so it can't live
         # in OUTDIR.
         self.sockdir = tempfile.mkdtemp(prefix="relcc2-ssh-",
@@ -207,6 +212,7 @@ class Remote:
         d = shlex.quote(self.dir)
         tar = subprocess.Popen(["tar", "-c", "-C", str(bindir.parent),
                                 bindir.name], stdout=subprocess.PIPE)
+        self.uploaded = bindir.name
         rc, out = self.remote(f"rm -rf {d}/{bindir.name} && mkdir -p {d} && "
                               f"tar -x -C {d}", stdin=tar.stdout)
         tar.wait()
@@ -214,6 +220,13 @@ class Remote:
             sys.exit(f"upload to {self.host} failed:\n{out[-2000:]}")
 
     def close(self):
+        if self.uploaded and not self.keep:
+            d = shlex.quote(self.dir)
+            rc, out = sh(self.ssh + [self.host, f"rm -rf {d}/{self.uploaded}"
+                                     f" && {{ rmdir {d} 2>/dev/null; true; }}"])
+            if rc:
+                print(f"could not remove {self.dir}/{self.uploaded} on "
+                      f"{self.host}:\n{out[-2000:]}", file=sys.stderr)
         sh(self.ssh + ["-O", "exit", self.host])
         shutil.rmtree(self.sockdir, ignore_errors=True)
 
@@ -309,6 +322,8 @@ def main():
     ap.add_argument("--ssh-port", type=int)
     ap.add_argument("--remote-dir", default="relcc2/compat")
     ap.add_argument("--remote-jobs", type=int, default=4)
+    ap.add_argument("--keep-remote", action="store_true",
+                    help="leave the programs in REMOTE_DIR on the remote")
     ap.add_argument("--pairs", help="CALLER:CALLEE,... (default: all; with "
                     "several targets, those that mix targets)")
     ap.add_argument("--known", type=Path,
@@ -364,7 +379,7 @@ def main():
     if args.remote:
         host = Remote(args.remote, sshkey.find_key(args.ssh_key),
                       args.remote_dir, out,
-                      args.ssh_port)
+                      args.ssh_port, args.keep_remote)
         run_jobs = args.remote_jobs
     else:
         host = Local(args.runner or default_runner(run_target))

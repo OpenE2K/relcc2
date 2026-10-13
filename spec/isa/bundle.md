@@ -302,8 +302,9 @@ Both fetch all of a cold 768-byte target given about 640 cycles from
 memory, where `ipd 2` loses 50–130 cycles, and both lose as much as
 `ipd 2` on a 1.5 KiB target ([control-transfer.md](control-transfer.md),
 "Code not in the instruction cache"; `tools/isa-probes/ctlleft.c`
-`f_fardiv48l3_*`, `f_fardiv48l6_*`) [hw; that the default is 3 is
-inferred from timing].
+`f_fardiv48l3_*`, `f_fardiv48l6_*`) [hw]. The instruction-fetch
+monitors count 3 lines for it, as for `ipd 3` (`tools/isa-probes/pmu2.c`
+`ib_depth_*`; [monitors.md](monitors.md)).
 
 **Type 1 (SF2) [source; run]:** used from v6 for `abgc`/`rbgc`, which replace
 `abg`. `abgc NUM` (1–7) puts NUM in bits 13–15 (the `aa1`–`aa3` positions of

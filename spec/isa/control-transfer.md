@@ -94,7 +94,7 @@ v7 widens the register to 128 bits and moves the fields):
 | 0–47 | `ta_base` | target address |
 | 54–56 | `ta_tag` | 0 empty, 1 diagnostic, 2 procedure label, 3 local label, 4 numeric label, 5 system label |
 | 57–58 | `opc` | 0 `disp`, 1 `ldisp`, 3 `return` |
-| 59–60 | `ipd` | the kernel names 0 no prefetch, 1 the target instruction, 2 the target and the next (`cpu_regs_types.h:733-735`). Measured, it is how much of the target the prepare fetches ahead: 0 nothing; 1 and 2 part of a cold three-line (768-byte) target (from L2, `ipd 2` is enough); 3 all of a 768-byte target but not of a 1.5 KiB one; a prepare in an instruction without SS behaves as 3 [hw: `ctlleft.c`, 4C, 8C2, 2C3; the depths in 256-byte lines are inferred from timing] |
+| 59–60 | `ipd` | the kernel names 0 no prefetch, 1 the target instruction, 2 the target and the next (`cpu_regs_types.h:733-735`). Measured, it is how much of the target the prepare fetches ahead: 0 nothing; 1 and 2 part of a cold three-line (768-byte) target (from L2, `ipd 2` is enough); 3 all of a 768-byte target but not of a 1.5 KiB one; a prepare in an instruction without SS behaves as 3 [hw: `ctlleft.c`, 4C, 8C2, 2C3]. The monitors count it: `ipd` N fetches N 256-byte lines starting at the target, and no SS 3 (`pmu2.c` `ib_depth_*`; [monitors.md](monitors.md), "Instruction fetch") |
 
 `rrd %ctprN` reads a CTPR in user mode (ALC0, as every `rrd`). After
 `sdisp` it holds `ta_tag` 5 for an entry the kernel enables and 0 for
@@ -310,8 +310,10 @@ transfer to a target that is not in the 128 KiB instruction cache
 (timing.md, "Cache geometry"), from the window's first instruction to
 the target's first. In mode 1 the target was pushed out by 256 KiB of
 other code (it is in L2). In mode 3 a 64 MiB data stream and 512 KiB of
-code ran first, and the target is on a page of its own (in memory, and
-probably out of the TLB too: inferred). The 4C runs pinned to one node
+code ran first, and the target is on a page of its own (in memory; its
+page was presumably still in the ITLB, which holds 256 or more pages,
+since a prepare whose target's page misses the ITLB fetches nothing:
+"Prefetch depth", below; inferred). The 4C runs pinned to one node
 (`numactl`); remote memory adds about 130 cycles. Targets on the
 window's own page come out at L2 cost even in mode 3, because the
 function's entry code fetched them (inferred), so only targets on
@@ -360,10 +362,22 @@ target on v3, v5 and v6, and lcc's v3 `ipd 2` loses 50 (4C) to about
 target from memory on the 8C2 and 2C3, and `ipd 2` loses 24–43 cycles
 more than the default. On a six-line (1.5 KiB) target `ipd 2`, `ipd 3`
 and the default lose the same (152 / 300–303 / 301–304 cycles,
-`f_fardiv48l6_*`). `ipd 0` makes the prepare fetch nothing ahead. That
-a prepare without SS behaves as `ipd 3` (bundle.md, "SS") and the
-depths in 256-byte lines are inferred from timing; the CTPR was not
-read back.
+`f_fardiv48l6_*`). `ipd 0` makes the prepare fetch nothing ahead. The
+instruction-fetch monitors confirm the depths: `ipd` N makes a prepare
+request N 256-byte lines starting at its target, and a prepare without
+SS 3 (bundle.md, "SS"): 0 / 1.2 / 2.5 / 3.7 / 3.6–3.7 requests to L2
+per prepare for `ipd` 0 / 1 / 2 / 3 / no SS, and as many fewer misses
+when the code reaches those lines (`pmu2.c` `ib_depth_*`, all three;
+[monitors.md](monitors.md), "Instruction fetch").
+
+**A prepare fetches nothing when its target's page is not in the
+ITLB** (code that has not run recently: the ITLB holds 256 to 383 4 KiB
+pages), whatever its lead: it counts an ITLB miss, starts no page walk
+and makes no request, so a transfer to it would pay the whole miss
+(inferred). The same targets after their pages ran get 0.9–1.5
+requests per prepare (`pmu2.c` `ib_near_*`, all three; monitors.md).
+The memory figures above are for targets whose pages had run. Whether
+`pref` behaves the same is not checked.
 
 **`pref`** needs the same lead as a prepare (about 20 cycles for code
 in L2, 200–255 for code in memory) and then hides the miss completely,

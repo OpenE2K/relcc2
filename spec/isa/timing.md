@@ -883,6 +883,15 @@ three machines and `pf.c`'s stride chase agree]:
   stream without prefetches pays a full memory access for every 64-byte
   line on all three (below). Only software prefetches and APB fetch data
   ahead.
+- **TLBs** [hw: `tools/isa-probes/pmu2.c` `tlb*`, `ib_pages_*`,
+  [monitors.md](monitors.md), "The other events"; source: kernel
+  `asm/tlb_regs_types.h:44-49`]: the DTLB holds 768 4 KiB pages (256
+  lines of 4 entries, the fourth kept for large pages: [apb.md](apb.md),
+  "Why"); a miss whose page-table entries are cached costs 15 / 17 /
+  44–45 cycles (4C / 8C2 / 2C3), stores alike, and with 2 MiB pages a
+  16 MiB stream makes none. The ITLB holds 256 to 383 4 KiB pages, and
+  a prepare whose target's page misses it fetches nothing
+  ([control-transfer.md](control-transfer.md), "Prefetch depth").
 
 Compilers schedule loads for an L1 hit (3 cycles; 5 on v6), and so does
 lcc outside pipelined loops. Inside them lcc issues the loads array

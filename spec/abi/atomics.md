@@ -447,6 +447,11 @@ lock-free 1, because that system's libatomic is built for the 8C2
 - MCST's libatomic is GCC's generic one (`libatomic/config/posix`, lock
   tables) with only protected-mode changes (`internal-lcc-libs`,
   `lib/GNU/gcc-11/libatomic`).
+- 32-bit mode (`-mptr32`) follows the same rules with `ldgdqp`/`stgdqp`,
+  and each lcc tree's 32-bit libatomic is built for its CPU too; v3 and
+  inline code mixed on one object there lose updates through lcc's
+  lock-based libatomic and count exactly through Elbrus Linux's
+  ([mode32.md](mode32.md), "16-byte atomics"; hw).
 
 **lcc's v5 and v6 sequences** [lcc 1.29.16 and 1.31.05 `-O3`,
 `e2k-v5.8c2` and `e2k-v6.2c3`: `tools/abi/probes/pocabi1_atom16.c`; the

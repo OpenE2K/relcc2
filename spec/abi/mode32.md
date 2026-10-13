@@ -23,6 +23,10 @@ Probes, in `tools/abi/probes/mode32/` (`run.sh [TARGET] --remote HOST
 | `cxx32.cc` | a C++ exception through four frames, dynamic and static |
 | `dlmix.c` with `mixlib.c` | linking and `dlopen` across the modes; `dlmix32pie` is a 32-bit PIE |
 | `rt32.c` | lcc's AddressSanitizer, OpenMP and `-pg` runtimes |
+| `lat32.c` with `gen_lat32.py` (writes `lat32.s`, `lat32-v5.s` and their `-cases.h`) | the latencies of `ldgd*`/`stgd*` against `ld*`/`st*`, store–reload steps, load and store issue, and `getpl` → `ct`/`call` against `movtd` and `disp`, all in one 32-bit process ("Timing"); `run.sh` runs it under the shared timing lock |
+| `asan32.c` | replays compiler-rt's start-up check of `/proc/self/maps` on the process's own maps ("C runtime") |
+| `atom32.c` | 16-byte atomics: what lcc emits (`-S`), and two threads adding to one `__int128` while a third counts torn loads; `atom32mix` and `atom32mixlock` mix v3 and inline code on one object ("16-byte atomics") |
+| `dbg32.c` with `dbg32.gdb` and `dbg32.sh` | gdb on 32-bit programs (dynamic and static), `gcore`, and kernel core dumps after `abort` and `SIGSEGV` ("C runtime") |
 
 **hw** here means lcc 1.29.16's `e2k-v3` code on the 4C (static, and
 dynamic through lcc's own `lib32` ld.so: `run.sh --ship-libs`),
@@ -119,7 +123,7 @@ on v6 and later; 64-bit tasks use 0 (`include/asm/head.h:181-184`,
 | The sum wraps | `ldgdw (gvar + 16) + 0xffff_fff0` and `ldgdw 0x8000_0000 + (gvar + 0x8000_0000)` both read `gvar` | [hw: `run32`] |
 | The bound | `ldgdw 0xefff_fff0` is an ordinary fault (`SEGV_MAPERR`, `si_addr` = that address); `ldgdw 0xf000_0000` and `0xffff_fff0` are `SIGSEGV` `SEGV_BNDERR` with `si_addr` = the address of the `ldgdw` itself. The usable range is [0, `0xf000_0000`) | [hw: `run32`]; kernel `kernel/traps.c:1296-1305`, `include/asm/traps.h:24-38` |
 | Ordinary `ld*`/`st*` | work in a 32-bit process (`ldw` and `stw` of `gvar` by its 64-bit address). A fault above 4 GiB reports `si_addr` cut to 32 bits (`gvar` + 2³² reports `gvar`), because the compat `siginfo_t` has a 32-bit `si_addr` | [hw: `run32`]; kernel `kernel/signal.c:442` |
-| `getpl %rN, %ctprN` | prepares a call or branch to `CUD.base` + `%rN` (a 32-bit operand; into a CTPR only in ALC0, [bundle.md](../isa/bundle.md)). This is how lcc calls through a function pointer, with the `call` 9 cycles later (`nop 7` and an empty instruction), as after 64-bit code's `movtd` | guide 9.5.3, 10.9.2; [lcc: `c_indirect`]; [hw: `run32` "getpl into %ctpr1 and call"] |
+| `getpl %rN, %ctprN` | prepares a call or branch to `CUD.base` + `%rN` (a 32-bit operand; into a CTPR only in ALC0, [bundle.md](../isa/bundle.md)). This is how lcc calls through a function pointer, with the `call` 9 cycles later (`nop 7` and an empty instruction): a `ct` or `call` waits until 9 cycles after a `getpl`, as after 64-bit code's `movtd` ("Timing") | guide 9.5.3, 10.9.2; [lcc: `c_indirect`]; [hw: `run32` "getpl into %ctpr1 and call"; `lat32`] |
 | `getpl %rN, %drM` | never emitted by lcc. v3–v5: a 64-bit procedure label in `%drM`, the address with tag `0xA` (`ETAGPLD`); `%drM+1` is left alone, and an odd M works. v6: a 128-bit label in an even pair: the low word is the address with bit 61 set (`itag` 1), the high word 0 (the CUI), tags `0xF` and `0xF` (`ETAGPLQ`); an odd M is `SIGILL` `ILL_ILLOPC` | [hw: `run32`; 4C, 8C2: tag `a`; 2C3: `0x2000_0000_0001_4638`, tags `f0f`]; kernel `include/asm/e2k_ptypes.h:153-197`, `include/asm/tags.h:17-18,50,61` |
 | In a 64-bit process | not usable: `ldgd*` and `stgd*` are `SIGSEGV` `SEGV_BNDERR`, and `getpl` into a register `SIGILL` `ILL_ILLOPN`, with the semantics probe's operands ([semantics.md](../isa/semantics.md); 4C, 8C2, 2C3). (inferred:) up to v6 the `GD` and `CUD` size fields are 32 bits, and the kernel gives a 64-bit task's entry the size `TASK_SIZE` = `0xd000_0000_0000`, whose low 32 bits are 0. The probes here run `ldgd*` and `getpl` only in 32-bit processes | kernel `include/asm/cpu_regs_types.h:81-135`, `include/asm/cpu_regs.h:869-880` |
 
@@ -140,6 +144,44 @@ What lcc's 32-bit code does [lcc: `callconv32.c`; `objdump` of lcc's
   value, below `0xf000_0000`.
 - **Globals in non-PIC code** use the address as a 32-bit literal:
   `ldgdw 0x0, [ _f32s,_lts1 g ], %r0` (guide 9.1.4.1).
+
+### Timing [hw: `lat32`; 4C `e2k-v3.4c` and `e2k-v3`, 8C2 `e2k-v5.8c2`, 2C3 `e2k-v6.2c3`; six runs on each machine, every line identical but one 8C2 value of 4.94 for 5.00]
+
+`lat32.c` times each case in one 32-bit process: chains of a producer
+and its consumer `g` cycles later, 16 and 32 steps, the difference
+giving the cycles a step. A step costs `g` from the latency `L` on and
+`g + 4 × ceil((L − g) / 4)` below it ([timing.md](../isa/timing.md),
+"Stalls cost more than the latency"); `L` below is the smallest `g`
+from which every step costs `g`.
+
+| Producer → consumer | 32-bit form | 64-bit form, same probe | 4C (v3) | 8C2 (v5) | 2C3 (v6) |
+|---|---|---|---|---|---|
+| load → the next load's address, same channel: the base (`ldgdw` in ALC0, 2, 3 or 5; `ldgdd` in ALC0, through its low word) or the index (`ldgdb`, `ldgdh`, `ldgdw`, `ldgdd` in ALC0) | `ldgd*` | `ldb` … `ldd` | 3 | 3 | 5 |
+| the same with the sum wrapping past 2³² (`ldgdw %r9, %r6, %r9`, `%r6` = `0x8000_0000`) | `ldgdw` | — | 3 | 3 | 5 |
+| load → load address in the other cluster (ALC0 ↔ ALC3) | `ldgdw` | `ldd` | 4 | 4 | 5 |
+| load → integer op | `ldgdw` → `adds` | `ldd` → `addd` | 3 | 3 | 5 |
+| integer op → load address | `adds` → `ldgdw` | `addd` → `ldd` | 1 | 1 | 1 |
+| register-pair load → load, through its low word | `ldgdq` | `ldq` (v5+) | 3 | 3 | 5 |
+| 16-byte load → load, through its low word | `ldgdqp` (v5+) | `ldqp` | — | 11 (L2) | 5 |
+| issue | four `ldgdw` (ALC0, 2, 3, 5; also each with its own 32-bit literal) or two `stgdw` (ALC2, 5, new addresses) in every instruction | `ldw`, `stw` | 1 cycle an instruction | 1 | 1 |
+| `getpl %rN, %ctprN` → `ct`, `call` (an earlier transfer waits) | `getpl` | `movtd` 9, `disp` 5 | 9 | 9 | 9 |
+
+A store, a load of the same word in the next instruction and an integer
+op 3 cycles after the load, feeding the next store's data, take 13
+cycles a step on the 4C and 8C2 and 17 on the 2C3; with the load 2
+cycles after the store, 6 and 10. These are timing.md's store-to-load
+costs ("Store to load": a load 1 cycle after a store to its doubleword
+is served by L2), and the 64-bit forms measure the same (`stgdw`/`ldgdw`
+and `stgdd`/`ldgdd` against `stw`/`ldw` and `std`/`ldd`, ALC2 → ALC0
+and ALC5 → ALC3).
+
+So 32-bit addressing costs nothing: each `ldgd*` and `stgd*` takes the
+time of the `ld*` or `st*` of its width in every channel and cluster
+tried, and the 32-bit sum, wrapping or not, adds no latency. `getpl`
+delays a transfer exactly as `movtd` does (a block costs `max(D, 9) +
+1` with the prepare `D` cycles ahead; [control-transfer.md](../isa/control-transfer.md),
+"Costs"). A `movtd` of a zero-extended 32-bit address also works in a
+32-bit process.
 
 ## Calling convention (guide 9.5; lcc: `callconv32.c` at `-O0`, `-O1`, `-O2`; hw: `run32` across `librun32.so`)
 
@@ -207,6 +249,44 @@ right totals.]
   `stgd*` and 4-byte pointers when `__ptr64__` is not defined
   (`src/e2k/call.S:4-23`).
 
+## 16-byte atomics (lcc; hw: `atom32`)
+
+As in 64-bit mode ([atomics.md](atomics.md), "16-byte atomics"), with
+`ldgdqp`/`stgdqp` for `ldqp`/`stqp`. The atomic macros
+(`__GCC_ATOMIC_*`, `__GCC_HAVE_SYNC_COMPARE_AND_SWAP_*`) are the same
+in both modes for every target [lcc `-dM -E`, `v3`, `v5.8c2`,
+`v6.2c3`].
+
+| Target | lcc's `-mptr32 -O2` code | `__atomic_always_lock_free (16)`; `__GCC_HAVE_SYNC_COMPARE_AND_SWAP_16` |
+|---|---|---|
+| v3, v4 (`v4.8c`, `v4.1c+`: compiled only) | calls `__atomic_load_16`, `__atomic_compare_exchange_16`, …: the pointers in 32-bit slots, the 16-byte value in an even slot pair (`movtq %r0, %b[2]`), the orders after it; the result in `%b[0..1]` | 0; not defined |
+| v5, v6 | inline: lock-wait `ldgdqp,0 … mas = 0x7`, wait-unlock `stgdqp,2 … mas = 0x2`, `rbranch`. A seq_cst load is `wait ld_c = 1, st_c = 1` and `ldgdqp`, then the dummy use; an acquire load drops the `wait`. A relaxed load is two `ldgdd` in one wide instruction on v5 (64-bit code: two `ldd`, the same way), one `ldgdqp` on v6 | 1; defined |
+
+- Every lcc tree's 32-bit libatomic (`fs/usr/lib32/libatomic.so.1`,
+  `lcc-home/…/lib32/libatomic.a`) is built for its CPU: the `e2k-v3`
+  tree's has no quad operation, the `v5.8c2` tree's 147
+  `ldgdqp`/`stgdqp` (`e_flags` elbrus-8c2), the `v6.2c3` tree's 257
+  (elbrus-2c3). Elbrus Linux's `/usr/lib32/libatomic.so.1` on the 8C2
+  and the 2C3 is the same file as the tree's for that CPU [objdump,
+  md5sum].
+- [hw] Two threads add 2⁶⁴ + 1 to one `__int128` a million times each
+  (fetch-add, and a compare-exchange loop) while a third counts loads
+  whose halves differ, with acquire and with relaxed loads:
+  - every count exact, with no torn load, in every run: the 4C with
+    lcc's lock-based libatomic (static, and dynamic through the shipped
+    `libatomic.so.1`); v5 and v6 code inline; v3 code
+    through the system libatomic, whose `__atomic_is_lock_free (16)` is 1
+    there; and v3 and inline code on one object through the system
+    libatomic (`atom32mix`). The 8C2's relaxed loads (two `ldgdd` in one
+    instruction) tore in none of about 110 million reads, as in 64-bit
+    mode (atomics.md);
+  - v3 and inline code on one object linked against lcc's lock-based v3
+    `libatomic.a` instead (`atom32mixlock`) lose updates: on the 8C2 in
+    12 of 12 runs (about 1.50 million of 2 million), one run also ending
+    with unequal halves (1,500,182 and 1,500,188) and 3.06 million of
+    3.5 million loads torn; on the 2C3 in 3 of 12 (1.78 to 1.89
+    million). Mixing breaks as atomics.md says for 64-bit code.
+
 ## ELF (binutils, lcc, kernel)
 
 | Item | Value | Source |
@@ -230,7 +310,7 @@ Relocation types lcc's 32-bit code uses [lcc: `readelf -r` of
 | 75 | `R_E2K_32_TLS_LE` | `x@TLS_LE` |
 | 74, 70, 71 | `R_E2K_TLS_IE`, `R_E2K_TLS_GDMOD`, `R_E2K_TLS_GDREL` | IE and GD |
 | 8, 9, 10 | `R_E2K_32_JMP_SLOT`, `R_E2K_32_COPY`, `R_E2K_32_RELATIVE` | dynamic |
-| 80, 81, 84 | `R_E2K_TLS_32_DTPMOD`, `R_E2K_TLS_32_DTPREL`, `R_E2K_TLS_TPOFF32` | dynamic TLS |
+| 80, 81, 84 | `R_E2K_TLS_32_DTPMOD`, `R_E2K_TLS_32_DTPREL`, `R_E2K_TLS_TPOFF32` | dynamic TLS; 81 also in `.debug_info`, for a TLS variable's `DW_OP_addr` [lcc: `-mptr32 -g`] |
 
 Code sequences [lcc: `callconv32.c` at `-O1`, with and without `-fPIC`;
 the 64-bit ones are in [elf.md](elf.md), "Code sequences"]:
@@ -292,14 +372,17 @@ directly, with 4-byte `R_E2K_32_ABS` words (64-bit: 8 bytes,
 | glibc configuration | `e2k/e2k32` implies `wordsize-32`; `slibdir` and `rtlddir` are `lib32`; the dynamic linker is `/lib32/ld-linux.so.2` | glibc `sysdeps/e2k/e2k32/Implies`, `sysdeps/unix/sysv/linux/e2k/e2k32/configure.ac:4`, `sysdeps/unix/sysv/linux/e2k/shlib-versions`; [lcc: `PT_INTERP`] |
 | Start files, link line | `fs/usr/lib32/crt1.o crti.o`, lcc's `lib32/crtbegin.o`, … `-lgcc --as-needed -lgcc_s --no-as-needed -llcc -lmvec -lc` …, `crtend.o crtn.o`; `Scrt1.o`, `rcrt1.o`, `gcrt1.o`, `grcrt1.o`, `Mcrt1.o` exist | [lcc: `-mptr32 -v`; the sysroot] |
 | lcc's runtime | `lcc-home/1.29.16/<target>/lib32` has the same 43 files as `lib64` (libgcc, `libgcc_eh`, `libgcc_s`, libstdc++, `liblcc`, `libmvec`, libatomic, OpenMP, Fortran, quadmath, the compiler-rt sanitizers). MCST's E2K unwinder tests only `__ptr128__`, and C++ exceptions work | [lcc tree]; libgcc `config/e2k/unwind-dw2-e2k.c`; [hw: `cxx32`] |
-| AddressSanitizer | reports `rt32-asan`'s heap overflow on the 4C (through lcc's shipped ld.so), but stops at startup on the 8C2 and 2C3, with the `e2k-v3` build as with the CPU's own: `AddressSanitizer CHECK failed: sanitizer_posix.cpp:219 "((start1 <= end1)) != (0)" (0x0, 0x0)`. That CHECK is in the loop that compares `/proc/self/maps` with the shadow range (compiler-rt `lib/sanitizer_common/sanitizer_posix.cpp:217-240`); a 32-bit process's maps also list the hardware stacks above 4 GiB, which a 32-bit `uptr` cannot hold (inferred; why the 4C escapes is not known) | [hw: `rt32`] |
+| AddressSanitizer | reports `rt32-asan`'s heap overflow on the 4C (through lcc's shipped ld.so), but stops at start on the 8C2 and 2C3, with an `e2k-v3` build as with the CPU's own: `AddressSanitizer CHECK failed: sanitizer_posix.cpp:219 "((start1 <= end1)) != (0)" (0x0, 0x0)`, in `MemoryRangeIsAvailable` called by `InitializeShadowMemory` from `__asan_init`. **Cause:** MCST's `ReadProcMaps` drops the last three lines of `/proc/self/maps`, taking them for the hardware stacks, and the remaining lines are parsed into a 32-bit `uptr`. The 4C's kernel puts three mappings above 4 GiB (`[procedure stack]`, `[chain stack]`, `[cut]`; its `[trampolines]` is in the 32-bit `mmap` area: "Address space", below). The 8C2's and 2C3's kernels put `[trampolines]` there too, so the `[procedure stack]` line (`c2dfffffe000-c2e000002000` on the 8C2, `c25fffffe000-c26000002000` on the 2C3) is parsed, as start `0xffff_e000` and end `0x2000`, and fails `CHECK (start1 <= end1)`; the printed `(0x0, 0x0)` are the values the CHECK compared | compiler-rt 11.1.0 in MCST's runtime sources (`internal-lcc-libs-open-source-1.29.16`, `lib/compiler_rt-11.1.0/lib/sanitizer_common/`): `sanitizer_procmaps_linux.cpp:27-49` (the e2k patch), `:65-67`, `sanitizer_procmaps_common.cpp:37-64`, `sanitizer_posix.cpp:217-240`; [hw: `rt32`; `asan32`, which replays the parse on its own maps: "line 13 fails a CHECK" on the 8C2 and 2C3 (line 6 static), "every parsed line passes" on the 4C; gdb on the 8C2, a breakpoint on `__sanitizer::CheckFailed`; kernels 6.1.158-mcst-e4c-alt1.9.1, 6.1.0-1.17-e8c2-nn, 6.1.0-1.18-e2c3] |
 | OpenMP, `-pg` | work: `rt32-omp`'s four-thread reduction is right, and gprof counts `rt32-pg`'s million calls | [hw: `rt32`] |
 | ldconfig, ldd | 32-bit libraries are cached with `FLAG_ELF_LIBC6`, 64-bit ones with `FLAG_E2K_LIB64` (`0x0800`), protected ones with `FLAG_E2K_LIB128` (`0x0900`). ldconfig adds the `lib32`, `lib64` and `lib128` siblings of each system directory, and `ldd` tries all three loaders | glibc `sysdeps/unix/sysv/linux/e2k/readelflib.c:41-72`, `sysdeps/generic/ldconfig.h:43-46`, `sysdeps/unix/sysv/linux/e2k/dl-cache.h:20-60`, `…/e2k/ldd-rewrite.sed` |
 | System calls | `__SYSCALL_TRAPNUM` 1 and `__VSYSCALL_TRAPNUM` 5; arguments are moved with `adds 0x0, …` (32-bit writes; the kernel zero-extends them, below) and the result taken from the low half (`adds 0x0, %db[0]`). The 32-bit `libc.so.6` has 577 `sdisp %ctpr1, 0x1`, 4 `sdisp %ctpr1, 0x5` and no other entry | glibc `sysdeps/unix/sysv/linux/e2k/e2k32/sysdep.h:42-58,105`; [lcc: `objdump`] |
 | `time_t` | 32 bits. With `_TIME_BITS=64` (glibc requires `_FILE_OFFSET_BITS=64` with it) programs use glibc's 64-bit-time functions, but neither glibc's E2K system call list nor the kernel's 32-bit table has the time64 calls (the table has only `recvmmsg_time64`, 417), so glibc falls back to the 32-bit calls: reading the time works, and setting a time past 2038 fails (`utimensat` to 2³² s: −1, `EOVERFLOW`; `0x7fff_ff00` s works) | glibc `sysdeps/unix/sysv/linux/e2k/e2k32/time64-compat.h`, `…/e2k/arch-syscall.h`; kernel `kernel/systable.c:547,1009`; [hw: `run32t`] |
 | Large files | a 64-bit offset is passed as two 32-bit arguments, low then high [hw: a raw `ftruncate64 (fd, 7, 2)` makes the file `0x2_0000_0007` bytes]. `ftruncate64` past 2 GiB on a file opened without `O_LARGEFILE` is `EINVAL` (the 64-bit `run64`: 0): the kernel's 32-bit `ftruncate64` calls the non-LFS `ftruncate`, as x86's compat one does; `open64` and `_FILE_OFFSET_BITS=64` set `O_LARGEFILE` | kernel `kernel/sys_32.c:81-85`, `linux/fs/open.c:156-183,202-210`, `linux/arch/x86/kernel/sys_ia32.c:61-65`; [hw: `run32`] |
 | Threads, contexts | `pthread_create`/`join`, `setjmp`/`longjmp` through 20 frames, `getcontext`, `makecontext_e2k`, `swapcontext`, `freecontext_e2k` work | [hw: `run32`] |
-| gdb | the `e2k32` OS ABI: `ptr_bit` 32, `addr_bit` 64 (the hardware stacks lie outside `GD`), the SVR4 ILP32 link map; `gcore` writes `elf64-e2k` | gdb `gdb/e2k32-tdep.c:28-37`, `gdb/e2k32-linux-tdep.c:30-55` |
+| gdb | the `e2k32` OS ABI: `ptr_bit` 32, `addr_bit` 64 (the hardware stacks lie outside `GD`), the SVR4 ILP32 link map. Each machine's gdb 15.2 (MCST's on the 8C2 and 2C3, ALT's on the 4C) debugs 32-bit programs, dynamic and static, as it does 64-bit ones: breakpoints, a backtrace through every frame, `info frame` (window registers saved in the procedure stack at their 64-bit addresses), arguments, locals and globals of every type (`sizeof (long)` and pointers 4), `ptype`, `finish` with the return value, a hardware watchpoint, `info sharedlibrary` (`/lib32/ld-linux.so.2`, `/lib32/libc.so.6`), `$pc`, `$sp`, `$r0` with its tags, `x/i`, and TLS variables in dynamic programs (through the host's 64-bit `libthread_db`). In static programs TLS is "Cannot find thread-local storage", as in static 64-bit ones. On the 4C (no `/lib32`) a program run under gdb as `./ld-linux.so.2 --library-path . ./prog` needs `add-symbol-file ./prog` for its symbols | gdb `gdb/e2k32-tdep.c:28-37`, `gdb/e2k32-linux-tdep.c:30-55`; [hw: `dbg32.sh`, all three machines] |
+| `gcore` | writes an `ELFCLASS64` core (`elf64-e2k`, `e_flags` 0) for a 32-bit process too, with the 32-bit layouts of `NT_PRPSINFO` (128 bytes, 136 for a 64-bit process), `NT_AUXV` (160 against 304 bytes) and `NT_FILE`; gdb reads it back (backtrace, globals) | gdb `e2k32-linux-tdep.c:55`; [hw: `dbg32.sh`; `readelf -n` of `gcore` files of 32- and 64-bit processes, all three machines] |
+| Kernel core dumps | the compat loader uses the 64-bit core writer ("Hardware stacks lie above 4Gb boundary in 32-bit applications"). A 32-bit process's core is `ELFCLASS64`, `e_machine` 175, `e_flags` the CPU's ISA version × 2²⁴ (`0x0500_0000` on the 8C2, `0x0600_0000` on the 2C3), as a 64-bit process's. Its notes are the 64-bit ones (`NT_PRSTATUS` 5,048 bytes, `NT_PRPSINFO` 136, `NT_SIGINFO`, `NT_FILE`), except `NT_AUXV` in the 32-bit form (160 bytes; 304 in a 64-bit core). It has a `LOAD` segment for each mapping, the hardware stacks above 4 GiB included, and after them one `PT_E2K_TAGS` (`0x7000_0000`) segment of tags for each `LOAD`, a sixteenth of its size in the file. gdb reads it (a backtrace through `abort ()` in `/lib32/libc.so.6`, globals, `ip`). The 4C's `core_pattern` is `/`, so its kernel writes no core in either mode | linux `fs/binfmt_elf.c:84-95,121-126`; kernel `include/asm/elf.h:30,50`; [hw: `dbg32.sh`, `abort` and `SIGSEGV`, static and dynamic, 32- and 64-bit; 8C2 and 2C3] |
+| DWARF | lcc's 32-bit objects use DWARF version 2 in the 32-bit format with 4-byte addresses (a 4-byte `DW_OP_addr`; a TLS variable is `DW_OP_addr` and `DW_OP_GNU_push_tls_address`, relocated with `R_E2K_TLS_32_DTPREL`; the other debug relocations are `R_E2K_32_ABS`). 64-bit objects use the 64-bit format ([stack-and-unwinding.md](stack-and-unwinding.md), "Debug information"). The register numbers, frame bases and locations (`DW_OP_reg0` …, `DW_OP_fbreg`) are the same in both modes, and neither has `.debug_frame` | [lcc 1.29.16 and 1.31.05: `dbg32.c` with `-g -c`, with and without `-mptr32`; `readelf --debug-dump=info`, `-x .debug_info`, `-r`] |
 
 ## lcc options and predefined macros (lcc, lcc-doc)
 
@@ -425,11 +508,12 @@ toolchain supports calls between the modes.
 
 ## Not checked yet
 
-- Latencies of `ldgd*`/`stgd*` against `ld*`/`st*`, and `getpl` to
-  `call`.
-- Why lcc's 32-bit AddressSanitizer starts on the 4C but not on the 8C2
-  and 2C3.
-- 16-byte atomics in 32-bit mode.
-- gdb and DWARF on 32-bit programs; core dumps of 32-bit processes.
+- Kernel core dumps on the 4C: its `core_pattern` is `/`, so none are
+  written (inferred to be as on the 8C2 and 2C3, from the same
+  `fs/binfmt_elf.c`).
+- Whether 32-bit AddressSanitizer on the 4C breaks later, when a fourth
+  mapping above 4 GiB (a `[signal stack]` after a signal, say) reaches
+  a later read of `/proc/self/maps`; only start-up was studied.
+- v4 (no hardware): the timings and the atomics runs.
 - v7 (out of scope): binutils has a v7 `getpl` in ALC1/4, and the v7
   `CUD` has a `va32` flag (kernel `include/asm/cpu_regs_types.h:108-112`).

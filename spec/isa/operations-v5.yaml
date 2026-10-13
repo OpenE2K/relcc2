@@ -256,9 +256,13 @@ groups:
     does: "128-bit AAU access through `%aadN` + `%aastiN`; `staaqp` counts as one store for loop-mode store suppression. Both need 16-byte alignment on v5 (SIGBUS), none on v6. `ldaaqp` is an AAU load (served from L2); with `,sm` and MAS mod 4 or 7 it gives a diagnostic value for every address on v5 (v6 loads)."
     use: "Pipelined loops: lcc stores with `staaqp` (`memmove`, vectorized loops) and emits no `ldaaqp`."
     see: apb.md, "AAU loads"; loops.md
-  - ops: ld{cs,ds,es,fs,gs,ss}qp st{cs,ds,es,fs,gs,ss}{qp,mqp} ldgdqp stgd{qp,mqp} ldcudqp ldapqp stap{qp,mqp} ldrqp strqp
+  - ops: ld{cs,ds,es,fs,gs,ss}qp st{cs,ds,es,fs,gs,ss}{qp,mqp} ldcudqp ldapqp stap{qp,mqp} ldrqp strqp
     does: "128-bit forms of the segment, protected-mode and privileged accesses: they fault in ordinary user mode (SIGILL, SIGSEGV or SIGBUS) as the v3 forms do."
     see: semantics.md, "Memory, tag and descriptor operations"
+  - ops: ldgdqp stgd{qp,mqp}
+    lat: "`ldgdqp` 11 (v6 5), as `ldqp` (32-bit processes)"
+    does: "128-bit forms of `ldgd*`/`stgd*` (operations-v3.md): they fault in a 64-bit process as the v3 forms do; lcc's 32-bit code (`-mptr32`) makes its v5+ 16-byte atomics with `ldgdqp`/`stgdqp` as 64-bit code does with `ldqp`/`stqp`."
+    see: spec/abi/mode32.md, "Timing", "16-byte atomics"; semantics.md, "Memory, tag and descriptor operations"
   - ops: puttagqp
     lat: "1 (4 to `addd` reading its low half)"
     does: "Set the tags of a 128-bit value, 2 bits per 32-bit word (the low 8 bits of b): tag 1 as asked (diagnostic where the word's bit 30 is set, empty where it is clear), 2 and 3 give 0; never traps, `,sm` or not (semantics.md, \"Tag operations\"); lcc gives speculatively loaded blocks tag 0 with it before testing them in string functions."

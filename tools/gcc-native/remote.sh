@@ -51,6 +51,8 @@
 # The builds run under nice -n 19 and take no lock (they last hours);
 # bench takes the machines' shared timing lock and pins one CPU.
 
+# One compound command, read in full before it runs (see gcc-native.sh).
+{
 set -u
 D=$(cd "$(dirname "$0")" && pwd)
 cd "$D" || exit 1
@@ -405,4 +407,5 @@ status)       cmd_status "$@" ;;
 clean)        cmd_clean "$@" ;;
 *)            die "unknown command $cmd" ;;
 esac
+}
 exit

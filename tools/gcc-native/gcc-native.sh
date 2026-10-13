@@ -82,6 +82,10 @@
 #   gcc-native.sh bench-inputs && gcc-native.sh bench NAME:stage1 NAME
 #   gcc-native.sh fetch
 
+# The whole script is one compound command, which bash reads to the end
+# before running any of it: editing this file while an xcheck or a wait
+# runs then can't feed that run the new text at its old offset.
+{
 set -eu
 root=$(cd "$(dirname "$0")/../.." && pwd)
 here=$root/tools/gcc-native
@@ -338,6 +342,8 @@ xcheck)
             echo "gcc/$f MISSING"
         elif [ "gcc/$f" -nt ../make.start ]; then
             echo "gcc/$f linked"
+        elif [ -n "$errs" ]; then
+            echo "gcc/$f not relinked (the errors above)"
         else
             echo "gcc/$f up to date"
         fi
@@ -354,3 +360,5 @@ clean)
     die "unknown command $cmd (--help)"
     ;;
 esac
+}
+exit

@@ -638,9 +638,13 @@ def divider(ops):
         "channel": 5,
         "ops": names,
         "rule": "one pipelined unit in ALC5 shared by every divide, square root and "
-                "reciprocal estimate (integer, FP, packed, 80-bit); an operation issued g "
-                "cycles after another on the unit stalls when g is in that operation's "
-                "conflicts; smodx/umodx hold it 9 cycles",
+                "reciprocal estimate (integer, FP, packed, 80-bit); in a run of one "
+                "operation issued every g cycles it stalls when g is in that operation's "
+                "conflicts. A lone pair conflicts only 1 cycle apart, except after "
+                "smodx/umodx (which hold the unit 9 cycles) and after a single-precision "
+                "square root, whose other distances depend on its operand; the runs "
+                "don't follow from the pairs (timing.md, \"Divider\": \"Pairs\", "
+                "\"Runs\")",
         "cycles_note": "cycles: cycles per operation when one issues every g = 1..8 "
                        "cycles, back to back with itself; mixed pairs measured at "
                        "distance 1 cost as two of the same (timing.md, \"Throughput\", "

@@ -560,6 +560,16 @@ globals, predicates or control registers. Debug info from lcc and Unipro
 uses `DW_OP_regN` with these numbers; arguments appear as `DW_OP_reg0`, … in
 the callee.
 
+MCST's gdb maps only these numbers (`e2k_dwarf_reg_to_regnum`,
+`OpenE2K/gdb/gdb/e2k-tdep.c:396-408`) and fails on any other ("Unable to
+access DWARF register number 128"), so debug info must not place a
+variable in a global register or address it relative to one: the
+experimental GCC numbered the globals from 128 and gdb rejected 44 of
+the variables its guality tests checked (`tools/dejagnu/README.md`,
+"Guality"; [source, hw] on the 8C2). Such a variable has to be described
+some other way (for example copied to a window register) or left out as
+optimized out.
+
 **Exception handling** uses DWARF 64 and 65 (`%b[0]`, `%b[1]`) as
 `__builtin_eh_return_data_regno (0)` and `(1)` (libgcc). A compiler that
 numbers them differently produces libraries that are incompatible with

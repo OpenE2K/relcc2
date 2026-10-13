@@ -1591,13 +1591,16 @@ each one cost it a debugging session:
   that dependence a latency of 2 rather than 1. v5 (the 8C2) adds any
   load of the store's 32-byte line 2 or 3 cycles after it that reads a
   byte the store didn't write; v6 (the 2C3) a load of the stored
-  doubleword at another width up to 4 cycles after it. sched-deps links
-  a load to an earlier store only when they may overlap
-  (`true_dependence`, sched-deps.cc:2675), so the v5 case (another
-  field of the line, through the same base) has no dependence to carry
-  a latency; it needs a check where instructions are formed. lcc
-  doesn't avoid it either: its v5 `core_list_reverse` kernel pays it on
-  CoreMark's lists, and so did the proof of concept's (I45).
+  doubleword at another width up to 4 cycles after it. Every version
+  also delays a load at the stored offset 16 KiB × k away with up to 2
+  empty cycles after the store (v6: 3; timing.md, "Loads 16 KiB away
+  from a store"). sched-deps links a load to an earlier store only when
+  they may overlap (`true_dependence`, sched-deps.cc:2675), so the v5
+  case (another field of the line, through the same base) and the
+  16 KiB one have no dependence to carry a latency; they need a check
+  where instructions are formed. lcc doesn't avoid the v5 case either:
+  its v5 `core_list_reverse` kernel pays it on CoreMark's lists, and so
+  did the proof of concept's (I45).
 - **Memory accesses in one wide instruction** are ordered (ALC2 before
   ALC5, a load before a store in its cluster; `spec/isa/bundle.md`): a
   load in ALC5 sees a store in ALC2 of its own instruction, and of two

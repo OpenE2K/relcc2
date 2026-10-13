@@ -554,8 +554,10 @@ difference.
 
 An FP-side result (FP add or multiply, integer multiply) on its way to
 an integer operation arrives one cycle late when an integer-side
-operation that writes a register issues in the **same channel exactly
-2 cycles after** the producer. Such an operation is an integer ALU
+operation that writes a register is placed in the **same channel
+exactly 2 cycles after** the producer, counted on the schedule as
+written (stalls between them don't count: "The schedule as written
+decides it", below). Such an operation is an integer ALU
 operation (the x86 flag forms included, but not the multiply ones,
 which are FP-side) or a load; a store is not, and neither is a compare
 or `cctop` into a predicate. With the consumer
@@ -885,7 +887,7 @@ three machines and `pf.c`'s stride chase agree]:
   ahead.
 - **TLBs** [hw: `tools/isa-probes/pmu2.c` `tlb*`, `ib_pages_*`,
   [monitors.md](monitors.md), "The other events"; source: kernel
-  `asm/tlb_regs_types.h:44-49`]: the DTLB holds 768 4 KiB pages (256
+  `asm/tlb_regs_types.h:45-50`]: the DTLB holds 768 4 KiB pages (256
   lines of 4 entries, the fourth kept for large pages: [apb.md](apb.md),
   "Why"); a miss whose page-table entries are cached costs 15 / 17 /
   44–45 cycles (4C / 8C2 / 2C3), stores alike, and with 2 MiB pages a
@@ -1246,8 +1248,9 @@ remains); on the 4C two at 3–4, one at 5–8; on the 2C3 two at 3–8,
 one at 9–12. In `stld.c`'s loop (the use right after the load) a
 store, reload and use take 14.5 cycles a step instead of 6.9 on the 4C
 and 8C2. Which loads pay, by the cycles from the store's issue to the
-load's (another 32-byte line never does, the next one included; a store
-under a false predicate makes nothing pay, `t_y_pf_*`):
+load's (another 32-byte line never does, the next one included,
+except one 16 KiB × k away: "Loads 16 KiB away from a store", below; a
+store under a false predicate makes nothing pay, `t_y_pf_*`):
 
 | Cycles after the store | 4C (v3) | 8C2 (v5) | 2C3 (v6) |
 |---|---|---|---|
@@ -1303,8 +1306,8 @@ pages; 4C, 8C2, 2C3]. Cycles a step:
 
 `D` = 4, 8, 12, 20, 24, 28 or 40 KiB, 16 KiB plus 8, 32 or 64 bytes
 and 64 KiB plus 8 to 256 bytes or minus 8 cost nothing. So a load of the same offset in
-another 16 KiB pays the penalty until 3 empty cycles after the store (4
-on the 2C3), where a true reload pays only right after it. 16 KiB is
+another 16 KiB pays the penalty with up to 2 empty cycles after the
+store (3 on the 2C3), where a true reload pays only right after it. 16 KiB is
 one way of the 64 KiB 4-way L1, so the check presumably compares the
 set index and offset, address bits 3–13, and not the rest (inferred).
 With 4 KiB pages the distances that pay change from run to run (64 KiB
@@ -1312,8 +1315,9 @@ paid in every run, 1 MiB in all but one, 32 KiB to 3 MiB and even
 64 KiB + 8 in some), which fits bits 12–13 being taken from the
 physical address (inferred; low confidence). For a compiler: keep a
 load that may be 16 KiB × k from a store just made, such as a spill
-reload or a strided access in a loop of stores, 3 cycles (v6: 4) after
-the store where the schedule allows it.
+reload or a strided access in a loop of stores, 3 empty cycles (v6: 4)
+after the store, that is 4 cycles (v6: 5) from the store's issue to the
+load's, where the schedule allows it.
 
 **Loads whose value is never read** (`pocchk2.c` `t_dead_*`, the
 proof-of-concept back end's finding I37): a step of four independent

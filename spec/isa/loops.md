@@ -198,6 +198,12 @@ the loop that the counter ended it.
 | 5, 2, 3, 2 (two stores) | both in 4–7 |
 | 5, 2, 3, `semc` = 1 | 1–7 |
 
+A suppressed store doesn't reach the cache: `L1_QUERY` counts only the
+stores that write (8 of 16 with `lcnt` 8, `pcnt` 3, `strmd` 0; 16 with
+`pcnt` 0, `strmd` 2), and neither `COND_ALU_FALSE` nor `COND_AM_FALSE`
+counts the others (`tools/isa-probes/pmu2.c` `c_lmst_*`, 4C, 8C2, 2C3;
+[monitors.md](monitors.md)).
+
 AAU stores (`staad … %aad0[ %aasti1 ]` with `incr`, as lcc pipelines
 them) follow the same rules, and a suppressed one doesn't advance its
 index either: with `pcnt` 3 the values of iterations 4, 5, 6 land in

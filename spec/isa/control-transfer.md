@@ -260,8 +260,8 @@ compare → `ibranch` 3), a not-taken `ct`, any prepare of a cached target
 instruction cache the depth matters, below), the `ipd` of the
 transfer's own instruction, and straight-line code from the instruction
 cache: wide instructions of up to 64 bytes issue one a cycle
-(`tools/isa-probes/ctlleft.c` `s_*`, 4C, 8C2, 2C3; 40 bytes measured
-right after a taken branch).
+(`tools/isa-probes/ctlleft.c` `s_*`, 4C, 8C2, 2C3), also right after a
+taken transfer, with one exception (below).
 
 Whole programs agree (the 4C, CoreMark, `tools/isa-score/profile.py`):
 gcc-claude's code branches with conditional `ibranch`; 6 cycles per
@@ -273,6 +273,35 @@ early) and conditional `ct`s 2–3 cycles after their `disp`. lcc prepares
 early and loses 1.3%. So: prepare every transfer that may be taken at
 least its delay ahead, `movtd` 9 cycles ahead, and keep `ibranch` for
 transfers that are rarely taken.
+
+**Right after a taken transfer** [hw: `tools/isa-probes/timeleft.c`
+`fetch`; hot code, 16 and 32 blocks 1 KiB apart, each ending in a
+transfer to the next, cycles a block from the difference; 4C, 8C2, 2C3
+identical; instruction sizes checked with objdump]. S is the size of the
+block's big instructions in bytes (8 to 48: `addd`s and literals; 56
+and 64: also predicated with `? %predN` and predicate logic, the only
+way the probe filled them), d the `disp` (8 bytes), t the `ct` through
+it, 8 an 8-byte instruction:
+
+| Block | S = 8–48 | 56 | 64 |
+|---|---|---|---|
+| S, d, 4 × 8, t (only the target is big) | 7 | 7 | 7 |
+| S, S, d, 4 × S, t | 8 | **9** | **9** |
+| the same, t 6 or 7 cycles after d | | | 9, 10 |
+| 8, 8, d, 4 × S, t | 8 (32, 48) | 8 | 8 |
+| S, S, d, 4 × 8, t | 8 (32, 48) | 8 | 8 |
+| 3 × S, d, 4 × 8, t | 9 (32, 48) | 9 | 9 |
+| 4 × S, d, 4 × 8, t | 10 (32, 48) | 10 | **11** |
+| S, S, d, 4 × S, 4 × 8, t (t 9 after d) | 12 (32, 48) | 12 | 12 |
+| d, 6 × S, t (t 7 after d) | 8 (32, 48) | 8 | 8 |
+| 7 × S, then a taken `ibranch` | 14 | 14 | 14 |
+| 2 × 8, d, 4 or 5 × 8, t (t 5 or 6 after d) with a 256-byte line boundary before any of the first ten instructions | 8, 9 (S = 8) | | |
+
+So a target instruction of up to 64 bytes is free after a prepared
+transfer, and so is any code of instructions up to 48 bytes. In some
+layouts of 56- and 64-byte instructions a `ct` exactly 5 cycles after
+its `disp` loses a cycle, and 6 or more cycles never do (why is not
+known). A taken `ibranch` costs its 6 cycles at any instruction size.
 
 #### Code not in the instruction cache [hw]
 
@@ -370,9 +399,9 @@ So wide instructions of any length up to 64 bytes cost nothing extra in
 hot code; in code that streams from L2, those longer than about 24
 bytes cost a cycle per 23–26 bytes (4C, 2C3; the 8C2 is slower).
 
-Not measured: fetch of 48–64-byte wide instructions right after a taken
-branch (40 bytes: above); v4 and v7; the 48C's different delays (lcc's
-`-mset-prepare-ct-delays-e48c`, timing.md).
+Not measured: v4 and v7; the 48C's different delays (lcc's
+`-mset-prepare-ct-delays-e48c`, timing.md); why 56- and 64-byte
+instructions with a `disp` exactly 5 cycles ahead lose a cycle.
 
 ## v6 [hw: Elbrus-2C3]
 

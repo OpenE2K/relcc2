@@ -104,13 +104,16 @@ remote_sh() {
     ssh_ "bash $rdir/remote.sh $(q "$@")"
 }
 
-# The same, detached: the command keeps running after ssh returns; its
-# output goes to LOG (relative to the work directory).
+# The same, detached: the command runs in its own session with its output
+# in LOG (relative to the work directory), so it keeps running when ssh
+# returns or this host goes away.  The braces matter: a bare "a && b &"
+# backgrounds the whole list in a subshell that keeps ssh's output open,
+# and ssh then waits for the command to end.
 remote_bg() {
     local log=$1
     shift
     ssh_ "mkdir -p $rdir && cat > $rdir/remote.sh" < "$here/remote.sh"
-    ssh_ "cd $rdir && mkdir -p $(dirname "$log") && setsid nohup bash remote.sh $(q "$@") > $log 2>&1 < /dev/null & echo started: $log"
+    ssh_ "cd $rdir && mkdir -p $(dirname "$log") && { setsid nohup bash remote.sh $(q "$@") > $log 2>&1 < /dev/null & } && echo started: $log"
 }
 
 commit=$(git -C "$src" rev-parse --verify "${rev:-HEAD}^{commit}" 2>/dev/null) \

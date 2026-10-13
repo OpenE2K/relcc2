@@ -272,14 +272,15 @@ not restore each area's position: it **recomputes** it as
 
 ```
 start + step × iterations,  iterations = %ilcr.lcnt − %lsr.lcnt
-                            (+ the epilogue count when lcnt reached 0)
+                            (+ the epilogue iterations done, when lcnt
+                               has reached 0 and ldmc is set)
 ```
 
-(`kernel/cpu/iset_v3.c`; v6 saves the positions instead, and on the
-2C3 a trap between movas outside a loop leaves them in place: "v6",
-below). So the number
-of `am` advances of every area must equal the number of loop-mode
-iterations done, **at every instruction where an interrupt can arrive**.
+(`kernel/cpu/iset_v3.c:194-196`; v6 saves the positions instead, and
+on the 2C3 a trap between movas outside a loop leaves them in place:
+"v6", below). So the number of `am` advances of every area must equal
+the number of loop-mode iterations done, **at every instruction where
+an interrupt can arrive**.
 Interrupts arrive at any instruction (timer, other CPUs), so this is a
 correctness rule, not a corner case. `apb-loop.c` shows it on the 4C:
 
@@ -306,7 +307,11 @@ branch loop is correct there in every run (0 of 200 wrong under 12,294
 signals; the 8C2: 200 of 200 wrong), and the stale-counter loop with a
 page fault is not shifted. So on v6 an area may advance any number of
 times per iteration, in any loop (lcc 1.31's `-floop-apb-packets`,
-"available from Elbrus V6"). The rules below are for v3–v5.
+"available from Elbrus V6"). The rules below are for v3–v5. Such a
+loop must still find `%lsr` with `vlc` 0, `lcnt` above 0 or `ldmc` 1
+(write it, 0 will do, before the first `mova`): on the 2C3 a `mova`
+outside `loop_mode` is SIGILL while `%lsr` says an earlier counted loop
+has ended ("v6", below; [hwbugs.md](hwbugs.md)).
 
 Rules that follow (v3–v5):
 
@@ -320,6 +325,12 @@ Rules that follow (v3–v5):
 - Write `%lsr` (which also sets `%ilcr`) before `bap`, and issue no
   `mova` outside the loop.
 - In the prologue between `bap` and the loop, no area may advance.
+- A `mova` in an epilogue iteration (`lcnt` 0, `ecnt` > 0) needs `ldmc`
+  = 1: with `ldmc` 0 it reads nothing in a `loop_mode` instruction, and
+  outside `loop_mode` it reads, but the kernel's recomputation leaves
+  it out, so an interrupt there repeats an element (4–6 wrong sums in
+  3,000,000 runs on the 4C and the 8C2: [loops.md](loops.md)); on the
+  2C3 it is SIGILL ("v6").
 
 ## Timing [hw]
 
@@ -911,6 +922,7 @@ a return, `eap` or a `%ctpr2` write: all as on the 8C2. What differs:
 | | 8C2 (v5) | 2C3 (v6) |
 |---|---|---|
 | Trap (page fault, signal handler) between movas outside a loop | positions recomputed from the loop counters: the next element repeats | **positions kept**: the next `mova` continues where it was (the kernel saves `%aaldi`, above). Inside a `loop_mode` loop both are correct; an ordinary branch loop is correct only on v6 (Traps, above) |
+| A `mova` outside `loop_mode` while `%lsr` has `vlc` 1, `lcnt` 0 and `ldmc` 0 (in an epilogue iteration, or after any counted loop has ended, glibc's `strncmp` included) | reads (in an epilogue iteration it is then left out of the position the kernel rebuilds: [loops.md](loops.md)) | **SIGILL `ILL_ILLOPC`** at the `mova` (`pocchk6.c` `seq`, both cores; [hwbugs.md](hwbugs.md)): write `%lsr` before such a program (0 will do) or set `ldmc` |
 | `mova` wider than `fmt` | diagnostic, whatever `mrng` (`movad` on `fmt` 3 with `mrng` 8 or 16, `movaw` on `fmt` 2 with `mrng` 4, `movad` on `fmt` 1 and 2 with `mrng` 8, `movaqp` on `fmt` 1–4 with `mrng` 16, 24 or 32) | **data whenever `ind` + size ≤ `mrng`**, in all of those: the read takes its size in bytes at the area's position, which steps by the area's own element (`movaqp` from `fmt` 4 reads + 0, + 8, + 16, overlapping; from `fmt` 1 + 0, + 1, + 2), also from a base 4 bytes past a doubleword; otherwise diagnostic (`movad` with `mrng` 4, `movaw` with 2, `movaqp` with 8, or at `ind` 8 with `mrng` 16). The earlier diagnostic `movaqp` on `fmt = 4` (`tagx.c` `movaqp4`) had `mrng` 8 (`isaleft.c` `m_*`, `q_*`) |
 | A byte area read by `movad` with a 12-byte step, a half area by `movaw` with a 6-byte step, `movad` at `ind` 4 of a byte area (`w12`, `w6`, `w_ind4`) | diagnostic | **the bytes at each position**, unaligned: a step need not be a multiple of the read (lcc 1.31's APB for such strides, "from Elbrus V6") |
 | Diagnostic value | `eaed0f70eaed0f70`, tag 1 | `4000000040000000`, tag 1 |

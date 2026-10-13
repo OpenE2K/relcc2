@@ -240,6 +240,22 @@ with `ldmc` = 1; `ldovl` 0, 1, 2 or 255 changed nothing [hw:
 `translate-mova.c`) [source]. So epilogue iterations need no guard for
 reads past the end of an array stream.
 
+**Outside `loop_mode`** the `%lsr` state that disables a `mova` (`vlc`
+1, `lcnt` 0, `ldmc` 0) changes nothing on the 4C and the 8C2: the
+`mova` reads, in an epilogue iteration or after a loop has ended, as
+MCST's qemu has it. On the 2C3 it is SIGILL `ILL_ILLOPC` instead
+([hwbugs.md](hwbugs.md)) [hw: `tools/isa-probes/pocchk6.c` `seq`]. And
+on v3–v5 the kernel adds epilogue iterations to a restarted stream's
+position only when `ldmc` is set (`kernel/cpu/iset_v3.c:194-196`), so
+an interrupt in an epilogue iteration without `ldmc` puts the stream
+back: in 3,000,000 runs of such a loop (`De`: `lcnt` 62 + `ecnt` 2, no
+`loop_mode`, one `movad` an iteration) 4–6 sums read one element twice,
+on the 4C and on the 8C2, and none with `ldmc` 1 (`Dem`) or with `ecnt`
+0 (`D`) [hw, two runs each]. So a `mova` that runs in an epilogue
+iteration needs `ldmc` = 1, with or without `loop_mode`. lcc's loops
+with `ecnt` > 0 (in NPB only FT's) have no array prefetch [lcc 1.29.16
+`-O3`, v3, v3.4c, v5.8c2, v6.2c3].
+
 **Array-prefetch depth (`ldovl`)** [hw: `tools/isa-probes/isaleft.c`
 `ovst`, `ovs`, `ovtouch`; 4C, 8C2, 2C3]. `ldovl` limits how far ahead
 of a `loop_mode` loop's movas the array prefetch unit fetches, in

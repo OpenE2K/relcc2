@@ -6,9 +6,11 @@
      unsigned long c = pmu_count (fd, fn, n, p);
 
    An event's config is 0xMMEE: MM the monitor (0 DDM0, 1 DDM1, 2 DIM0,
-   3 DIM1, 4 either DDM, 5 either DIM), EE the event number
-   (spec/isa/monitor-events-v3.yaml).  Counting is per thread and user
-   mode only, which /proc/sys/kernel/perf_event_paranoid 2 allows.
+   3 DIM1, 4 either DDM, 5 either DIM), EE the event number (MCST's
+   lists, OpenE2K/linux/tools/perf/pmu-events/arch/e2k/vN/Events.json;
+   pmu2-events.h has every v3, v5 and v6 code with its names).
+   Counting is per thread and user mode only, which
+   /proc/sys/kernel/perf_event_paranoid 2 allows.
 
    While an event counts on DIM0 or DIM1, user code can also read the
    counter itself with pmu_dimar0 () or pmu_dimar1 () (rrd %dimarN, no

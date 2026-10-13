@@ -247,7 +247,10 @@ What this adds to the table above:
   the other cluster in 4, and a combined integer operation (`add_addd`
   in ALC1) reaches `adds` the same way. Both reach a store's data in 1,
   or 3 from the other cluster [hw: `tools/isa-probes/pocchk4.c` `lat`;
-  4C, 8C2, 2C3; the other combined operations inferred]. The chains
+  4C, 8C2, 2C3]. So do the other combined integer operations measured,
+  `and_addd` and `shl_addd` in ALC1 and `add_addd` and `add_xord` in
+  ALC4: 2 to `adds` in their cluster, 4 in the other, store data 1 and
+  3 [hw: `tools/isa-probes/timeleft.c` `lat`; 4C, 8C2, 2C3]. The chains
   above put each operation in one channel. `cctop` runs only in
   ALC0 and ALC3, so the `cctop` in a flag form's own channel gets the
   flags in 2 and the other one in 4 (found by the proof-of-concept back
@@ -255,7 +258,8 @@ What this adds to the table above:
   `adds_fw` in the other channel ran at 2.3 cycles an iteration instead
   of 1). The multiply flag forms are FP-side results (the 4 | 6 row): 6
   to `cctop` or any integer operation in either cluster, 4 to `smulx`
-  and to store data.
+  and to store data in their cluster, 6 to store data in the other
+  (`timeleft.c` `lat`).
 
 **The divider.** Every ALC5 operation that divides, takes a root or
 estimates a reciprocal shares one unit with `fdivd` (`v3div_*` kernels):
@@ -381,7 +385,10 @@ issues instead of 1. This holds in the same cluster or the other one
 
 Measured producers: `adds`, `ands`, `xors`, `shls`, `merges`, `getfs`,
 `gettagd` and the x86 flag forms (`adds_fw`, `addd_fd`, `ands_fw`,
-`shls_fw`, whose flags word is a 32-bit result), from ALC0 or ALC3.
+`shls_fw`, whose flags word is a 32-bit result), from ALC0 or ALC3;
+also `subs`, `ors`, `andns`, `shrs`, `sars`, `scls`, `scrs`,
+`bitrevs`, `insfs` (ALC0), `lzcnts` and `popcnts` (ALC1), into `addd`
+in ALC0 (4 under `dbl = 0`, 1 under `dbl = 1`, 1 into `adds`).
 Measured consumers, in ALC0–5: `addd`, `andd`, `shld`, `getfd`,
 `cmpedb`, `merged`, `movtd`, `gettagd` and `faddd`, a load or store
 index (`ldd` in ALC0 or ALC3, `std`), and `std`'s data (ALC2 or ALC5).
@@ -397,8 +404,8 @@ from the other cluster, store data 1) [hw: `tools/isa-probes/tagx.c`
 `adds_addd`, `ands_andd`, `shls_shld`, `adds_addd1`, `adds_addd3`,
 `adds3_addd4`, `adds_movtd`, `adds_gettagd`, `gettagd`, `adds_sxt`,
 `muls_addd`, `*_dbl1`; `tools/isa-probes/pocchk4.c` `lat`, the `dbl 0`
-and `dbl 1` rows; the 4C, the Elbrus-8C2 and the 2C3 alike; other
-32-bit integer operations inferred].
+and `dbl 1` rows; `tools/isa-probes/timeleft.c` `lat`, the second list
+of producers; the 4C, the Elbrus-8C2 and the 2C3 alike].
 
 So lcc's `adds` + `sxt` under `dbl = 0` costs nothing extra, while a
 64-bit use of a 32-bit result without the `sxt` waits 4. Under
@@ -455,10 +462,15 @@ back end, I44):
 | Producer → store data | Same cluster | Other cluster |
 |---|---|---|
 | `addd` | 1 | 1 (no crossing cost) |
-| x86 flag form (`adds_fw`), `add_addd` (`pocchk4.c` `lat`) | 1 (not the 2 an integer op waits) | 3 |
-| `faddd`, `fmuld` | 4 (not the 6 an integer op waits) | 6 |
-| `smulx_fw` (`pocchk4.c` `lat`) | 4 (not the 6 an integer op waits) | not measured |
+| `ldd`, L1 hit (`timeleft.c` `lat`) | 3 (2C3: 5) | 3 (2C3: 5): no crossing cost, where an `addd` in the other cluster waits 4 |
+| x86 flag form (`adds_fw`), `add_addd` (`pocchk4.c` `lat`); `and_addd`, `shl_addd`, `add_xord` (`timeleft.c` `lat`) | 1 (not the 2 an integer op waits) | 3 |
+| `faddd`, `fmuld`; `muld`, `smulx` (`timeleft.c` `lat`) | 4 (not the 6 an integer op waits) | 6 |
+| `smulx_fw`, `umulx_fw` (`pocchk4.c`, `timeleft.c` `lat`) | 4 (not the 6 an integer op waits) | 6 |
 | `fdivd` (ALC5) | — | 16 (14 + 2) |
+
+(`timeleft.c` `lat` rows: gap method, stores in ALC2 and ALC5,
+producers in ALC0, 2, 3 or 5 for `ldd` and in ALC0 or 3 otherwise; 4C,
+8C2, 2C3.)
 
 `aaurw`/`aaurwd` (writing `%aaind`, `%aaincr` or `%aabf`, ALC2 or ALC5)
 take their operand the same way: an `addd` result from either cluster
@@ -466,7 +478,11 @@ the next cycle, with no crossing cost, where an `addd` consumer in the
 other cluster stalls (`tools/isa-probes/aaurwct.c`, 16 producer–consumer
 pairs: 66 cycles with `aaurw(d)` or a store after `addd,3` or `addd,0`,
 134 with `addd,2` after `addd,3`; 4C and 8C2 alike; isa-score models it).
-Only an `addd` producer was tried.
+Other producers reach `aaurwd` exactly as they reach a store's data:
+`faddd`, `fmuld` and `muld` in 4 in their cluster and 6 in the other,
+`ldd` in 3 from either cluster (2C3: 5), `add_addd` in 1 and 3, `addd`
+in 1 from either [hw: `tools/isa-probes/timeleft.c` `lat`, `aaurwd`
+into `%aaind1` and `%aaincr1` in ALC2 or ALC5; 4C, 8C2, 2C3].
 
 A store's address operands pay the integer crossing (+1, as a load's
 address does): two stores a cycle after the `addd`s that advance their
@@ -1321,9 +1337,31 @@ What v5 adds or changes:
   17), because stalls come in 4-cycle steps. The v3 sweep shows it only
   in `v3op_fxdivtss` and `v3op_fxdivtdd` (18): its other 80-bit chains
   run through the 80-bit operand or reach the narrow one from a
-  conversion 12 cycles earlier. Conversions with a narrow input
-  (`fdtofx`, `fstofx`), the `fx*` compares and a load in ALC5 into the
-  divider were not measured.
+  conversion 12 cycles earlier. Conversions with a narrow input don't
+  pay it, and the 80-bit compares do [hw: `tools/isa-probes/timeleft.c`
+  `lat`, gap method; 4C, 8C2, 2C3]:
+
+  | Edge | 4C, 2C3 | 8C2 |
+  |---|---|---|
+  | `faddd`, `fmuld` → `fdtofx`; `fadds` → `fstofx` | 4 | 4 |
+  | `fxadddd` → `fdtofx` | 5 | 5 |
+  | `ldd,0` → `fdtofx` | 3 (2C3: 5) | 3 |
+  | `faddd`, `fmuld` → the double operand of `fxcmpltdb` or `fxcmpuddf`; `fadds` → `fxcmpltsb` | 4 | **6** |
+  | `fxadddd` → `fxcmpltdb`, `fxcmpuddf` | 5 | **7** |
+  | `ldd,0` → `fxcmpltdb`, `fxcmpuddf` | 3 (2C3: 5) | **4** |
+  | `faddd,3` → the double operand of `fxdivdd,5` or `fxdivtdx,5` | 4 | **6** |
+  | `ldd,3` → `fxdivdd,5`, `fxdivtdx,5` | 3 (2C3: 5) | **4** |
+  | `ldd,5` → `fdivd,5`, `fxdivdd,5`, `fxdivtdx,5` | 3 (2C3: 5) | 3 |
+
+  The cost never adds to a crossing: from the other cluster these
+  edges take what any FP result or load does there, on all three
+  machines (`faddd,3` → `fdtofx,0` or `fxcmpltdb,0` 6, `faddd,0` →
+  `fxdivdd,5` 6, `fxadddd,0` → `fxdivdd,5` 7, `ldd,0` or `ldd,2` →
+  the ALC5 operations 4, 2C3 5). So on the 8C2 an 80-bit operation's
+  narrow operand takes FP results and loads as if they came from the
+  other cluster, except a load in ALC5 feeding ALC5. (An 80-bit result
+  read as a double, `fdtofx` → `fxadddd` or `fxcmpuddf`, takes 6 on all
+  three: a format change, Formats.)
 - **Divider:** `sdivd` and `udivd` every 2 cycles no longer conflict (2
   cycles; v3 3.4); `fxsqrtuxx` and `fxsqrttxx` every 3 cycles now do
   (4.4; v3 3), `pfdivd` every 2 cycles takes 2.5, and `pfsqrttd` has a

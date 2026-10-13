@@ -54,6 +54,15 @@ of a GCC source tree (`-s`, default `toolchains/gcc`) instead. Results
 are GCC's usual `gcc.sum` and `gcc.log` (`BUILD/gcc/testsuite/gcc/`);
 compare runs with GCC's `contrib/compare_tests`.
 
+A board variant adds its flags to every compilation:
+`'e2k-8c2/-march=elbrus-v5'`, `'e2k-4c{-O0,-O2}'` (two runs). The
+boards ask DejaGnu for this (`process_multilib_options`, as its own
+baseboards do); before 2026-10-13 they did not, and a variant only ran
+the tests again without its flags. Checked with two variants
+(`{-march=elbrus-v3,-march=elbrus-v5}`, `execute.exp=20000112*`) on
+`e2k-qemu`, `e2k-ssh` and `e2k-8c2`: each compilation has its
+variant's flag.
+
 ### Binutils in PATH
 
 GCC's testsuite runs the target's binutils by the name
@@ -178,7 +187,8 @@ compiler (`-i`), `execute.exp=20000[0-6]*` gives the same 500 PASS on
 included); the `dg.exp` tests that check the harness
 (`shouldfail-*.c`, `dg-output`, `dg-output-file`) and
 `gcov.exp=gcov-1[0-2]*.c` pass on both; board variants
-(`'e2k-4c{-O0,-O2}'`) work. In a build tree (`-b`, `make check-gcc`)
+(`'e2k-4c{-O0,-O2}'`) ran, but without their flags (fixed 2026-10-13,
+above). In a build tree (`-b`, `make check-gcc`)
 `execute.exp=2000[01]*` and the gcov tests ran on the 4C with `-j 4`
 (four runtest processes, 1,286 PASS; the only FAILs were a test the
 compiler can't build). The remote run directories and control sockets

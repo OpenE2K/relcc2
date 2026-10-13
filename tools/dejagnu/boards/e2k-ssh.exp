@@ -30,6 +30,13 @@ if {[info procs e2k_setting] eq ""} {
     source [file join [file dirname [info script]] e2k-common.tcl]
 }
 
+# Board variants (--target_board='e2k-4c/-O0', 'e2k-8c2{-O0,-O2}'):
+# DejaGnu passes their flags to every compilation (multilib_flags) only
+# for a board that asks for them, as its baseboards do. Here, not in
+# e2k-common.tcl, which this file sources only once per runtest while
+# DejaGnu loads the board again for each variant.
+process_multilib_options ""
+
 set_board_info e2k,host [e2k_setting E2K_SSH_HOST]
 set_board_info e2k,port [e2k_setting E2K_SSH_PORT]
 # The machines must only see relcc2's key: without it ssh would offer the

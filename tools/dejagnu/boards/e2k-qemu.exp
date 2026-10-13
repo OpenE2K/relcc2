@@ -29,6 +29,11 @@
 
 source [file join [file dirname [info script]] e2k-common.tcl]
 
+# Board variants (--target_board='e2k-qemu/-O0', 'e2k-qemu{-O0,-O2}'):
+# DejaGnu passes their flags to every compilation (multilib_flags) only
+# for a board that asks for them, as its baseboards do.
+process_multilib_options ""
+
 set_board_info e2k,cpu [e2k_setting E2K_CPU elbrus-v3]
 switch -glob -- [board_info $board e2k,cpu] {
     elbrus-v4 { set e2k_lcc_target e2k-v4.8c }

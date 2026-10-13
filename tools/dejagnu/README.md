@@ -193,6 +193,27 @@ runtest with an error. Rerun 2026-10-13 after the board variant and
 `remote_spawn` changes: 25 on `e2k-qemu` (`elbrus-v3`, `elbrus-v5`),
 23 on `e2k-4c`, `e2k-8c2` and `e2k-2c3`.
 
+32-bit and protected programs (2026-10-13), built by lcc 1.29.16 with
+`SMOKE_CC='LCC -mptr32'` or the variant `e2k-2c3/-mptr32`, and
+`SMOKE_CC='LCC -mptr128 -static'` or the variant
+`e2k-8c2/-mptr128/-static`:
+
+| Board | `-mptr32` | `-mptr32 -static` | `-mptr128` | `-mptr128 -static` |
+|---|---|---|---|---|
+| `e2k-8c2` | all 23 pass | | every program SIGSEGV | all 23 pass |
+| `e2k-2c3` | all 23 pass | | every program SIGSEGV | all 23 pass |
+| `e2k-4c` | no program starts ("No such file or directory") | all 23 pass | | all 23 pass |
+
+The Elbrus Linux of the 8C2 and 2C3 ships `/lib32` and `/lib128`; ALT
+Linux on the 4C has no 32-bit runtime (`spec/abi/mode32.md`). A
+dynamic protected program from the cross lcc 1.29.16 dies at its first
+library call because that lcc's ld builds the old protected PLT
+(`spec/abi/protected-mode.md`, "ELF and linking"): link protected test
+programs statically. In protected mode a store through `NULL` is
+SIGILL, not SIGSEGV (`NULL` is not a pointer there; protected-mode.md),
+which `smoke.exp` expects when the compiler, with the variant's flags,
+defines `__ptr128__`.
+
 With GCC's own testsuite (2026-10-12; the compiler under test was the
 experimental `toolchains/gcc-claude`, only run): with an installed
 compiler (`-i`), `execute.exp=20000[0-6]*` gives the same 500 PASS on
@@ -278,6 +299,8 @@ change, gave the same 102 PASS, 27 FAIL and 23 UNSUPPORTED.
 - `remote_exec target` on the qemu board runs the command on the build
   machine (DejaGnu does that for every local target); GCC runs test
   programs only through `remote_load`, which goes through qemu.
-- 32-bit and protected mode are not set up: ALT Linux ships no runtime
-  for them, and only the community qemu has a 32-bit emulator
-  (`qemu-e2k32`).
+- 32-bit and protected programs run on the SSH boards (see "Smoke
+  suite": dynamic ones on the 8C2 and 2C3, static ones everywhere; a
+  board variant such as `e2k-8c2/-mptr32` passes the mode to the
+  compiler). The qemu board doesn't run them: MCST's qemu has no 32-bit
+  or protected emulator, and only the community qemu has `qemu-e2k32`.

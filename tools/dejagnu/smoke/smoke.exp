@@ -10,7 +10,9 @@
 #   DEJAGNU=RELCC2/tools/dejagnu/site.exp runtest --tool smoke \
 #       --srcdir RELCC2/tools/dejagnu/smoke --target_board=e2k-qemu
 #
-# The compiler is the board's lcc (E2K_LCC; SMOKE_CC overrides it).
+# The compiler is the board's lcc (E2K_LCC; SMOKE_CC overrides it, e.g.
+# "lcc -mptr32" for 32-bit programs, "lcc -mptr128 -static" for protected
+# ones).
 # SMOKE_TIMEOUT is the time limit for the endless loop (default 10 s).
 
 if {[info procs e2k_setting] eq ""} {
@@ -25,9 +27,16 @@ set smoke_qemu [expr {[target_info protocol] eq "e2kqemu"}]
 # Unique program names, so that the timeout check can look for leftover
 # processes of this run only.
 set smoke_tag [pid]
+# Protected mode (lcc -mptr128 in SMOKE_CC or a board variant): NULL is an
+# untagged zero, and a store through it is SIGILL, not SIGSEGV
+# (spec/abi/protected-mode.md).
+set smoke_pm [expr {![catch {exec -ignorestderr {*}$smoke_cc \
+				 {*}[target_info multilib_flags] \
+				 -dM -E -x c /dev/null} defs]
+		    && [string match "*__ptr128__*" $defs]}]
 
 verbose -log "smoke: compiler $smoke_cc, board [target_info name],\
-	      qemu $smoke_qemu"
+	      qemu $smoke_qemu, protected mode $smoke_pm"
 
 # Build NAME.c into NAME-TAG.exe in the current directory. Returns the
 # program's path, or "" after an UNRESOLVED.
@@ -102,7 +111,7 @@ if {$smoke_qemu} {
     smoke_run segv fail "signal 9 (qemu stopped on a hardware exception)"
     smoke_run divzero fail "signal 9 (qemu stopped on a hardware exception)"
 } else {
-    smoke_run segv fail "signal 11"
+    smoke_run segv fail [expr {$smoke_pm ? "signal 4" : "signal 11"}]
     smoke_run divzero fail "signal 8"
 }
 smoke_no_cores segv.c

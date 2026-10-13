@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Smoke test: a crash at run time, a store through a null pointer. On
-   hardware the board must report signal 11 (SIGSEGV); MCST's qemu can't
-   deliver the fault and kills itself (signal 9).  */
+   hardware the board must report signal 11 (SIGSEGV), or signal 4
+   (SIGILL) for a protected-mode program, where NULL is not a pointer;
+   MCST's qemu can't deliver the fault and kills itself (signal 9).  */
 int *volatile p = 0;
 
 int main (void)

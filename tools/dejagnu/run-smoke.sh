@@ -7,7 +7,8 @@
 # Usage: tools/dejagnu/run-smoke.sh [-o OUTDIR] BOARD... [-- RUNTEST-ARGS...]
 #
 #   BOARD     e2k-qemu, e2k-4c, e2k-8c2, e2k-2c3 or e2k-ssh;
-#             e2k-qemu:elbrus-vN runs qemu with -cpu elbrus-vN (E2K_CPU)
+#             e2k-qemu:elbrus-vN runs qemu with -cpu elbrus-vN (E2K_CPU);
+#             a DejaGnu variant adds compiler flags: e2k-8c2/-mptr32
 #   -o OUTDIR results go to OUTDIR/BOARD/smoke.{sum,log}
 #             (default toolchains/dejagnu/smoke in this checkout)
 #
@@ -31,7 +32,7 @@ while [ $# -gt 0 ] && [ "$1" != "--" ]; do
 done
 [ "$1" = "--" ] && shift
 if [ -z "$boards" ]; then
-    sed -n '4,17p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '4,/^$/p' "$0" | sed 's/^# \{0,1\}//'
     exit 2
 fi
 mkdir -p "$out"

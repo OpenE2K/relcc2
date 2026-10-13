@@ -16,7 +16,9 @@ Joins five sources:
   spec/isa/timing-e8c2.yaml, 2C3)
   spec/isa/timing-e2c3.yaml
   spec/isa/lcc-usage.yaml    how often lcc's system libraries use it
-  tools/**/probes .s files   which hardware probes execute it
+  tools/**/probes .s files   which hardware probes execute it (the
+                             generators in GENERATED write theirs first:
+                             those files are too large to keep in git)
 
   python3 tools/isa-extract/gen_operations.py          # write the pages
   python3 tools/isa-extract/gen_operations.py --check  # only check rules
@@ -25,6 +27,7 @@ Joins five sources:
 import argparse
 import glob
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -199,8 +202,17 @@ def _assign(rules_doc, ops, v1, owner, errors, level, lo, hi):
                 owner.setdefault(n, r)
 
 
+# Generators of probe assembly that is not kept in the repository
+# (.gitignore: several MB each); probe_runs() runs them before the scan.
+GENERATED = ["gen_timeleft.py", "gen_timeleftv.py"]
+
+
 def probe_runs(ops):
     runs = {}
+    for gen in GENERATED:
+        subprocess.run([sys.executable,
+                        str(ROOT / "tools" / "isa-probes" / gen)],
+                       check=True, stdout=subprocess.DEVNULL)
     files = glob.glob(str(ROOT / "tools" / "isa-probes" / "*.s"))
     files += glob.glob(str(ROOT / ABI_PROBES / "*.s"))
     files += glob.glob(str(ROOT / ABI_PROBES / "*" / "*.s"))

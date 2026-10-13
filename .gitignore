@@ -3,3 +3,12 @@
 __pycache__/
 /toolchains/
 /secrets/
+# Generated probe files too large to keep: gen_timeleft.py and
+# gen_timeleftv.py write them (gen_operations.py runs both)
+/tools/isa-probes/timeleft.s
+/tools/isa-probes/timeleft-v6.s
+/tools/isa-probes/timeleft-cases.h
+/tools/isa-probes/timeleft-v6-cases.h
+/tools/isa-probes/timeleftv.s
+/tools/isa-probes/timeleftv-cases.h
+/tools/isa-probes/timeleftv-runs.h

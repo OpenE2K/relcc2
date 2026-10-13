@@ -9,7 +9,8 @@
    store and load address aliasing (alias); and on v6 the speculative
    lock load MAS 0x17, the wait-unlock store MAS 0x33 / 0x73 and icall
    (v6).  timeleft.s, timeleft-v6.s and the -cases.h files are generated
-   by gen_timeleft.py.
+   by gen_timeleft.py and not kept in git (timeleft.s alone is 6.7 MB):
+   run it first.
 
      python3 tools/isa-probes/gen_timeleft.py
      LCC=/opt/mcst/lcc-1.29.16.e2k-v3.4c.linux-6.1/bin/lcc  # the 4C;

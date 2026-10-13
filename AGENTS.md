@@ -317,7 +317,8 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     runs, byte throughput, store banks, store/load
                     aliasing, fetch after a taken transfer, v6 lock MAS
                     and icall; timeleftv.c, gen_timeleftv.py recheck
-                    them), run on hardware; -DSPEC_V5, -DLOOPS_V5, -DAPB_V5
+                    them; their generated files are not kept in git:
+                    run the generators first), run on hardware; -DSPEC_V5, -DLOOPS_V5, -DAPB_V5
                     builds add v5 cases
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     compiled to assembly and read, as are atomics.c,
@@ -1262,3 +1263,7 @@ None at the moment.
   section.
 - Keep tools reproducible: generated files record the source commit; never
   hand-edit generated YAML.
+- Generated probe files are committed unless they are several MB: those
+  (the timeleft probes) are listed in `.gitignore`, and
+  `gen_operations.py` runs their generators (its `GENERATED` list)
+  before it scans the probes.

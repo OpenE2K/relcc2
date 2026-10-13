@@ -448,8 +448,36 @@ proc e2kssh_load {dest prog args} {
     return [e2k_load_result $prog {*}$r $limit]
 }
 
+# remote_spawn: start COMMANDLINE in the run directory over ssh, under
+# timeout(1) like a test program, for remote_expect to read. GCC's guality
+# tests run the remote's gdb this way (lib/gcc-gdb-test.exp). Without this
+# DejaGnu would fall back to standard_spawn, which runs rsh to the board's
+# name. No pty: the output is the command's bytes.
+proc e2kssh_spawn {dest commandline args} {
+    global board_info
+    set limit [e2k_exec_limit $dest]
+    set d [e2k_shq [e2k_ssh_dir $dest]]
+    set script "exec 2>&1; mkdir -p $d && cd $d &&\
+		exec timeout -k 10 $limit sh -c [e2k_shq $commandline]"
+    set board_info($dest,e2k,dir_used) 1
+    if {[catch {spawn {*}[e2k_ssh_cmd $dest] $script} pid] || $pid <= 0} {
+	verbose -log "e2k: could not start '$commandline' on\
+		      [board_info $dest e2k,host]: $pid"
+	return -1
+    }
+    verbose "e2k: spawned '$commandline' on [board_info $dest e2k,host]" 2
+    set board_info($dest,fileid) $spawn_id
+    return $spawn_id
+}
+
 proc e2kssh_close {dest args} {
     global board_info
+    # A command from e2kssh_spawn: close only it (as standard_close does)
+    # and keep the run directory and the connection for later tests.
+    if {[board_info $dest exists fileid]} {
+	standard_close $dest
+	return ""
+    }
     if {[info exists board_info($dest,e2k,dir_used)]} {
 	unset board_info($dest,e2k,dir_used)
 	set dir [e2k_ssh_dir $dest]

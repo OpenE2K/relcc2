@@ -105,7 +105,7 @@ or, failing that, an environment variable of the same name.
 | `E2K_SSH_KEY` | ssh | identity file, always used with `IdentitiesOnly=yes`. Default `$RELCC2_SSH_KEY`, else `secrets/id_ed25519` of this checkout or of the main checkout (from a git worktree). Without one the board refuses to load: it never lets ssh offer its own keys |
 | `E2K_SSH_OPTS` | ssh | more ssh options (a Tcl list) |
 | `E2K_REMOTE_DIR` | ssh | work directory on the remote, relative to its home; default `relcc2/dejagnu` |
-| `E2K_TIMEOUT` | all | seconds; sets the board's `gcc,timeout` (GCC's limit for compiling and for running a test; GCC's default is 300) |
+| `E2K_TIMEOUT` | all | seconds; sets the board's `gcc,timeout` (GCC's limit for compiling and for running a test; GCC's default is 300). 60 suits guality runs (see "Known limits") |
 
 For qemu the default lcc follows the CPU model MCST's qemu 11.0.1
 emulates [qemu: `OpenE2K/qemu-e2k-mcst/target/e2k/cpu.c`; checked by
@@ -150,7 +150,12 @@ timed out." The limit is GCC's `timeout_value`: `gcc,timeout`, scaled by
   `XDG_RUNTIME_DIR` is set (control socket there, closed at the end);
   without it every call connects anew (about twice as slow).
   `remote_download`, `remote_upload`, `remote_file` and `remote_exec`
-  work in the run directory. GCC's profile and gcov tests expect the
+  work in the run directory, and so does `remote_spawn`, which GCC's
+  guality tests use to run the remote's gdb and read its output with
+  `remote_expect` (`lib/gcc-gdb-test.exp`): the command runs under the
+  same time limit as a program, without a pty. (Without it DejaGnu
+  would fall back to `standard_spawn`, which runs `rsh` to the board's
+  name.) GCC's profile and gcov tests expect the
   `.gcda` file at the object's absolute path on the build machine,
   which the remote doesn't have: programs run with
   `GCOV_PREFIX_STRIP=1000`, so libgcov writes `NAME.gcda` into the run
@@ -184,7 +189,9 @@ with `elbrus-v3` to `elbrus-v7`, all 23 on `e2k-4c`, `e2k-8c2`,
 `e2k-2c3` and `e2k-ssh` (the 8C2), also without the SSH master
 connection; with an unreachable host the checks FAIL at once (GCC's
 execution tests are UNRESOLVED), a missing qemu or 2C3 address stops
-runtest with an error.
+runtest with an error. Rerun 2026-10-13 after the board variant and
+`remote_spawn` changes: 25 on `e2k-qemu` (`elbrus-v3`, `elbrus-v5`),
+23 on `e2k-4c`, `e2k-8c2` and `e2k-2c3`.
 
 With GCC's own testsuite (2026-10-12; the compiler under test was the
 experimental `toolchains/gcc-claude`, only run): with an installed
@@ -205,6 +212,26 @@ are gone afterwards.
 `-j 4` with `'e2k-8c2/-march=elbrus-v5'`: 13 s) and on `e2k-2c3` (110 s;
 `-j 2` with `'e2k-2c3/-march=elbrus-v6'`: 66 s); the run directories
 of every runtest process are gone afterwards.
+
+Guality (2026-10-13, the same compiler, `-j 4`) with the remote's gdb
+(the 8C2's MCST gdb 15.2), `E2K_TIMEOUT=60`: the gate
+(`check_guality`) passes, so a test program can attach the remote's gdb
+to itself. `guality.exp='pr36728-*.c example.c guality.c'` gave 465
+PASS, 82 FAIL, 15 XFAIL, 2 XPASS and 78 UNSUPPORTED in 13 minutes, 7
+of which went to `example.c`'s 7 timeouts (below). `pr36728-*.c` check
+variables by running gdb through `remote_spawn` (608 results);
+`example.c` and `guality.c` drive gdb from the program. The results
+reflect the compiler's debug information, not the board: all 82 FAILs
+are variables gdb prints as `<optimized out>`; of the 78 UNSUPPORTED,
+44 are gdb errors for variables addressed through global registers,
+which this compiler numbers DWARF 128 and up (`spec/abi/registers.md`
+gives globals no number) and MCST's gdb rejects ("Unable to access
+DWARF register number 128"; gdb `e2k-tdep.c:396-408`,
+`e2k_dwarf_reg_to_regnum`, maps only 0–127), 9 are "value has been
+optimized out", and 25 are gdb errors whose message the test stops
+reading before it arrives (`lib/gcc-gdb-test.exp` matches "Error in
+sourced command file"). `pr36728-1.c` alone, rerun after the variant
+change, gave the same 102 PASS, 27 FAIL and 23 UNSUPPORTED.
 
 ## Known limits
 
@@ -229,8 +256,16 @@ of every runtest process are gone afterwards.
   `libgcc_s.so.1` and `libstdc++.so.6` (MCST's), not the build tree's,
   unless linked statically (`--target_board='e2k-4c/-static-libgcc'`,
   `-static-libstdc++` for C++). GCC marks `dg-set-target-env-var` tests
-  UNSUPPORTED on remote targets. Not tried: guality with the remote's
-  gdb.
+  UNSUPPORTED on remote targets.
+- **Guality on the SSH boards**: the `guality.h` tests start gdb from
+  the test program itself (`popen`), so they use the remote's gdb as
+  found in its `PATH` (`GUALITY_GDB_NAME` does not reach the remote),
+  and gdb attaches to the program. If the program then stops for a
+  signal gdb is not told to pass (an `abort`), gdb waits for commands
+  that only the stopped program would send, and the test hangs until
+  the time limit (seen with `example.c` at `-O1` and up, built by the
+  experimental compiler, which fails an assertion under gdb only): run
+  guality with `E2K_TIMEOUT=60`.
 - **The machines are shared** (AGENTS.md, "Hardware"): `make -j4` at
   most on the 4C and 8C2, `-j2` on the 2C3 (two cores);
   `run-gcc-tests.sh` enforces it. Each run works only in its own

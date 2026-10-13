@@ -1186,7 +1186,9 @@ on the 4C):
 Operands can be 5-bit literals in the syllable or 16/32/64-bit literals
 in LTS slots (max 4 × 32 bits per wide instruction). In M0–M3 each
 wide instruction holds one op, so literals never run out. From M4 the DFA
-must count literal slots as a resource (section 7.2).
+must count literal slots as a resource (section 7.2), and a size check
+after bundling closes the groups the DFA can't judge (section 7.4,
+"Count each wide instruction's size").
 
 ### D6. Condition codes
 
@@ -1899,6 +1901,29 @@ either or the loop's first instruction (4 cycles), → `rrd %ilcr` (5;
 timing.md, loops.md); loop-mode code (7.7) must respect them.
 Privileged state registers (which gas pads) don't appear in user code.
 
+**Count each wide instruction's size** (I52). At most 16 words fit
+(`spec/isa/bundle.md`, "Counting the size"), and the DFA can't hold that:
+two operations with the same literal value share an LTS, a constant 0–31
+is free as `src1` but half an LTS as `src2`, half-syllables pair into
+words, and the total rounds up to an even count. Compute the size the
+way gas does, from each insn's channel and literals, in the pass that
+marks the groups (step 1 above), and start a new group when an insn
+would take one past 16 words. It rarely bites: 0.02–0.13% of lcc's wide
+instructions are 16 words, mostly six ALU operations with a predicate
+tree of two or three PLS words, CDS words and three or four literal
+words, and on v3 also function entries (`setwd` and `setbn`, a prepare
+with `ipd`, `getsp` and five more operations with literals: 15 words,
+so one more CDS word or `mova` fits, two more words don't). Print a
+commutative operation's small constant first, since gas never swaps
+operands (`addd 0x14, %dr0, %dr1` needs no LTS, `addd %dr0, 0x14, %dr1`
+half of one), and leave the literal slots to gas (an explicit `_ltsN`
+with a lower slot left empty costs that slot's word, rounding aside).
+`tools/isa-extract/check_reservations.py` computes the same size for
+compiled code (the size part of `Checker.bundle`). The proof of concept's count after
+channel assignment matched gas's for 95% of the 71,299 instructions of
+its Lua build and was 2–4 words high for the rest, mostly from counting
+every constant above 15 as a literal (its figures).
+
 If later passes could insert labels inside a group, wrap each group in a
 `SEQUENCE` as C6x does (`c6x_gen_bundles`, c6x.cc:4622).
 
@@ -2597,8 +2622,19 @@ check-free semi-speculative form works.
   - no calls in the loop, and no use of `%ctpr2` (a call, a return or a
     write to `%ctpr2` stops the program, and a later `mova` is SIGILL);
   - on v3/v4, elements aligned to their size (otherwise the `mova`
-    returns a diagnostic value), proven or checked at run time as lcc
-    does.
+    returns a diagnostic value and the loop dies with SIGILL at the
+    first non-speculative use of it), proven, tested at run time (lcc
+    1.31, long loops) or assumed ("APB alignment on v3/v4", below);
+  - movas in epilogue iterations (`lcnt` 0, `ecnt` > 0) only with
+    `ldmc` = 1 in `%lsr`: with `loop_mode` and `ldmc` 0 they read
+    nothing (the destination keeps its value), without `loop_mode` they
+    read, but on v3–v5 an interrupt there puts the stream back an
+    element (the kernel counts epilogue iterations only with `ldmc`,
+    `iset_v3.c:194-196`: a few runs in a million on the 4C and the
+    8C2), and on the 2C3 the first one is SIGILL
+    (`spec/isa/hwbugs.md`). lcc's APB loops have no epilogue
+    iterations; a pipelined kernel that drains through `ecnt` must set
+    `ldmc` or keep its movas out of the drain stages.
   - no store during the loop to an element of a streamed array that a
     later `mova` reads: the buffer doesn't see stores, and how far it
     has prefetched varies. Stores to elements already read are fine;
@@ -2878,6 +2914,43 @@ check-free semi-speculative form works.
   size is always safe there, because v3 already needs element-aligned
   starts. Where a group of loads needs a larger `mrng` than that, lcc
   splits it into more areas. v5 and v6 have neither limit.
+- **APB alignment on v3/v4: prove it as lcc does, or assume C's**
+  (P90). An area whose start isn't aligned to its element gives
+  diagnostic values on v3 (and v4, by lcc's changelog), and the loop
+  dies with SIGILL `ILL_ILLOPN` at the first non-speculative use; v5
+  and v6 read the misaligned data (`spec/isa/apb.md`, "Diagnostic
+  results"). lcc's way first (decision 7): it uses APB on v3/v4 only
+  where it proves the alignment (global arrays,
+  `__builtin_assume_aligned`) or with `-faligned`, and lcc 1.31 also
+  versions a loop with a large known count on `(p & (size − 1)) == 0`
+  at `-O3` (`-floop-apb-align-versioning`). GCC's middle end has both
+  halves: `get_pointer_alignment` proves (builtins.cc:423, from the
+  alignment CCP and `__builtin_assume_aligned` record in
+  `ptr_info_def`, tree-ssanames.cc:735), and the vectorizer's
+  versioning for alignment builds the run-time test
+  (`vect_create_cond_for_align_checks`, tree-vect-loop-manip.cc:4216,
+  with `loop_version`, cfgloopmanip.cc:1888). C's rule is the other
+  choice: `get_object_alignment` gives a memory reference its type's
+  alignment unless the pointer's is known (builtins.cc:323–333), so
+  `MEM_ALIGN` of `*p` is already the element's
+  (`set_mem_attributes_minus_bitpos`, emit-rtl.cc:2164). It breaks
+  only code that reads misaligned words through cast pointers
+  (undefined in C, but it works with lcc and with plain loads, which
+  cost cycles and don't trap), and that code then dies on the 4C
+  (`tools/isa-probes/pocchk6.c` `align`: lcc's own `-faligned` and
+  `__builtin_assume_aligned` loops on data 1 or 4 bytes off; the 8C2
+  and the 2C3 run the same v3 code right). What lcc's rule costs it
+  (`spec/isa/apb.md`, "What lcc's alignment rule costs"): in NPB class
+  W its v3 code gets 7, 5, 14 and 73 programs in CG, FT, MG and LU
+  against 23, 12, 22 and 78 with `-faligned`, and runs CG 2.0× and FT
+  1.48× slower on the 4C. The proof of concept assumes C's alignment
+  (`-mapb-type-align`, on by default) and reports 18, 25, 50 and 54
+  programs against 8, 12, 4 and 52 with its own proof, which is weaker
+  than lcc's (MG's arrays passed as pointers; its figures). Following
+  lcc means carrying the alignment from the arrays' declarations
+  through the pointers ivopts makes and adding the run-time test for
+  long loops; an option that assumes C's alignment, as lcc's
+  `-faligned` does, gets the rest for code that keeps to C's rules.
 - **Read all of a loop's streams through APB, backward ones too**
   (I49). On the 4C, plain loads that miss L1 lose 1.25 cycles an
   iteration in L2 while an area streams beside them: II 4 becomes
@@ -2902,7 +2975,9 @@ check-free semi-speculative form works.
   its peeled prologue instances stay loads, and each area starts at the
   element its first kernel instance reads (stage U reads iteration
   S − 1 − U), so every area advances once per kernel iteration, which
-  is all apb.md requires (`loop_mode` is not needed). Channels and areas
+  is all apb.md requires (`loop_mode` is not needed, as long as no
+  `mova` runs in an epilogue iteration without `ldmc`: the APB item
+  above; such loops also run on the 2C3, P89). Channels and areas
   are given per kernel row after scheduling (0/1 the left half, 2/3 the
   right; area = program instruction). The setup (`aaurwd` of each
   start, `ldisp %ctpr2`, `bap`) goes on each way in after `rwd %lsr`, in
@@ -3412,8 +3487,10 @@ lcc's v5 code for CoreMark and Linpack differs from its v3 code in only
 a few ways, a guide to what an `-march=elbrus-v5` mode needs first:
 
 - **Array prefetch without alignment**: v5 allows unaligned areas, so
-  lcc uses APB where its v3 code needed `-faligned` or a run-time check
-  (Linpack: 52 APB programs in the v5 build, none in the v3 one).
+  lcc uses APB where its v3 code needed `-faligned` (1.29.16 has no
+  run-time test; 1.31 versions long loops) (Linpack: 52 APB programs in
+  the v5 build, none in the v3 one; NPB class W: CG 22, FT 13, MG 22,
+  LU 78 against 7, 5, 14 and 73).
 - **More FP channels**: `faddd`/`fmuld`/`fmul_add*` also in ALC2/5 (6 a
   cycle); lcc uses them sparingly (19 of 399 FP operations in Linpack).
   Watch the one conflicting pattern with the divider (timing.md).
@@ -3470,7 +3547,11 @@ Measured on an Elbrus-2C3 (timing.md "Elbrus-2C3 (v6)", semantics.md
   `qpmrgp` for a select by a predicate, `qpsrad` for 64-bit arithmetic
   shifts, `clmull`/`clmulh` for carry-less multiplies.
 - **APB**: 32 bytes a cycle per area, so two `movaqp` from one area per
-  iteration cost nothing extra.
+  iteration cost nothing extra. Areas keep their positions across traps,
+  so any loop shape works, but write `%lsr` (0 will do) before a program
+  that isn't counted by it: on the 2C3 a `mova` outside `loop_mode` is
+  SIGILL while `%lsr` says a counted loop has ended (`vlc` 1, `lcnt` 0,
+  `ldmc` 0), the state glibc's `strncmp` leaves (`spec/isa/hwbugs.md`).
 - **Atomics**: lcc's v6 code is its v3 code (`wait` + plain accesses).
   v6's load-acquire / store-release MAS forms (0x13) run, and a release
   store that way costs about a quarter of `wait` + store on the 2C3,

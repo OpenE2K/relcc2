@@ -421,6 +421,27 @@ The protocol, as lcc uses it and as measured:
      CS0 as well as the SS transfer, so the check's instruction holds no
      prepare and no `ct` ([bundle.md](bundle.md), "Bundling
      restrictions").
+     A pipelined in-place list reversal (CoreMark's
+     `core_list_reverse`: a lock load chasing the next node, the check
+     of an earlier lock with `rbranch`, a store into the checked node)
+     runs at 3 cycles an iteration, unless a stored node shares a
+     32-byte line with the node a lock reads soon after (below),
+     whatever the check's instruction (4 to 10 cycles after its lock),
+     the channels (lock ALC0 or ALC3, check and store ALC2 or ALC5),
+     the `rbranch` and the rotating ring (10 to 16 registers): `DAM_LINE` counts 1 an iteration, `DAM_BELL`
+     and `RBRANCH` 0 ([hw] `tools/isa-probes/damlist.c`, lists that
+     never alias, 4C, 8C2 and 2C3, the 2C3 at 5 cycles an iteration).
+     An intact check goes through the DTLB and L1 (`DTLB_QUERY` and
+     `L1_QUERY` count it) but never to L2: `L2_QUERY` doesn't move,
+     where a plain load in its place, of a line stored 2 cycles before,
+     adds 0.5 an iteration [hw: 8C2]. What lost the proof-of-concept
+     back end 2.9% of CoreMark on the 8C2 in this loop (its I45) was
+     the store, not the DAM: 2 cycles before the next lock, it sends
+     that lock to L2 whenever the two nodes share a 32-byte line, a
+     v5-only cost of two stall steps that a plain `ld,sm` in the lock's
+     place pays too, and that lcc 1.29.16's own v3 and v5 kernel for
+     the loop pays as well (timing.md, "Store to load" and
+     "Elbrus-8C2"). DAM placement needs no rule beyond the ones above.
 4. **Recovery**: `rbranch label` (= `ibranch label ? %MLOCK`) in the
    **same wide instruction as the check** jumps when the check reloaded,
    to compensation code that recomputes whatever already used the early

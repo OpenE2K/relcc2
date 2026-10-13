@@ -102,7 +102,7 @@ empty loop (`pmu.c`).
 | `DAM_LINE` (0x020) | lock loads entering the DAM | one per lock load |
 | `DAM_BELL` (0x120) | checks that failed (`%MLOCK` set) | |
 | `DAM_OVFL` (0x121) | lock loads that evicted an entry | 33 locks after a clear: 1; 48: 16 |
-| `L1_QUERY` (0x000), `L1_HIT` (0x100), `L1_ST_QUERY` (0x101), `L1_ST_HIT` (0x001), `DTLB_QUERY` (0x010) | L1 and DTLB accesses | one `ldd`: 1 query, 1 hit |
+| `L1_QUERY` (0x000), `L1_HIT` (0x100), `L1_ST_QUERY` (0x101), `L1_ST_HIT` (0x001), `DTLB_QUERY` (0x010) | L1 and DTLB accesses; `L1_HIT` counts stores that hit as well as loads | one `ldd`: 1 query, 1 hit; a store and a load of its line: `L1_HIT` 2, 1 when the store sends the load to L2 (`damlist.c`; timing.md, "Store to load") |
 | `COND_ALU_FALSE` (0x225) | **not** what its description says (operations cancelled by their predicate) | 4 per ordinary instruction, 0 for one with four operations predicated off, 5 with one off, 2 with six: unexplained, don't use |
 
 Also measured with `tools/isa-probes/stbase.c` (pipelined daxpy
@@ -163,6 +163,14 @@ unchanged. v5's list (643 events) splits the caches further: `L1_REQUEST`
 unit) and L3 events. They showed that `ldqp` bypasses L1 (timing.md,
 "Elbrus-8C2"). With more events than counters `perf stat` multiplexes
 and scales the counts; ask for at most four at a time for exact ones.
+
+`L1_LD_HIT` (0x100) counts the loads L1 serves, and `L2_QUERY` (0x040)
+every store (L1 is write-through) and every load L2 serves: a store
+and a load of another line count 1 `L1_LD_HIT` and 1 `L2_QUERY` a
+step, a store that sends the load to L2 0 and 2, and the same store
+under a false predicate 1 and 0 (`tools/isa-probes/damlist.c` `t_*`,
+8C2 and 2C3; timing.md, "Store to load"). An intact DAM check counts in `L1_QUERY` and
+`DTLB_QUERY` but never in `L2_QUERY` (speculation.md).
 
 ## v6 (Elbrus-2C3) [hw]
 

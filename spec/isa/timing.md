@@ -1208,21 +1208,63 @@ offsets.)
   aligned, as `ldqp` and `stqp` are, and cost nothing on the 2C3 at any
   offset.
 
-**Store to load** (`tools/isa-probes/stld.c`, 4C and 8C2 alike): a load
-of a doubleword just stored, issued in the **very next** instruction,
-returns its value about 7.6 cycles late (two 4-cycle stall steps: a
-store, reload and use take 14.5 cycles a step instead of 6.9). The load
-itself issues at once; only its result is delayed, and only when it is
-used. Any gap of one cycle or more between the store and the load
-removes the penalty completely. (A store's base or data register
-written by the instruction before costs nothing: `pocchk2.c`
-`t_stbase_k*`, `t_stdata_k*`, all three machines.) The match is by aligned doubleword: a
-narrower or wider reload, and `stw` at +0 followed by `ldw` at +4 (no
-overlapping bytes), all pay it; the next doubleword, the next line or
-any other address in the same 16 KiB doesn't (but see the next
-paragraph). So keep a reload of a just-stored location
-(a spill and its fill, a stack argument) at least one instruction away
-from the store.
+**Store to load** [hw: `tools/isa-probes/stld.c`;
+`tools/isa-probes/damlist.c` `t_*` cases: a store, a load 0 to 8
+cycles later, its value used 3 to 15 cycles after the load, four such
+steps an iteration 64 bytes apart, medians of 15 runs, two or three
+repeats; 4C, 8C2, 2C3]: a load that a
+store just before it keeps out of L1 is **served by L2** (one
+`L1_LD_HIT` fewer, one `L2_QUERY` more; monitors.md), so its value
+comes at the L2 hit latency whatever the channels: 9 cycles on the 4C,
+11 on the 8C2, 13 on the 2C3, 6, 8 and 8 cycles late. The load itself
+issues at once; only a use of its value waits (stall rule), by
+`t_w*`: on the 8C2 a use 3–6 cycles after the load stalls two steps
+more than from L1, 7–10 cycles after one, 11 or more none (after a
+store 2 or 3 cycles before the load about half a cycle a step
+remains); on the 4C two at 3–4, one at 5–8; on the 2C3 two at 3–8,
+one at 9–12. In `stld.c`'s loop (the use right after the load) a
+store, reload and use take 14.5 cycles a step instead of 6.9 on the 4C
+and 8C2. Which loads pay, by the cycles from the store's issue to the
+load's (another 32-byte line never does, the next one included; a store
+under a false predicate makes nothing pay, `t_y_pf_*`):
+
+| Cycles after the store | 4C (v3) | 8C2 (v5) | 2C3 (v6) |
+|---|---|---|---|
+| 0 (one instruction) | any load of the line, in some code only: identical loops paid +8 cycles a step in every run in one function (`t_u3_d0_o0`) and 0.1–2.7 in another (`t_w3_d0_o0`); a load 4 KiB away at the stored offset in 10–50% of the steps. Its issue cost is "A store and a load in one instruction" (Throughput) | the same | the same |
+| 1 | every load reading a byte of the stored aligned doubleword: the same bytes, narrower, wider, or other bytes of it (`stw` +0 then `ldw` +4) | the same | the stored bytes, a narrower load inside them or a wider one holding them; other bytes of the doubleword and other doublewords of the line in some runs only (below) |
+| 2, 3 | none | **every load of the line that reads a byte the store did not write**: other bytes of the stored doubleword, a wider load holding the stored bytes, any other doubleword, the line's last byte; a load inside the stored bytes is served by L1 | a load of the stored doubleword at another width that overlaps the stored bytes: `std` then `ldw` at +0 or +4; `stw` then `ldd` (tried 2 and 4 cycles after) |
+| 4 | none | none | the same, and every other load of the stored doubleword except the stored bytes at the store's width (`stw` +0 then `ldw` +4; `stb` +0 then `ldb` +1) |
+| 5 or more | none | none | none |
+
+Channels don't matter (stores in ALC2 or ALC5, loads in ALC0, 2, 3 or
+5), nor whether the addresses are the same in every iteration, and
+speculative loads (`ld,sm`, the lock load `mas=0x4`) pay like the rest
+(`damlist.c`'s list cases). The 2C3's "some runs" behaves like a
+state: `stld.c`, at one address, paid nothing in eight processes and
+in a ninth paid the whole penalty on every load from one run that took
+an interrupt on (`w0_w4`: 6.9, then 14.7 cycles a step); `damlist.c`'s
+loops, moving through 16 KiB, paid on 25% to 100% of such loads by run
+and case, and its list walk with the store 1 cycle before the next
+node's load (`v6_d1`) on none. The cause is not known.
+(A store's base or data register written by the instruction before
+costs nothing: `pocchk2.c` `t_stbase_k*`, `t_stdata_k*`, all three
+machines.)
+
+For a compiler that sees both addresses (one base register: a spill
+and its fill, stack arguments, structure fields): keep a load of a
+just-stored doubleword at least 2 cycles after the store (v3), on v5
+also keep any load of the store's 32-byte line out of 2 and 3 cycles
+after it unless it reads only stored bytes (1 cycle is fine for another
+doubleword, 4 for anything), and on v6 keep a load of the stored
+doubleword 5 cycles after the store unless it reads exactly the stored
+bytes at the store's width (then 2). Loads through other pointers pay
+when they hit the line, which no compiler can see: CoreMark's list
+reversal (Elbrus-8C2, below). lcc's own v5 code pays too: in its
+static libm's `__ieee754_acoshl` (lcc 1.29.16, the `v5.8c2` sysroot)
+an `ldw` reads a `long double`'s exponent 2 cycles after the `sth` that
+stored it, and `tools/isa-score/profile.py` on the 8C2 measured that
+block at 27.4 cycles an execution against 25.0 modelled with this rule
+and 17.0 without it [hw: 3,000,000 calls].
 
 **Loads 16 KiB away from a store pay the reload penalty too**, and
 longer [hw: `tools/isa-probes/timeleft.c` `alias`, the `stld` lines,
@@ -1236,7 +1278,7 @@ pages; 4C, 8C2, 2C3]. Cycles a step:
 | no conflict | 7.1 | 8.1 | 9.1 | 10.1 | 11.1 |
 | `D` = 0 (a true reload) | 15.1 | 8.1 | 9.1 | 10.1 | 11.1 |
 | `D` = 16, 32, 48, 64, 96, 128 or 192 KiB, or 1 MiB | 15.1 | 4C 14.0; 8C2, 2C3 16.1 | 4C 13.1; 8C2, 2C3 17.1 | 4C, 8C2 10.1; 2C3 18.1 | 11.1 |
-| `D` = 8, 16, 24 (another doubleword of the stored 32-byte block), 8C2 | 7.1 | 16.1 | 17.1 | 10.1 | 11.1 |
+| `D` = 8, 16, 24 (another doubleword of the stored 32-byte block), 8C2 (the line rule above) | 7.1 | 16.1 | 17.1 | 10.1 | 11.1 |
 
 `D` = 4, 8, 12, 20, 24, 28 or 40 KiB, 16 KiB plus 8, 32 or 64 bytes
 and 64 KiB plus 8 to 256 bytes or minus 8 cost nothing. So a load of the same offset in
@@ -1490,10 +1532,26 @@ What v5 adds or changes:
   scheduling" is about).
 - **A store and a load in one 32-byte block** in one instruction take
   1.8–2 cycles in every run (the 4C sometimes runs them at 1); two
-  stores agreeing in address bits 6–7 take 2, as on the 4C. A load of
-  another doubleword of a 32-byte block stored 1 or 2 cycles before
-  pays the reload penalty, which the 4C and 2C3 don't (Memory, "Loads
-  16 KiB away from a store").
+  stores agreeing in address bits 6–7 take 2, as on the 4C.
+- **A load 2 or 3 cycles after a store to its 32-byte L1 line** that
+  reads any byte the store didn't write (another doubleword, other
+  bytes of the stored one, a wider load) is served by L2: 11 cycles, 8
+  late. The 4C and 2C3 serve it from L1 (Memory, "Store to load";
+  `damlist.c`). A pipelined list walk that stores to one node 2 cycles
+  before it loads another pays two stall steps whenever the two nodes
+  share a line. That is CoreMark's `core_list_reverse` as lcc 1.29.16
+  `-O3` schedules it for v3 and v5, `{} {lock ALC3, check ALC5,
+  rbranch} {store ALC5, ct}` with the store 2 cycles before the next
+  lock, which reads the node 3 places on, and as the proof-of-concept
+  back end did: CoreMark's own list orders (`core_bench_list`'s, 30
+  nodes of 16 bytes, two of them to a line, interleaved), replayed
+  through such a kernel on the 8C2, cost 8.0–8.4 stall steps a call,
+  0.27–0.28 an element, against 0 with the store 1 cycle before the
+  lock (lcc's kernel built from C: 8.0–8.5 above its constant 2) [hw;
+  a replay harness not kept], the PoC's whole loss (speculation.md,
+  "Data speculation (DAM)"). lcc's v6 kernel loses nothing: the 2C3
+  has no such window, and the 5-cycle chase delays each lock to 5
+  cycles after the store anyway.
 
 ## Elbrus-2C3 (v6) [hw]
 
@@ -1567,12 +1625,16 @@ conflicts, the store bank rule (two stores agreeing in address bits
   then `wait all_e` 16 (10); after a store 16 (15), but `ma_c` after a
   store 20 (25 and 33), and the soft modifiers save more after a load
   than on the 8C2 ("Every v3 operation").
-- **Store to load**: a reload of the same aligned doubleword in the next
-  instruction still costs 7.6 cycles (lcc 1.26's note that v6 removed
-  the store-to-load bypass shows no extra cost), but a load of *other*
-  bytes of that doubleword no longer pays (`stw` at +0 then `ldw` at +4,
-  `stb` at +0 then `ldb` at +1: 6.9, as for a load of another
-  doubleword; `stld.c`).
+- **Store to load** (Memory, "Store to load"; `stld.c`, `damlist.c`): a
+  reload of the stored bytes in the next instruction still gets its
+  value at the L2 latency (13 cycles, 8 late). Other bytes of that
+  doubleword and other doublewords of the line pay there only in some
+  runs (`stld.c`'s `stw` +0 then `ldw` +4 runs at 6.9 cycles a step,
+  no penalty, in most processes and at 14.7 in some). The 8C2's
+  whole-line window 2 and 3 cycles after a store is gone; instead a
+  load of the stored doubleword at another width (`std` then `ldw`,
+  `stw` then `ldd`) pays up to 4 cycles after the store, and at 4 any
+  load of that doubleword but the stored bytes at the store's width.
 - **Caches** (`--memory`, `/sys/devices/system/cpu`): 64 KiB L1D, 2 MiB
   L2, no L3; L2 hit 13 cycles (6.5 ns), memory about 220 cycles (110 ns).
 - **Array prefetch** (apb.md): one area delivers **32 bytes a cycle**
@@ -1625,10 +1687,15 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
 - v5: floating-point operations in channel 5 need special scheduling
   (lcc 1.26); measured above: one conflicting pattern with the divider.
 - v6: the bypass from a store to a following load was removed (lcc 1.26),
-  so a load that reads what a store just wrote waits longer. Not seen
-  on the 2C3: the reload penalty is the 8C2's (Elbrus-2C3, above); only
-  a load 16 KiB away pays it a cycle longer (Memory, "Loads 16 KiB away
-  from a store").
+  so a load that reads what a store just wrote waits longer. On the
+  2C3 a reload of the stored bytes at the store's width pays only in the
+  next instruction, as on v3 and v5, but a load of the stored
+  doubleword at another width (a narrower one inside the stored bytes,
+  a wider one holding them) pays up to 4 cycles after the store, where
+  v3 and v5 serve a load inside the stored bytes from L1 from 2 cycles
+  after it; that may be what the note means (inferred). A load 16 KiB
+  away pays a cycle longer too (Memory, "Store to load", "Loads 16 KiB
+  away from a store").
 - Elbrus-48C (v7): prepare-to-transfer delays differ;
   `-mset-prepare-ct-delays-e48c` applies them and is on with
   `-mtune=elbrus-48c` (lcc 1.31).
@@ -1644,6 +1711,13 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
 - Exactly which address bits the 16 KiB store-to-load alias compares
   with 4 KiB pages, where the result changes from run to run (Memory,
   "Loads 16 KiB away from a store").
+- Store to load (Memory, "Store to load"): why the 8C2 sends a load of
+  a line stored 2 or 3 cycles before to L2 (perhaps the write-through
+  L1 updating the line then; not checked); what decides the 2C3's
+  "some runs" state and whether a load in the store's own instruction
+  pays; v4; quad (`stqp`, `ldqp`), AAU and line-crossing accesses;
+  stores that miss L1; on the 2C3 a load of another width outside the
+  stored bytes (`stw` +0 then `ldb` +5).
 - Why a stream of loads that miss leaves only part of its lines in L1
   (Memory, "Not every load that misses fills L1"), and why a chase
   in the other cluster finds fewer of a chase's lines on the 4C and

@@ -173,18 +173,24 @@ measured 0.54% of xz -6's cycles in `BUB_B_RF_SPILLFILL` on the 8C2
   an 80-bit value (`movif`, `fdtofx`, `istofx`, `fx*` arithmetic,
   conversions and compares), leaves included and also when the value
   sits only in `%g16`/`%g17`. A function that only moves a `long double`
-  as its two 64-bit parts (copies through memory, arguments returned,
-  stored or passed on, call results returned) holds no extended value
-  and keeps `nfx = 1`, except that from `-O1` on it inherits `nfx = 0`
+  as its two 64-bit parts (arguments returned, stored or passed on, call
+  results returned, copies through memory) holds no extended value and
+  gets `nfx = 1` on its own, but from `-O1` on it may inherit `nfx = 0`
   from the function before it in the file when that one had it [lcc
   1.29.16 `-O3`, v3, v5.8c2, v6.2c3, and 1.31.05:
-  `tools/abi/probes/pocabi2_nfx.c`]. The carry-over isn't about `long
-  double`: a function that only returns a constant or one loaded value
-  inherits `nfx = 0` too, whatever its types, and passes it on to the
-  next, while one that computes (an `int` `x + 3`, the sum of two loads)
-  or stores (a copy through memory) gets `nfx = 1` and stops it [lcc
-  1.29.16 `-O1` to `-O3` and 1.31.05 `-O3`, v3, v5.8c2, v6.2c3:
-  `tools/abi/probes/pocabi1_nfx.c`]. Unipro's clang clears it in
+  `tools/abi/probes/pocabi2_nfx.c`]. Which functions inherit it isn't
+  about `long double`: one that only returns a constant or one loaded
+  value, stores an argument (`*p = x`) or passes a loaded value to a call
+  inherits `nfx = 0`, whatever its types, and passes it on to the next,
+  while one that computes (an `int` `x + 3`, the sum of two loads),
+  copies through memory (`*a = *b`, a `long double` too at `-O3`; at
+  `-O1` and `-O2` lcc copies one through `movif`/`movfi` and clears
+  `nfx` for that) or stores a constant (`*p = 0`) gets `nfx = 1` and
+  stops it [lcc 1.29.16 `-O1` to `-O3` and 1.31.05 `-O3`, v3, v5.8c2,
+  v6.2c3: `tools/abi/probes/pocabi1_nfx.c`, `pocabi2_nfx.c`]. The
+  functions that stop it build a value in `%g16` first, the ones that
+  inherit it use only their window registers (inferred from the
+  listings). Unipro's clang clears it in
   exactly the functions that compute with an 80-bit value (unipro
   20.1.8 `-O2 -march=elbrus-v3`, `pocabi2_nfx.c`). lcc's
   v5 and v6 code also clears it in every function that uses a 128-bit

@@ -15,8 +15,9 @@
    in those that only move the two 64-bit parts (cp ... tail), except
    pass2_after: a move-only function that follows one with nfx = 0 in the
    file gets nfx = 0 as well (from -O1 on; a function between them that
-   stores, such as cp, or computes stops it, while one that only returns
-   a constant or a loaded value inherits it too: pocabi1_nfx.c).
+   copies through memory, such as cp, or computes stops it, while one
+   that only returns a constant or a loaded value or stores an argument
+   inherits it too: pocabi1_nfx.c).
    Unipro 20.1.8: nfx = 0 in the computing functions only.  */
 
 extern long double ext (long double);

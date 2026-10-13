@@ -1294,9 +1294,9 @@ at an interrupt; system calls and page faults keep it
 (`spec/abi/registers.md`, `nfx`, measured on all three machines; the
 proof of concept's A26). lcc sets `nfx=0` in every function that
 computes with an 80-bit value, leaves included; one that only copies or
-passes a `long double` as its two parts keeps `nfx=1`, unless it
-directly follows such a function in the file (an lcc artifact,
-registers.md).
+passes a `long double` as its two parts gets `nfx=1`, though it may
+inherit `nfx=0` from the function before it in the file (an lcc
+artifact, registers.md).
 80-bit operations follow `%fpcr`/`%fpsr` (x87 control and status
 words), not `%pfpfr`, so rounding-mode patterns and `fenv` support must
 handle both (`spec/abi/registers.md`, "Floating-point control and

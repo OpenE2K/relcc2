@@ -1391,6 +1391,7 @@ and memory (apb.md, "Plain loads beside an area"; `pocchk3.c` `bk`,
 | **`rwd %lsr` → `rrd %lsr`**; v5+ also `rwd %lsr1` → `rrd %lsr1` or `rrd %lsr`, and `rwd %lsr` → `rrd %lsr1` | **no** | old value at distance 1–3, new from 4 (`loops.c`, `lsrw.c`; 4C, 8C2, 2C3) |
 | `rwd %lsr`, `%lsr1` or `%ilcr` → `rrd %ilcr` or `%ilcr1` | **no** | old value at distance 1–4, new from 5 (`lsrw.c`) |
 | **`rwd %lsr` or `%lsr1` → the loop's `alc`** | **no** | iterations issued 1–3 cycles after the write count down the old `%lsr`, the new count applies from 4 ([loops.md](loops.md), "Registers") |
+| `getsap` → `rrd %usd.lo` (protected mode) | **no** | old value at distance 1–2, new from 3 (`tools/abi/probes/protected/pmleft.c` `usd`; 4C, 8C2, 2C3; [protected-mode.md](../abi/protected-mode.md), "Stack pointers"). `getsp` → `rrd %usd.lo` in 64-bit code was not measured |
 | anything in the same wide instruction | — | every operation reads the state from before the wide instruction (distance 0 sees the old value) |
 
 **Other stalls** the performance monitors found [hw:

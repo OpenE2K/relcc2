@@ -24,7 +24,9 @@ submodules' current commits. **guide** is chapter 11 (the model), 9
 Probes, in `tools/abi/probes/protected/` (`run.sh --remote HOST
 [--ssh-port N] [--static TARGET]` builds and runs `pmasm`, `pmcxx` and
 `pmrun`, then `pmrun`'s malloc cases under each `PM_*` setting and its
-system call cases with the kernel's soft mode on and off):
+system call cases with the kernel's soft mode on and off; `run.sh …
+--left` builds and runs `pmleft`, `pmomp`, `pmmin` and, where there is
+a `/lib128`, the shared-library probes):
 
 | Probe | What it shows |
 |---|---|
@@ -33,6 +35,10 @@ system call cases with the kernel's soft mode on and off):
 | `pmrun.c` | run, each case in its own child: data layout, pointer images, bounds, tags, integer casts, use after free, stack escapes, calls, varargs, system calls, signals, threads |
 | `pmasm.c` | run: `%core_mode`, raw `getsap`, `aptoap`, `aptoapb`, `getva` results, `%usd`, stack pointers stored outside their frame, procedure labels |
 | `pmcxx.cc` | run: C++ exceptions, virtual calls, containers, member pointers |
+| `pmleft.c` | run: `usd` when `rrd %usd.lo` sees a `getsap` (under the machines' timing lock); `cud` `cudtoap`, `gdtoap`, `ldcud*`, `%cud`/`%gd` and the `rw` field of every kind of AP; `clean` the `clean_descriptors` system call; `mremap` a moving `mremap` with and without the dangling-pointer mode; `psl` recursion until `%usd.psl` overflows |
+| `pmlib.c`, `pmdl.c`, `pmlibmain.c`; `pmlibxx.cc`, `pmlibxxmain.cc` | run: user shared libraries built with `-mptr128 -shared` (data, function pointers, callbacks, TLS, `%cud`/`%gd` in a library, `dlopen`/`dlclose`; C++ across the boundary) |
+| `pmomp.c` | run: OpenMP |
+| `pmmin.s` | run: a hand-written static protected program, linked as ELF64 and, through `objcopy`, as ELF32 |
 
 **hw** here means the same result on the three machines:
 
@@ -128,11 +134,41 @@ pair (`movtq`) or as an aligned 16-byte memory access (guide 11.3). [hw:
 
 [hw: `pmrun` "ptr"] `malloc (40)` gives low `0x1800000050a24060`, high
 `0x0000002800000000` (`rw` 3, size 0x28, `curptr` 0); `p + 3` (`int`)
-changes only `curptr`, to 0xc; `p - 1` has `curptr` `0xfffffffc`. Every
-pointer lcc and lib128 make has `rw` = 3, pointers to `const` objects and
-string literals included; a write through one is stopped by the page,
-not by the descriptor (SIGSEGV `SEGV_ACCERR` at the data address:
-`f_strlit_write`, `f_const_write`).
+changes only `curptr`, to 0xc; `p - 1` has `curptr` `0xfffffffc`.
+
+**Only `cudtoap` makes a read-only AP.** Every other pointer has `rw` =
+3 [hw: `pmrun`; `pmleft cud` "rw" lines, all three]: pointers to
+`const` objects and string literals, `malloc`, `alloca` (`getsap`),
+`gdtoap`, and everything the kernel hands out (`argv`, `envp` and their
+strings, `mmap` with `PROT_READ`, with `PROT_NONE` or of a file opened
+`O_RDONLY`, a mapping after `mprotect (PROT_READ)`, a handler's
+`siginfo` and `ucontext`). The kernel builds its APs with `RW_ENABLE`
+(`MAKE_AP`, kernel `include/asm/uaccess.h:1581-1583`); its only
+`R_ENABLE` ones (`kernel/binfmt_elfe2kp.c:232-245`) are compiled only
+without `ARGS_AS_ONE_ARRAY`, which `include/asm/prot_loader.h:13`
+defines. No lcc option or builtin sets `rw`, and `aptoapb` and
+`__builtin_e2k_create_ap_subarray` keep it [hw: `c_cudap_narrow`,
+`c_cudap_builtin`]. So a write through a `const` pointer is stopped by
+the page, not by the descriptor (SIGSEGV `SEGV_ACCERR` at the data
+address: `f_strlit_write`, `f_const_write`).
+
+`cudtoap`'s AP covers the module's code with `rw` = 1, read only [hw:
+`pmleft` `c_cudap_*`, all three]. A load through it works (`ldapd`
+returns the code, tag 0); **a store through it is SIGSEGV `SEGV_ACCERR`
+with `si_addr` the `stapd` itself**, before the page is reached: the
+descriptor check `exc_access_rights`, exception 18 (kernel
+`kernel/traps.c:179`, `:1309-1314`). System calls hardly look at `rw`:
+`write` checks that its buffer is readable (`R_ENABLE`: kernel
+`kernel/protected_syscalls.c:2012`, `include/asm/protected_syscalls.h:524-537`),
+which every AP is, and nothing checks `W_ENABLE` on a buffer
+(`check_buffer_is_writeable` has no caller). So `write (fd, cudap, 16)`
+writes 16 bytes and `read` into it fails with `EFAULT` only because the
+page is `r-x`. Otherwise only `mprotect` (a `prot` beyond the AP's
+rights prints a warning, SIGABRT with `PROTECTED_MODE_SOFT=0`:
+`protected_syscalls.c:5074-5080`, `include/asm/protected_syscalls.h:288-292`)
+and `mremap` (the new AP keeps the old `rw`: `protected_syscalls.c:2705`)
+read it (source only: an `mprotect` that would make code writable was
+not tried).
 
 An access of N bytes at `p + i` is allowed when `0 ≤ curptr + i` and
 `curptr + i + N ≤ size`. Moving `curptr` out of range is allowed; using
@@ -149,24 +185,90 @@ pointers", kernel `include/asm/cpu_regs_types.h:1126-1129`) at boot on
 every CPU before v7 (`kernel/e2k_syswork.c:1844-1855`, "bug 115090"),
 and a protected process reads it as set [hw: `pmasm` "core_mode": 0x2 on
 the 4C and 8C2, 0x26 on the 2C3; the same values as a 64-bit process,
-[lcc-builtins.md](lcc-builtins.md)]. So `getsap` returns an ordinary AP
-with the full 48-bit address [hw: `pmasm` `getsap -32: lo=1800c2defffed9c0
-hi=0000002000000000 tags=f,c` on the 8C2], and a stack pointer stored
+[lcc-builtins.md](lcc-builtins.md)]. Only root can clear it, through the
+sysctl `debug.no_stack_prot`, which rewrites `%core_mode` on every CPU
+(`OpenE2K/linux/kernel/sysctl.c:2529-2546`, `:2597-2605`; kernel
+`kernel/e2k_syswork.c:1825-1842`); it reads 1 on all three machines
+[hw: `/proc/sys/debug/no_stack_prot`, owner root, mode 0644]. So
+`getsap` returns an ordinary AP with the full 48-bit address [hw:
+`pmasm` `getsap -32: lo=1800c2defffed9c0 hi=0000002000000000 tags=f,c`
+on the 8C2], and a stack pointer stored
 into a global, the heap or an older frame, returned from its function
 or used after its frame is gone never faults (`pmrun` `f_stack_to_*`,
 `f_return_local`; `pmasm` `c_sap_*`, also with raw `getsap` results); the
 dead frame reads stale data.
 
-On the 2C3 every pointer into the stack, `getsap`'s included, has **bit
-58 set** (`0x1c00c25e…`); heap and global pointers don't, nor do the
-8C2's and 4C's stack pointers. The sources don't name this bit in an AP;
-in `%usd.lo` bit 58 is `p` [hw].
+**What the checks would do** is known only from the kernel source. A
+SAP stored into global memory would (inferred, from the name) raise a
+page fault whose type has the `global_sp` bit (kernel
+`include/asm/mmu_types.h:429`, `:481`); 6.1-1.19 treats that as
+impossible, warns once and sends SIGBUS `BUS_MCEERR_AO` at the data
+address ("Hm? we refused to use sap in HW and SW", `mm/fault.c:2469-2475`).
+The software that once tracked such stores (`do_global_sp`,
+`lw_global_sp`, `mark_all_global_sp`, `delete_records` and a
+`global_store_t` record, `include/asm/3p.h:16-67`) is declared but
+defined nowhere (inferred: removed). The kernel still keeps `psl`
+right across `longjmp` (`kernel/signal.c:1787-1805`) and `ptrace`
+(`kernel/ptrace.c:358-367`).
+
+**Bit 58.** On the 2C3 an AP made by `getsap` (so every pointer lcc
+makes to a local, through `aptoap`/`aptoapb`) or by `cudtoap` has bit 58
+set (`0x1c00c25e…`, `0x0c00…`); APs from `gdtoap`, `malloc`, `mmap` and
+the kernel (`argv`, `envp`, `siginfo`, `ucontext`, though these lie on
+the stack) don't, and on the 4C and 8C2 none does [hw: `pmleft cud`,
+`pmasm`]. The registers these two operations start from have bit 58 set
+in a protected process: `%usd.lo` (`p`: kernel
+`include/asm/cpu_regs_types.h:280`, set by `new_pusd_v6`,
+`include/asm/cpu_regs.h:715-722`) and `%cud.lo` (`c`:
+`cpu_regs_types.h:84-87`, set for every module: `new_cud_v6`,
+`cpu_regs.h:869-879`, called with `c` = 1 from `kernel/process.c:819`);
+`%gd` has no such bit. So (inferred) v6 copies bit 58 of the source
+register into the AP and v3–v5 clear it. Nothing in the kernel reads
+bit 58 of an AP (its layout leaves bits 48–58 unused,
+`e2k_ptypes.h:31-35`; the AAU's descriptor calls its bit 58 `ed`,
+`include/asm/aau_regs_types.h:90`); what it means is not known.
 
 `%usd` itself has the SAP layout in a protected process: bits 31–0 the
 stack pointer, 47–32 `psl`, 58 `p`
 ([stack-and-unwinding.md](stack-and-unwinding.md), "Stack registers")
 [hw: `pmasm`: `usd.lo` `0x1c000008fffed9e0` in a function,
 `0x1c000009fffed960` in its callee: `psl` counts calls].
+
+**`psl` overflows at 0xffe0.** In a new thread (which the kernel starts
+at `psl` 1: `kernel/process.c:1789`) level n of a recursion has `psl` =
+n + 2 [hw: `pmleft psl`, sampled from level 1 to 65,500, all three].
+The call that would take `psl` past 0xffe0 is **SIGSEGV
+`SEGV_BNDERR`** with `si_addr` the `call` instruction: 65,502 levels
+below the thread's start function. It is the `psl` value, not a stack
+size: a function with a 28-pair window and a 464-byte frame reaches the
+same 65,502 levels, and a recursion in the main thread (`main` runs at
+`psl` 8 in a dynamic program, 5 in a static one) stops when `psl`
+reaches 0xffe0 too (65,494 levels on the 8C2 and 2C3, 65,497 static on the 4C)
+[hw: `pmleft psl`, `c_psl_big`, `c_psl_main`, all three]. Up to v6 the
+kernel raises `exc_user_stack_bounds` only on a `psl` over- or
+underflow and sends this signal (`kernel/traps.c:1210-1217`); an
+array-bounds fault would give the same signal (`:1178-1180`), so which of
+the two the hardware raises is inferred. 64-bit programs have no such
+limit ([kernel-interface.md](kernel-interface.md), "The data stack":
+250,000 levels). Why the limit is 0xffe0 and not 0xffff is not known.
+
+**A `rrd %usd.lo` issued one or two cycles after a `getsap` returns the
+value from before it; from three cycles on, the new one** [hw: `pmleft
+usd`: 2,000 samples per distance 1–8, 10, 12, 16, 24 in each of 12
+or more passes on each machine, all alike; [timing.md](../isa/timing.md),
+"Hazards"]. It is a fixed delay: a second `getsap` in the next
+instruction sees the first (the two areas are 32 bytes apart; inferred:
+it waits, as a `getsp` after a `getsp` does), and an `aptoapb` of the
+result in between makes the read see it. The two cannot share an
+instruction: gas places a `getsap` in ALC0 whichever channel is
+written, and `rrd` runs only in ALC0 ("attempting to place several
+instructions into ALC0"). lcc's prologues end with a `getsap`, so a
+read of `%usd` two instructions into a function sees the frame without
+it (`usd_pair`'s first read differs from a settled one in all but at
+most one of 2,000 samples in the 8C2 and 2C3 builds where lcc put the
+prologue's `getsap` two instructions before it, and never in the 4C
+build, where it is 5 cycles before): this is (inferred) the 64-byte
+step an earlier `pmasm` showed for a 32-byte `getsap`.
 
 ### Procedure label (PL) (kernel `e2k_ptypes.h:150-193`; hw)
 
@@ -186,8 +288,9 @@ keeps the high half's pointer tag).
 ## Operations
 
 What lcc 1.29.16 uses them for [lcc: `pmcc.c` for `e2k-v3`, `v5.8c2`,
-`v6.2c3`] and what they do in a protected process [hw: `pmasm`]. In a
-64-bit process they fault ([semantics.md](../isa/semantics.md);
+`v6.2c3`] and what they do in a protected process [hw: `pmasm` and
+`pmleft`]. In a 64-bit process they fault
+([semantics.md](../isa/semantics.md);
 [operations-v3.md](../isa/operations-v3.md)).
 
 | Operation | In protected mode |
@@ -196,6 +299,8 @@ What lcc 1.29.16 uses them for [lcc: `pmcc.c` for `e2k-v3`, `v5.8c2`,
 | `aptoap src, off, dst` | the part of `src` from `curptr + off` to its end, `curptr` 0 [hw: `aptoap sap, 16` moves the base by 16 and the size from 32 to 16] |
 | `aptoapb src, size, dst` | the first `size` bytes from `curptr` [hw: size 32 → 8]. Both are SIGSEGV `SEGV_BNDERR` if the result would leave `src` (`c_aptoap_over`, `c_aptoapb_over`): a descriptor cannot be widened. lcc narrows with `aptoap` + `aptoapb` (`__builtin_e2k_create_ap_subarray`) |
 | `gdtoap [lit], dst` | an AP into the module's globals at a literal offset; lcc follows it with an `aptoapb` of the object's size (`g_addr`, `g_str`) |
+| `cudtoap lit, dst` | an AP to the module's code from `CUD.base` + `lit` to its end, `curptr` 0, **`rw` = 1** (read only: "Array pointer") [hw: `cudtoap 0x100` of a 0xd000-byte `CUD` gives base + 0x100, size 0xcf00]. lcc never emits it (next row) |
+| `ldcud{b,h,w,d,q} lit, off, dst` | a load at `CUD.base` + `lit` + `off`: it reads the module's code [hw: 64 bytes at offset 0 and at a function's offset are each found once in `/proc/self/exe`, exactly that offset apart]; past `CUD.size` SIGSEGV `SEGV_BNDERR` at the instruction. The guide reads text-segment constants with it in 32-bit mode (9.1.4.3), where lcc doesn't use it either ([mode32.md](mode32.md)). lcc never emits `ldcud*` or `cudtoap` in protected code: none in the 321 `lib128` files of each of lcc 1.29.16's `e2k-v3`, `v5.8c2` and `v6.2c3` sysroots or the 324 of 1.31.05's `e2k-v3`, nor for switch tables, constant arrays, literals, computed `goto` or `-fPIC` code at `-O0`…`-O3` [lcc]; gas notes that "data is not allocated in CUD (not supported yet)" (binutils `gas/config/tc-e2k.c:7813-7818`), but accepts both operations under `-mptr128` |
 | `getpl [lit], dst` | a PL of a function at a `CUD` offset (guide 10.9.2 gives the form into `%ctprN`); lcc's function addresses (`p_fnaddr`; for v3–v5 lcc also zeroes the high doubleword) |
 | `getva p, off, dst` | the low 48 bits of `p`'s base plus `off`, a 32-bit operand: `curptr` is not added (semantics.md's operands; [hw: `getva` of `getsap`'s result gives its base]). lcc converts a pointer to an integer, compares and subtracts pointers with `getva p, curptr` plus the sign-extended minus the zero-extended `curptr` (`p_to_long`, `p_lt`, `p_diff`), so (inferred) `getva` zero-extends `off` |
 | `ldap{b,h,w,d,q} p, idx, dst`, `stap{b,h,w,d,q} p, idx, src` | access through an AP with an index, checked as above: every pointer access lcc makes |
@@ -243,13 +348,26 @@ Why is not known [lcc].
   (`getpl` is `CUD`-relative), so ld.so takes other modules' PLs from
   their export table (`DT_EXPORT_PL`) or through the module's own
   `getpl` helper (glibc `sysdeps/unix/sysv/linux/e2k/e2k128/ldsodefs.h:380-410`).
+- **`%cud` and `%gd` read with `rrd` in user mode** [hw: `pmleft`
+  `c_cud_regs`, `pmlibmain` `c_regs`]: `%cud.lo` is `0x0c00…` + base on
+  the 4C and 8C2 and `0x0e00…` + base on the 2C3, `%gd.lo` `0x1800…` +
+  base, each `.hi` the size in bits 63–32. The kernel's `CUD` has `p`
+  (bit 57, protected) and `c` (bit 58), its `GD` only base and size
+  (kernel `include/asm/cpu_regs_types.h:77-135`); it sets `p` for
+  protected modules (`include/asm/cpu_regs.h:869-879`), but bit 57
+  reads 1 only on the 2C3. Bits 60–59 read as an AP's `rw`, 1 for
+  `%cud` and 3 for `%gd`: what `cudtoap` and `gdtoap` give (inferred).
+  `CUD` covers the module's `r-x` mappings and `GD` its `r--` and `rw-`
+  ones, and a call into a library switches both (the library's own
+  values inside it).
 
 ## What is checked (hw; signals: kernel `kernel/traps.c`)
 
-`exc_array_bounds` becomes SIGSEGV `SEGV_BNDERR` (3) and
-`exc_illegal_operand` SIGILL `ILL_ILLOPN` (2); for both, `si_addr` is
-**the faulting instruction**, not the data (`S_SIG`, kernel
-`include/asm/traps.h:24-38`; `traps.c:1280-1306`). Page faults give the
+`exc_array_bounds` becomes SIGSEGV `SEGV_BNDERR` (3),
+`exc_access_rights` SIGSEGV `SEGV_ACCERR` (2) and `exc_illegal_operand`
+SIGILL `ILL_ILLOPN` (2); for all three `si_addr` is **the faulting
+instruction**, not the data (`S_SIG`, kernel
+`include/asm/traps.h:24-38`; `traps.c:1280-1315`). Page faults give the
 data address as usual. `si_addr` is an untagged `unsigned long` in
 lib128 (glibc `sysdeps/unix/sysv/linux/bits/types/siginfo_t.h:91-95`);
 the 4C's ALT kernel sets bits 59–60 in it (`0x18000000500e3648`), the
@@ -277,6 +395,9 @@ others don't.
 | `free` of a stack array | lib128 prints "ERROR: protected memory structure looks corrupted", then SIGILL (8C2, 2C3); no fault with the static libc (4C) |
 | `free` twice | no fault |
 | `mmap (100)` and a read at offset 200 of the same page | SIGSEGV `SEGV_BNDERR`: `mmap` returns an AP of exactly the requested length (`f_sys_mmap_over`) |
+| a store through `cudtoap`'s AP (`rw` = 1) | SIGSEGV `SEGV_ACCERR`, `si_addr` the store (`pmleft` `c_cudap_store`) |
+| `ldcud` past `CUD.size` | SIGSEGV `SEGV_BNDERR`, `si_addr` the load (`c_ldcud_over`) |
+| a call nesting past `psl` 0xffe0 | SIGSEGV `SEGV_BNDERR`, `si_addr` the call ("Stack pointers"; `pmleft psl`) |
 
 ### Freed memory
 
@@ -291,7 +412,7 @@ dynamic one (`/lib128`, 2.35-29.023) differently [hw].
 | the next `malloc` of the same size | the same block: the old pointer sees the new data | another block |
 | copies of `p` in a global, the heap, a register | keep their tags | keep their tags |
 | `PM_MM_ZEROING_FREED_POINTERS=1` | as above | `p[2]` reads 0 |
-| `PM_MM_CHECK_4_DANGLING_POINTERS=1` | **every `free` dies with SIGSEGV, `SI_KERNEL`** (also without `fork`: `pmrun free1`) | `free` is deferred: `p` still reads the old value |
+| `PM_MM_CHECK_4_DANGLING_POINTERS=1` | **every `free` dies with SIGSEGV, `SI_KERNEL`** (also without `fork`: `pmrun free1`) | `free` is deferred until the 1,024th, which dies the same way (`pmleft` `c_clean_free_many`; `PM_CLEAN_DESCRIPTOL_LIST_SIZE=2000` makes it the 2,000th, `=10` changes nothing: the variable can only raise the threshold, `free-uclibc.c:186-191`) |
 | `PM_MALLOC_MODE=0`, `2` | no change: new memory is always `0x0bad…` tag 5 | the same |
 
 What the source does: lib128's `free` puts the pointer on a list
@@ -301,15 +422,47 @@ asks the kernel to fill the block with empty values
 `0x0baddead0baddead` with tag 5: kernel
 `kernel/protected_syscalls.c:770-829`, `:810`), in the "zeroing" mode it
 `memset`s it (`free-uclibc.c:120-133` reads the mode from the kernel).
-When the list reaches its threshold (1, `malloc-uclibc.h:439-443`;
-environment variable `PM_CLEAN_DESCRIPTOL_LIST_SIZE`) the blocks are
-freed, and in the dangling-pointer mode `clean_descriptors` first walks
-all writable user memory, the signal stacks and the procedure stack and
-rewrites every descriptor into a freed block as a number (kernel
-`kernel/clean_aps.c:106-150, 330-360`). A failed walk sends SIGSEGV with
-`SEND_SIG_PRIV`, hence `SI_KERNEL` (`protected_syscalls.c:825-826`):
-what both machines' libc gets. `malloc_1` fills new blocks with empty
-values whatever the malloc mode (`malloc-uclibc.c:1307-1336`).
+When the list reaches its threshold (1 in the source,
+`malloc-uclibc.h:439-443`; 1,024 in the static `libc.a` [hw]; the
+environment variable `PM_CLEAN_DESCRIPTOL_LIST_SIZE` can only raise it)
+the blocks are freed, and in the dangling-pointer mode
+`clean_descriptors` is first meant to walk all writable user memory,
+the signal stacks and the procedure stack and rewrite every descriptor
+that lies wholly inside a freed block as a number (kernel
+`kernel/clean_aps.c:106-150`, `:330-360`). `malloc_1` fills new blocks
+with empty values whatever the malloc mode (`malloc-uclibc.c:1307-1336`).
+The mode sets `PM_MM_CHECK_4_DANGLING_POINTERS` (0x1000) and clears
+emptying and zeroing (0x814018 → 0x811018 on the 8C2, 0x812018 →
+0x811018 on the 2C3, 0x84018 → 0x81018 on the 4C; uapi
+`include/uapi/asm/protected_mode.h:50-55`).
+
+**The walk never starts from `free`.** lib128 passes its list of freed
+pointers as descriptors (`free-uclibc.c:534-558`, `:575`), and the
+kernel refuses any entry that is one: it logs "clean_descriptors: bad
+descriptor extag 0xcf" and returns `-EFAULT` (kernel
+`kernel/clean_aps.c:442-449`, the same in 6.1-1.9, 1.17 and 1.19), which
+the system call turns into SIGSEGV with `SEND_SIG_PRIV`, hence
+`SI_KERNEL` (`protected_syscalls.c:825-826`) [hw: that log line for
+every such `free`, all three; the static libc's list has 1,024
+entries].
+
+**The walk works when reached another way** [hw: `pmleft clean`,
+`mremap`, all three]:
+
+| Call | Effect |
+|---|---|
+| `clean_descriptors (list, n, 0)`, each entry an AP's two doublewords as numbers (tag 0) | fills each area with `0x0baddead0baddead`, tag 5, then walks |
+| `clean_descriptors (ap, size, 1)` (`CLEAN_DESCRIPTORS_SINGLE`) | the walk only |
+| `clean_descriptors (ap, size, 3)` (also `NO_GARB_COLL`) | the fill only: lib128's "emptying" `free` |
+| a moving `mremap` under `PM_MM_CHECK_4_DANGLING_POINTERS=1` | the walk for the old area (`protected_syscalls.c:2712-2728`) |
+
+After a walk every copy of a pointer lying wholly inside the area, in a
+global, the heap, a local array or the caller's registers (spilled to
+the procedure stack), keeps its bits with tags 0, so using it is SIGILL
+`ILL_ILLOPN`. A pointer to the next page, or to a larger area that
+contains the cleaned one, keeps its tags. After a moving `mremap`
+without the mode the old pointer keeps its tags and a read through it
+is SIGSEGV `SEGV_MAPERR`.
 
 ## Data layout (hw: `pmrun` "layout", `pmcxx`)
 
@@ -470,6 +623,14 @@ is as in [data-layout.md](data-layout.md).
   a callback work.
 - **Threads**: `pthread_create` and `pthread_join` work; thread stacks
   are mapped below 4 GiB [hw: `f_thread`].
+- **OpenMP** (`-fopenmp`; `libomp` is in `/lib128` and in lcc's
+  sysroot) [hw: `pmomp`, two threads, all three, static on the 4C]:
+  parallel loops through a heap pointer, `reduction`, `critical`,
+  `atomic`, `single`, `threadprivate`, `barrier`, pointers made in one
+  thread and used in another, and tasks give the right results; a
+  bounds error in a worker thread is SIGSEGV `SEGV_BNDERR` in that
+  thread. On the 2C3 libomp printed "Setaffinity error -1" once, for a
+  team of 2 without `OMP_NUM_THREADS`.
 - **TLS**: the thread pointer is `%g12`, an AP to the thread's TLS block
   ([registers.md](registers.md)). lcc reads `ldapw %g12, [var@TLS_LE]`
   and takes an address as `%g12` with `curptr` moved, so a TLS pointer
@@ -522,6 +683,25 @@ is as in [data-layout.md](data-layout.md).
   applies `R_E2K_AP`, `R_E2K_PL`, `R_E2K_32_JMP_SLOT`, `R_E2K_32_COPY`
   and the 32-bit TLS relocations
   (`sysdeps/e2k/e2k128/dl-machine.h:353-394`).
+
+## User shared libraries (hw: `pmlibmain`, `pmlibxxmain`; 8C2, 2C3)
+
+Libraries built on the machine with `lcc -mptr128 -fPIC -shared` (its
+`ld` makes the new PLT, "ELF and linking": `wbs = 8`, `%qr0`–`%qr14`
+copied) work like the system ones. The 4C has no `/lib128` to run them.
+
+| What | Result |
+|---|---|
+| Building | `-fPIC` is needed only when the library refers to another module's data: without it ld stops with "relocation `R_E2K_32_ABS' against undefined symbol `main_var' can not be used when making a shared object" [lcc 1.29.16, also the host's crossdev ld]. A library without such references links and runs without it (`pmdl.c` through `dlopen`): it then reaches its own globals `GD`-relative (`R_E2K_32_ABS`, no dynamic relocation) |
+| Data the program uses | copy relocations (`R_E2K_32_COPY`) into the program's `GD`; the library reaches its own exported variables through its GOT (`R_E2K_AP`), so both use the program's copy (`&lib_var` is the same AP from both) |
+| An array of unknown size (`extern const char lib_str[]`) | its pointer runs to the end of the program's `GD` (size 0xd80 for a 15-byte string): lcc takes the address with a `gdtoap` and no `aptoapb` [lcc: `-S`]; `extern int lib_arr[4]` gets exactly 16 bytes |
+| Function pointers | a library function the program refers to has its canonical address in the program's PLT: the program's and the library's pointers are equal and on v6 carry the program's `cui` (2); one from `dlsym` carries its own module's (5 on the 2C3) |
+| Callbacks, arguments | the program's function called from the library, and the program's arrays read in it, work; an out-of-bounds read in the library is SIGSEGV `SEGV_BNDERR` |
+| TLS | the program uses IE (`R_E2K_TLS_IE` in the object, `R_E2K_TLS_TPOFF32` in the executable), the library GD (`R_E2K_TLS_32_DTPMOD`, `R_E2K_TLS_32_DTPREL`, `__tls_get_addr`); both get the same AP over the thread's TLS block, and each thread its own |
+| `%cud`, `%gd` | switch to the library's own on a call into it ("Compilation units") |
+| `dlopen`, `dlsym`, `dlclose` | work; after `dlclose` a call or a read through a pointer into the library is SIGSEGV `SEGV_MAPERR` at its address; a second `dlopen` maps it at the same place and `dlsym` gives the same PL as before (on v6 the same `cui`) |
+| A 64-bit library | `dlopen ("/lib64/libm.so.6")`: "ELF file OS ABI invalid" |
+| C++ (`l++`) | an exception thrown in the library is caught in the program; one thrown in the program passes through the library's frame and runs its destructor; virtual calls into the library work |
 
 ## lcc
 
@@ -620,6 +800,23 @@ CSE for protected address operations.
   file `x.o' is incompatible with 64-bit output" [lcc 1.29.16's link of
   `pm6464.c` built with `-mptr128`]; `-mptr128-64` objects ("lcc") are
   accepted.
+- **32-bit protected ELF files** (`ELFCLASS32` with `EF_E2K_PM`). lcc
+  never makes one: of its pointer-mode options the last wins
+  (`-mptr128 -mptr32` gives an ordinary 32-bit object, `e_flags`
+  without `EF_E2K_PM`), gas with `-mptr128` always writes `elf64-e2k-pm`
+  (binutils `gas/config/tc-e2k.c:745-751`), and every `lib128` file in
+  lcc's sysroots is ELF64 [lcc]. binutils has the format and an ld
+  emulation (`bfd/elf32-e2k-pm.c:20-26`, `ld/emulparams/elf32_e2k_pm.sh`),
+  so `objcopy -O elf32-e2k-pm` of a protected object and `ld -m
+  elf32_e2k_pm -static` make one (`e_flags` `0x3000060`, as the ELF64
+  link). The kernel has a loader for it ("Kernel support"; it marks the
+  task `E2K_FLAG_3P_ELF32`, "can be removed when only elf64 3P is
+  supported": `include/asm/elf.h:248-265`,
+  `include/asm/processor.h:193-194`). [hw: `pmmin.s`, all three] The
+  same hand-written static program, which writes a string through a
+  `gdtoap` AP with the protected system call entry and exits with 42,
+  runs as ELF64 and as ELF32. Only such static programs can exist:
+  there is no ELF32 `lib128`.
 
 ## Kernel support
 
@@ -632,10 +829,13 @@ CSE for protected address operations.
   unprotected processes (`trap_table.S:161-164`, `:930-934`).
   `CONFIG_SOFT_PM` (default n) is a "software corrector" for some
   protected-mode faults (`kernel/soft_pm.c`).
-- The protected loader accepts only `ELFCLASS64` files with `EF_E2K_PM`
-  (or the old `EM_E2K_FAKE` machine with a protected `EI_SEMANTIC`;
-  `binfmt_elfe2kp.c:51-90`) and lays `argv` and `envp` out as
-  descriptors in one area (`:92-110`).
+- The protected loader (`kernel/binfmt_elfe2kp.c`, built twice, by
+  `binfmt_elf64_3P.c` and `binfmt_elf32_3P.c`: `kernel/Makefile:113-114`)
+  accepts files of its own class with `EF_E2K_PM` (or the old
+  `EM_E2K_FAKE` machine with a protected `EI_SEMANTIC`;
+  `binfmt_elfe2kp.c:51-90`), so 32-bit protected files run too ("ELF
+  and linking"), and lays `argv` and `envp` out as descriptors in one
+  area (`:92-110`).
 
 ## Emulators (qemu)
 
@@ -652,15 +852,14 @@ Neither emulator runs protected code:
 
 ## Not checked yet
 
-- What the stack pointer checks would do with
-  `%core_mode.no_stack_prot` clear: the kernel never clears it before
-  v7. What bit 58 of the 2C3's stack pointers means.
-- When an `rrd %usd.lo` right after a `getsap` sees its change: it did
-  on the 2C3; on the 4C and 8C2 it varied between runs, and once the
-  8C2's moved by 64 bytes for a 32-byte `getsap` (`pmasm`).
-- Read-only APs (`rw` ≠ 3): neither lcc nor lib128 made one.
-- A working `PM_MM_CHECK_4_DANGLING_POINTERS` walk: it fails on both
-  Elbrus Linux machines and the static libc defers `free` instead.
-- User libraries built with `-mptr128 -shared` (only the system ones
-  ran), `cudtoap`/`ldcud*` (not in lcc's output), 32-bit protected ELF
-  files, OpenMP, and v4.
+- What the stack pointer checks do with `%core_mode.no_stack_prot`
+  clear: only root can clear it (the sysctl in "Stack pointers"), and it
+  is a setting for the whole machine. Why `psl` stops at 0xffe0, and
+  whether the fault there is `exc_user_stack_bounds` (inferred) or
+  `exc_array_bounds`: both give the same signal.
+- What bit 58 of a v6 AP means, and whether v3–v5 keep bit 57 (`p`) of
+  `CUD` (it reads 0 there).
+- `mprotect` beyond a read-only AP's rights (source only: it would make
+  code writable).
+- Dynamic 32-bit protected programs (there is no ELF32 `lib128`).
+- v4.

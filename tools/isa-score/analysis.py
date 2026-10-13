@@ -449,8 +449,8 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None,
     fpside = []                    # (op, chan, issue, st) of recent FP-side
     late = set()                   # (op, issue) whose result arrives late
     stored = set()                 # (base, off, off) of same-bank store pairs
-    slow = {}                      # (op, issue) -> extra cycles (reload)
-    last_store = []                # (base, doubleword, issue) of stores
+    slow = {}                      # (op, issue) -> latency (store reload)
+    last_store = []                # (base, offset, size, issue) of stores
     last_div = None                # (name, issue) of the last divide
     for k, v in seed.items():
         avail[k] = v
@@ -462,6 +462,8 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None,
                      for k, v in avail.items()}
             stored = {(((b[0], b[1] + 2) if b[0] == "b" else b), x, y)
                       for b, x, y in stored}
+            last_store = [(((b[0], b[1] + 2) if b[0] == "b" else b), o, z, i)
+                          for b, o, z, i in last_store]
         for ins in block.instrs:
             issue = t
             wait, why = 0, None
@@ -490,7 +492,7 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None,
                             and not taken \
                             and p.name in model.CTP_NOT_TAKEN_PREPARES:
                         lat = min(lat, model.CTP_LAT_NOT_TAKEN)
-                    r = pis + lat + slow.get((id(p), pis), 0)
+                    r = pis + max(lat, slow.get((id(p), pis), 0))
                     # A write-back conflict delays an FP-side result to an
                     # integer consumer, and to an FP consumer in the other
                     # cluster (timing.md; fmuld,0 -> faddd,3: 6 -> 7).
@@ -559,27 +561,33 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None,
             written = {key for op in ins.ops for key in op.dsts}
             stored = {s for s in stored if s[0] not in written}
             for op in ins.ops:
-                # A load of the doubleword stored in the previous cycle
-                # gets its value STORE_RELOAD_DELAY late (timing.md).
+                # A load that a recent store sends to L2 gets its value
+                # at the L2 latency (timing.md, "Store to load").
                 if op.mem and op.mem[0] == "ld" and op.mem[1] is not None \
                         and op.mem[2] is not None:
-                    dw = op.mem[2] // 8
-                    if any(b == op.mem[1] and d == dw and si == issue - 1
-                           for b, d, si in last_store):
-                        slow[(id(op), issue)] = model.STORE_RELOAD_DELAY
+                    ld = op.mem[1:]
+                    ois = getattr(op, "iset", 3)
+                    if any(model.store_reload(ois, issue - si, (b, o, z), ld)
+                           for b, o, z, si in last_store):
+                        slow[(id(op), issue)] = model.STORE_RELOAD_LAT.get(
+                            ois, model.STORE_RELOAD_LAT[3])
                 for key in op.dsts:
                     if key[0] != "lp":
                         avail[key] = (op, op.chan, issue)
                 if model.CLASSES.get(op.cls, {}).get("fpside") \
                         and op.unit == "alc":
                     fpside.append((op, op.chan, issue, st))
-            last_store = [x for x in last_store if x[2] >= issue - 1]
+            last_store = [x for x in last_store if x[3] >=
+                          issue - model.STORE_RELOAD_WINDOW + 1]
             for op in ins.ops:
                 if op.mem and op.mem[0] == "st" and op.mem[1] is not None \
                         and op.mem[2] is not None:
-                    last_store.append((op.mem[1], op.mem[2] // 8, issue))
+                    last_store.append((*op.mem[1:], issue))
                 if model.is_divider(op.name):
                     last_div = (op.name, issue)
+            # A base register written since the store no longer names
+            # the stored address (the store itself used the old value).
+            last_store = [x for x in last_store if x[0] not in written]
             fpside[:] = [f for f in fpside if f[3] >= st - 8]
             t = issue + ins.cycles()
             st += ins.cycles()

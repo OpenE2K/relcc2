@@ -186,10 +186,44 @@ FX_NARROW_FP = 2
 FX_NARROW_LOAD = 1
 NOT_FP_OPS = {"imul", "idiv", "imod", "packed", "pmul", "pslow"}
 
-# timing.md, "Memory": a load of an aligned doubleword stored in the
-# instruction just before returns its value about 7.6 cycles late (two
-# stall steps); one cycle between them removes it.
-STORE_RELOAD_DELAY = 8
+# timing.md, "Memory", "Store to load": a load that a store just made
+# keeps out of L1 is served by L2, so its value comes at the L2 hit
+# latency (4C 9, 8C2 11, 2C3 13) in any channel, no cluster crossing
+# added.  Which loads, by D, the cycles from the store's issue to the
+# load's (tools/isa-probes/damlist.c):
+#   every version: D 1, a load of the stored aligned doubleword;
+#   v5:  D 2-3, a load of the stored 32-byte line that reads a byte the
+#        store did not write;
+#   v6+: D 2-4, a load of the stored doubleword that overlaps the stored
+#        bytes at another width; D 4 also any other load of the stored
+#        doubleword except the stored bytes at the store's width.
+# v4 was not measured and gets v3's rule.  On the 2C3 other bytes and
+# other doublewords at D 1, and on all three a load in the store's own
+# instruction, pay in some runs only; they are left out.  Addresses are
+# compared by base register and literal offset, the base assumed 32-byte
+# aligned: loads through other registers (a list walk) are left to
+# profile.py's measurement.
+STORE_RELOAD_LAT = {3: 9, 4: 9, 5: 11, 6: 13, 7: 13}
+STORE_RELOAD_WINDOW = 4             # the longest D that can pay
+
+
+def store_reload(iset, d, st, ld):
+    """True if a load LD = (base, offset, size) issued D cycles after a
+    store ST = (base, offset, size) gets its value from L2."""
+    if st[0] != ld[0] or not 1 <= d <= STORE_RELOAD_WINDOW:
+        return False
+    s0, s1 = st[1], st[1] + st[2]
+    l0, l1 = ld[1], ld[1] + ld[2]
+    same_dw = s0 // 8 == l0 // 8
+    if d == 1:
+        return same_dw
+    if iset == 5:
+        return d <= 3 and s0 // 32 == l0 // 32 and not (s0 <= l0 and l1 <= s1)
+    if iset >= 6 and same_dw:
+        if l0 < s1 and s0 < l1 and st[2] != ld[2]:
+            return True
+        return d == 4 and (l0, l1) != (s0, s1)
+    return False
 
 # timing.md, "Throughput": the divider in ALC5 (every divide, square
 # root and reciprocal estimate, integer, FP, packed and 80-bit) stalls

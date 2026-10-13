@@ -97,6 +97,35 @@ EDGES = [
 ]
 
 
+# (ISA version, D, store, load, served by L2): timing.md "Store to load"
+# (tools/isa-probes/damlist.c t_x_*, t_y_*, t_u3_*; 4C, 8C2, 2C3).
+STORE_LOADS = [
+    (3, 1, "std,2 %dr13, 0x0, %dr10", "ldd,0 %dr13, 0x0, %dr11", True),
+    (3, 1, "stw,2 %dr13, 0x0, %r10", "ldw,0 %dr13, 0x4, %r11", True),
+    (3, 1, "std,2 %dr13, 0x0, %dr10", "ldd,0 %dr13, 0x8, %dr11", False),
+    (3, 2, "std,2 %dr13, 0x0, %dr10", "ldd,0 %dr13, 0x8, %dr11", False),
+    (5, 1, "std,2 %dr13, 0x0, %dr10", "ldd,0 %dr13, 0x8, %dr11", False),
+    (5, 2, "std,2 %dr13, 0x0, %dr10", "ldd,0 %dr13, 0x8, %dr11", True),
+    (5, 3, "std,2 %dr13, 0x0, %dr10", "ldb,0 %dr13, 0x1f, %r11", True),
+    (5, 2, "std,2 %dr13, 0x0, %dr10", "ldb,0 %dr13, 0x20, %r11", False),
+    (5, 2, "stw,2 %dr13, 0x0, %r10", "ldw,0 %dr13, 0x4, %r11", True),
+    (5, 2, "stw,2 %dr13, 0x0, %r10", "ldd,0 %dr13, 0x0, %dr11", True),
+    (5, 2, "std,2 %dr13, 0x0, %dr10", "ldw,0 %dr13, 0x4, %r11", False),
+    (5, 2, "stw,2 %dr13, 0x0, %r10", "ldw,0 %dr13, 0x0, %r11", False),
+    (5, 4, "std,2 %dr13, 0x0, %dr10", "ldd,0 %dr13, 0x8, %dr11", False),
+    (6, 2, "std,2 %dr13, 0x0, %dr10", "ldw,0 %dr13, 0x4, %r11", True),
+    (6, 4, "std,2 %dr13, 0x0, %dr10", "ldw,0 %dr13, 0x0, %r11", True),
+    (6, 2, "stw,2 %dr13, 0x0, %r10", "ldd,0 %dr13, 0x0, %dr11", True),
+    (6, 3, "stw,2 %dr13, 0x0, %r10", "ldw,0 %dr13, 0x4, %r11", False),
+    (6, 4, "stw,2 %dr13, 0x0, %r10", "ldw,0 %dr13, 0x4, %r11", True),
+    (6, 4, "stb,2 %dr13, 0x0, %b[0]", "ldb,0 %dr13, 0x1, %r11", True),
+    (6, 4, "stw,2 %dr13, 0x0, %r10", "ldw,0 %dr13, 0x0, %r11", False),
+    (6, 4, "std,2 %dr13, 0x0, %dr10", "ldd,0 %dr13, 0x8, %dr11", False),
+    (6, 2, "std,2 %dr13, 0x0, %dr10", "ldd,0 %dr13, 0x8, %dr11", False),
+    (6, 5, "std,2 %dr13, 0x0, %dr10", "ldw,0 %dr13, 0x4, %r11", False),
+]
+
+
 class _Names:
     known_names = set()
 
@@ -134,6 +163,13 @@ def edges():
             bad += 1
             print(f"v{iset} dbl {dbl}: {ptext} -> {ctext}: "
                   f"model {got}, measured {want}")
+    for iset, d, stext, ltext, want in STORE_LOADS:
+        st, ld = op(stext, iset, 1), op(ltext, iset, 1)
+        got = model.store_reload(iset, d, st.mem[1:], ld.mem[1:])
+        if got != want:
+            bad += 1
+            print(f"v{iset} D {d}: {stext} -> {ltext}: model {got}, "
+                  f"measured {want}")
     print("latency rules:", "ok" if not bad else f"{bad} disagreements")
     return bad
 

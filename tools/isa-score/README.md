@@ -76,9 +76,16 @@ the integer operation's instruction, doesn't remove the conflict), and
 a consumer in the integer operation's own instruction waits for the
 late result too (`spec/isa/timing.md`, `tools/isa-probes/stbase.c`
 `wb_*`). Also from
-`timing.md`: a load of the aligned doubleword stored in the instruction
-just before gets its value 8 cycles late (same base register, offsets
-in one doubleword); a divide 1 cycle after another waits 4 (every
+`timing.md` ("Store to load"): a load that a recent store sends to L2
+gets its value at the L2 latency (9, 11 and 13 cycles on v3, v5 and
+v6) whatever its channel: on every version a load of the doubleword
+stored in the instruction just before, on v5 also a load of the stored
+32-byte line 2 or 3 cycles after the store that reads a byte the store
+didn't write, on v6 a load of the stored doubleword at another width
+2 to 4 cycles after it, and at 4 any load of it but the stored bytes
+(same base register, not written since, literal offsets, the base
+assumed 32-byte aligned; v4 gets v3's rule; until 2026-10-13 every
+version had the doubleword rule only, 8 cycles late); a divide 1 cycle after another waits 4 (every
 operation of the ALC5 divider: divides, square roots and reciprocal
 estimates, integer, FP, packed and 80-bit), an `fsqrts` or `pfsqrts` 5
 cycles after another 2, and anything within 9 cycles of an `smodx` or

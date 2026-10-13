@@ -413,6 +413,7 @@ v6 adds transfers through a register without a CTPR, run by
 |---|---|---|
 | `ibranchd,0 %drN, %empty [? cond]` | jump to the address in `%drN` (ALC0; the condition is a ctcond, as for `ct`, not an ALU predicate) | 13 cycles for a one-instruction block: 12 beyond the instruction, however early the address is ready (`ibranch` 6, a `ct` prepared 5 ahead 0); a loaded address adds the load-to-use stall |
 | `icalld,0 wbs = N, %drN, %empty` | call the address in `%drN`, `wbs` as for `call`; the callee returns normally and the caller's registers below `wbs` survive | 23 cycles a call with a trivial leaf, against 14 for `disp` + `call` |
+| `icall L, wbs = N` (binutils from v6, `opcodes/e2k-opc.c:487`; `tools/isa-probes/timeleft.c` `v6`) | call the label L without a CTPR (CS0 holds the displacement), `wbs` as for `call`: the callee got its argument and the caller's registers below `wbs` survived | 17 cycles a call of a 7-cycle leaf, against 14.3 for `disp`, 5 empty cycles and `call`, and 22.9 for `icalld`. With N cycles of caller work after the return a call takes 8 + N + max(6, 9 − N): 6 cycles more than a `call` through a CTPR prepared in time (`icalld` 12), plus up to 3 that work after the return hides |
 | `disp %ctprN, L` and `ct %ctprN` in one instruction (gas allows it from v6) | **no transfer**: execution falls through; so does `movtd` + `ct` (timing.md) | 1 cycle |
 | `fillr`, `fillc` | refill the register window or chain stack from memory (source); run in user mode and return normally | about 2 cycles with nothing flushed; right after a `flushr`, `fillr` adds about 63 cycles to a shallow call chain and saves 36 at 64 frames (`ctlleft.c` `fr_*`; operations-v6.md) |
 
@@ -423,7 +424,10 @@ MCST's kernel lists an erratum for every E2C3, E12C and E16C:
 So for indirect jumps and calls `movtd` 9 cycles ahead (or `disp` 5
 ahead) plus `ct`/`call` stays the fast way; `ibranchd`/`icalld` only
 save code where nothing else can fill the delay (MCST's binutils uses
-`ibranchd` in v7 PLT entries). Remember the window rule: a callee's
+`ibranchd` in v7 PLT entries). The direct `icall` saves the `disp` but
+not its time: it costs what a `disp` 6 cycles ahead with nothing in
+between does, and up to 3 cycles more when the caller has nothing to
+do right after the return. Remember the window rule: a callee's
 `setwd` must not be smaller than what `wbs` passes it (SIGILL
 `ILL_ILLOPC` at the callee's first instruction).
 

@@ -112,8 +112,8 @@ groups:
     use: "None for a compiler: the hardware refills frames on return anyway."
   - ops: hcall icall
     does: "`hcall N, wbs = W`: hypercall N (0–15, CS0.disp bits 4:1; the kernel enables user hypercall numbers through `%hcem`). `icall L, wbs = W`: a call to the label L without a CTPR, CS0 holding the displacement (gas takes a symbol for it; binutils `parse_hicall_args`, `tc-e2k.c`)."
-    use: "lcc 1.31.05 emits `icall f, wbs = 4` for direct calls (and `ibranch f` for direct tail calls) only in v7 code (`-march=elbrus-v7`); its v6 code keeps `disp` + `call`. Cost not measured; v6's `icalld` + return takes 23 cycles against 14 for `disp` + `call` (control-transfer.md, \"v6\")."
-    status: "v6; not run (`hcall` enters the hypervisor; `icall` not tried)"
+    use: "lcc 1.31.05 emits `icall f, wbs = 4` for direct calls (and `ibranch f` for direct tail calls) only in v7 code (`-march=elbrus-v7`); its v6 code keeps `disp` + `call`. On the 2C3 `icall f, wbs = 0x1c` passed an argument and kept the caller's registers below `wbs`; it costs 6 cycles more than a `call` through a CTPR prepared in time, plus up to 3 that caller work after the return hides: 17 cycles a call of a 7-cycle leaf, against 14.3 for `disp`, 5 empty cycles and `call`, and 22.9 for `icalld` (control-transfer.md, \"v6\")."
+    status: "v6; `icall` run on the 2C3 (`timeleft.c`); `hcall` not run (it enters the hypervisor)"
   - ops: iret hret glaunch
     does: Privileged returns from traps and the hypervisor, guest launch.
     status: "v6; not run (privileged)"

@@ -323,8 +323,10 @@ each access in its own wide instruction unless noted:
 In this setup (litmus.c's writer resets `x` and `y`, so both lines
 start in its cache) the only reordering across wide instructions is a
 later load passing an earlier store (a store buffer), which `wait st_c =
-1` before the load prevents. That is not TSO, though: when the reader
-already holds the lines, MP fails on all three machines (below).
+1` before the load prevents (on the 4C; pocabi1_mp.c's version of this
+setup, W below, saw MP 0–2 times per million on the 8C2 and 0–1 on the
+2C3). That is not TSO, though: when the reader already holds the lines,
+MP fails on all three machines (below).
 Within one wide instruction a load may see memory before the
 instruction's store, and two stores may become visible in either
 order (rare, since they need another core reading between them). The

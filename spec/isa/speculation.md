@@ -552,8 +552,10 @@ lines in L2 without displacing much, as if they were inserted to be
 replaced first (inferred). The kernel defines no `dc_ch` value with
 `m1` and lcc uses none: a compiler should keep to 0x20, 0x40 and 0x60.
 
-That the acquire and release forms order memory can't be told on
-hardware that already keeps every order but store → load (atomics.md);
+Whether the acquire and release forms order memory as their names say
+was not checked: litmus.c's setup shows only store → load reordering,
+and the message-passing setups in which every machine reorders loads
+were not run with them (atomics.md, "Memory ordering on hardware");
 lcc 1.29.16 uses none of the v6 forms. Not tried: 0x37, 0x57 and 0x77
 with `,sm`.
 

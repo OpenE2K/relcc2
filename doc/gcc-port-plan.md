@@ -253,7 +253,7 @@ read with `git show`:
 | `e2k-modes.def` | Extra modes if needed (e.g. condition modes) | `loongarch-modes.def` |
 | `e2k.opt` | `-m` options (`-march=elbrus-vN`, `-mtune=`, ...) | `or1k.opt` |
 | `elbrus-v3.md` … | Pipeline (DFA) descriptions per CPU generation (section 7) | `ia64/itanium2.md`, `c6x/c6x.md` |
-| `linux.h` | `GLIBC_DYNAMIC_LINKER "/lib64/ld-linux.so.2"`, link spec, OS macros; `CPP_SPEC "%{pthread:-D_REENTRANT}"` (lcc's `-pthread` defines it, and autoconf's `AX_PTHREAD` rejects `-pthread` without it; `riscv/linux.h:40`, `aarch64/aarch64-linux.h:39`; the PoC's P39); `TARGET_ASM_FILE_END file_end_indicate_exec_stack` (as `or1k/linux.h:47` and `loongarch/linux.h:58`): the GNU-stack note, `"x"` only in objects with a stack trampoline (`spec/abi/elf.md`, "Executable stack"; D1, "Trampolines") | `or1k/linux.h` |
+| `linux.h` | `GLIBC_DYNAMIC_LINKER "/lib64/ld-linux.so.2"`, link spec, OS macros; `CPP_SPEC "%{pthread:-D_REENTRANT}"` (lcc's `-pthread` defines it, and autoconf's `AX_PTHREAD` rejects `-pthread` without it; `riscv/linux.h:40`, `aarch64/aarch64-linux.h:39`; the PoC's P39); `TARGET_ASM_FILE_END file_end_indicate_exec_stack` (as `or1k/linux.h:47` and `loongarch/linux.h:58`): the GNU-stack note, `"x"` only in objects with a stack trampoline (`spec/abi/elf.md`, "Executable stack"; D1, "Trampolines"); `ENDFILE_SPEC` = a math-file spec followed by `GNU_USER_TARGET_ENDFILE_SPEC`, as `loongarch/gnu-user.h:59-61, 69-72`, with libgcc's `extra_parts="$extra_parts crtfastmath.o"` (`libgcc/config.host:993-994`) and MCST's `crtfastmath.c` (3.3), which sets fz and daz. GCC's ports write `%{Ofast\|ffast-math\|funsafe-math-optimizations:%{!shared:crtfastmath.o%s}}`; lcc links it into shared libraries too, and loading such a library switches the loading thread and its later threads to flush-to-zero (`spec/abi/registers.md`, "Flush to zero"; A28). GCC removed exactly that on x86 (PR 55522, `88b531d0323`; invoke.texi:18862-18864); doing what lcc does (decision 7) means dropping `%{!shared:...}`: a decision for you | `or1k/linux.h` |
 | `t-e2k` | Makefile fragment (multilibs, generated `.md`) | `or1k/t-or1k`, `c6x/t-c6x` |
 | `gcc/common/config/e2k/e2k-common.cc` | Option defaults per `-O` level (e.g. enable scheduling at `-O1`) | `common/config/tilegx/`, `common/config/c6x/` |
 
@@ -374,11 +374,19 @@ written up in `spec/abi/source-compat.md` and `spec/abi/atomics.md`:
   ALC0) and a wait-unlock store (MAS `0x2`) with `rbranch` back, which
   gas assembles as `ibranch ? %MLOCK`; fences = `wait ld_c = 1,
   st_c = 1`. Under `-march=elbrus-v3` 16-byte atomics must call
-  libatomic, like lcc. The 4C orders memory like x86 TSO across wide
-  instructions (atomics.md, "Memory ordering on hardware"), so lcc's
-  `wait`s around acquire/release accesses are stronger than needed;
-  following lcc keeps them. Never bundle a release store with an
-  earlier store: stores in one instruction are unordered.
+  libatomic, like lcc. No machine keeps loads or stores in order across
+  wide instructions in general: message passing fails on all three when
+  the reader already holds the data's line, up to 42% of tries with
+  plain accesses (atomics.md, "Memory ordering on hardware"; found
+  rechecking A29). Each side needs lcc's form: a `wait ld_c = 1, st_c =
+  1` before a release store (`atomic_store` pattern) and, after an
+  acquire load, a dummy use of the value (`adds,sm r, 0x0, %empty`) or
+  a `wait ld_c = 1` (`atomic_load` pattern); with both, no setup
+  reordered anything on any machine, with either alone some did. A
+  read-modify-write as lcc emits it needs no `wait` (its exchange used
+  as a release, read with lcc's acquire, never failed). Never bundle a
+  release store with an earlier store: stores in one instruction are
+  unordered.
 - lcc treats `swapcontext` as returns-twice and zero-initialises
   possibly uninitialised locals at `-O1`+ to avoid tag traps; the port
   should consider both.
@@ -1439,6 +1447,37 @@ each one cost it a debugging session:
   `REG_PARM_STACK_SPACE` grows to the result size so the caller reserves
   enough; `STACK_PARMS_IN_REG_PARM_AREA` keeps stack arguments at their
   slot offsets. A decision for you before M2.
+- **The last fixed argument of a variadic call counts the hidden result
+  pointer** (A24; `spec/abi/calling-convention.md`, "Variadic
+  functions"). The caller stores the last fixed argument and every
+  variadic one to its slot as well, and when a C++ class comes back
+  through the hidden pointer in slot 0, "last fixed" is the last
+  declared parameter one slot further on (`S f (long a, long b, ...)`:
+  from slot 2; with no declared parameter, from slot 0). GCC already
+  gives you that count: `INIT_CUMULATIVE_ARGS` receives `n_named_args`,
+  which includes the pointer when it is passed as an argument
+  (tm.texi:4441-4444; calls.cc:2996-3006, :3014), and `this` too, since
+  it is in a method's `TYPE_ARG_TYPES`. Keep it in `CUMULATIVE_ARGS` (it
+  is one too large for a function that isn't variadic, harmless there)
+  and store argument `max (n_named_args - 1, 0)` and every later one. A
+  call without a prototype stores every argument (`n_named_args` is then
+  the number of actual arguments: test `prototype_p`). Don't count
+  `TYPE_ARG_TYPES` yourself: the proof of concept did, stored one
+  argument too early, and an lcc callee read garbage. Don't rely on
+  `function_arg_info::named` either: once the port defines
+  `TARGET_SETUP_INCOMING_VARARGS`, `pretend_outgoing_varargs_named`
+  defaults to true (targhooks.cc:249-253) and `expand_call` marks every
+  argument named (calls.cc:3035-3047). The callee side needs nothing:
+  GCC puts `.result_ptr` first among the parameters
+  (function.cc:2474-2496) and calls `setup_incoming_varargs` after the
+  last one (:3809-3810), so `va_start` already skips it.
+- **`va_list` is `char *`** (A27; `spec/abi/calling-convention.md`). GCC's
+  default `__builtin_va_list` is `void *` (`std_build_builtin_va_list`,
+  builtins.cc:5276-5282), and C++ mangles a `void *` parameter `Pv` where
+  lcc's names say `Pc`, so no C++ function taking a `va_list` would link
+  against lcc-built code. Define `TARGET_BUILD_BUILTIN_VA_LIST` to return
+  `build_pointer_type (char_type_node)`, as C6x does (c6x.cc:676-679,
+  :6732-6733).
 - **PIC jump tables:** GCC emits them as offsets from the table
   (`ADDR_DIFF_VEC`) and leaves adding the table address to the port's
   `tablejump` expander.
@@ -3373,7 +3412,16 @@ a few ways, a guide to what an `-march=elbrus-v5` mode needs first:
   consecutive instructions).
 - **128-bit data**: two `ldd` + `qppackdl` for loads (`ldqp` goes to L2,
   latency 11), `stqp` for 16-byte stores, `qp*` operations with their
-  64-bit latencies; `ldqp`/`stqp` loops for 16-byte atomics.
+  64-bit latencies; for 16-byte atomics lcc's `ldqp`/`stqp` sequences
+  (`spec/abi/atomics.md`, "16-byte atomics"), but with every atomic load
+  one `ldqp`: lcc's relaxed load is two `ldd`, which tear once they are
+  a few cycles apart (and once in 4 million reads even in consecutive
+  instructions). Define `atomic_loadti`: without it
+  `can_atomic_load_p` (optabs-query.cc:675-688) takes 16-byte loads for
+  non-atomic, and `expand_atomic_exchange` won't inline an exchange
+  (optabs.cc:7509-7513). Give exchange its own pattern, lcc's
+  two-instruction lock loop; GCC's fallback for it is a compare-exchange
+  loop (A29).
 - **`getfzd`/`getfzs`** (v5 field extract) in place of v3 sequences.
 
 Everything else (latencies, hazards, control transfer, the ABI) is the
@@ -3416,11 +3464,17 @@ Measured on an Elbrus-2C3 (timing.md "Elbrus-2C3 (v6)", semantics.md
 - **Atomics**: lcc's v6 code is its v3 code (`wait` + plain accesses).
   v6's load-acquire / store-release MAS forms (0x13) run, and a release
   store that way costs about a quarter of `wait` + store on the 2C3,
-  but their ordering can't be checked there, lcc doesn't use them, and
+  but their ordering wasn't checked, lcc doesn't use them, and
   MCST's kernel lists the store-release as broken on the E2C3 up to
   revision 2 and the E12C/E16C (spec/isa/hwbugs.md): follow lcc, and
   keep them as a later option (speculation.md, "v6
   encodings"). The new fully speculative MAS 0x12 is what v3's 0x3 was.
+  16-byte atomics load with one `ldqp` at every order, and their
+  compare-exchange tests with `qpcmpeqdap` into a predicate and selects
+  with `qpmrgp` (`spec/abi/atomics.md`, "16-byte atomics"). The 2C3 needs
+  the release store's `wait` most of all: there a reader that orders its
+  loads still sees two plain stores out of order (atomics.md, "Memory
+  ordering on hardware").
 
 The ABI is unchanged (the compat suite passes on the 2C3). What tuning
 buys there: lcc's 2C3-tuned code runs CoreMark 1.19× and Linpack 1.35×

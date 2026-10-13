@@ -20,8 +20,10 @@
 #              with DejaGnu variants if wanted: 'e2k-qemu/-O0' or
 #              'e2k-4c{-O0,-O2}'; settings in tools/dejagnu/README.md
 #   -l LANG    c (check-gcc, default) or c++ (check-g++)
-#   -j N       parallel runtest processes for -b (default 1; at most 4
-#              on e2k-4c, e2k-8c2 and e2k-ssh, 2 on e2k-2c3)
+#   -j N       parallel runtest processes (default 1; at most 4 on
+#              e2k-4c, e2k-8c2 and e2k-ssh, 2 on e2k-2c3); with -i they
+#              share the tests as GCC's "make -jN check" does, each in
+#              OUT/TOOLn, and the results are merged into OUT
 #   -B BINDIR  MCST binutils, named e2k-linux-* (default: $E2K_LCC's
 #              binutils/bin, else lcc v3's, else toolchains/binutils/bin)
 #
@@ -56,7 +58,7 @@ while getopts b:i:s:o:t:l:j:B:h opt; do
     l) lang=$OPTARG ;;
     j) jobs=$OPTARG ;;
     B) bindir=$OPTARG ;;
-    *) sed -n '4,40p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+    *) sed -n '4,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
     esac
 done
 shift $((OPTIND - 1))
@@ -138,16 +140,19 @@ else
     mkdir -p "$out"
     out=$(cd "$out" && pwd)
     gxx=$(echo "$gcc" | sed 's/gcc\([^/]*\)$/g++\1/')
+    guess=$("$src/config.guess")
+    triplet=$("$src/config.sub" "$alias")
     # What GCC's Makefile writes into BUILD/gcc/site.exp, for a compiler
-    # outside a build tree.
-    cat > "$out/site.exp" <<EOF
-set rootme "$out"
+    # outside a build tree, in directory $1.
+    site() {
+        cat > "$1/site.exp" <<EOF
+set rootme "$1"
 set srcdir "$src/gcc/testsuite"
-set host_triplet $("$src/config.guess")
-set build_triplet $("$src/config.guess")
-set target_triplet $("$src/config.sub" "$alias")
+set host_triplet $guess
+set build_triplet $guess
+set target_triplet $triplet
 set target_alias $alias
-set tmpdir "$out"
+set tmpdir "$1"
 set CFLAGS ""
 set CXXFLAGS ""
 set HOSTCC "cc"
@@ -156,9 +161,52 @@ set TEST_ALWAYS_FLAGS ""
 set GCC_UNDER_TEST "$gcc"
 set GXX_UNDER_TEST "$gxx"
 EOF
-    echo "cd $out && runtest --tool $tool --target_board=$board $*"
-    (cd "$out" && runtest --tool "$tool" --target_board="$board" "$@") || true
+    }
     sum="$out/$tool.sum"
+    if [ "$jobs" -eq 1 ]; then
+        site "$out"
+        echo "cd $out && runtest --tool $tool --target_board=$board $*"
+        (cd "$out" && runtest --tool "$tool" --target_board="$board" "$@") || true
+    else
+        # GCC's parallel check (gcc/Makefile.in, check-parallel-%): every
+        # runtest process walks all the tests and runs the batches it
+        # claims first in GCC_RUNTEST_PARALLELIZE_DIR (lib/gcc-defs.exp);
+        # contrib/dg-extract-results.sh merges the results.
+        GCC_RUNTEST_PARALLELIZE_DIR="$out/$tool-parallel"
+        export GCC_RUNTEST_PARALLELIZE_DIR
+        rm -rf "$GCC_RUNTEST_PARALLELIZE_DIR" "$sum" "$out/$tool.log"
+        mkdir -p "$GCC_RUNTEST_PARALLELIZE_DIR"
+        echo "$jobs x (cd $out/$tool<n> && runtest --tool $tool --target_board=$board $*)"
+        i=1
+        while [ "$i" -le "$jobs" ]; do
+            d="$out/$tool$i"
+            rm -rf "$d"
+            mkdir -p "$d"
+            site "$d"
+            (cd "$d" && runtest --tool "$tool" --target_board="$board" "$@" \
+                 > runtest.out 2>&1) &
+            i=$((i + 1))
+        done
+        wait
+        sums= logs=
+        i=1
+        while [ "$i" -le "$jobs" ]; do
+            if [ -f "$out/$tool$i/$tool.sum" ]; then
+                sums="$sums $out/$tool$i/$tool.sum"
+                logs="$logs $out/$tool$i/$tool.log"
+            else
+                echo "run-gcc-tests.sh: runtest $i gave no results" \
+                     "(see $out/$tool$i/runtest.out)" >&2
+            fi
+            i=$((i + 1))
+        done
+        if [ -n "$sums" ]; then
+            # Word splitting wanted: lists of paths.
+            sh "$src/contrib/dg-extract-results.sh" $sums > "$sum"
+            sh "$src/contrib/dg-extract-results.sh" -L $logs > "$out/$tool.log"
+        fi
+        rm -rf "$GCC_RUNTEST_PARALLELIZE_DIR"
+    fi
 fi
 
 [ -f "$sum" ] || die "no $sum"

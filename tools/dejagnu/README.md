@@ -52,7 +52,13 @@ does this and the binutils setup below, and keeps `-j` within each
 machine's limit; `-i GCC` tests an installed compiler with the testsuite
 of a GCC source tree (`-s`, default `toolchains/gcc`) instead. Results
 are GCC's usual `gcc.sum` and `gcc.log` (`BUILD/gcc/testsuite/gcc/`);
-compare runs with GCC's `contrib/compare_tests`.
+compare runs with GCC's `contrib/compare_tests`. With `-i`, `-j N`
+starts N runtest processes in `OUT/gcc1` … `OUT/gccN` that share the
+tests as GCC's `make -jN check` does (`GCC_RUNTEST_PARALLELIZE_DIR`,
+`gcc/testsuite/lib/gcc-defs.exp`) and merges their results into
+`OUT/gcc.sum` and `OUT/gcc.log` with `contrib/dg-extract-results.sh`.
+GCC hands out test files in batches of ten, so a run of a few files
+gains nothing from `-j`.
 
 A board variant adds its flags to every compilation:
 `'e2k-8c2/-march=elbrus-v5'`, `'e2k-4c{-O0,-O2}'` (two runs). The
@@ -193,6 +199,12 @@ above). In a build tree (`-b`, `make check-gcc`)
 (four runtest processes, 1,286 PASS; the only FAILs were a test the
 compiler can't build). The remote run directories and control sockets
 are gone afterwards.
+
+2026-10-13, the same installed compiler (built 2026-10-05):
+`execute.exp=20000[0-6]*` gives the same 500 PASS on `e2k-8c2` (31 s;
+`-j 4` with `'e2k-8c2/-march=elbrus-v5'`: 13 s) and on `e2k-2c3` (110 s;
+`-j 2` with `'e2k-2c3/-march=elbrus-v6'`: 66 s); the run directories
+of every runtest process are gone afterwards.
 
 ## Known limits
 

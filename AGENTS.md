@@ -355,8 +355,14 @@ tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     signals) and pocplan_tail.c (lcc's tail calls),
                     callsstack_tail.c/.s with callsstack_tailx.cc (tail
                     calls that release the frame, getsp rounding,
-                    predicated movtd) and callsstack_clash.c/.s
-                    (stack-clash probing) run on hardware; ctxtls.c
+                    predicated movtd), callsstack_clash.c/.s
+                    (stack-clash probing) and debuginfo.c/.s with
+                    debuginfo.gdb, debuginfo_misc.c and
+                    debuginfo_gline.c (how MCST's gdb reads DWARF
+                    locations, TLS, lcc's line tables; debuginfo.sh
+                    builds them and runs gdb there) run on hardware;
+                    debuginfo_loc.sh (gas's .loc, .label and
+                    @TLS_DTPREL) runs on the host; ctxtls.c
                     (TLS across a context switch),
                     pocabi1_atom16.c, pocabi1_ord.c, pocabi1_nfx.c,
                     pocabi2_nfx.c and pocplan.c are read with -S;
@@ -1113,6 +1119,24 @@ it, a `getsp` is no probe, and probes after one big `getsp` let a
 signal frame land below the guard; an E2K call probes nothing
 (inferred). A `movtd` into a CTPR under a predicate is SIGILL.
 
+Debug information (2026-10-16; registers.md, "How MCST's gdb reads
+them", stack-and-unwinding.md, "Debug information", elf.md, "Thread-local
+storage"; gdb on hand-written DWARF, all three machines): MCST's gdb
+reads DWARF 64 + k through the `%br` in effect (a caller's as saved at
+its call), so `%b[]` locations end at every `setbn` and `abn`; in a
+caller's frame, registers from 2 × `wbs` up show the callee's, and
+lookups use the return address − 1. A bare `DW_OP_regN` of a 16-byte
+float is read from the caller's frame (MCST's gdb 15 port, which also
+breaks `next` over `longjmp`); pieces, GCC's form for register pairs,
+read right, and lcc's one-register `long double` and a v5 `%qpr` value
+have no correct location. A frame base register is valid from the
+instruction after its write; `_Unwind_GetCFA` is gdb's `$sp` (the
+frame's stack pointer at its call), not the entry value. gas makes a
+`.loc` row only at the next `.loc` unless it has `view`, so GCC writes
+`.debug_line` itself as lcc does; lcc's `-gline` rows name syllables
+(`.label`) and gdb ignores them. gdb reads TLS in lcc's and GCC's forms
+(GCC needs `TARGET_ASM_OUTPUT_DWARF_DTPREL`: `.dword x@TLS_DTPREL`).
+
 32-bit mode (`spec/abi/mode32.md`, for completeness; hw on all three):
 ILP32 with 8-byte `long long` and `double`; every data access is
 `ldgd*`/`stgd*` (two 32-bit operands summed mod 2^32 within GD =
@@ -1271,6 +1295,17 @@ None at the moment.
   %pred0`) and MCST's qemu runs it conditionally, but the hardware traps
   (SIGILL `ILL_ILLOPC`) whatever the predicate's value
   (spec/isa/predicates.md, "RLP"). Prepare unconditionally.
+
+- MCST's gdb 15.2 reads a 16-byte float described as a bare
+  `DW_OP_regN` from the caller's frame (lcc `-O0`'s own `__float128`
+  parameters print garbage), and `next` over a call that ends in
+  `longjmp` runs on to the program's end (spec/abi/registers.md, "How
+  MCST's gdb reads them"). Expect guality noise from both.
+
+- MCST gas gives a `.loc` without a `view` operand its row only at the
+  next `.loc` (the last one gets none), and plain assembly gets no debug
+  sections even with `--gdwarf-5` or `-g`
+  (spec/abi/stack-and-unwinding.md, "Debug information").
 
 - Unipro's assembly needs fixes to assemble with MCST gas: write `%empty`
   instead of `%empty.hi`, compile with `-fno-addrsig` and `-fno-PIC` (gas

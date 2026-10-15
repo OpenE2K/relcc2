@@ -576,6 +576,96 @@ numbers them differently produces libraries that are incompatible with
 lcc's libgcc and libstdc++ at run time; the libgcc source notes this
 happened with an old `e2k-linux-gcc`.
 
+### How MCST's gdb reads them (gdb source; hw)
+
+MCST's gdb 15.2 maps DWARF N to an 8-byte view of the register without
+its tags (`$__dwrN`, `$__dwbN`; `OpenE2K/gdb/gdb/e2k-tdep.c:396-408` at
+818fc87ba33). It reads callers' windows from the procedure stack in the
+layout of the CPU gdb runs on (v3: 32 bytes a pair; v5+: 16 bytes a
+register; [stack-and-unwinding.md](stack-and-unwinding.md), "Scanning
+for roots"), which it takes from the live target description, not from
+the binary (`e2k-tdep.c:862-873`, `:3607-3680`;
+`e2k-linux-nat.c:231-255`). [source; hw: `tools/abi/probes/debuginfo.sh`
+with the hand-written DWARF of `debuginfo.s`, the same on the 4C (ALT's
+gdb 15.2-alt1.2), the 8C2 and the 2C3 (OS Elbrus's gdb 15.2-29.023)]
+
+| DWARF location | In the stopped function | In a caller's frame |
+|---|---|---|
+| `%rN` (0–63) | its value; `<unavailable>` beyond the window (`e2k-tdep.c:1833-1888`) | below 2 × `wbs` of the call it is in: its own value. From 2 × `wbs` to its window size: the callee's `%r0`, `%r1`, … as they are now, the pairs handed over (gdb rebuilds the caller's window as the callee's `psize` + `wbs`, `e2k-tdep.c:842-873`). Beyond its window: the error "Cannot access memory at address 0x0" (`e2k-tdep.c:1517-1526`), where gdb's own `$rN` says `<unavailable>` |
+| `%b[k]` (64 + k) | through the live `%br`: `%r(2 rbs + (2 rcur + k) mod 2(rsz + 1))`; `<unavailable>` for k ≥ 2(rsz + 1) (`e2k-tdep.c:1919-1936`) | the same through the `%br` saved at the call (`cr1_hi.br`, `e2k-tdep.c:875-890`), whatever the callee set since; a k beyond the ring gives the error above |
+
+What a compiler's locations must allow for:
+
+- **A `%b[k]` location means `%b[k]` under the base in effect where gdb
+  stops.** `setbn` and each `abn` rename every `%b[k]` from the next
+  instruction on, while `%r` numbers don't move, so a location in `%b[]`
+  has to end at each of them [hw: with `rbs` 4 and `rsz` 3, DWARF 64 read
+  `%r10` after `setbn rcur = 1`, then `%r8` and `%r14` in the next two
+  iterations of a loop that rotates with `abn`, and `%r12` after it;
+  DWARF 72 (`%b[8]`) read `<unavailable>`].
+- **A function without its own `setbn` runs on its caller's `%br`**
+  ("Window and rotating-base units", above), and gdb reads its DWARF
+  64 + k through that ring [hw: `%b[0]` was the callee's own `%r12`
+  under its caller's `rbs` 4, `rcur` 2].
+- **lcc's big-window layout** (`rbs` 0x20:
+  [gcc-port-plan.md](../../doc/gcc-port-plan.md), "Registers above
+  `%r63`") puts `%b[0..63]` at `%r64` and up, which only DWARF 64–127
+  reach [hw: under `rbs` 0x20, DWARF 64–71 read `%r64`–`%r71`].
+  `%b[64..127]` have no number. gdb's own names stop at `$r63` (`$r64`
+  is void) and go up to `$b127`.
+- **In a caller's frame, a register at or above 2 × the call's `wbs`
+  shows the callee's register**, not the caller's value [hw: the
+  caller's `%r24`, at 2 × `wbs` 0xc, read the callee's `%r0`]. The call
+  clobbers these registers anyway, so no location may stay in them
+  across it.
+- **A caller's PC is its return address** (`cr0_hi.ip`, the wide
+  instruction after the `call`; `e2k-tdep.c:745`), and gdb looks up the
+  caller's blocks and location lists at PC − 1, inside the call's wide
+  instruction (gdb `frame.c:2848`, `get_frame_address_in_block`). So a
+  location that holds during the call must cover the call's wide
+  instruction [hw: an entry covering only that instruction was used
+  while the callee was stopped; one starting at the return address
+  read `<optimized out>`]. gdb subtracts 1 only below an ordinary
+  frame, so a frame interrupted by a signal may be looked up at its PC
+  itself (not checked).
+- **No DWARF number reaches** gdb's `$sp` and `$fp`
+  ([stack-and-unwinding.md](stack-and-unwinding.md), "Debug
+  information"), an extended part or a v5+ high half, besides the
+  registers listed above. gdb shows the last two as `$xrN` and `$qprN`,
+  also in callers' frames [hw].
+
+**Values wider than 8 bytes** [hw: `debuginfo.sh`, all three machines,
+in the stopped function and in a caller's frame alike; source as
+marked]:
+
+| Location | What gdb shows |
+|---|---|
+| `DW_OP_regN` of a type that is not a float: a vector or `__int128` [hw], also `_Complex double` or a struct [source: `e2k_convert_register_p` takes only 16-byte `TYPE_CODE_FLT`] | DWARF N, then N + 1, of the right frame (gdb `findvar.c:553-592`). That is right for the pair layout of argument slots, with the low half in N |
+| `DW_OP_regN` of a 16-byte float type (`long double`, `__float128`, any 16-byte `DW_ATE_float`) | N, then N + 1, through `e2k_register_to_value` (`e2k-tdep.c:3398-3431`), **but from the caller's frame**: gdb 15 made `get_frame_register_bytes` take the next frame (upstream 9fc79b42369; gdb `frame.c:1546`), and `e2k-tdep.c` still passes the frame itself, where `e2k-pm-tdep.c:39-51` was updated. A `long double` 1.5 in `%r4`/`%r5` printed as its caller's 2.5, a `__float128` 1 as 2, and lcc `-O0`'s own `__float128` parameter (`DW_OP_reg2`) as 9.99e-3083 (`debuginfo_misc.c`) |
+| `DW_OP_regN DW_OP_piece 8 DW_OP_reg(N+1) DW_OP_piece 8`, or `DW_OP_regN DW_OP_piece 16`; the pieces need not be adjacent | read from the right frame for every type, 16-byte floats included (gdb `dwarf2/expr.c:205-260`, `rw_pieced_value`). GCC writes the first form for a value in two hard registers (gcc `dwarf2out.cc:14649-14652`, `:14686-14720`), so a port that keeps `long double` and `__float128` in register pairs is not affected |
+| a `long double` in one register (lcc's `movif` form, "Extended parts" below) | no location describes it: read as N, N + 1, the low 16 bits of N + 1 become sign and exponent (1.5 in `%r6`, with `%r7` = 0x4000, read as 3) |
+| a v5+ 128-bit value in one register (`%qprN`, the high half in the extended part) | no location describes it: `DW_OP_regN` shows N + 1's low half as the upper lane (`{0x6666, 0x7777}` for `%qpr14` = `{0x6666, 0x5555}`), and `DW_OP_regN DW_OP_piece 8 DW_OP_piece 8` the lower lane and `<optimized out>` [8C2, 2C3] |
+
+The bug in the second row would go if `e2k_register_to_value` passed
+`get_next_frame_sentinel_okay (frame)`, as `e2k-pm-tdep.c` does (not
+tried: relcc2 doesn't patch MCST's gdb). It also breaks `next` over
+`longjmp` ([stack-and-unwinding.md](stack-and-unwinding.md), "Debug
+information").
+
+gdb reads a 16-byte float type named `__float128`, `_Float128`,
+`complex __float128`, `complex _Float128`, `real(kind=16)` or
+`complex(kind=16)` as IEEE quad, and any other as x87 extended
+(`e2k_floatformat_for_type`, `e2k-tdep.c:3566-3582`) [source]; lcc names
+its types `long double` and `__float128` [lcc]. At `-O0` lcc keeps
+`long double` and vector variables, parameters included, in memory
+(`DW_OP_fbreg`), and `__int128` and `__float128` parameters and
+`__int128` locals in an even register pair (a bare `DW_OP_regN`); a
+`__float128` local without its address taken was in memory too [lcc
+1.29.16 and 1.31.05, `e2k-v5.8c2`, `-O0 -g`].
+
+Not checked: frames interrupted by a signal (gdb's signal-frame
+unwinder), for `%b[]` and the PC − 1 lookup above.
+
 ## Extended parts and `long double` (lcc, hw, qemu)
 
 Checked by `tools/abi/probes/ldouble.c` on the 4C (v3) and under MCST's

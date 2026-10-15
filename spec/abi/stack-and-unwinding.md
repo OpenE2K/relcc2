@@ -400,8 +400,12 @@ and threads".
 C++ exceptions use MCST's E2K `libgcc_s`:
 
 - Each frame is found by walking the chain stack, not by interpreting CFI.
-  The CFA is the caller's stack pointer, computed from `ussz` in the chain
-  frame.
+  A frame's CFA (`_Unwind_GetCFA`) is `us_base` plus `ussz` × 16 from
+  the chain record of the call the frame is making: the frame's own
+  stack pointer at that call, the bottom of the frame, which gdb shows
+  as `$sp`. It is not the stack pointer on entry (gdb's `$fp`, and the
+  CFA in GCC's sense on other targets) [libgcc `unwind-dw2-e2k.c:363-368,
+  769, 884`; hw: "Debug information" below].
 - `.eh_frame` is still needed: its FDE locates the function and its
   augmentation gives the personality routine and LSDA. **CFI instructions
   are ignored**, so a compiler only needs to emit the FDE with its
@@ -676,17 +680,125 @@ frames is an offset into the procedure stack (`this_psp - psp_base`,
 `DW_OP_call_frame_cfa` (GCC's default) therefore makes every argument
 and local unreadable, while backtraces still work (proof-of-concept
 backend, `docs/spec-poc-findings.md` A13). lcc's frame base is a window
-register holding a data-stack address (`DW_OP_reg2` at `-O0`, set from
-`getsp` plus the frame size; `DW_OP_reg1` in an `-O2` function), and
-`-O0` arguments live in window registers (`DW_OP_reg0`, `DW_OP_reg1`)
-[lcc]. A compiler should describe the frame base with a register
-expression (`DW_OP_bregN` of the register holding the stack pointer
-after `getsp`, or of a frame pointer).
+register holding a data-stack address: at `-O0` the register just after
+the argument registers (`%r2` with two argument slots, `%r8` with eight
+or more; `%r1` with none or one), set from `getsp` plus the frame size;
+`DW_OP_reg1` in an `-O2` function. `-O0` arguments live in window
+registers (`DW_OP_reg0`, `DW_OP_reg1`), except `long double` and vector
+ones, which lcc stores in the frame ([registers.md](registers.md), "How
+MCST's gdb reads them") [lcc 1.29.16 and 1.31.05, `-O0 -g`]. A compiler
+should describe the frame base with a register expression
+(`DW_OP_bregN` of the register holding the stack pointer after `getsp`,
+or of a frame pointer).
+
+gdb's `$sp` for a frame is that frame's data-stack pointer at the call
+it is in, the bottom of its frame: `usd.lo.base` in the stopped
+function, `usd.base − usd.size + cr1_hi.ussz × 16` for a caller. Its
+`$fp` is the stack pointer on entry, which is its caller's `$sp`
+(`OpenE2K/gdb/gdb/e2k-tdep.c:826-830`, `:1598-1606`, `:2233-2282`)
+[source; hw: `tools/abi/probes/debuginfo.sh` stop 14, 4C, 8C2, 2C3].
+MCST libgcc's `_Unwind_GetCFA` is the frame's `$sp`, not its `$fp`
+("Exceptions" above) [hw: `debuginfo.c` prints the CFAs
+`_Unwind_Backtrace` sees, which matched gdb's `$sp` of each frame, 4C,
+8C2, 2C3]. lcc `-O0`'s frame base holds the entry value, gdb's `$fp`,
+so the stack argument in slot 8 is `DW_OP_fbreg 64` [lcc]. Neither
+`$sp` nor `$fp` has a DWARF number, so a frame base must be a window
+register the function writes, and **that register is valid only from
+the instruction after the one that writes it** [hw: `debuginfo.sh`
+stops 11–13, `break *f10` and `stepi` through lcc `-O0`'s prologue, 4C,
+8C2, 2C3]:
+
+- At the function's first instruction the register is outside the
+  window, and gdb shows the stack arguments as `<unavailable>`.
+- After `{ setwd; getsp }`, before the copy into `%r8`, it is a
+  register the window has just gained: 0 with tag 5 on all three
+  machines (the 4C can leave stale bits there instead:
+  [calling-convention.md](calling-convention.md), "Unused parts of a
+  slot"). gdb reported errors reading the stack arguments at 0x40 and
+  0x48 ("Cannot access memory").
+- From the instruction after the copy the arguments are right. A
+  breakpoint set by function name (`break f10`) lands there, after
+  lcc's prologue.
+
+A frame base given as a location list should therefore start after the
+writing instruction. The proof-of-concept back end's frame base is
+`DW_OP_breg8 96` over the whole function, although its `getsp` writes
+`%r8` only in the function's second instruction [PoC output, `-O2 -g`].
 
 lcc emits no DIE for a global register variable (`register long gv asm
 ("%g20")`) [lcc], so it never needs DWARF numbers for `%g0–31`, which
 [registers.md](registers.md) leaves unnumbered; MCST's gdb maps nothing
-above 127.
+above 127. How gdb reads the numbered registers, in the stopped
+function and in callers' frames, and which locations it misreads:
+registers.md, "How MCST's gdb reads them".
+
+**Line tables.** lcc writes `.debug_line` itself and never emits
+`.loc`: before every row it puts a `.LM.N` label and a
+`DW_LNE_set_address`. With `-g` the table is DWARF version 2 with
+`minimum_instruction_length` 8 and rows at wide-instruction starts, one
+per statement at `-O0` [lcc 1.29.16 and 1.31.05, `e2k-v3`, `-O0 -g -S`
+and `-c`; `readelf --debug-dump=rawline`]. `-O3 -gline-tables-only`
+gave a one-function file a single row, at the function's start [lcc
+1.29.16 and 1.31.05].
+
+`-gline` is line data for the `ldis` disassembler. lcc's manual says
+its layout suits `ldis` rather than gdb, and that `-g` and `-gline`
+exclude each other, the rightmost option winning [lcc-doc:
+`lcc_options.htm`]. What it writes [lcc 1.29.16 and 1.31.05, `-O3
+-gline -S`, `readelf --debug-dump=rawline`;
+`tools/abi/probes/debuginfo_gline.c`]:
+
+- a `.label .LM.N` before most operations inside a wide instruction's
+  braces, and a row for each, at the address of the syllable that
+  encodes the operation (ALS for an ALU operation, CS0 for `disp`:
+  [bundle.md](../isa/bundle.md), "What a compiler can rely on").
+  `setwd`, `setbn`, `abn`, `alc`, `loop_mode`, `bap`, `fapb`,
+  `aaurw`/`aaurwq`, the predicate operations in PLS and some ALU
+  operations (the `merges` in a `ct` instruction) get none;
+- `minimum_instruction_length` 4, and rows in schedule order rather
+  than address order, all `is_stmt`;
+- a `.debug_info` that is only a compile unit with `DW_AT_stmt_list`:
+  no address range and no functions.
+
+`ldis` prints "! file : line" after each operation of a `-gline` object
+and after each wide instruction of a `-g` one [lcc 1.29.16]. gdb maps
+none of a `-gline` table, because the unit has no code range ("No line
+number information available"; gdb `dwarf2/read.c:7406-7411`) [hw:
+`debuginfo.sh`, 4C, 8C2, 2C3]. What gdb does with rows inside a wide
+instruction in a unit that has one is not known: a breakpoint planted
+there would corrupt the wide instruction, so it was not tried.
+
+MCST gas handles `.loc` only partly. `tc-e2k.c` never calls
+`dwarf2_emit_insn`, so a `.loc` without a `view` operand gets its row
+only when the next `.loc` is read, at that later address: each line's
+row lands where the next line starts, and the last `.loc` of a sequence
+gets none. With `view` the row is made at once, at the right address
+(`gas/dwarf2dbg.c:1059-1072`, `:1255-1258`, `:1451-1453`); inside
+braces that is the start of the wide instruction being built, and a
+second row there gets view 1 [binutils b4bebd940a3:
+`tools/abi/probes/debuginfo_loc.sh`]. GCC's configure probe for `.loc`
+(`.file`, `.loc 1 3 0`, `nop`, no `view`) therefore gets no
+`.debug_line` and fails, so `HAVE_AS_DWARF2_DEBUG_LINE` stays undefined
+and GCC writes `.debug_line` itself, as lcc does (gcc
+`configure.ac:5727-5767`). `as --gdwarf-5`, `--gdwarf2` and `-g` give
+plain assembly no debug sections at all, so hand-written `.S` files,
+glibc's and the kernel's among them, can be stepped only by instruction
+[binutils: `debuginfo_loc.sh`].
+
+**TLS variables**: [elf.md](elf.md), "Thread-local storage".
+
+**`next` over `longjmp`.** gdb's `next` over a call that ends in
+`longjmp` doesn't stop where `setjmp` returns. `e2k_get_longjmp_target`
+reads the `jmp_buf` pointer from the `%r0` of `longjmp`'s caller
+rather than of `longjmp`, the same wrong-frame read as for 16-byte
+floats (registers.md, "How MCST's gdb reads them";
+`e2k-tdep.c:3434-3452`), so it reads the target at a wrong address and
+fails
+("BPSTAT_WHAT_SET_LONGJMP_RESUME (!gdbarch_get_longjmp_target)" under
+`set debug infrun 1`), and the program runs on until something else
+stops it: to its end in `tools/abi/probes/debuginfo_misc.c` [hw: 4C,
+8C2, 2C3]. The `libc.so.6` of ALT and of OS Elbrus has no SystemTap
+notes gdb could use instead [hw: `readelf -n`, 4C, 8C2, 2C3].
 
 ## setjmp/longjmp, contexts
 

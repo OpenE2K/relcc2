@@ -510,6 +510,27 @@ GOT entries the linker creates:
 The module-ID and offset entries are separate, not a pair, so GD loads
 two independent GOT offsets.
 
+**Debug information.** lcc describes a `__thread` variable as
+`DW_OP_addr` holding the variable's offset in its module's TLS block,
+written `.uadword x@TLS_DTPREL` (`R_E2K_TLS_64_DTPREL`), followed by
+`DW_OP_GNU_push_tls_address` (0xe0); an extern TLS variable that is used
+but not defined gets no DIE [lcc 1.29.16 and 1.31.05, `e2k-v3`, `-g -O0
+-c`; the 32-bit form: [mode32.md](mode32.md), "C runtime"]. gas makes
+`R_E2K_TLS_64_DTPREL` of `x@TLS_DTPREL` in any 8-byte data directive
+(`.dword`, `.8byte`, `.quad`, `.uadword`) and `R_E2K_TLS_32_DTPREL` in
+any 4-byte one (`.word`, `.4byte`, `.long`, `.uaword`), and rejects
+other sizes (`tc-e2k.c:11239-11247`) [binutils:
+`tools/abi/probes/debuginfo_loc.sh`]. MCST's gdb reads the selected
+thread's variable in lcc's form and in GCC's: `DW_OP_const8u` (or
+`DW_OP_const4u`) with the offset, then `DW_OP_GNU_push_tls_address`, or
+`DW_OP_form_tls_address` from DWARF 5 on [hw:
+`tools/abi/probes/debuginfo.sh`, 4C, 8C2, 2C3]. It finds the TLS block
+through `libthread_db` (`e2k-linux-tdep.c:526-528`;
+`/lib64/libthread_db.so.1` on ALT and OS Elbrus), which works in dynamic
+programs and in static ones that link `pthread_create`; a static
+program without threads gives "Cannot find thread-local storage" [hw:
+`debuginfo_misc.c`, all three].
+
 ## Exception tables (lcc, libgcc)
 
 `.eh_frame` CIEs use augmentation `zR` (C) or `zPLR` (C++ with

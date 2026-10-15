@@ -262,7 +262,7 @@ read with `git show`:
 | File | What to add |
 |---|---|
 | `gcc/config.gcc` | Two `case` entries. First (around :340–633): `e2k*-*-*) cpu_type=e2k ;;`. Second, OS-specific: `e2k*-*-linux*)` with `tm_file="elfos.h gnu-user.h linux.h glibc-stdint.h ${tm_file} e2k/linux.h"` and `tmake_file` (see `riscv*-*-linux*` at :2551 and `or1k*-*-linux*` at :2946). The header comment (:21–120) explains every variable |
-| `gcc/configure.ac` | Add `e2k` to the `cpu_type` list with a valid `nop` for the dwarf2 `.loc` probe (:5727); add a TLS assembler probe (`conftest_s`, near :4038) or `HAVE_AS_TLS` stays off. Regenerate `gcc/configure` with the autoconf version GCC requires |
+| `gcc/configure.ac` | Leave `e2k` out of the dwarf2 `.loc` probe's `cpu_type` list (:5727). Unless a `.loc` has a `view` operand, MCST gas makes its row only when the next `.loc` arrives, so the probe fails anyway, and GCC then writes `.debug_line` itself, as lcc does (`spec/abi/stack-and-unwinding.md`, "Debug information"). Listing `e2k` is not a no-op, though: a non-empty `insn` also runs the `--gdwarf2`, `--gdwarf-5`, `--gdwarf-4`, compiler-generated `.debug_line`, APP-marker and `--debug-prefix-map` probes (:5780-6056), which concern debug information gas makes for assembly, and it makes none (inferred). Add a TLS assembler probe (`conftest_s`, near :4038) or `HAVE_AS_TLS` stays off. Regenerate `gcc/configure` with the autoconf version GCC requires |
 | `libgcc/config.host` | `cpu_type` (:138 area) and an `e2k*-*-linux*` entry: `extra_parts`, `tmake_file`, `md_unwind_header` (see loongarch at :993) |
 | `libgcc/config/e2k/` | `t-e2k`, `sfp-machine.h` (for `__float128` soft-fp), crt pieces. **The unwinder is special on E2K** (it walks the chain stack, see `spec/abi/stack-and-unwinding.md`); see 3.3. No `linux-unwind.h`: MCST's unwinder interprets no CFI and skips signal frames like any frame without an FDE, and with it an exception cannot be thrown out of a signal handler (`spec/abi/stack-and-unwinding.md`, "Signal frames, cancellation") |
 | `libatomic/configure.tgt`, `libgomp/configure.tgt`, `libstdc++-v3/configure.host`, `libitm/`, `libsanitizer/` | Later; most have generic fallbacks |
@@ -350,9 +350,32 @@ mainline libgcc this way, `docs/spec-poc-findings.md` A7, A10, A11):
   between threads; the kernel's rules for that (keep the threads that
   run goroutines alive, reach TLS only through functions that read it)
   are in the same file, "Contexts and threads".
-- DWARF: MCST's gdb ignores CFI and misreads `DW_OP_call_frame_cfa`, so
-  `DW_AT_frame_base` must be a register expression
-  (stack-and-unwinding.md, "Debug information").
+- DWARF, for MCST's gdb (`spec/abi/registers.md`, "How MCST's gdb
+  reads them"; `spec/abi/stack-and-unwinding.md`, "Debug information"):
+  - gdb ignores CFI and misreads `DW_OP_call_frame_cfa`, so
+    `DW_AT_frame_base` must be a register expression. The register is
+    valid only after the instruction that writes it, so start the frame
+    base's location list there.
+  - End every location in `%b[]` at each `setbn` and `abn`.
+  - Keep no location across a call in registers at or above 2 × the
+    call's `wbs`: gdb shows the callee's registers there.
+  - A location that holds during a call must cover the call's whole
+    wide instruction: gdb looks a caller up at its return address − 1.
+  - Describe a 16-byte float held in registers as pieces. GCC does this
+    by itself for a value in two hard registers; MCST's gdb reads a bare
+    `DW_OP_regN` of one from the caller's frame.
+  - A v5+ 128-bit value in one register has no correct location: drop
+    it, or describe only the low half followed by an empty piece.
+    `DW_OP_regN` shows the next register as the upper lane.
+  - Define `TARGET_ASM_OUTPUT_DWARF_DTPREL` to print `.dword
+    x@TLS_DTPREL` for size 8 and `.word x@TLS_DTPREL` for size 4, with
+    no newline, or no TLS variable gets a location
+    (`dwarf2out.cc:16612` for a `SYMBOL_REF`, `:19210` for a `__thread`
+    variable, which also gets none when it is extern and not bound
+    locally). GCC then writes `DW_OP_GNU_push_tls_address` before DWARF
+    5 and `DW_OP_form_tls_address` from 5 on; gdb reads both
+    (`spec/abi/elf.md`, "Thread-local storage").
+  - Let GCC write `.debug_line` itself (the `configure.ac` row in 3.2).
 
 Until libgcc builds (M3), link against the system's `libgcc_s.so.1`
 from lcc's sysroot.
@@ -1932,7 +1955,10 @@ Copy TILE-Gx (gcc-tilegx), which prints the same `{ }` syntax:
    `ASM_OUTPUT_OPCODE` print `{` before the first insn of a group and `}`
    after the last (`tilegx_asm_output_opcode`, tilegx.cc:5463).
 3. Move var-location debug notes out of the middle of groups
-   (`reorder_var_tracking_notes`, tilegx.cc:4796).
+   (`reorder_var_tracking_notes`, tilegx.cc:4796): a label printed
+   inside the braces gets the wide instruction's start address, before
+   the instruction's results are written (`spec/isa/bundle.md`, "What a
+   compiler can rely on").
 4. Known pitfalls TILE-Gx handled: a call must end its wide instruction;
    inline `asm` is never put in braces; the profiler call prints its own
    group.

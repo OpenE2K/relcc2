@@ -687,6 +687,16 @@ disassembling; the first four also by the proof-of-concept backend,
 - **Operands.** `merged a, b, dst, ~%predN` takes a negated predicate;
   `getsp %rN, %drM` and `getsp 0, %drM` (read the stack pointer) work; a
   constant address works as `ldd 0x0, sym, %dr4` / `std 0x0, sym, %dr4`.
+- **Labels and `.loc` inside braces.** A label written between the
+  operations of a wide instruction gets the instruction's start address,
+  and so does a `.loc` with a `view` operand; without `view`, gas places
+  `.loc` rows late ([stack-and-unwinding.md](../abi/stack-and-unwinding.md),
+  "Debug information"). `.label NAME` before an operation instead gives
+  NAME the address of the syllable that encodes the operation: in `{
+  setwd; disp; addd,1; addd,3 }` the `addd,1` label is at +4 (ALS1), the
+  `addd,3` label at +8 (ALS3) and the `disp` label at +0xc (CS0). lcc's
+  `-gline` uses this. [checked: `tools/abi/probes/debuginfo_loc.sh`;
+  `tc-e2k.c:382-394`, `:9240-9300`]
 - **What lcc emits** (1.29.16): `.ignore ld_st_style` and `.ignore
   strict_delay` at the top of every file; `.type sym, #function` /
   `#object` (SPARC style); `.align` in bytes; 64-bit data as `.uadword`

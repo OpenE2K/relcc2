@@ -6,7 +6,7 @@ built compilers as programs. It drives `remote.sh` over relcc2's SSH
 wrapper (`tools/setup/e2k-ssh`). Any GCC git checkout with an
 `e2k-*-linux-gnu` port will do.
 
-Status: **draft** (2026-10-13). Checked so far, all on the 8C2:
+Status: **draft** (2026-10-13; bootstraps below). Checked first, all on the 8C2:
 - `check`;
 - `push` (21 s for the 1.3 GB tree);
 - `bootstrap --stop-after configure`, which guessed
@@ -21,6 +21,28 @@ passes a `vec<tree>` through `...` and fetches it with `va_arg` (EDG
 error #1291). `native-build` commit `76b0bd07e3c` gives `conflict_fn`
 fixed parameters instead. `xcheck` (below) then compiled every host
 object with lcc, and the bootstrap was restarted on 2026-10-14.
+
+Bootstraps 2 to 7 (2026-10-14/15) found seven PoC bugs, fixed on
+`native-build`, which is v0.4 plus those fixes. Four were miscompiles of
+GCC itself, found by object bisection against lcc-built objects:
+- a hoisted invariant clobbered the register an `rwd %lsr` reads;
+- a predicate written one cycle before a taken return, across an empty
+  block;
+- while-loop renaming left behind;
+- `vec_init` turned a negative constant lane into all ones.
+
+Three made `-g` change the code, which `bootstrap-debug`'s comparison
+(stage 2 without debug information, stage 3 with it) caught:
+- debug labels triggering gas's CODE_PLACEMENT padding;
+- a debug insn counted as room to move;
+- `.LFE` in C without unwind tables.
+
+Bootstrap 7's comparison failed on one object (libiberty's
+`floatformat.o`, the `.LFE` case). Measured on the 8C2, with checking
+compiled in and the same source: the PoC-built cc1plus is within 1% of
+the lcc-built one (`cp/pt.cc`, `fold-const.cc`, ... about 1,000 s in
+all, identical output), and lcc itself compiling the same files at
+`-O3` takes 20% longer.
 
 ## What it is for
 
@@ -202,9 +224,40 @@ These follow AGENTS.md, "Hardware".
 - Remove what you no longer need (`clean`). A bootstrap tree with
   `--enable-checking=yes` is about 10–15 GB (not yet measured).
 
+## Cross toolchain and tarballs
+
+`cross.sh` builds an x86_64-hosted cross toolchain, target
+`e2k-linux-gnu`. It contains:
+- MCST's binutils from `OpenE2K/binutils-gdb`, with gas's CODE_PLACEMENT
+  fix on, as by default;
+- the PoC GCC of a `toolchains/gcc-claude-native` commit, built against
+  lcc's e2k-v3 sysroot (default lcc 1.29.16: Elbrus Linux 9.5.5, glibc
+  2.35-29.018).
+
+It installs into one relocatable prefix and packs it as
+`toolchains/gcc-native/gcc-e2k-VERSION-x86_64-cross-OS.tar.xz`.
+VERSION is the PoC's tag plus the commits on top of it
+(`0.4+native-build.7`).
+
+The tarball leaves the sysroot out: MCST's glibc and libraries are
+not ours to ship. `setup-sysroot.sh`, at the top of the tarball, links
+one in from an installed lcc. It copies the GNU ld scripts and fixes
+MCST glibc's `bits/fenv.h`, which breaks `<fenv.h>` under C23.
+
+The smoke test builds a C and two C++ programs, one with a static and
+one with the toolchain's shared libstdc++, and runs them on the 4C. It
+doesn't use MCST's qemu, which lacks the `cctop*` operations the PoC
+emits.
+
+```
+tools/gcc-native/cross.sh -j 8                 # about 20 minutes
+tools/gcc-native/cross.sh --stage pack         # repack only
+```
+
 ## Not done yet
 
-- A full bootstrap; how long each stage takes.
+- A bootstrap whose comparison passes, and the native tarball from its
+  install.
 - `test` and `bench` against a real build.
 - Running the suite from a host-side DejaGnu (`tools/dejagnu`) against a
   natively built compiler. That would need a board that compiles on the

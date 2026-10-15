@@ -1001,7 +1001,12 @@ Its `if (f == 2) lng (l); else dbl (d)` prepares `lng` and `dbl` in two
 CTPRs before the compare, then does `call %ctpr2 ? p` and `call %ctpr1
 ? ~p` in consecutive instructions. A call under a false predicate leaves
 the CTPRs (D4), and a prepare takes no predicate (CS0 has no condition
-field, bundle.md), so preparing unconditionally is harmless. ce3
+field, bundle.md; a predicated `movtd` traps, D4), so preparing
+unconditionally is harmless. A false call costs what a false `ct`
+costs: nothing when its predicate is written 3 cycles ahead (2 or 1
+cycles of wait when 1 or 2 ahead), and the chain-stack spill it makes
+when the chain register file is full costs nothing measurable
+(`spec/isa/predicates.md`, "Control transfers"; 4C, 2C3). ce3
 predicates call insns once their patterns are predicable
 (`cond_exec_process_insns` accepts `CALL_P`, ifcvt.cc:374, and adds a
 `REG_BR_PROB` note, :429), so give `call` and `call_value` the
@@ -1072,7 +1077,12 @@ written one instruction earlier as it was before the compare, without
 a stall (timing.md, "Hazards"; branches and calls wait), so the bundler
 must keep 2 cycles there and not rely on the interlock.
 
-Indirect calls: `movtd %reg, %ctprN` (latency 9) then `call`. v6 adds
+Indirect calls: `movtd %reg, %ctprN` (latency 9) then `call`. The
+`movtd` must not carry a predicate: gas accepts `movtd … ? %predN`, but
+the hardware traps at it (SIGILL), true predicate or false, while MCST's
+qemu runs it conditionally (`spec/isa/predicates.md`, "RLP"; 4C, 8C2,
+2C3). So don't make the prepare patterns `predicable`; lcc prepares
+unconditionally, `movtd,0,sm` included. v6 adds
 `ibranchd` and `icalld`, a jump or call through a register with no
 CTPR, but a taken `ibranchd` costs 12 cycles however early its register
 is ready, and `icalld` plus a return 23 cycles against 14 for `disp` +
@@ -1160,11 +1170,27 @@ slots than the caller got is refused, calls.cc:2631-2641) and need a
 `sibcall_epilogue` pattern or the `emit_epilogue_for_sibcall` hook
 (calls.cc:2564-2571); a function with a frame gives it back before the
 jump with a positive `getsp`, which lcc uses to free a VLA at the end of
-its scope [lcc 1.29.16 `-O2`] (before a jump: inferred, not checked);
-that would pass all four tests (inferred). The proof of concept turns
-sibling calls off (`TARGET_FUNCTION_OK_FOR_SIBCALL`, target.def:3147),
-so sibcall-3, -4, -9 and -10 fail for it: they are xfailed only on the
-targets they list (gcc.dg/sibcall-3.c:8).
+its scope [lcc 1.29.16 `-O2`]. That works before a `ct` to another
+function, in the `ct`'s own instruction or earlier: the callee's stack
+pointer and locals, stack arguments rewritten in the incoming area
+after the release, a large result, signals, `backtrace` and C++
+exceptions through MCST's unwinder all behave as after a direct call,
+and 10^6 chained sibling calls run in constant stack [hw:
+`tools/abi/probes/callsstack_tail.c`, `callsstack_tailx.cc`, 4C, 8C2,
+2C3] (`spec/abi/calling-convention.md`, "Tail calls that release the
+frame"). E2K's normal epilogue has no `getsp`, since the return
+restores `USD` from the chain stack; the sibcall epilogue adds one, a
+positive `getsp` of the whole frame (VLAs and `alloca` included; a
+multiple of 16, since `getsp` rounds down), which may share the `ct`'s
+instruction. Everything the jump needs must be read from the frame
+before it: below `USD` a signal frame may overwrite it. The target is
+prepared with `disp`, or with an unconditional `movtd` (above). That
+would pass all four tests (inferred: sibcall-3 and -9 compare a local's
+address at two depths of a sibling recursion, and the probe's chains
+keep the final callee's local where a direct call puts it). The proof
+of concept turns sibling calls off (`TARGET_FUNCTION_OK_FOR_SIBCALL`,
+target.def:3147), so sibcall-3, -4, -9 and -10 fail for it: they are
+xfailed only on the targets they list (gcc.dg/sibcall-3.c:8).
 
 Two hardware facts shape this (`spec/isa/control-transfer.md`, measured
 on the 4C):
@@ -1580,6 +1606,39 @@ each one cost it a debugging session:
   allocations past the mapped stack (`spec/abi/stack-and-unwinding.md`;
   the proof of concept's 800 KB VLA). lcc uses `%g24`. Give the
   `allocate_stack` pattern a window-register constraint.
+- **Stack-clash protection** (`-fstack-clash-protection`, which some
+  distributions turn on by default; `gcc.dg/stack-check-*`; measured for
+  the port, not found by the proof of concept, and GCC's defaults are
+  right here). lcc accepts the option and emits nothing for it. glibc's
+  threads have a one-page guard, and stores every 4 KiB were enough for
+  one large frame while stores every 8 KiB missed the guard
+  (`spec/abi/kernel-interface.md`,
+  "Probing"; `tools/abi/probes/callsstack_clash.c`, 4C, 8C2, 2C3), so
+  keep GCC's default guard size and probe interval
+  (`stack-clash-protection-guard-size` and `-probe-interval` 12, 4 KiB,
+  params.opt:1116-1122), not aarch64's 64 KiB
+  (common/config/aarch64/aarch64-common.cc:67-68).
+  - Allocate page by page, each `getsp -4096` followed by a store into
+    the page it took, never one `getsp` followed by its probes: the
+    kernel writes a signal frame right below `USD`, so a signal between
+    the two lands below the guard. The `getsp` itself touches nothing.
+    GCC's generic loop for `alloca` and VLAs
+    (`anti_adjust_stack_and_probe_stack_clash`, explow.cc:2075) has that
+    shape; it stores at the top of each new page (sp + 4088,
+    explow.cc:2088-2096) unless
+    `TARGET_STACK_CLASH_PROTECTION_ALLOCA_PROBE_RANGE` says otherwise,
+    which is still one store in every 4 KiB step (inferred; the measured
+    loop stored at the new stack pointer, as x86's prologue does). The
+    prologue's probes are the port's own code.
+  - GCC also counts calls as probes (x86 pushes the return address,
+    aarch64 saves LR within a 1 KiB caller guard). An E2K call stores
+    nothing on the data stack, so frames below the probing threshold
+    that never store to their own memory can add up past the guard
+    (inferred, not tested).
+  - In the main thread the unmapped gap below `[stack]` and the
+    kernel's 1 MiB `stack_guard_gap` catch what the probes reach. Page
+    by page costs more only on the main stack's first growth: a first
+    4 MiB frame took 19 ms against 11 ms with one `getsp` on the 4C.
 - **Short label-difference tables** crash MCST gas when a `.text`
   label follows them (`spec/isa/bundle.md`, "Known gas bugs"): keep
   `CASE_VECTOR_SHORTEN_MODE` at `SImode` or wider.

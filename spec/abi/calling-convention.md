@@ -52,9 +52,42 @@ callee:
   local's address stays the same across sibling calls of a one-argument
   function, therefore abort with lcc's code; `sibcall-4.c` and `-10.c`
   (no arguments, no area) pass [hw: lcc 1.29.16 `e2k-v3` `-O2
-  -fno-inline`, 4C, 8C2, 2C3]. Releasing the frame before the jump, as
-  GCC's sibling calls do, is compatible with this: a callee sees only
-  the `USD` it is entered with (inferred).
+  -fno-inline`, 4C, 8C2, 2C3]. A function may instead give its frame
+  back before the jump, as GCC's sibling calls do, and that works
+  ("Tail calls that release the frame", below).
+
+### Tail calls that release the frame [hw: `tools/abi/probes/callsstack_tail.c` with `callsstack_tail.s`, and `callsstack_tailx.cc`; 4C, 8C2, 2C3 and MCST's qemu]
+
+A function can give its frame back with a positive `getsp` of its size
+(a VLA included, in one `getsp` of a register sum) and then jump to
+another function with `ct`, in the same wide instruction or later. The
+callee then runs exactly as if the original caller had called it
+directly:
+
+| Case | Result |
+|---|---|
+| a 64-byte frame released in the `ct`'s instruction, or 6 cycles before it | the callee's `getsp 0` in its first instruction reads what it reads after a direct call (without the release: 64 bytes lower) |
+| a 32-byte frame and a VLA of 1, 16, 100, 4,096 or 70,000 bytes, released by one `getsp` of a register | the same |
+| slots 8 and 9 read from the incoming area, then, after the release, rewritten in that area for the callee | the callee gets them; its local is at the direct call's address |
+| a 96-byte result of the tail-called function | written through the original caller's area, right; the callee's local at the direct call's address |
+| chains of 0 to 1,000,000 mutual tail calls with a 64-byte frame each, released 6 cycles before each `ct` or in its instruction (there under the `ct`'s predicate) | the final callee's local at the direct call's address; `USD` after the return the same as before the call |
+| `alloca` of 64 KiB to 4 MiB in the final callee of 1,000 tail calls | the block at the direct call's address; `USD` restored |
+| `backtrace` in the final callee of 10,000 tail calls | 6 frames: the final callee directly under `main` |
+| a 20 µs SIGALRM timer during 200 chains of 100,000 calls (50 on the 8C2 and 2C3), the handler clearing 2 KiB of locals on the thread's stack | 2.6 million signals on the 4C and no wrong result; the deepest `backtrace` in the handler had 8 frames. The signals came at random points, not aimed at the instructions between a release and its `ct` |
+| C++ exceptions with lcc 1.29.16's runtime (MCST's unwinder), `callsstack_tailx.cc` | thrown in the final callee of 0 to 10^6 tail calls (by the callee or a function it calls) and caught in `main`, the destructor run once and `USD` the same afterwards; caught by a landing pad in a function entered by `ct`; thrown by a callee whose stack arguments were rewritten after the release |
+
+Give back exactly what was taken: `getsp` rounds the new stack pointer
+down to 16 bytes, and nothing bounds a release by the function's frame
+([stack-and-unwinding.md](stack-and-unwinding.md), "User stack"). After
+the release nothing may read the released frame: it lies below `USD`,
+where a signal frame can be written at any moment (no red zone:
+[kernel-interface.md](kernel-interface.md), "Signals"). The
+`ct`'s target is prepared with `disp` or an unconditional `movtd`: a
+`movtd` into a CTPR under a predicate traps
+([predicates.md](../isa/predicates.md), "RLP"). GCC's
+`gcc.dg/sibcall-3.c` and `-9.c`, which compare a local's address at two
+depths of a sibling recursion, would then pass, as `-4.c` and `-10.c`
+already do (inferred from the chain cases; not run).
 
 ## Argument slots (guide 9.5.1; lcc, unipro, libffi)
 

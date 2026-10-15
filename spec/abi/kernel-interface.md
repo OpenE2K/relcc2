@@ -1202,11 +1202,10 @@ reached the guard; the SIGSEGV handler ran, and its first lazily bound
 call (`_exit`) died with SIGILL `ILL_ILLOPN` in `_dl_fixup` (gdb on the
 4C; SIGILL on all three; with `LD_BIND_NOW=1` the run ended normally).
 A guard larger than the largest frame (`pthread_attr_setguardsize`)
-catches such a frame. A compiler can make a one-page guard enough by
-touching each page of a large frame from the top down right after its
-`getsp`, as GCC's `-fstack-clash-protection` does on other targets
-(inferred). lcc 1.29.16 and 1.31.05 accept `-fstack-clash-protection`
-and `-fstack-check` and emit the same code as without them [lcc].
+catches such a frame, and so do stores every 4 KiB made page by page
+as the frame is allocated ("Probing", below). lcc 1.29.16 and 1.31.05
+accept `-fstack-clash-protection` and `-fstack-check` and emit the same
+code as without them [lcc].
 
 With `pthread_attr_setstack`, `USD` covers the given stack and
 everything below it down to the start of its mapping (the `clone` row
@@ -1218,7 +1217,11 @@ hole lies between mappings that end below the stack's top (kernel log:
 to `RLIMIT_STACK`, and the failing `getsp` gives the same SIGSEGV.
 `[stack]` ends at the stack's top, so the hole check never sees the gap
 below it: a single `getsp` that reaches past the gap into another
-mapping is accepted. A SIGSEGV handler on an alternate stack ran in
+mapping is accepted. The gap then stays unmapped: the kernel finds the
+mapping that holds the new bottom and extends nothing
+(`find_extend_vma_locked`, `mm/mmap.c:2214-2219`), and a fault never
+grows `[stack]` ("Overflow signals" below), so a store into the gap
+gets `SEGV_MAPERR`. A SIGSEGV handler on an alternate stack ran in
 every case:
 
 | Stack | Below it | Frames | Result |
@@ -1237,6 +1240,78 @@ every case:
 | main thread, `RLIMIT_STACK` 2 MiB | unmapped | 4 KiB | the bottom moved 16 KiB every 4 levels and `[stack]` grew with it to exactly 2 MiB; after 507 levels the `getsp` failed |
 | main thread, `RLIMIT_STACK` 16 MiB | unmapped | 64 KiB | the same at 16 MiB (255 levels) |
 | main thread | a gap of about 3 MiB, then a 1 MiB mapping | one of about 3.75 MiB | the `getsp` is accepted with the bottom inside that mapping; about 638 KiB of it changed, then `SEGV_MAPERR` at its top, in the gap |
+
+**Probing** [hw: `tools/abi/probes/callsstack_clash.c` with
+`callsstack_clash.s`; the 4C, 8C2 and 2C3 agree apart from addresses,
+except that a refused `getsp` gives `SEGV_ACCERR` on the 4C, as above].
+Stores every 4 KiB make a one-page guard enough for one large frame, as
+GCC's `-fstack-clash-protection` does on other targets. Two schemes
+were tried: **one `getsp`** of the whole frame, then a store every
+4 KiB from the frame's top down; and **page by page**, `getsp -4096`
+and a store at the new stack pointer, repeated. Each run then filled
+the frame from its bottom up, as above:
+
+| Stack | Below it | Frame and probes | Result |
+|---|---|---|---|
+| glibc, 64 KiB | one-page guard | 96 KiB: one `getsp` and a store every 4 KiB, or page by page | `SEGV_ACCERR` in the guard; nothing below it changed |
+| the same | the same | 96 KiB, one `getsp`, a store every 8 KiB | by the frame's phase against the guard: as above, or no probe in the guard, and the probes and the fill wrote all 35,296 bytes between the frame's bottom and the guard (17,737 of them changed value: the fill's upper halves are zero, as was most of that memory), then `SEGV_ACCERR` at the guard's first byte |
+| the same | the same | 1 MiB, one `getsp` | the `getsp` is refused (SIGSEGV at the old bottom − 1): its bottom lay past the 40 KiB mapping below the guard (unmapped or past a hole; not determined) |
+| `pthread_attr_setstack`, 64 KiB | a 4 KiB `PROT_NONE` guard, then 2 MiB mapped | 96 KiB or 1 MiB, one `getsp` and a store every 4 KiB; 1 MiB page by page | `SEGV_ACCERR` in the guard; nothing below it changed |
+| the same | the same | 1 MiB, one `getsp`, a store every 8 KiB | by phase: as above, or 985,568 bytes below the guard written, then `SEGV_ACCERR` at its first byte |
+| the same | the same | 96 KiB, one `getsp` and no store, then a register-only loop under a 100 µs SIGALRM timer, the handler on the thread's stack | no SIGSEGV: the handler ran 39,696 bytes below the guard's start, and 3,146 bytes there changed (3,148 on the 8C2 and 2C3) |
+| main thread | unmapped | 1 MiB, one `getsp`, a store every 4 KiB | runs normally: the `getsp` grows `[stack]` |
+| main thread | a gap of about 3 MiB, then a 1 MiB mapping | one `getsp` to 768 KiB below the mapping's end, a store every 4 KiB | the `getsp` is accepted; the first probe below `[stack]`'s start gets `SEGV_MAPERR` in the gap; the mapping is untouched |
+| the same | the same | page by page | a `getsp` is refused (SIGSEGV at the old bottom − 1) between 1 MiB and 1 MiB + 16 KiB above the mapping (4, 8 and 12 KiB over on the 4C, 8C2 and 2C3); the mapping is untouched |
+
+So:
+
+- **The probe interval must not exceed the guard** (the 8 KiB rows).
+- **A `getsp` is no probe.** It touches no memory, and the kernel
+  accepts it whenever its new bottom lies in a mapping (bottoms 35 KiB
+  and 985 KiB below a guard were accepted; only the stores faulted).
+- **Allocate page by page wherever a signal can come between the
+  allocation and its probes.** The kernel writes each signal frame
+  right below `USD` ("Signals"), so after one large `getsp` a signal
+  lands below the guard (the timer row). Page by page, `USD` is never
+  more than a page below a probed word.
+- **In the main thread the gap below `[stack]` catches the probes.** A
+  `getsp` into a lower mapping extends nothing (above), so the first
+  probe below `[stack]` faults. Page by page, each `getsp` grows
+  `[stack]` through `expand_downwards`, which keeps `stack_guard_gap`
+  (256 pages, 1 MiB) free above the next mapping (`mm/mmap.c:2091-2099,
+  2164`); the kernel grows `[stack]` in 16 KiB steps from its start, so
+  the refusal comes up to 16 KiB above that gap.
+
+Not covered (inferred, not tested):
+
+- **Calls probe nothing.** An E2K call stores nothing on the data stack
+  (its state goes to the chain and procedure stacks), and the runs above
+  cover one large frame whose top lies within a page of memory already
+  touched. Frames smaller than the probe interval that never store to
+  their own memory can add up past the guard; GCC's model counts calls
+  as implicit probes on x86 (the pushed return address) and AArch64
+  (the saved LR, with a 1 KiB caller guard).
+- **A signal frame is larger than a page**: 4,272 bytes (above), so with
+  `USD` less than 176 bytes above a one-page guard part of the frame
+  lies below the guard. Whether the kernel writes that part before it
+  faults on the guard depends on the order of its copies (it writes the
+  frame in many separate copies, `arch/e2k/kernel/signal.c:383-414` and
+  others).
+
+Page-by-page allocation costs more only the first time the main
+thread's stack grows, because the kernel steps in at each `getsp` that
+leaves the part `USD` covers ("The data stack" above). Time of the first
+frame in a fresh process, with an 8-byte-store fill of the frame, three
+runs [hw: `callsstack_clash cost`; not measured on the 8C2]:
+
+| Frame | 4C: one `getsp`, probes | 4C: page by page | 2C3: one `getsp`, probes | 2C3: page by page |
+|---|---|---|---|---|
+| 64 KiB | 0.26 ms | 0.25 ms | 0.08 ms | 0.08 ms |
+| 1 MiB | 3.7–3.8 ms | 4.5–4.6 ms | 1.18–1.30 ms | 1.47–1.48 ms |
+| 4 MiB | 10.9–11.1 ms | 18.5–19.1 ms | 3.5–3.6 ms | 6.1–6.2 ms |
+
+A second frame of the same size costs about the same either way (4 MiB:
+5.7–5.8 ms on the 4C, 2.1–2.2 ms on the 2C3).
 
 ### Overflow signals [hw: `accerr.c`; 4C, 8C2, 2C3]
 
@@ -1447,6 +1522,10 @@ drivers expect anyway. A static link with an ifunc crashes ld
 ## Not checked yet
 
 - `sigreturn` with an edited `uc_mcontext.cr0_hi` (resuming elsewhere).
+- Stack-clash probing ("Threads", "Probing"): small frames that never
+  store to their memory adding up past a guard (an E2K call probes
+  nothing); a signal arriving while `USD` is less than 176 bytes above
+  a one-page guard; the cost of page-by-page growth on the 8C2.
 - Entries 2, 9, 13–15 and 19–31, which the trap table does not name
   ("Disabled entries").
 - Why the 4C's kernel entries move `%g24`–`%g31` under a nonzero

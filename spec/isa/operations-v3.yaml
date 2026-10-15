@@ -463,7 +463,7 @@ groups:
     see: semantics.md, "Tag operations"; speculation.md, "Diagnostic values", "What lcc speculates"
   - ops: movt{s,d,q}
     lat: "2; 9 (`movtd` to `ct`)"
-    does: "Copy keeping tags (`movtq` every tag, `movtd` turns a tag-3 half into 0, `movts` keeps only tag 1: semantics.md, \"Tag operations\"); `movtd a, %ctprN` prepares a transfer to the address in a (9 cycles to `ct`; ALC0)."
+    does: "Copy keeping tags (`movtq` every tag, `movtd` turns a tag-3 half into 0, `movts` keeps only tag 1: semantics.md, \"Tag operations\"); `movtd a, %ctprN` prepares a transfer to the address in a (9 cycles to `ct`; ALC0). Under a predicate, `movtd` into a CTPR is SIGILL `ILL_ILLOPC` whether the predicate is true or false (gas accepts it; MCST's qemu runs it conditionally: predicates.md, \"RLP\")."
     use: "Indirect calls and jumps (`movtd` + `ct`/`call`)."
     see: control-transfer.md
   - ops: movtc{s,d,q} movtr{s,d,q} movtrc{s,d,q}
@@ -489,8 +489,8 @@ groups:
     see: registers.yaml; spec/abi/registers.md; spec/abi/stack-and-unwinding.md, "Stack registers"
   - ops: getsp
     lat: "2"
-    does: "Allocate (negative b) or release stack in the user stack and return the new stack pointer; `getsp 0` reads it. 2 cycles. The amount must be a window register or `%g16`+. One past the part of the stack `USD` covers traps, and the kernel grows the stack by the amount rounded up to a page, at least 16 KiB."
-    use: "`allocate_stack`, frame setup."
+    does: "Allocate (negative b) or release stack in the user stack and return the new stack pointer, the sum rounded down to 16 bytes; `getsp 0` reads it. 2 cycles. The amount must be a window register or `%g16`+. One past the part of the stack `USD` covers traps, and the kernel grows the stack by the amount rounded up to a page, at least 16 KiB. It touches no memory, so it is no stack probe; a release is not bounded by the frame; under a predicate it runs only when true."
+    use: "`allocate_stack`, frame setup; a positive amount frees a VLA or, before a sibling call's `ct`, the whole frame (spec/abi/calling-convention.md, \"Tail calls that release the frame\")."
     see: spec/abi/stack-and-unwinding.md, "User stack"; spec/abi/kernel-interface.md, "The data stack"
 - title: Predicates
   rules:

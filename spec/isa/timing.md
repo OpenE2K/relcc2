@@ -82,6 +82,7 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | FP add → FP multiply | 4 | 4 | — |
 | compare → predicated ALU op | 2 | 2 | — |
 | compare → `ct ? pred` | 3 | 3 | — |
+| compare → `call ? pred`, not taken (a false call costs nothing else, also with the chain register file full: predicates.md, "Control transfers"; `callsstack_pcall.c`, 4C, 2C3) | — | 3 | — |
 | `disp` → `ct` | 5 | 5 | — |
 | `return` → `ct` | 6 | 6 | — |
 | `movtd` → `ct` | 9 | 9 | — |

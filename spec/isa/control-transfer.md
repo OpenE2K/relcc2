@@ -150,6 +150,11 @@ So:
   cycles ahead.
 - `movtd` and `getpl` into a CTPR go only in ALC0
   ([bundle.md](bundle.md), "Bundling restrictions").
+- [hw] A `movtd` into a CTPR must not carry a predicate: gas accepts
+  `movtd,0 %dr1, %ctpr1 ? %pred0`, but the hardware traps at it (SIGILL
+  `ILL_ILLOPC`) whether the predicate is true or false
+  ([predicates.md](predicates.md), "RLP"; 4C, 8C2, 2C3). MCST's qemu
+  runs it conditionally.
 
 ## Costs [hw]
 
@@ -162,6 +167,7 @@ Delays between a prepare (or the condition) and the transfer, from
 | `return` | `ct` | 6 |
 | `movtd`; `getpl` (32-bit mode, [mode32.md](../abi/mode32.md)) | `ct`, `call` | 9 |
 | integer compare, `andp` | `ct ? pred` | 3 |
+| integer compare | `call ? pred`, not taken | 3 |
 | FP compare | `ct ? pred` | 5 |
 
 A transfer placed earlier waits until the CTPR is ready, then proceeds:
@@ -170,6 +176,15 @@ delay) + 1` cycles. Unlike an early data consumer (timing.md, "Stalls
 cost more than the latency"), there is no extra penalty. The same holds
 for the condition: a `ct ? pred` 1 or 2 cycles after its integer compare
 waits 2 or 1 cycles, taken or not.
+
+A `call ? pred` whose predicate is false waits for its condition the
+same way, 2 or 1 cycles when the compare is 1 or 2 cycles before it, and
+otherwise costs nothing, 1 call deep or 64 [hw:
+`tools/isa-probes/callsstack_pcall.c` `loop`, 4C, 2C3]. Its spill of a
+full chain register file costs nothing either
+([predicates.md](predicates.md), "Control transfers"). So lcc's
+predicated calls ("How lcc uses it", below) are free on the path that
+skips them.
 
 A conditional `ct` that is **not taken** waits for its CTPR only until
 2 cycles after the `disp` (1 cycle early: 1 cycle lost; later: none),

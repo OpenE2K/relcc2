@@ -330,10 +330,28 @@ false; the community one reads these ELP values as `%pcnt1`–`%pcnt15`
 Any ALU operation except `ibranchd`/`icalld` may carry `? [~]%predN`,
 `? [~]%pcntN`, or one of each (`? %pcnt3, ~%pred0`), checked on loads,
 stores, `staa`, quad operations, combined operations, compares, merges,
-`getsp`, `rwd` and `movtd` [checked]. Two `%pred` (or two `%pcnt`)
-conditions on one operation are rejected. A `%pcnt` and a `%pred`
-together are **and**ed (`pc_*`) [hw]; lcc writes such a pair 93 times
-[lcc], gating loads in pipelined loops.
+`getsp`, `rwd` and `movtd` [checked: gas accepts them]. Two `%pred`
+(or two `%pcnt`) conditions on one operation are rejected. A `%pcnt`
+and a `%pred` together are **and**ed (`pc_*`) [hw]; lcc writes such a
+pair 93 times [lcc], gating loads in pipelined loops. A `getsp` under a
+predicate runs only when the predicate is true [hw:
+`tools/abi/probes/callsstack_tail.s` `cs_chain_c`/`d`, 4C, 8C2, 2C3].
+
+**A `movtd` into a CTPR under a predicate is SIGILL `ILL_ILLOPC`** on
+hardware, whether the predicate is true or false and whether or not the
+CTPR held a `disp`; the same `movtd` without the predicate works [hw:
+`tools/abi/probes/callsstack_tail.c` `movtdp`, 4C, 8C2, 2C3]. The trap
+is at the `movtd` itself: it comes also when the following `ct` is
+under the same false predicate (`q`), and `si_addr` is the `movtd`'s
+instruction (checked on the 4C and 2C3). gas accepts the form and
+MCST's qemu runs it conditionally; the community qemu raises
+`illopc` for it, with `%pcnt` too ("Conditional write to ctpr is not
+allowed", `target/e2k/translate.c:5508-5511`) [source]. To choose
+between two targets, prepare both and use a conditional `ct` for each
+CTPR, or select the address first (`merged`) and `movtd` it
+unconditionally. lcc prepares unconditionally, its speculative
+`movtd,0,sm` included (control-transfer.md, "How lcc uses it")
+[lcc 1.29.16 `-O3`, v3, v5.8c2, v6.2c3].
 
 **Encoding** [checked]: a 16-bit RLP entry in a CDS syllable (bundle.md,
 "CDS"): opcode 0 for ALC0–2, 1 for ALC3–5; a 3-channel mask; a negation
@@ -353,7 +371,7 @@ two entries) and only the lower channel on v7.
 | memory | a load or store is not performed: `ldd`/`std` at address 0 under a false (or negated true) predicate don't fault (`fm_*`) |
 | operands | not checked: a diagnostic operand doesn't trap ([speculation.md](speculation.md)) |
 | timing | a reader of its destination doesn't wait for it (timing.md, "Hazards") |
-| what may still happen | in a KVM guest kernel, a privileged operation (`strd`) under a false predicate can still raise a privileged-action exception (kernel `kvm/guest/mmu_regs_access.h`) [source]; native and user mode not known |
+| what may still happen | a `movtd` into a CTPR is SIGILL under any predicate, false included (above) [hw]; in a KVM guest kernel, a privileged operation (`strd`) under a false predicate can still raise a privileged-action exception (kernel `kvm/guest/mmu_regs_access.h`) [source]; native and user mode not known |
 
 **Under a diagnostic predicate** (either polarity: `? %predN` and `?
 ~%predN` alike) [hw, `dg_*`; stores `spec.c` `st_*`]:
@@ -446,9 +464,28 @@ conditional `abgc` cannot share an instruction with any `ct`.
 - Conditional calls and returns work like branches: `call %ctpr1, wbs
   = 4 ? %pred0`, `ct %ctpr3 ? %pred0`. A `call` under a false predicate
   leaves the CTPRs, unlike a call that runs (`callf_*`) [hw], so a
-  return prepared before it still works after it (lcc relies on this),
-  but it is not free: it still spills the chain stack (kernel `ttable.c`
-  comment) [source].
+  return prepared before it still works after it (lcc relies on this).
+  It costs what a false `ct` costs: nothing when its predicate was
+  written 3 or more cycles earlier, 1 or 2 cycles when 2 or 1 cycles
+  earlier. An 8-instruction loop takes 8, 9 or 10 cycles accordingly,
+  the same as with a false `ct` in its place, 1 and 64 calls deep [hw:
+  `tools/isa-probes/callsstack_pcall.c` `loop`, 4C, 2C3].
+- **A false call spills one chain frame when the chain register file
+  is full**, as the kernel says (`kernel/ttable.c:896-898`): at the
+  file's maximum (`%pcshtp` 960, 30 frames, on the 4C and 8C2; 928 on
+  the 2C3: [stack-and-unwinding.md](../abi/stack-and-unwinding.md),
+  "Stack registers") the first false call lowers `%pcshtp` by 32 and
+  raises `%pcsp.hi`'s `ind` by 32, and the next ones find room and
+  spill nothing; below the maximum nothing is spilled [hw: `shtp`, 4C,
+  8C2, 2C3; MCST's qemu the same]. The spill costs no cycles that show:
+  in a recursion 1,000 deep, a false call before each recursive call
+  makes a level 2 cycles faster (25.1 against 27.1 cycles on the 4C,
+  25.6 against 27.6 on the 2C3), one after the recursive call returns
+  changes nothing, and `BUB_B_CHAIN_SPILLFILL` counts 2.93 a level in
+  every variant [hw: `rec`, `pmu`; 4C, 2C3; not timed on the 8C2]. That
+  the earlier spill is what saves the 2 cycles is inferred (the gain
+  grows with the depth: none at 8 levels). So predicating a call costs
+  nothing beyond its predicate's distance, in deep code too.
 - `alc`, `abn` and `abp` have `f` and `t` bits that act when the
   instruction does not or does transfer ([loops.md](loops.md)); a
   diagnostic condition counts as "not" (MCST qemu) [source].
@@ -672,7 +709,12 @@ Rules a compiler must follow:
   channel's, a CLP's over any compare's, and the higher CLP's.
 - `pass @pK, %predN` only from a CLP (`@p4`–`@p6`); never feed a
   `movep` result to a CLP.
-- A `call` under a false predicate still costs a chain-stack spill.
+- A `call` under a false predicate costs what a false `ct` costs: its
+  predicate is needed 3 cycles ahead, else it waits 1–2 cycles. With
+  the chain register file full it spills one frame early, which costs
+  nothing measurable.
+- Never put a predicate on a `movtd` into a CTPR: gas accepts it, and
+  the hardware traps whatever the predicate's value ("RLP").
 
 `%spred` (proceed without waiting for late operands) and `%rndpred`
 (sampling) are for special code; `%MLOCK` and `%dt_al` belong to
@@ -699,7 +741,7 @@ Neither qemu can be trusted on predicates beyond the basics:
 | `,sm` store under a diagnostic predicate | data with bit 30 set | data replaced by `0x40000000` per half | data with bit 30 set |
 | `,sm` load under a diagnostic predicate (`isaleft.c` `dl_*`) | no access (above) | no access | reads memory: its bits with bit 30 set (`41234567c9abcdef`), and pages an untouched page in |
 | a `,sm` compare under a diagnostic predicate | diagnostic result | diagnostic | clean result |
-| a predicated write to a CTPR (`movtd`) | — | conditional | SIGILL |
+| a predicated write to a CTPR (`movtd`) | SIGILL `ILL_ILLOPC`, predicate true or false (`callsstack_tail.c` `movtdp`) | conditional | SIGILL |
 | `incr` condition | — | searched in all CDS | searched in CDS0 only |
 
 ## Not checked yet
@@ -708,3 +750,8 @@ Neither qemu can be trusted on predicates beyond the basics:
   type 9 with `ibranchd`, and with no
   integer compare in ALC N or an FP compare or `cctop*` there (gas
   rejects all three, so a test needs hand encoding).
+- A `movtd` into a CTPR under a `%pcnt` condition (a `%pred` one traps,
+  "RLP"; the community qemu traps on both).
+- What a false call costs on the 8C2: only its spill of a full chain
+  register file was read there (`callsstack_pcall` `shtp`); v3–v5 share
+  their timings, so the 4C's figures probably hold.

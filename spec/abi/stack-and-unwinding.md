@@ -13,6 +13,25 @@ Each thread has three stacks (guide 9.1.1):
 - Grows downwards. `USD` points to the lowest used address.
 - `getsp N` moves the stack pointer by N bytes (negative N allocates) and
   returns the new pointer, aligned to 16 bytes. `getsp 0` reads it.
+- The alignment is a rounding down of the sum, so only multiples of 16
+  come back exactly: `getsp -8` and then `getsp 8` leave the stack
+  pointer 16 bytes lower (so do −24/+24 and −40/+40; −16/+16 and
+  −32/+32 restore it)
+  [hw: `tools/abi/probes/callsstack_tail.c` `round`, 4C, 8C2, 2C3 and
+  MCST's qemu, whose `getsp` masks the sum with `~0xf`:
+  `target/e2k/tcg/translate-al-c12.c:165-177`]. A positive N gives
+  memory back: lcc frees VLAs this way, and a sibling call can free
+  its whole frame before its `ct`
+  ([calling-convention.md](calling-convention.md), "Tail calls that
+  release the frame"). Nothing bounds a release by the function's
+  frame: `getsp 16`, `256` or `4096` in a function with no frame lift
+  `USD` above its value at entry without a trap, and the function
+  returns normally (`over`; the return restores `USD`, below). A
+  `getsp` touches no memory, and the kernel accepts one past a guard
+  page whenever its new bottom lies in a mapping, so it is no stack
+  probe ([kernel-interface.md](kernel-interface.md), "Threads",
+  "Probing"). Under a predicate it runs only when the predicate is
+  true [hw: `callsstack_tail.s` `cs_chain_c`/`d`, all three].
 - **The amount of a `getsp` must be a literal, a window or rotating
   register, or a global from `%g16` up.** The data stack is mapped on
   demand: a `getsp` that moves past the part `USD` covers traps, and up

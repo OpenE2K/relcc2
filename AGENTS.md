@@ -318,7 +318,9 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     aliasing, fetch after a taken transfer, v6 lock MAS
                     and icall; timeleftv.c, gen_timeleftv.py recheck
                     them; their generated files are not kept in git:
-                    run the generators first), run on hardware; -DSPEC_V5, -DLOOPS_V5, -DAPB_V5
+                    run the generators first), and calls under a false
+                    predicate (callsstack_pcall.c/.s: their cost and
+                    chain-stack spill), run on hardware; -DSPEC_V5, -DLOOPS_V5, -DAPB_V5
                     builds add v5 cases
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     compiled to assembly and read, as are atomics.c,
@@ -350,8 +352,12 @@ tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     pocabi1_fm.c, pocabi1_mp.c/.s (message passing),
                     pocabi1_a16run.c with pocabi1_tear.s, pocabi2.c/.s
                     (a call's wbs bounds; extended parts across
-                    signals) and pocplan_tail.c (lcc's tail calls) run
-                    on hardware; ctxtls.c (TLS across a context switch),
+                    signals) and pocplan_tail.c (lcc's tail calls),
+                    callsstack_tail.c/.s with callsstack_tailx.cc (tail
+                    calls that release the frame, getsp rounding,
+                    predicated movtd) and callsstack_clash.c/.s
+                    (stack-clash probing) run on hardware; ctxtls.c
+                    (TLS across a context switch),
                     pocabi1_atom16.c, pocabi1_ord.c, pocabi1_nfx.c,
                     pocabi2_nfx.c and pocplan.c are read with -S;
                     mode32/ (32-bit mode: layout32.c must compile with
@@ -1090,6 +1096,23 @@ conditional loads but never volatile or atomic ones; lcc's 64-bit
 objects use the 64-bit DWARF format, and MCST's gdb rejects DWARF
 register numbers from 128 up.
 
+Calls and the data stack (2026-10-16; calling-convention.md, "Tail
+calls that release the frame", kernel-interface.md, "Probing",
+predicates.md; hw on all three, false-call timing on the 4C and 2C3): a
+tail call may give its frame back with a positive `getsp` before its
+`ct` (or in its instruction), and the callee then behaves as after a
+direct call (stack pointer, locals, rewritten stack arguments, large
+results, signals, `backtrace`, MCST's unwinder; 10^6 chained calls in
+constant stack), so GCC's sibling calls fit; `getsp` rounds its sum
+down to 16, and nothing bounds a release. A false `call` costs what a
+false `ct` costs, and the one chain frame it spills when the chain
+register file is full costs nothing measurable. Stack-clash probes
+every 4 KiB, allocated page by page (`getsp -4096` and a store), make
+glibc's one-page guard enough for a large frame; 8 KiB probes can miss
+it, a `getsp` is no probe, and probes after one big `getsp` let a
+signal frame land below the guard; an E2K call probes nothing
+(inferred). A `movtd` into a CTPR under a predicate is SIGILL.
+
 32-bit mode (`spec/abi/mode32.md`, for completeness; hw on all three):
 ILP32 with 8-byte `long long` and `double`; every data access is
 `ldgd*`/`stgd*` (two 32-bit operands summed mod 2^32 within GD =
@@ -1243,6 +1266,11 @@ None at the moment.
 - MCST's qemu applies `%pfpfr` (rounding, flags) to 80-bit operations
   and ignores x87 precision control; the hardware uses `%fpcr`/`%fpsr`.
   Check `long double` rounding and flags on hardware.
+
+- gas accepts a predicated `movtd` into a CTPR (`movtd,0 %dr1, %ctpr1 ?
+  %pred0`) and MCST's qemu runs it conditionally, but the hardware traps
+  (SIGILL `ILL_ILLOPC`) whatever the predicate's value
+  (spec/isa/predicates.md, "RLP"). Prepare unconditionally.
 
 - Unipro's assembly needs fixes to assemble with MCST gas: write `%empty`
   instead of `%empty.hi`, compile with `-fno-addrsig` and `-fno-PIC` (gas

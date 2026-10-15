@@ -303,9 +303,15 @@ diagnostic; 30 isolated runs on each machine always gave the data.
 
 lcc's `-fsemi-spec-ld` (default) makes loads moved from under a predicate
 semi-speculative; `-fspec-ld` uses fully speculative loads with
-compensation code where semi-speculative ones are not allowed; the
-kernel itself is built `-fno-semi-spec-ld` [lcc-doc, source]. In lcc
-1.29.16's output (CoreMark, Linpack, probes at `-O3`) [lcc]:
+compensation code where semi-speculative ones are not allowed [lcc-doc].
+MCST's kernel is built with `-fkernel` (semi-speculative loads only of
+globals, the stack and through global registers) followed by
+`-fsemi-spec-ld` or `-fno-semi-spec-ld` as `CONFIG_SEMI_SPECULATIVE_KERNEL`
+says (`y` in its `defconfig`), its trap entry with `-fno-semi-spec-ld`,
+and its physical-mode code also with `-fno-spec-ld`
+([kernel-build.md](../abi/kernel-build.md), "Speculative loads")
+[lcc-doc, source]. In lcc 1.29.16's output (CoreMark, Linpack, probes
+at `-O3`) [lcc]:
 
 | Options | Speculative loads | Prefetch | Data speculation |
 |---|---|---|---|
@@ -638,8 +644,10 @@ and the compensation block is one `{ ibranch back; adds,0,sm }`: unlike
 a `disp` + `ct` back, it writes no CTPR, so the APB program in `%ctpr2`
 keeps running ([apb.md](apb.md)). Its `full_verify` loop puts two locks
 (ALC0, ALC3) and two checks (ALC2, ALC5) with one `rbranch` in one
-instruction [lcc]. Options: `-fno-dam`, `-fno-swp-dam`, `-fswp-dam-cc`
-(compensation code in pipelined loops; default at `-O3`),
+instruction [lcc]. Options: `-fno-dam` (1.29.16's removes all of it,
+1.31.05's leaves the DAM of software-pipelined loops [lcc]),
+`-fno-swp-dam` (1.29's `-fno-dam4swp`), `-fswp-dam-cc` (compensation
+code in pipelined loops; default at `-O3`),
 `-fno-dam-call`, `#pragma no_dam`; the guide (6.5.4.2) recommends
 `-fno-dam` when a profile shows the compensation code running often
 [lcc-doc, guide].

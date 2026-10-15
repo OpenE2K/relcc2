@@ -200,7 +200,10 @@ The calling sequence is the one above with `sdisp %ctpr1, 0x6` (glibc
 A fast call keeps `%g0`–`%g11`, `%g14`, `%g15` and `%g16`–`%g25`
 (`%g12`, `%g13` not tried), but **may change `%g26`–`%g31`**: the kernel
 is compiled to use those six as scratch registers (`-fglobal-regs`;
-`SCRATCH_GREGS_START` 26, kernel `include/asm/glob_regs.h:22-24, 57-68`).
+`SCRATCH_GREGS_START` 26, kernel `include/asm/glob_regs.h:22-24, 57-68`;
+the kernel's whole global-register convention, and why only
+`-ffixed-g16` … `-ffixed-g25` keeps the user's `%g16`–`%g25` there:
+[kernel-build.md](kernel-build.md), "Global registers").
 The calls tested changed only `%g26`–`%g28`: fast calls 2 and 3 left
 kernel values in all three on every machine, and the clock calls 0 and 1
 changed `%g26` on the 2C3. On the 4C and 8C2 the clock calls emptied all
@@ -1432,7 +1435,9 @@ glibc's `_mcount (u_long frompc)` is a `noinline` C function that takes
 `selfpc` from its own `%cr0.hi`, the address after the call in the
 profiled function (glibc `sysdeps/e2k/machine-gmon.h:28-34`). lcc links
 `gcrt1.o` for `-pg` and `grcrt1.o` for `-pg -static-pie`; the sysroot
-also has `Mcrt1.o`. lcc rejects `-finstrument-functions` [lcc]. On all
+also has `Mcrt1.o`. lcc rejects `-finstrument-functions` [lcc]. The
+kernel's ftrace finds and patches this call sequence in its own objects
+([kernel-build.md](kernel-build.md), "ftrace"). On all
 three machines a `-pg` program, dynamic and static PIE, writes
 `gmon.out`, and the system's `gprof` prints the right call counts and
 callers (500 calls of `leaf`, 400 from `twice`, 100 from `main`).

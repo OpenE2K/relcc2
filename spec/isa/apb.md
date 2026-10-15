@@ -245,7 +245,9 @@ comments in `ttable.c`], so APB can be used only in loops without calls
 [guide 6.6], and a `mova` after a call (even in a later, separate loop)
 must follow its own `ldisp` and `bap`. System calls also reset it (they
 are reached through calls anyway). The kernel itself is built with
-lcc's `-fno-loop-apb` and keeps `%ctpr2` free in trap code.
+lcc's `-fno-loop-apb` and keeps `%ctpr2` free in trap code
+([kernel-build.md](../abi/kernel-build.md), "Array prefetch, `%ctpr2`,
+DAM").
 
 After the loop lcc writes `{ disp %ctpr2, disp=0x0; aaurw,2 0, %aabf0 }`
 and never uses `eap`. The `%aabf0` write clears `%aasr.iab` and

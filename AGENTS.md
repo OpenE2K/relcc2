@@ -176,6 +176,10 @@ spec/abi/      ABI spec for e2k64: data layout, registers + DWARF, calling
                also shared between threads, signals and their frames,
                hardware and data stacks, overflow signals, address
                space, -pg, sanitizers, static PIE),
+               kernel-build.md (what compiling MCST's Linux kernel
+               asks of a compiler: lcc's kernel options, global
+               registers, check_stack, asm idioms, kernel-mode code
+               generation, build tools that read compiler output),
                mode32.md and protected-mode.md (lcc's 32-bit and
                protected modes, for completeness),
                lcc-builtins.md (lcc 1.31's builtins and <e2kintrin.h>:
@@ -377,7 +381,15 @@ tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     library probes by run.sh --left, static on the
                     4C); execstack.sh (GNU-stack census) and
                     prefrel.sh (R_E2K_PREF) link and read; sanitize.c
-                    is read with -S);
+                    is read with -S; kernelbuild.py compiles probes
+                    with lcc, and optionally a GCC, for what building
+                    MCST's kernel asks of a compiler: its options,
+                    global registers and register variables,
+                    check_stack/check_mem/avoid_stack, its asm idioms,
+                    kernel-mode code generation, -ffix-lcc-bug123567,
+                    -pg for recordmcount, module relocations, and with
+                    --compare-wsz the windows of kernel objects built
+                    on the host with make O=...);
                     find_builtins.py, gen_builtins.py and
                     gen_builtins_misc.py ask lcc 1.31.05 about its builtins;
                     asmconv.py asks lcc about inline-asm constraints,
@@ -820,7 +832,9 @@ bugs). The ones that matter for code: `CODE_PLACEMENT` (all three; gas
 works around it), the v6 MAS store-release being broken on E2C3 ≤ rev 2
 (use `wait` + store, as lcc and the kernel do), `ibranchd`/`rbranch`
 corrupting an inactive CTPR on all v6 CPUs, and #123567 (a load right
-after an intersecting store, 8C2), which `stldv.c` did not reproduce.
+after an intersecting store, 8C2), which `stldv.c` did not reproduce
+and the default `e2k-v5.8c2` lcc doesn't avoid (only
+`-ffix-lcc-bug123567`, which MCST's kernel passes, does).
 Our own (low confidence): on the 2C3 a `mova` outside `loop_mode` is
 SIGILL while `%lsr` says a counted loop has ended (`vlc` 1, `lcnt` 0,
 `ldmc` 0: after any finished counted loop, glibc's `strncmp` included;
@@ -1137,6 +1151,25 @@ frame's stack pointer at its call), not the entry value. gas makes a
 (`.label`) and gdb ignores them. gdb reads TLS in lcc's and GCC's forms
 (GCC needs `TARGET_ASM_OUTPUT_DWARF_DTPREL`: `.dword x@TLS_DTPREL`).
 
+Kernel build (2026-10-16; `spec/abi/kernel-build.md`, compile only:
+lcc 1.29.16 and 1.31.05 for v3, v5 and v6, the PoC GCC, `OpenE2K/linux`
+files built on the host): the kernel's `lcc-option(s)` silently drop
+whatever a compiler rejects, so a GCC loses every kernel option,
+`-ffixed-g16` … `g25` included (`%g16`–`%g25` hold kernel state,
+`%g26`–`%g31` are scratch). lcc doesn't reserve a register variable's
+register; GCC fixes it and warns (fatal under `-Werror`) when it is
+call-clobbered. `check_stack` (the kernel's `__interrupt`, about 90
+functions) makes lcc refuse anything needing the data stack and skip
+the argument area of calls. The kernel relies on lcc keeping
+non-volatile asms with unused outputs (`barrier()`, per-CPU stores)
+and not merging or hoisting state-register reads; GCC does both. It
+also needs `%L`/`%H` on 16-byte operands, 39 asm operands (GCC's
+limit is 30), lcc's pragmas under `-Werror`, inline 128-bit multiplies
+(no libgcc) and lcc's `-pg` shape for recordmcount. MCST's `defconfig`
+uses `-fsemi-spec-ld`; lcc honours `-fno-jump-tables` only at `-O0`;
+1.31's `-fno-dam` keeps pipelined loops' DAM (`-fno-swp-dam`); the
+default 8C2 lcc doesn't apply the #123567 workaround.
+
 32-bit mode (`spec/abi/mode32.md`, for completeness; hw on all three):
 ILP32 with 8-byte `long long` and `double`; every data access is
 `ldgd*`/`stgd*` (two 32-bit operands summed mod 2^32 within GD =
@@ -1175,8 +1208,9 @@ OpenMP and static ELF32 protected programs work; root can clear
 A plan for the owner, written for someone new to GCC: pipeline and
 backend anatomy, files to create (LoongArch's 2022 series as the model),
 cross-build commands against lcc's sysroot, milestones M0–M8, design
-decisions, VLIW scheduling, and what to take from ia64, TILE-Gx, C6x and
-SPARC (with file:line references into `toolchains/gcc`). Owner's
+decisions (D11: what compiling MCST's kernel needs), VLIW scheduling,
+and what to take from ia64, TILE-Gx, C6x and SPARC (with file:line
+references into `toolchains/gcc`). Owner's
 decisions so far: follow lcc's conventions wherever there is a choice
 (`setwd dbl` per function; `.ignore strict_delay` with the compiler inserting
 every delay, `.accept strict_delay` around user asm); use MCST's
@@ -1306,6 +1340,14 @@ None at the moment.
   next `.loc` (the last one gets none), and plain assembly gets no debug
   sections even with `--gdwarf-5` or `-g`
   (spec/abi/stack-and-unwinding.md, "Debug information").
+
+- Building `OpenE2K/linux` with anything but lcc: the kernel's
+  `lcc-option`/`lcc-options` (`scripts/Makefile.compiler`) drop every
+  option, or whole group, the compiler rejects without a word,
+  `-ffixed-g16` … `g25` included, and GCC then deletes the kernel's
+  `barrier()` and other non-volatile asms with unused outputs
+  (spec/abi/kernel-build.md). Check the `V=1` command lines and the
+  object code, not just that it compiles.
 
 - Unipro's assembly needs fixes to assemble with MCST gas: write `%empty`
   instead of `%empty.hi`, compile with `-fno-addrsig` and `-fno-PIC` (gas

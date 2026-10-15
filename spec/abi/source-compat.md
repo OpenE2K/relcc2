@@ -107,14 +107,31 @@ Constraints, as lcc 1.28+ defines them:
   included only under `__LCC__`.
 - lcc accepts `_Pragma("asm_inline")` before an `asm` (it allows lcc to
   schedule the asm with surrounding code, `-masm-inline`), and checks the
-  asm's text unless `-mno-asm-check`. Other compilers ignore the pragma.
+  asm's text unless `-mno-asm-check`. `-masm-inline` is off by default
+  at every `-O` level; MCST's kernel turns it on, and then lcc parses the
+  asm text: it deletes an unused `rrd`, folds pure operations such as two
+  identical `addd`, and merges two `rrd %lsr`, but keeps every read of
+  `%upsr`, `%ip`, `%clkr`, `%sclkr` and `%fpsr` [lcc 1.29.16, 1.31.05:
+  `kernelbuild.py` `open`; [kernel-build.md](kernel-build.md),
+  "State-register reads"]. GCC ignores the pragma with a warning (below).
 
 Register variables (`register T v asm("...")`, lcc 1.29+): a name without
 a prefix is ordinary registers, so a 16-byte variable at `%g2` occupies
 `%g2`+`%g3`; the prefix `x` names one extended register (`%xg5`, odd
 numbers allowed). By default (`-mold-register-asm-long-double`) a `long
 double` named without `x` is still placed in the extended register, with
-a warning.
+a warning. A file-scope register variable only names its register: lcc
+does not reserve it, and the file's other functions use that register
+for temporaries (`%g16`–`%g31` under `-fglobal-regs`, lcc's default)
+unless `-ffixed-gN` is given. lcc reads such a variable again after a
+call, merges two reads with only a store between and keeps two
+consecutive writes [lcc: `tools/abi/probes/kernelbuild.py` `gregapi`,
+`gvars`]. GCC instead makes the register fixed for the rest of the file,
+warns (with no `-W` switch to turn it off) when it is call-clobbered and
+not already fixed, and deletes the first of two consecutive writes
+[source: `gcc/reginfo.cc:737-790`; gcc]. MCST's kernel relies on
+`-ffixed-g16` … `-ffixed-g25` ([kernel-build.md](kernel-build.md),
+"Global registers").
 
 ### Other constraints (lcc)
 
@@ -156,7 +173,8 @@ the kernel's uapi headers use `ri` (51), `=r` (13) and `i` (8) [source].
 | `%[name]` | the named operand |
 | `%cN` | a constant without decoration: `5` gives `0x5`, `&g` gives `g`. On a register: error "operand modifier 'c' should only be used for constants" |
 | `%nN` | the negated constant: `5` gives `0xfffffffb` (`int` width), `-5L` gives `0x5` |
-| `%HN` | the second register of a 16-byte `r` operand: an `__int128` in `%r4`+`%r5` prints `%r4` for `%0` and `%r5` for `%H0`. On an 8-byte operand or an `x` operand: error "operand modifier 'H' should only be used with quadro" |
+| `%HN` | the second register of a 16-byte `r` operand: an `__int128` in `%r4`+`%r5` prints `%r4` for `%0` and `%r5` for `%H0`; the same for a 16-byte struct or union, input or `"=&r"` output (`kernelbuild.py` `modifiers`). On an 8- or 4-byte operand, an `x` operand or a constant: error "operand modifier 'H' should only be used with quadro" |
+| `%LN` | the first register of a 16-byte `r` operand, the one `%N` prints (`%r4` above), for `__int128`, `unsigned __int128`, a `struct { u64, u64 }` or a union of them, input or `"=&r"` output. On an 8- or 4-byte operand, an `x` operand or a constant: error "operand modifier 'L' should only be used with quadro". MCST's kernel uses it 27 times, beside `%H`, all in `asm/e2k_api.h` ([kernel-build.md](kernel-build.md), "`%L`, `%H` and 16-byte operands") [lcc 1.29.16 v3, v5.8c2, v6.2c3; 1.31.05 v3: `kernelbuild.py` `modifiers`] |
 | `%a`, `%l`, `%P`, `%p`, `%w`, `%d`, `%x`, `%X`, `%h`, `%b`, `%q`, `%s`, `%z`, `%k`, `%V`, `%K` | error "unknown operand modifier" |
 
 - In a basic asm (no colons) `%` is not special: `asm volatile ("%#")`
@@ -251,6 +269,7 @@ uapi's clobber list names them ([kernel-interface.md](kernel-interface.md),
 |---|---|
 | `asm volatile`, any clobbers | a barrier for everything: reserves the outgoing area, prepares `return %ctpr3` and loop `disp`s again after it (also with no clobbers: CTPRs are never kept across it), and reloads memory as if `"memory"` were given |
 | non-volatile | follows the clobber list: keeps `return %ctpr3` prepared across it unless `"ctpr3"`, `"call"` or a `"b[N]"` is listed; may put operands in `%g16`–`%g31` unless `"call"` or that `gN` is listed; reuses a value loaded before it unless `"memory"`, `"call"` or a `"b[N]"` is listed (`asmconv.py`, "Effects") |
+| non-volatile with outputs, opaque (`-mno-asm-inline`, lcc's default) | in every case probed, kept when its outputs are unused, and two identical ones neither merged nor moved out of a loop (`kernelbuild.py` `barrier`, `open`). GCC deletes the first kind and merges or hoists the second (`gcc/doc/extend.texi:11700-11711`, `gcc/cse.cc:2743-2760`) [gcc]; MCST's kernel relies on lcc here for `barrier()`, per-CPU stores and state-register reads ([kernel-build.md](kernel-build.md), "Inline assembly the kernel relies on") |
 
 The uapi system call macros list neither `"memory"` nor `"call"`, so they
 rely on this (inferred). GCC does not treat `asm volatile` as a memory clobber and may
@@ -273,9 +292,14 @@ lcc also has `#pragma asm_inline`, `#pragma no_asm_inline` and
 `#pragma asm_length (N)` (the asm's length in cycles, 0–14, E2K only)
 (**lcc-doc** `pragma_mcst.html`). glibc uses the first two
 (`sysdeps/e2k/dl-machine.h:89-95`, `sysdeps/e2k/fpu/e_coshf.c:44`) and
-the kernel all three (`asm/compiler.h:43-67`); MCST's libgcc
-`__e2k_clear_cache` uses `no_asm_inline` (`config/e2k/clear-cache.c`). GCC
-ignores unknown pragmas (a warning with `-Wunknown-pragmas`).
+the kernel the last two (`__no_asm_inline`, `asm/compiler.h:43-101`;
+it never uses `asm_inline`); MCST's libgcc `__e2k_clear_cache` uses
+`no_asm_inline` (`config/e2k/clear-cache.c`). lcc accepts them under
+`-Wall -Werror` [lcc]. GCC ignores unknown pragmas with a warning from
+`-Wunknown-pragmas`, which `-Wall` includes, so under the kernel's
+`-Werror` these and lcc's loop pragmas (`loop count (N)`, `unroll
+(N)`, `ivdep`, ...) stop the build [gcc; [kernel-build.md](kernel-build.md),
+"lcc's pragmas"].
 
 Register names for `-ffixed-<reg>` and `-fcall-used-<reg>` (as in GCC):
 `g0`..`g31`, `r0`..`r63`, `pred0`..`pred31`.
@@ -321,7 +345,22 @@ Register names for `-ffixed-<reg>` and `-fcall-used-<reg>` (as in GCC):
   conditions); `-f[no-]spec-volatile-st` (1.30, speculative stores
   through `volatile` pointers). `-fkernel` disables
   semi-speculative loads except those of globals, the stack and through
-  global registers.
+  global registers; a later `-fno-semi-spec-ld` removes those too, and
+  fully speculative loads (`mas=0x3` with `%dt_al` recovery) stay until
+  `-fno-spec-ld` [lcc: `kernelbuild.py` `codegen`].
+- **Jump tables**: lcc 1.29.16 and 1.31.05 honour `-fno-jump-tables`
+  only at `-O0`; from `-O1` on a dense `switch` still becomes a `.T.N`
+  table of absolute addresses [lcc: `kernelbuild.py` `jumptab`].
+- **DAM**: 1.29.16's `-fno-dam` removes every lock and check load; in
+  1.31.05 it leaves the DAM of software-pipelined loops, which
+  `-fno-swp-dam` turns off [lcc: `kernelbuild.py` `codegen`].
+  `-fno-swp-dam` is 1.30's name for `-fno-dam4swp`, which 1.29.16
+  accepts and 1.31.05 still does (**lcc-doc** `changelog_130.html`).
+- **Kernel builds**: `-fkernel`, the options MCST's kernel adds
+  (`-fglobal-regs`, `-ffixed-g16` … `g25`, `-fexclude-ctpr2`,
+  `-fno-dam`, `-fno-loop-apb`, `-ffix-lcc-bug123567`,
+  `-mfixed-gregs-base`, ...) and the attributes `check_stack`,
+  `check_mem` and `avoid_stack` are in [kernel-build.md](kernel-build.md).
 - **`swapcontext`** is treated like `setjmp` (returns twice) since 1.28;
   without that it "could cause runtime errors". GCC marks only `setjmp`,
   `sigsetjmp`, `savectx`, `vfork` and `getcontext` (`gcc/calls.cc`,

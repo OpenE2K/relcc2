@@ -1775,6 +1775,62 @@ each one cost it a debugging session:
   wrote and kept values live across the call in window registers (its
   runs, not rechecked).
 
+### D11. Building MCST's Linux kernel
+
+What compiling `OpenE2K/linux` needs beyond user code
+(`spec/abi/kernel-build.md`; compile-only, lcc and the proof of concept
+on the host):
+
+- **lcc's option spellings.** The kernel passes its lcc options through
+  `lcc-option`/`lcc-options` (`scripts/Makefile.compiler`), which drop an
+  option, or a whole group, silently when the compiler rejects it. Under
+  a GCC everything goes: the `-fkernel -gline …` group (GCC rejects
+  `-gline`), `-fglobal-regs -ffixed-g16` … `-ffixed-g25`,
+  `-fexclude-ctpr2`, `-fno-dam`, `-fno-semi-spec-ld`, `-fno-spec-ld`,
+  `-fno-loop-apb`. The fixed globals matter most: the kernel reserves
+  `%g16`–`%g25` for its state (and needs `%g16`–`%g31` untouched where
+  lcc gets `-fno-global-regs`). Accept lcc's spellings where the port has
+  the feature, or expect a kernel Makefile change; either way, a
+  register the port uses outside allocation (a result buffer's address,
+  a thunk's scratch) must honour `-ffixed-gN`.
+- **`%L` and `%H`** on 16-byte `r` operands, and 16-byte structs
+  (`e2k_qreg_t`) in register pairs as `r` and `"=&r"` operands
+  (`spec/abi/source-compat.md`, "Operand modifiers").
+- **lcc's pragmas** (`no_asm_inline`, `asm_length`, `loop count`,
+  `unroll`, `ivdep`, `vector aligned`, `novector`, `no_dam`,
+  `noprefetch`): register them, as no-ops at first, or `-Wall -Werror`
+  stops on `-Wunknown-pragmas`.
+- **Asm operands**: `TRAP_HANDLER_DONE` has 39 and lcc allows 50. GCC's
+  limit, `MAX_RECOG_OPERANDS`, is the largest operand count of any md
+  pattern (at least 29) plus 1 (genconfig.cc:285, 320), 30 for a port
+  without a bigger pattern.
+- **A `check_stack` attribute** (the kernel spells it `__interrupt__`
+  for other compilers; about 90 functions, fast system calls among
+  them): an error, never a frame, whenever the function would need the
+  data stack, and calls with up to 8 arguments made without reserving
+  the argument area.
+- **128-bit multiplies and shifts inline**: the kernel links no libgcc;
+  lcc uses `muld` and `umulhd`, while the proof of concept calls
+  `__multi3` (and the TImode shift helpers at `-Os`).
+- **`-pg` in lcc's shape** (`spec/abi/kernel-interface.md`,
+  "Profiling"), which `recordmcount.pl` and the ftrace patcher read
+  back: `disp %ctprN, _mcount`, then the `call` in a wide instruction
+  with SS and CS1, no transfer between, `cr1.wpsz` ≤ 4; and accept
+  `-mptr64`, which `recordmcount.pl` passes.
+- **`ttable.c`'s windows** (v3 and v4 kernels): seven trap-return
+  functions keep their names and a `setwd`, and none gets a larger
+  window in `ttable.o` than in `ttable_tmp.o`, whose `setwd`s the build
+  reads back.
+- **Erratum #123567** (`spec/isa/hwbugs.md`): 8C2 and generic kernels
+  ask for `-ffix-lcc-bug123567`, a real wide instruction between a store
+  and a later load that may intersect it.
+
+Not the port's to fix: GCC deletes a non-volatile asm whose outputs are
+unused and merges or hoists identical ones (its documented semantics),
+and the kernel's `barrier()`, per-CPU stores and state-register reads
+rely on lcc doing neither, so a GCC-built kernel needs those asms
+`volatile`.
+
 ---
 
 ## 7. Scheduling for a VLIW/EPIC machine
@@ -2454,7 +2510,9 @@ the `mas=0x4` lock and the `mas=0x3` check.
 **5. Checked control speculation (`%dt_al`).** The fully speculative
 load (`ld,sm ..., mas=0x3`) never enters the kernel, so it is what code
 that must not page in memory speculatively uses (lcc's
-`-fno-semi-spec-ld`, which the kernel is built with). It needs recovery,
+`-fno-semi-spec-ld`, which the kernel's trap entry is built with, and
+the rest of the kernel too when `CONFIG_SEMI_SPECULATIVE_KERNEL` is off;
+`spec/abi/kernel-build.md`, "Speculative loads"). It needs recovery,
 and E2K has ia64's `ld.s` + `chk.s` in this form:
 
 | ia64 | E2K |

@@ -15,6 +15,7 @@ code.
 | [atomics.md](atomics.md) | Atomic read-modify-write, memory orders, 16-byte atomics |
 | [source-compat.md](source-compat.md) | Predefined macros, inline-asm constraints, modifiers and clobbers, register names, lcc options that change code |
 | [kernel-interface.md](kernel-interface.md) | System calls, auxiliary vector, contexts (also shared between threads), signals and their frames, hardware and data stacks, address space, `-pg`, sanitizers, static PIE |
+| [kernel-build.md](kernel-build.md) | What building MCST's Linux kernel asks of a compiler: lcc's kernel options and which a GCC loses, the kernel's global registers, `check_stack` functions without a data stack, the asm idioms it relies on, kernel-mode code generation (speculation, APB, `%ctpr2`, DAM, jump tables, block moves, inlining, 128-bit helpers), erratum #123567, and the build tools that read compiler output |
 | [mode32.md](mode32.md) | For completeness (the GCC port targets 64-bit mode only): lcc's 32-bit mode (`-mptr32`): data layout, `ldgd*`/`stgd*` and `getpl`, calling convention, ELF32, TLS, system calls and signals, address space, why the modes can't be mixed |
 | [protected-mode.md](protected-mode.md) | For completeness (the GCC port targets 64-bit unprotected mode only): protected mode (`-mptr128`, e2k128): descriptors and tags, what the hardware, kernel and lib128 check, calling convention, system calls, lib128, lcc's options, ELF and linking |
 
@@ -28,6 +29,7 @@ Each rule is marked with where it comes from:
 | **lcc** | Observed in the output of lcc 1.29.16 for `tools/abi/probes/` (1.31.05 where the text says so; `tools/setup/fetch-lcc.sh 1.31.05 e2k-v3`) |
 | **lcc-doc** | lcc 1.31.05's user documentation (`doc/lcc/` in the compiler's tree, e.g. `toolchains/lcc-1.31.05-e2k-v3/opt/mcst/lcc-1.31.05.e2k-v3.linux-6.1/doc/lcc/`: changelogs since 1.24, option reference, notes on incompatible changes). MCST publishes it with the compilers, which it distributes freely (dev.mcst.ru/download). Facts are taken from it, not its text, and checked with a probe where possible |
 | **unipro** | Observed in the output of Unipro's clang 20.1.8 for the same probes |
+| **gcc** | Observed in the output of the proof-of-concept GCC back end (`toolchains/gcc-claude`), compile only: what GCC's middle end does with the same input, and what that back end still lacks |
 | **libffi** | MCST's libffi 3.3 E2K port (`src/e2k/`, MIT licence; `tools/setup/fetch-lcc-libs.sh`): an independent implementation of the calling convention by MCST, built with lcc and run against lcc code under qemu |
 | **binutils** | MCST's GPL binutils, `OpenE2K/binutils-gdb` (`bfd/elfxx-e2k.c`, `gas/config/tc-e2k.c`) |
 | **gdb**, **glibc**, **kernel**, **libgcc** | MCST's GPL sources: `OpenE2K/gdb`, `OpenE2K/glibc`, `OpenE2K/linux`, and the E2K libgcc in lcc's `internal-lcc-libs-open-source` tarball |

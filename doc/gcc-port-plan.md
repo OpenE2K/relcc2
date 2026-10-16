@@ -1688,17 +1688,23 @@ each one cost it a debugging session:
   aligned doubleword in the very next instruction; give the scheduler
   that dependence a latency of 2 rather than 1. v5 (the 8C2) adds any
   load of the store's 32-byte line 2 or 3 cycles after it that reads a
-  byte the store didn't write; v6 (the 2C3) a load of the stored
-  doubleword at another width up to 4 cycles after it. Every version
+  byte the store didn't write; v6 (the 2C3) any load that overlaps the
+  stored bytes without being exactly them at the store's width, or
+  reads another byte of a stored doubleword, up to 4 cycles after it,
+  any other load of the stored 32-byte line 1 cycle after it, and after
+  a store that crosses a line any load of its second line up to 4
+  cycles after it (16-byte `stqp`/`ldqp` and AAU stores alike; timing.md,
+  "More store-to-load cases"). A v3 store that crosses a doubleword
+  costs its own 4 cycles and needs no distance after that. Every version
   also delays a load at the stored offset 16 KiB × k away with up to 2
   empty cycles after the store (v6: 3; timing.md, "Loads 16 KiB away
   from a store"). sched-deps links a load to an earlier store only when
   they may overlap (`true_dependence`, sched-deps.cc:2675), so the v5
-  case (another field of the line, through the same base) and the
-  16 KiB one have no dependence to carry a latency; they need a check
-  where instructions are formed. lcc doesn't avoid the v5 case either:
-  its v5 `core_list_reverse` kernel pays it on CoreMark's lists, and so
-  did the proof of concept's (I45).
+  and v6 line cases (another field of the line, through the same base)
+  and the 16 KiB one have no dependence to carry a latency; they need a
+  check where instructions are formed. lcc doesn't avoid the v5 case
+  either: its v5 `core_list_reverse` kernel pays it on CoreMark's lists,
+  and so did the proof of concept's (I45).
 - **Memory accesses in one wide instruction** are ordered (ALC2 before
   ALC5, a load before a store in its cluster; `spec/isa/bundle.md`): a
   load in ALC5 sees a store in ALC2 of its own instruction, and of two
@@ -1790,6 +1796,46 @@ each one cost it a debugging session:
   and `-O2 -fPIC` on the 4C, 8C2 and 2C3, reloaded memory a `read`
   wrote and kept values live across the call in window registers (its
   runs, not rechecked).
+- **C++ ABI details** (`spec/abi/calling-convention.md`, "C++ ABI beyond
+  calls"; `spec/abi/data-layout.md`; found by comparing the proof of
+  concept with l++ 1.29.16 and 1.31.05). Member pointers, guards, array
+  cookies, constructors and the names of every type lcc has come out of
+  GCC's generic Itanium code as l++ makes them; four things don't:
+  1. **`__float80` is `long double`** in lcc, one type. Register it as
+     `long_double_type_node` itself, as x86 does (`float80_type_node =
+     long_double_type_node`, i386-builtins.cc:1474). The proof of
+     concept made it a separate `REAL_TYPE`: `f (long double)` and
+     `f (__float80)` then both compile, both as `_Z1fe`, and C's
+     `__builtin_types_compatible_p (__float80, long double)` is 0.
+  2. **`TARGET_MANGLE_TYPE`**: `__float128` is `g`, `long double` `e`,
+     but leave `_Float128` and `_Float64x` to the generic `DF128_` and
+     `DF64x`, as `ix86_mangle_type` does by returning nothing for
+     `float128_type_node` and `float64x_type_node` (i386.cc:25821-25830).
+     Mapping every XFmode `REAL_TYPE` to `e`, as the proof of concept
+     did, gives `_Float64x` the name of `long double`. lcc has neither
+     type, so no names are fixed.
+  3. **Guard variables' COMDAT groups.** GCC puts a guard in a group of
+     its own (`copy_linkage`, cp/decl2.cc:4052-4064), l++ in its
+     variable's, and both make it `STB_GNU_UNIQUE`, so an l++ object
+     linked before a GCC object that defines the same guarded inline
+     static fails with a multiple definition. Either put the guard in
+     its variable's group (a change in the C++ front end: no target
+     hook decides it) or make `-fno-gnu-unique` the E2K default (the
+     guard and the variable become weak and link in either order, as
+     with Unipro's clang, but lose GNU_UNIQUE's one instance across
+     `dlopen`ed libraries). The owner's call. The compat suite doesn't
+     test it yet; `tools/abi/probes/memorycxx_abi_x.cc` shows it.
+  4. **`alignof` of large vectors.** lcc aligns a vector of N bytes to N
+     up to 256 and its `_Alignof`/`alignof` say N; with `BIGGEST_ALIGNMENT`
+     128 GCC lays them out the same but `min_align_of_type`
+     (stor-layout.cc:2821-2837) answers 16 for 32 bytes and more.
+     Matching lcc needs a `BIGGEST_ALIGNMENT` of 256 bytes with
+     `ATTRIBUTE_ALIGNED_VALUE` kept at 128 bits (a bare `aligned` is 16
+     in lcc; defaults.h:1150-1151 ties it to `BIGGEST_ALIGNMENT`), but
+     `BIGGEST_ALIGNMENT` also sets the alignment of every
+     `__builtin_alloca` (builtins.cc:5790-5792) and the predefined
+     `__BIGGEST_ALIGNMENT__` (cppbuiltin.cc:164), which lcc doesn't
+     define. Weigh it before M8.
 
 ### D11. Building MCST's Linux kernel
 
@@ -2483,7 +2529,7 @@ ia64's advanced load + check (`ld.a` + `ld.c`/`chk.a`):
 | `ld.sa r` (speculative advanced load) | `ldd,0,sm ..., mas=0x7` (fully speculative lock: a failed one just makes the check reload) |
 | `ld.c.nc r` (check, entry kept) | `ldd,5 ..., mas=0x2` |
 | `invala.e r` (drop one entry) | `std,2 ..., %rN, mas=0x5` (drops the entry of its data register, writes nothing) |
-| ALAT invalidation by stores | DAM entry removed by any overlapping store (exact bytes, no false conflicts); a `mas=0x4` store skips the DAM |
+| ALAT invalidation by stores | DAM entry removed by any overlapping store (exact bytes, no false conflicts except a store in the check's own instruction, which fails it on a match of address bits 0–11), also one in the lock load's own instruction (in its cluster: the lock reads first, so that packing is correct); a `mas=0x4` store skips the DAM |
 
 A load moved above both its guard and a store gets its check **under the
 guard's predicate**: a check under a false predicate neither accesses

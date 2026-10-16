@@ -323,9 +323,16 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     aliasing, fetch after a taken transfer, v6 lock MAS
                     and icall; timeleftv.c, gen_timeleftv.py recheck
                     them; their generated files are not kept in git:
-                    run the generators first), and calls under a false
+                    run the generators first), calls under a false
                     predicate (callsstack_pcall.c/.s: their cost and
-                    chain-stack spill), run on hardware; -DSPEC_V5, -DLOOPS_V5, -DAPB_V5
+                    chain-stack spill), the store-to-load leftovers
+                    (memorycxx_stld.c, gen_memorycxx_stld.py: AAU,
+                    16-byte and line-crossing accesses, stores that
+                    miss L1, the 2C3's line penalty; its generated
+                    files are not kept in git either) and a store in a
+                    DAM lock load's own instruction (memorycxx_dam.c,
+                    gen_memorycxx_dam.py), run on hardware;
+                    -DSPEC_V5, -DLOOPS_V5, -DAPB_V5, -DSTLD_V5
                     builds add v5 cases
 tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     compiled to assembly and read, as are atomics.c,
@@ -367,9 +374,13 @@ tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     locations, TLS, lcc's line tables; debuginfo.sh
                     builds them and runs gdb there), glibcbuild_entry.c/.s
                     (the state a process starts in, static and
-                    dynamic) and glibcbuild_cancel.c (cancellation
+                    dynamic), glibcbuild_cancel.c (cancellation
                     through C cleanup regions, built by lcc and GCC)
-                    run on hardware;
+                    and memorycxx_abi_x.cc (the C++ ABI across
+                    compilers: member pointers, guards, array cookies,
+                    thread_local, typeid) run on hardware;
+                    memorycxx_abi.cc (l++'s mangled names, member
+                    pointers, guards, cookies) is read with -S and nm;
                     debuginfo_loc.sh (gas's .loc, .label and
                     @TLS_DTPREL) runs on the host; ctxtls.c
                     (TLS across a context switch),
@@ -1201,6 +1212,25 @@ aborts (`_Unwind_SetGR` index 24); and with a working one a
 cancellation that must land beyond a signal frame (a thread blocked in
 a system call) is lost.
 
+Memory and the C++ ABI (2026-10-16; timing.md "More store-to-load
+cases", speculation.md, calling-convention.md "C++ ABI beyond calls",
+data-layout.md; timing on the 4C and 2C3, the rest on all three): a
+store may share a DAM lock load's instruction (gas allows only the
+lock's cluster): the lock reads first, and a store to a locked byte
+always loses the entry, to other bytes never. On the 2C3 any load that
+overlaps the stored bytes without being exactly them at the store's
+width (16-byte, AAU and crossing stores alike) pays up to 4 cycles
+after the store, after a line-crossing store any load of its second
+line too, and other bytes of the line usually pay 1 cycle after it
+(some processes never do); on the 4C a crossing store costs only its 4
+cycles and AAU stores follow `std`. l++ is the generic Itanium C++ ABI
+(`__float80` is `long double`, member-function pointers `{ptr, adj}`,
+8-byte guards, cookies of max (8, align)), but it puts a guard in its
+variable's COMDAT group and GCC doesn't, so an l++ object linked before
+a GCC object with the same guarded inline static fails; lcc's `alignof`
+of a vector of 32+ bytes is its size, GCC's (`BIGGEST_ALIGNMENT` 128)
+16. The 8C2's store-to-load cases are still to be timed.
+
 32-bit mode (`spec/abi/mode32.md`, for completeness; hw on all three):
 ILP32 with 8-byte `long long` and `double`; every data access is
 `ldgd*`/`stgd*` (two 32-bit operands summed mod 2^32 within GD =
@@ -1379,6 +1409,19 @@ None at the moment.
   `barrier()` and other non-volatile asms with unused outputs
   (spec/abi/kernel-build.md). Check the `V=1` command lines and the
   object code, not just that it compiles.
+
+- Linking an l++ C++ object before a GCC one that defines the same
+  guarded inline static fails ("multiple definition of `guard variable
+  for ...`"): the two put the guard in different COMDAT groups
+  (spec/abi/calling-convention.md, "C++ ABI beyond calls"). Link GCC's
+  objects first or build them with `-fno-gnu-unique`.
+
+- Store-to-load timing on the 2C3 depends on the process's history: a
+  long sweep of kernels switched off a line penalty that fresh
+  processes pay in 3 or 4 of 4 steps, and a latency read as "every step
+  clean" hides rows where half the steps pay. Time such cases in fresh
+  processes (`memorycxx_stld.c trace`) and look at the cycles a step
+  (spec/isa/timing.md, "The 2C3's line penalty").
 
 - MCST's `/lib64/libgcc_s.so.1` aborts (SIGABRT in `_Unwind_SetGR`)
   whenever a cancellation or `pthread_exit` (presumably an exception

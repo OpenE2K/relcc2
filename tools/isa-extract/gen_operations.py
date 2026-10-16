@@ -119,6 +119,9 @@ PROBES = {
     "timeleft-v6.s": ("timeleft.c", "2C3"),
     "timeleftv.s": ("timeleftv.c", "4C, 8C2, 2C3"),
     "damlist.s": ("damlist.c", "4C, 8C2, 2C3"),
+    "memorycxx_dam.s": ("memorycxx_dam.c", "4C, 8C2, 2C3"),
+    "memorycxx_stld.s": ("memorycxx_stld.c", "4C, 2C3"),
+    "memorycxx_stld-v5.s": ("memorycxx_stld.c", "2C3"),
     "pocabi2.s": ("abi/pocabi2.s", "4C, 8C2, 2C3"),
     "kernleft.s": ("abi/kernleft.s", "4C, 8C2, 2C3"),
     "pocabi1_mp.s": ("abi/pocabi1_mp.s", "4C, 8C2, 2C3"),
@@ -209,7 +212,7 @@ def _assign(rules_doc, ops, v1, owner, errors, level, lo, hi):
 
 # Generators of probe assembly that is not kept in the repository
 # (.gitignore: several MB each); probe_runs() runs them before the scan.
-GENERATED = ["gen_timeleft.py", "gen_timeleftv.py"]
+GENERATED = ["gen_timeleft.py", "gen_timeleftv.py", "gen_memorycxx_stld.py"]
 
 
 def probe_runs(ops):

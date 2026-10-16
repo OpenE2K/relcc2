@@ -389,3 +389,52 @@ with stack arguments and from member functions, the callee building the
 object at the caller's address) and as arguments (in a register slot,
 on the stack, two at once, each destroyed once by the caller), with
 trivially copyable controls.
+
+## C++ ABI beyond calls (lcc: l++ 1.29.16 and 1.31.05; gcc; hw)
+
+l++ follows the Itanium C++ ABI in its generic form [lcc:
+`tools/abi/probes/memorycxx_abi.cc` read with `-S` and `nm`, l++
+1.29.16 and 1.31.05 for v3 giving the same names and code; across
+compilers: `tools/abi/probes/memorycxx_abi_x.cc`, l++ and the
+proof-of-concept GCC as either side, 0 failures under MCST's qemu and
+on the 4C, 8C2 and 2C3]. The proof-of-concept GCC gives the same names
+as l++ for every type l++ accepts, and the same layouts [gcc].
+
+| Item | Rule |
+|---|---|
+| E2K's types in mangled names | `long double` `e`; **`__float80` is `long double`**, one type (`f (long double)` and `f (__float80)` is a redefinition, error #247; in C `__builtin_types_compatible_p (__float80, long double)` is 1); `__float128` `g`; `__int128` `n`, `unsigned __int128` `o`; `_Complex float`, `double`, `long double` `Cf`, `Cd`, `Ce`; GNU vectors `Dv<N>_<element>`, N the element count (`Dv2_d`, `Dv4_d` for 32 bytes, `Dv16_h`, `Dv8_c`, `Dv2_f`); `wchar_t` `w`, `char16_t` `Ds`, `char32_t` `Di`, `std::nullptr_t` `Dn`, `std::byte` `St4byte`; `size_t` `m`, `ptrdiff_t` `l`; `va_list` `Pc` ("Variadic functions", above) |
+| Types lcc lacks | no `_FloatN` or `_FloatNx` types (lcc-doc: `builtin_gnu.html`; lcc: undeclared identifiers), so lcc fixes no names for them; x86 GCC mangles `_Float128` `DF128_` and `_Float64x` `DF64x` [source: GCC `ix86_mangle_type`, i386.cc:25821-25830]. `_Complex __float128` and `__complex__ __float80` are errors in l++ (#1043); GCC doesn't take them as types either: it reads `__float128` or `__float80` after `_Complex` as the declarator's name (a syntax error with a named parameter; an unnamed one becomes `_Complex double`) [gcc: host g++ 16.2 and the proof of concept] |
+| Typeinfo | lcc's `libstdc++.so.6.0.29` (GCC 11's) exports `_ZTIe@@CXXABI_1.3`, `_ZTIg@@CXXABI_FLOAT128`, `_ZTIn` and `_ZTIo@@CXXABI_1.3.5` and their pointer forms (`P`, `PK`), and nothing for `_FloatN` (no `_ZTIDF*`); a compatible libstdc++ must export these versions. Vector typeinfo (`_ZTIDv4_i`) is emitted as COMDAT where it is used |
+| Pointer to data member | 8 bytes: the member's offset; null is −1 |
+| Pointer to member function | 16 bytes, aligned 8, `{ptr, adj}`: `ptr` is the function's address, or for a virtual function 1 + the byte offset of its vtable slot (`B::v1` at slot 0 is 1, `B::v2` 9); `adj` is the `this` adjustment in bytes, not doubled (`D::v1` through a second base at offset 16 is `{1, 16}`); null has `ptr` 0. A call tests `ptr & 1`, reads the vtable at `this + adj` and the function at vtable + `ptr` − 1. GCC's default keeps the virtual bit in `ptr` when functions are 2-byte aligned (`ptrmemfunc_vbit_in_pfn`) [source: GCC defaults.h:894-898] |
+| Guard variables | 8 bytes; the inline test reads byte 0 (`ldb`) and uses it in a compare (the acquire of [atomics.md](atomics.md)) before calling `__cxa_guard_acquire`, then `__cxa_guard_release`, or `__cxa_guard_abort` from the landing pad when the initialiser throws. A `thread_local` with a dynamic initialiser has a 1-byte TLS flag, an init function `_ZTH<name>` and a weak wrapper `_ZTW<name>`; other files reference `_ZTH<name>` weakly |
+| Array cookies | `new T[n]` for a `T` with a non-trivial destructor allocates a cookie of max (8, `alignof (T)`) bytes and stores the count in the 8 bytes right before the array (`alignas (64)`: the count at +0x38, the array at +0x40); none for a trivially destructible `T`. l++ calls `__cxa_vec_new (n, size, cookie, ctor, dtor)` and `__cxa_vec_delete3` with the sized `operator delete[] (void *, size_t)`; for an over-aligned `T` it calls `operator new[] (size_t, align_val_t)`, `__cxa_vec_ctor`, `__cxa_vec_dtor` and `operator delete[] (void *, size_t, align_val_t)`. GCC builds the same layout inline. `__STDCPP_DEFAULT_NEW_ALIGNMENT__` is 16 |
+| Constructors, destructors, vtables | constructors and destructors return nothing (`this` is not returned, unlike ARM's ABI); l++ makes C2 an alias of C1 (`_ZN1KC2El = _ZN1KC1El`) and D2 of D1; the vtable pointer points 16 bytes into the vtable; non-virtual thunks are `_ZThn16_…`; the key-function rule holds (a class whose first non-inline virtual function is defined elsewhere only references its vtable) |
+| Static initialisation | `__cxa_atexit` with `__dso_handle` for static destructors. l++ puts one `__sti__<file>` function per file in `.ctors`, which MCST's ld places into `.init_array` (binutils `ld/scripttempl/elf.sc:257-279`), so l++'s and GCC's static constructors run in link order whichever compiler built each file [qemu: five link orders] |
+
+**COMDAT groups of guard variables** [lcc: 1.29.16, 1.31.05; gcc; hw:
+4C, 8C2, 2C3 and MCST's qemu]: l++ puts the guard of an inline
+function's static, or of a template's static data member, in the
+**variable's** COMDAT group (`_ZZ…`, `_ZN…`; the guard follows the
+object in its section), as the Itanium C++ ABI suggests. GCC gives the
+guard a group of its own (`copy_linkage`, `cp/decl2.cc:4052-4064`)
+[source: GCC], which the ABI also allows, provided the guard is weak
+[source: Itanium C++ ABI 5.2.2]. Both compilers make the guard
+`STB_GNU_UNIQUE` instead, so linking an l++ object before a GCC object
+that defines the same guarded static into one executable or library
+fails ("multiple definition of `guard variable for …`"): the linker
+keeps l++'s group, which holds both symbols, drops GCC's group of the
+variable, and then meets GCC's guard again in its own group (inferred
+from the groups). The reverse order links and runs. Both orders link
+and run when the GCC side is built with `-fno-gnu-unique` (its guard
+and variable are then weak). Unipro's clang also uses a separate group,
+with a weak guard; its object links with l++'s in both orders and the
+static is initialised once [unipro: assembly read, then assembled with
+MCST gas, linked with an l++ object and run under MCST's qemu]. GCC has
+no target hook for the guard's group (the `TARGET_CXX_*` hooks in
+`target.def`) [source: GCC];
+[gcc-port-plan.md](../../doc/gcc-port-plan.md), D10, has what a port
+can do. The other grouping differences involve only weak symbols and
+link in both orders: l++ puts D0 in a group of its own and D1 + D2 in
+one where GCC uses one `D5` group, and l++ puts a thunk in its own
+group where GCC puts it in the function's.

@@ -15,17 +15,33 @@ Little-endian. Checked by `tools/abi/probes/layout.c` (lcc, unipro).
 | pointers | 8 | 8 | `%dr` | |
 | `float` | 4 | 4 | `%r` | IEEE single |
 | `double` | 8 | 8 | `%dr` | IEEE double |
-| `long double`, `__float80` | 16 | 16 | `%xr` | 80-bit x87 extended in the low 10 bytes (mantissa, then sign and exponent); stores write only those 10 bytes, so bytes 10–15 are undefined (hw); for MCST's gdb, debug information can describe one in registers only as a register pair given in pieces ([registers.md](registers.md), "How MCST's gdb reads them") |
+| `long double`, `__float80` | 16 | 16 | `%xr` | 80-bit x87 extended in the low 10 bytes (mantissa, then sign and exponent); stores write only those 10 bytes, so bytes 10–15 are undefined (hw); for MCST's gdb, debug information can describe one in registers only as a register pair given in pieces ([registers.md](registers.md), "How MCST's gdb reads them"); `__float80` is the same type as `long double` (lcc: C and C++) |
 | `__float128` | 16 | 16 | `%qr` / two `%dr` | IEEE quad; arithmetic is in libgcc (`__multf3`, …) |
 | `_Complex float` | 8 | 4 | | |
 | `_Complex double` | 16 | 8 | | |
 | `size_t` | 8 | 8 | | unsigned long |
 | `wchar_t` | 4 | 4 | | signed int |
 | `max_align_t` | 32 | 16 | | |
+| GNU vectors, `__attribute__ ((vector_size (N)))` | N | N (2 to 256 bytes; `_Alignof` says N too) | | |
+| C++ pointer to data member | 8 | 8 | | the offset; null is −1 |
+| C++ pointer to member function | 16 | 8 | | Itanium's `{ptr, adj}` ([calling-convention.md](calling-convention.md), "C++ ABI beyond calls") |
 
 Sources: guide 9.2 for sizes and register formats; gdb sets
 `long double` to the i387 extended format in 128 bits and recognises
-`__float128`/`_Float128` as IEEE quad.
+`__float128`/`_Float128` as IEEE quad. The vectors, the member pointers
+and `__float80` [lcc: 1.29.16 for v3, v5.8c2 and v6.2c3, and 1.31.05;
+`tools/abi/probes/memorycxx_abi.cc` for the member pointers].
+
+`__attribute__ ((aligned))` without a value means 16, and lcc defines
+no `__BIGGEST_ALIGNMENT__` [lcc: 1.29.16, 1.31.05]. A vector of N
+bytes is aligned to N, also beyond 16 (`struct { char c; v32 v; }` puts
+`v` at 32), and lcc's `_Alignof` and `alignof` say N. GCC with
+`BIGGEST_ALIGNMENT` 128 lays such vectors out as lcc does but answers
+16 to C11 `_Alignof` and C++ `alignof` for vectors of 32 bytes or more
+and for a structure holding one, because `min_align_of_type` caps the
+answer at `BIGGEST_ALIGNMENT` (`stor-layout.cc:2821-2837`) [source:
+GCC; gcc]; its `__alignof__` says N. Unipro's clang answers N
+[unipro].
 
 ## Aggregates (guide 9.2.4)
 

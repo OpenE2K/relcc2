@@ -1256,8 +1256,8 @@ store under a false predicate makes nothing pay, `t_y_pf_*`):
 | Cycles after the store | 4C (v3) | 8C2 (v5) | 2C3 (v6) |
 |---|---|---|---|
 | 0 (one instruction) | any load of the line, in some code only: identical loops paid +8 cycles a step in every run in one function (`t_u3_d0_o0`) and 0.1–2.7 in another (`t_w3_d0_o0`); a load 4 KiB away at the stored offset in 10–50% of the steps. Its issue cost is "A store and a load in one instruction" (Throughput) | the same | the same |
-| 1 | every load reading a byte of the stored aligned doubleword: the same bytes, narrower, wider, or other bytes of it (`stw` +0 then `ldw` +4) | the same | the stored bytes, a narrower load inside them or a wider one holding them; other bytes of the doubleword and other doublewords of the line in some runs only (below) |
-| 2, 3 | none | **every load of the line that reads a byte the store did not write**: other bytes of the stored doubleword, a wider load holding the stored bytes, any other doubleword, the line's last byte; a load inside the stored bytes is served by L1 | a load of the stored doubleword at another width that overlaps the stored bytes: `std` then `ldw` at +0 or +4; `stw` then `ldd` (tried 2 and 4 cycles after) |
+| 1 | every load reading a byte of the stored aligned doubleword: the same bytes, narrower, wider, or other bytes of it (`stw` +0 then `ldw` +4) | the same | the stored bytes, a narrower load inside them or a wider one holding them; other bytes of the doubleword and other doublewords of the line usually too, though some processes never pay (below, and "More store-to-load cases") |
+| 2, 3 | none | **every load of the line that reads a byte the store did not write**: other bytes of the stored doubleword, a wider load holding the stored bytes, any other doubleword, the line's last byte; a load inside the stored bytes is served by L1 | a load that overlaps the stored bytes without being exactly them at the store's width: `std` then `ldw` at +0 or +4; `stw` then `ldd` (tried 2 and 4 cycles after); also 16-byte accesses and misaligned stores ("More store-to-load cases") |
 | 4 | none | none | the same, and every other load of the stored doubleword except the stored bytes at the store's width (`stw` +0 then `ldw` +4; `stb` +0 then `ldb` +1) |
 | 5 or more | none | none | none |
 
@@ -1270,7 +1270,8 @@ in a ninth paid the whole penalty on every load from one run that took
 an interrupt on (`w0_w4`: 6.9, then 14.7 cycles a step); `damlist.c`'s
 loops, moving through 16 KiB, paid on 25% to 100% of such loads by run
 and case, and its list walk with the store 1 cycle before the next
-node's load (`v6_d1`) on none. The cause is not known.
+node's load (`v6_d1`) on none. The cause is not known; "The 2C3's line
+penalty" below has what decides it as far as it was traced.
 (A store's base or data register written by the instruction before
 costs nothing: `pocchk2.c` `t_stbase_k*`, `t_stdata_k*`, all three
 machines.)
@@ -1280,9 +1281,15 @@ and its fill, stack arguments, structure fields): keep a load of a
 just-stored doubleword at least 2 cycles after the store (v3), on v5
 also keep any load of the store's 32-byte line out of 2 and 3 cycles
 after it unless it reads only stored bytes (1 cycle is fine for another
-doubleword, 4 for anything), and on v6 keep a load of the stored
-doubleword 5 cycles after the store unless it reads exactly the stored
-bytes at the store's width (then 2). Loads through other pointers pay
+doubleword, 4 for anything), and on v6 keep a load that reads a stored
+byte or another byte of a doubleword the store wrote into 5 cycles
+after the store unless it reads exactly the stored bytes at the store's
+width (then 2), any other load of the stored 32-byte line 2 cycles
+after it, and after a store that crosses a 32-byte line any load of its
+second line 5 cycles after it (16-byte stores and loads and AAU stores
+included; "More store-to-load cases" below). On v3 a load after a store
+that crosses a doubleword or a line needs no distance beyond the
+store's own 4 cycles. Loads through other pointers pay
 when they hit the line, which no compiler can see: CoreMark's list
 reversal (Elbrus-8C2, below). lcc's own v5 code pays too: in its
 static libm's `__ieee754_acoshl` (lcc 1.29.16, the `v5.8c2` sysroot)
@@ -1290,6 +1297,84 @@ an `ldw` reads a `long double`'s exponent 2 cycles after the `sth` that
 stored it, and `tools/isa-score/profile.py` on the 8C2 measured that
 block at 27.4 cycles an execution against 25.0 modelled with this rule
 and 17.0 without it [hw: 3,000,000 calls].
+
+**More store-to-load cases** [hw: `tools/isa-probes/memorycxx_stld.c`,
+kernels from `gen_memorycxx_stld.py`, 2026-10-16; 4C (two runs) and
+2C3, the 8C2 not measured]. Each step is a store, a load D = 0–6
+cycles later (ALC0) and a use of its value U = 3–24 cycles after the
+load, which gives the next step's store its data; four steps 256 bytes
+apart make an iteration, 64 iterations a call, best of 15 calls, and
+every pair also runs with the store 128 bytes away as a baseline. A
+latency is the smallest U that adds nothing; where only some steps pay,
+the extra cycles a step show what share does (the stall rule). D counts
+the cycles from the store's issue to the load's:
+
+| Store, then load | 4C (v3) | 2C3 (v6) |
+|---|---|---|
+| `std` +0, `ldd` +0 (the table above) | D 0: 9; D 1: 9 with the steps spaced, 9 or 10 back to back (below); D ≥ 2: 3 | D 0–1: 13; D ≥ 2: 5 |
+| another width inside the stored bytes (`std` +0 then `ldw` +4; `stw` +0 then `ldb` +3) | D 1: as `ldd` +0; D 0: `ldb` +3 in a quarter of the steps in one run of two | D 1–4: 13 |
+| other bytes of the stored doubleword (`stw` +0, then `ldw` +4, `ldb` +5 or `ldh` +6) | D 1: as `ldd` +0 | D 4: 13; D 1: usually 13 (below) |
+| another doubleword of the line (`std` +0, `ldd` +8) | nothing from D 1 on; D 0: half the steps in one run of two | D 1: usually 13 (below) |
+| `staad` +0 (AAU), then `ldd` +0 / `ldd` +8 / `ldw` +4 | as `std` from D 1 on (D 1 / nothing / D 1); D 0: `ldd` +0 in a quarter of the steps | as `std` from D 1 on (13 at D 1 / nothing / 13 at D 1–4); D 0: nothing |
+| a store crossing a doubleword (`std` +4), then `ldd` +4, +0 or +8 | the store's own 4 cycles ("Misaligned loads and stores"), then nothing at D ≥ 1 | `ldd` +4: D 1; `ldd` +0 and +8 (partly stored): D 1–4 |
+| a store crossing a 32-byte line (`std` +28), then a load of either line | its 4 cycles, then nothing at D ≥ 1, whatever the load reads | `ldw` +32 (stored bytes, second line): D 0–4; `ldw` +28 (stored, first line) and `ldd` +40 (not stored, second line): D 1–4, and D 0 in a quarter of the steps; `ldd` +32 (half stored): D 1–4; `ldd` +16 (not stored, first line): D 1, and D 0 in a quarter of the steps; `ldd` +28 (crossing): 13 at every D, also with the store 128 bytes away |
+| an aligned store, then a load crossing a line that reads 4 stored bytes (`std` +32 or +24, `ldd` +28) | nothing beyond the crossing load's own cost at D ≥ 1; 4 cycles more a step at D 0 | D 1–4: 13 in every step; without the store, and at D 0 and 6, 13 in half the steps and 5 in the rest |
+| a store to a line not in L1 but in L2, then a load of that line or the next 32-byte one (`ldd` +0, +8 or +32) | 9 (the L2's) at every D, with or without the store; at D 1 10 in half the steps (back to back) | 13 (the L2's) at every D, with or without the store; `stqp` then `ldqp` or `ldd` the same |
+| `stqp` +0, `ldqp` +0 | — | D 0–1: 13; D ≥ 2: 5 |
+| `stqp` +0, then `ldd` +0, `ldd` +8 or `ldw` +12 | — | D 1–4: 13 |
+| `std` +0 or `std` +8, then `ldqp` +0 | — | D 1–4: 13 |
+| `std` +0 and `std` +8 in one instruction, then `ldqp` +0 | — | D 1: 14; D 2–4: 13; D 6: 5 |
+| other bytes of the line: `stqp` +0, then `ldqp` or `ldd` +16; `std` +16, then `ldqp` +0 | — | D 1: usually 13 (below) |
+
+Back to back means the next step's store issues right after the use.
+On the 4C that makes D 1 dearer: 9 or 10 (half the steps each) when the
+steps use four places, 10 or 11 when they use one. With 4 empty cycles
+after each use every step gets 9, with one place or four (the
+`t<L>l4*` trace kernels, and a sweep of U with that spacing), as the
+table above says. Whether the extra cycle for lines not in L1 also goes
+with spacing was not tried, nor whether it covers a whole 64-byte L2
+line (+0, +8 and +32 paid; +64 was not tried).
+
+So on v6 any load that overlaps the stored bytes without being exactly
+them at the store's width gets its value from L2 up to 4 cycles after
+the store: narrower, wider and partly overlapping loads, misaligned and
+line-crossing stores, and 16-byte accesses alike; after a store that
+crosses a line, so does any load of its second line. Exactly the stored
+bytes at the store's width pay only in the store's own instruction and
+1 cycle after it. On v3 a store that crosses a doubleword holds issue
+for its 4 cycles, so no load after it falls in the 1-cycle window
+(inferred). AAU stores follow the `std` rules from 1 cycle after the
+store on both machines. A load in the store's own instruction reads the
+old value ([bundle.md](bundle.md)) and still pays when it reads exactly
+the stored bytes at the store's width (4C: `std`/`ldd`; 2C3: `std`/`ldd`
+and `stqp`/`ldqp`), on the 2C3 also `ldw` +32 after `std` +28; other
+pairs in one instruction paid in some steps (a quarter of them: on the
+2C3 `ldw` +28, `ldd` +16 and `ldd` +40 after `std` +28, on the 4C
+`staad`/`ldd`) or in some runs only (4C: `ldd` +8 after `std` +0 and
+`ldb` +3 after `stw` +0 paid in one run of two).
+
+**The 2C3's line penalty** [hw: `memorycxx_stld.c` `trace` and `pages`,
+the load 1 cycle after the store, its use 5 after the load]: a load of
+other bytes of the stored 32-byte line 1 cycle after the store (`std`
++0 then `ldd` +8; `stw` +0 then `ldw` +4, `ldb` +5 or `ldh` +6; `stqp`
++0 then `ldqp` or `ldd` +16; `std` +16 then `ldqp` +0) is usually served
+by L2 (value at 13): the "some runs" of the table above are the usual
+case. Seven such loops storing to four lines, each run in 6 fresh
+processes, paid in 3 of the 4 steps in 38 of the 42 processes, in all 4
+in 3 and in 2 in 1; the step that escaped was the first one after the
+loop's back branch, whichever line it used. With the `pages` buffers
+(64 4 KiB pages, then a 2 MiB page) `stw` +0 then `ldw` +4 paid in 3 of
+4 steps on every 4 KiB page and in all 4 on the 2 MiB page, and `std` +0
+then `ldd` +8 in all 4 on most pages of both. A loop whose steps all
+use one line paid nothing, except in many calls with 31 or 87 cycles a
+step; one with two lines paid in half its steps. Every page paid, and
+neither the core nor a 3 ms sleep before every call changed this. Yet
+in a process that had first run thousands of other kernels (the full
+sweep) the same loops paid nothing, and in short sweeps whether they
+paid depended on which pairs ran first: this is the state seen in
+`stld.c` and `damlist.c`. Its cause is not known. For a compiler: on v6
+keep any load of the stored 32-byte line at least 2 cycles after the
+store.
 
 **Loads 16 KiB away from a store pay the reload penalty too**, and
 longer [hw: `tools/isa-probes/timeleft.c` `alias`, the `stld` lines,
@@ -1578,8 +1663,10 @@ What v5 adds or changes:
 - **A load 2 or 3 cycles after a store to its 32-byte L1 line** that
   reads any byte the store didn't write (another doubleword, other
   bytes of the stored one, a wider load) is served by L2: 11 cycles, 8
-  late. The 4C and 2C3 serve it from L1 (Memory, "Store to load";
-  `damlist.c`). A pipelined list walk that stores to one node 2 cycles
+  late. The 4C serves it from L1, and so does the 2C3 unless the load
+  overlaps the stored bytes or the store crossed into its line (Memory,
+  "Store to load", "More store-to-load cases"; `damlist.c`). A
+  pipelined list walk that stores to one node 2 cycles
   before it loads another pays two stall steps whenever the two nodes
   share a line. That is CoreMark's `core_list_reverse` as lcc 1.29.16
   `-O3` schedules it for v3 and v5, `{} {lock ALC3, check ALC5,
@@ -1669,14 +1756,19 @@ conflicts, the store bank rule (two stores agreeing in address bits
   than on the 8C2 ("Every v3 operation").
 - **Store to load** (Memory, "Store to load"; `stld.c`, `damlist.c`): a
   reload of the stored bytes in the next instruction still gets its
-  value at the L2 latency (13 cycles, 8 late). Other bytes of that
-  doubleword and other doublewords of the line pay there only in some
-  runs (`stld.c`'s `stw` +0 then `ldw` +4 runs at 6.9 cycles a step,
-  no penalty, in most processes and at 14.7 in some). The 8C2's
-  whole-line window 2 and 3 cycles after a store is gone; instead a
-  load of the stored doubleword at another width (`std` then `ldw`,
-  `stw` then `ldd`) pays up to 4 cycles after the store, and at 4 any
-  load of that doubleword but the stored bytes at the store's width.
+  value at the L2 latency (13 cycles, 8 late). Other bytes of the line
+  usually pay at 1 cycle too: in 3 or all 4 of the steps of a loop that
+  stores to four lines (in 3 the first step after the back branch
+  escapes). A loop that reuses one line, as `stld.c`'s does, mostly
+  doesn't, and neither do processes in some other state (Memory, "The
+  2C3's line penalty"; `memorycxx_stld.c`). The 8C2's whole-line window
+  2 and 3 cycles after a store is gone; instead any load that overlaps
+  the stored bytes without being exactly them at the store's width
+  (`std` then `ldw`, `stw` then `ldd`, and 16-byte `stqp`/`ldqp` with
+  `ldd` or `std`) pays up to 4 cycles after the store, at 4 any load of
+  the stored doubleword but the stored bytes at the store's width, and
+  after a store crossing a 32-byte line any load of its second line
+  (Memory, "More store-to-load cases").
 - **Caches** (`--memory`, `/sys/devices/system/cpu`): 64 KiB L1D, 2 MiB
   L2, no L3; L2 hit 13 cycles (6.5 ns), memory about 220 cycles (110 ns).
 - **Array prefetch** (apb.md): one area delivers **32 bytes a cycle**
@@ -1755,11 +1847,15 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
   "Loads 16 KiB away from a store").
 - Store to load (Memory, "Store to load"): why the 8C2 sends a load of
   a line stored 2 or 3 cycles before to L2 (perhaps the write-through
-  L1 updating the line then; not checked); what decides the 2C3's
-  "some runs" state and whether a load in the store's own instruction
-  pays; v4; quad (`stqp`, `ldqp`), AAU and line-crossing accesses;
-  stores that miss L1; on the 2C3 a load of another width outside the
-  stored bytes (`stw` +0 then `ldb` +5).
+  L1 updating the line then; not checked); what switches the 2C3's
+  line penalty off in some processes and why the first step after a
+  loop's back branch escapes it ("The 2C3's line penalty"); v4; on the
+  8C2 every case of "More store-to-load cases" (16-byte, AAU and
+  line-crossing accesses, stores that miss L1, other bytes of the
+  stored doubleword; `memorycxx_stld.c` built with `-DSTLD_V5`, not run
+  because the machine was busy), with steps spaced as well as back to
+  back; on the 4C whether the extra cycle at 1 cycle after a store to
+  a line not in L1 stays with spaced steps and covers a 64-byte line.
 - Why a stream of loads that miss leaves only part of its lines in L1
   (Memory, "Not every load that misses fills L1"), and why a chase
   in the other cluster finds fewer of a chase's lines on the 4C and

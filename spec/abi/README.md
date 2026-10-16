@@ -9,7 +9,7 @@ code.
 |---|---|
 | [data-layout.md](data-layout.md) | Sizes and alignment of types, aggregates, bit-fields |
 | [registers.md](registers.md) | Register files, windows, conventions, FP control and status (and MCST glibc's FP bugs: `fesetenv`, `fmod` in `FE_DOWNWARD`, libm after `feclearexcept`), DWARF numbering |
-| [calling-convention.md](calling-convention.md) | Calls, argument passing, results, varargs |
+| [calling-convention.md](calling-convention.md) | Calls, argument passing, results, varargs, and the rest of the C++ ABI: mangled names of E2K's types, member pointers, guard variables and their COMDAT groups, array cookies |
 | [stack-and-unwinding.md](stack-and-unwinding.md) | User stack, hardware stacks, the stack registers and why split stacks are impossible, exceptions, signal frames, cancellation and C cleanups (MCST's broken `__gcc_personality_v0`), backtraces, `setjmp`/`longjmp`, what they cost, scanning for roots (garbage collectors) |
 | [elf.md](elf.md) | ELF header, sections, the executable-stack note, relocations, PIC and PLT, TLS |
 | [atomics.md](atomics.md) | Atomic read-modify-write, memory orders, 16-byte atomics |

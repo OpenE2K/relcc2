@@ -651,7 +651,14 @@ never put a load that must see a store in the same instruction as the
 store, and should not put two stores that may alias in one instruction
 unless it places them in channels. Other cores may see two stores of
 one instruction in either order (atomics.md). A failed check load in
-ALC5 also sees an ALC2 store of its own instruction (I12).
+ALC5 also sees an ALC2 store of its own instruction (I12). A DAM lock
+load (`ld*,sm … mas=0x4` in ALC0 or ALC3) and a store in its cluster
+(ALC2 or ALC5; gas rejects the other pairings as for any load) keep
+this order too: the lock reads the old value, and a store that writes a
+locked byte removes the entry the lock has just made, so the check
+reloads [hw: `tools/isa-probes/memorycxx_dam.c`; 4C, 8C2, 2C3;
+speculation.md, "What keeps or loses an entry"]. That needs no bundling
+restriction.
 
 Channel lists in `binutils-ops.yaml` don't depend on the operands, but
 one rule does: `movtd` and `getpl` **into `%ctpr1–3` go only in ALC0**

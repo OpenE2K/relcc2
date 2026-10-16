@@ -612,6 +612,7 @@ What keeps or loses an entry:
 | store to other bytes | kept | at distances 8 B to 16 MiB + 8: no false conflicts |
 | a store before the lock load | — | no conflict |
 | a store **in the check's own wide instruction** whose address agrees with the checked one in bits 0–11 | the check fails, also for a store 4 KiB away (a false conflict) | `DAM_BELL_STORE_CONFLICT` and `DAM_BELL` 1, `rbranch` taken, 27 cycles an iteration against 8; a store to the next doubleword in that instruction, or 4 KiB away one instruction earlier, doesn't (`tools/isa-probes/pmu2.c` `dam_st_*`, 4C, 8C2, 2C3; the event's description: "determined by 12 bits"; [monitors.md](monitors.md)) |
+| a store **in the lock load's own wide instruction** (gas accepts it only in the lock's cluster: ALC2 with a lock in ALC0, ALC5 with a lock in ALC3) | the lock reads first (the value from before the store; [bundle.md](bundle.md)); a store to any locked byte (`std` +0, `stw` +4, `stb` +0) **loses** the new entry, a store to other bytes keeps it (+8, +32, 4 KiB, 4 KiB + 8, 16 KiB: no false conflict on bits 0–11 here) | `rbranch` taken in 1,000 of 1,000 runs and the check reloading the stored value; never for the other bytes; the same with the check 2 to 9 cycles after the lock and in either cluster; a MAS mod-4 store skips the DAM here too (`tools/isa-probes/memorycxx_dam.c`; 4C, 8C2, 2C3) |
 | a `call` (to a function that just returns) | kept | |
 | a call deep enough to spill the register file (64 levels) | lost | `DAM_BELL` 1 ([monitors.md](monitors.md)); 2 levels: kept |
 | a trap (page fault) | lost: the kernel clears the DAM on every page fault and context switch [source] | reload, `%MLOCK` |
@@ -620,6 +621,14 @@ What keeps or loses an entry:
 | the register locked again (other address) | the newer entry replaces it | a store to the first address keeps the check passing; a store to the second fails it |
 | 32 lock loads to other registers | kept | |
 | 33 or more lock loads | the oldest entries evicted | the table holds exactly **32** (`DAM_OVFL` = locks − 32 after a clear, monitors.md) |
+
+So a store may share its wide instruction with a lock load: the entry
+the lock makes there never misses the store. When the store may write
+the locked bytes, the check fails whenever it does and the compensation
+code runs, so the speculation is wasted but the result is right. A
+store one instruction after the lock loses the entry as well, and one
+an instruction before it doesn't conflict (the controls of
+`memorycxx_dam.c`, as rows 2 and 4 of the table say).
 
 `mmurw %rX, %dam_inv` clears the whole table; lcc writes it at the exits
 of functions that use data speculation [lcc]. An entry is keyed by the
@@ -867,5 +876,8 @@ where the guard is false.
 
 - Quad lock and check loads on v3 (`ldq` exists only in protected
   mode there).
+- A quad lock (`ldqp,0,sm … mas=0x4`, v5+) with a `stqp` in its own
+  wide instruction ("What keeps or loses an entry" has the doubleword
+  case only).
 - (v7, with its partial speculative loads across pages, kernel
   `cpu_features.h`, is out of scope: not in silicon.)

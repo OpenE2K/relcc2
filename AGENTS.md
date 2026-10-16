@@ -382,11 +382,16 @@ tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     through C cleanup regions, built by lcc and GCC)
                     and memorycxx_abi_x.cc (the C++ ABI across
                     compilers: member pointers, guards, array cookies,
-                    thread_local, typeid) run on hardware;
+                    thread_local, typeid), folddebug_opt.c (lcc's
+                    debug information for optimized code;
+                    folddebug_opt.sh builds it and runs gdb there) and
+                    folddebug_lambda.cc (gdb's implicit-pointer abort;
+                    needs a GCC for E2K) run on hardware;
                     memorycxx_abi.cc (l++'s mangled names, member
                     pointers, guards, cookies) is read with -S and nm;
                     debuginfo_loc.sh (gas's .loc, .label and
-                    @TLS_DTPREL) runs on the host; ctxtls.c
+                    @TLS_DTPREL) and folddebug_reloc.s (ld's 32-bit
+                    DWARF offset limit) run on the host; ctxtls.c
                     (TLS across a context switch),
                     pocabi1_atom16.c, pocabi1_ord.c, pocabi1_nfx.c,
                     pocabi2_nfx.c and pocplan.c are read with -S;
@@ -1175,6 +1180,15 @@ frame's stack pointer at its call), not the entry value. gas makes a
 `.debug_line` itself as lcc does; lcc's `-gline` rows name syllables
 (`.label`) and gdb ignores them. gdb reads TLS in lcc's and GCC's forms
 (GCC needs `TARGET_ASM_OUTPUT_DWARF_DTPREL`: `.dword x@TLS_DTPREL`).
+lcc describes no locations above `-O0` (one line row per function; its
+`-Og` is `-O0`), and the 64-bit DWARF format is its default
+(`-gdwarf32` the other; MCST's ld fails 32-bit offsets past 4 GiB).
+gdb puts a line breakpoint on `is_stmt` rows, one per block at the
+lowest address, drops rows after a discriminator, ignores
+`prologue_end` in GCC units with location lists (entry address) and
+traps predicated statements whatever the predicate; call-site
+parameters must name the callee's `%r<i>`; OS Elbrus's gdb aborts on
+GCC's by-reference lambdas (ALT's is patched). Advice: plan D13.
 
 Kernel build (2026-10-16; `spec/abi/kernel-build.md`, compile only:
 lcc 1.29.16 and 1.31.05 for v3, v5 and v6, the PoC GCC, `OpenE2K/linux`
@@ -1275,7 +1289,8 @@ OpenMP and static ELF32 protected programs work; root can clear
 A plan for the owner, written for someone new to GCC: pipeline and
 backend anatomy, files to create (LoongArch's 2022 series as the model),
 cross-build commands against lcc's sysroot, milestones M0–M8, design
-decisions (D11, D12: what compiling MCST's kernel and glibc needs),
+decisions (D11, D12: what compiling MCST's kernel and glibc needs;
+D13: debug information for optimized code),
 VLIW scheduling, and what to take from ia64, TILE-Gx, C6x and SPARC
 (with file:line references into `toolchains/gcc`). Owner's
 decisions so far: follow lcc's conventions wherever there is a choice

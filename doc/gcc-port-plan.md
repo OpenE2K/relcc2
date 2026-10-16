@@ -370,6 +370,29 @@ mainline libgcc this way, `docs/spec-poc-findings.md` A7, A10, A11):
     `DW_AT_frame_base` must be a register expression. The register is
     valid only after the instruction that writes it, so start the frame
     base's location list there.
+  - Make `TARGET_DEBUG_UNWIND_INFO` return `UI_NONE` (gdb has no CFI
+    unwinder). dwarf2out then builds `DW_AT_frame_base` as a location
+    list of register expressions from its own CFA tracking
+    (`convert_cfa_to_fb_loc_list`) instead of `DW_OP_call_frame_cfa`
+    (`dwarf2out.cc:24422-24442`); the default hook answers `UI_DWARF2`
+    whenever DWARF debug info is on (`targhooks.cc:2417-2433`). This
+    needs a CFA register with a DWARF number: in the proof of concept
+    the stack-pointer register is the window register `getsp` writes
+    (CFA = `%r8` + the frame size). dwarf2cfi still runs with any DWARF
+    debug info (`dwarf2cfi.cc:3715-3733`), so with gas CFI on, GCC still
+    prints `.cfi` directives and `.cfi_sections .debug_frame`
+    (`dwarf2out.cc:30256-30259`), and gas builds a `.debug_frame` that
+    nothing reads, in the 32-bit format even under `-gdwarf64`. Default
+    to `-fno-dwarf2-cfi-asm` unless a `.eh_frame` is wanted (exceptions
+    or unwind tables) or the option was given, as the proof of concept
+    does: GCC itself writes `.debug_frame` only for `UI_DWARF2`
+    (`dwarf2out.cc:1279-1288`), and lcc writes none.
+  - Default to the 64-bit DWARF format, as lcc does: in the option
+    override set `dwarf_offset_size = 8` unless `OPTION_SET_P
+    (dwarf_offset_size)` (`rs6000.cc:3947-3951` does this for AIX). In
+    the 32-bit format ld fails once a section that other debug sections
+    point into passes 4 GiB (`spec/abi/stack-and-unwinding.md`, "Debug
+    information"). MCST's gdb reads both.
   - End every location in `%b[]` at each `setbn` and `abn`.
   - Keep no location across a call in registers at or above 2 × the
     call's `wbs`: gdb shows the callee's registers there.
@@ -390,6 +413,7 @@ mainline libgcc this way, `docs/spec-poc-findings.md` A7, A10, A11):
     5 and `DW_OP_form_tls_address` from 5 on; gdb reads both
     (`spec/abi/elf.md`, "Thread-local storage").
   - Let GCC write `.debug_line` itself (the `configure.ac` row in 3.2).
+  - Optimized code: D13.
 
 Until libgcc builds (M3), link against the system's `libgcc_s.so.1`
 from lcc's sysroot, and expect C code built with `-fexceptions` that
@@ -1936,6 +1960,206 @@ Not the port's to fix: MCST's static glibc leaves `__libc_stack_end`
 NULL, so `pthread_getattr_np` fails for the main thread of every static
 program (`spec/abi/kernel-interface.md`, "Process entry").
 
+### D13. Debug information for optimized code
+
+From `-O1` up lcc describes names and types only: no locations, and one
+line row per function (`spec/abi/stack-and-unwinding.md`, "Optimized
+code"). "As lcc does" gives nothing to follow here, and whatever GCC's
+var-tracking delivers is new to Elbrus users. The consumer is MCST's
+gdb 15.2. How it reads registers is in `spec/abi/registers.md` ("How
+MCST's gdb reads them"); how it uses line tables and blocks is in
+stack-and-unwinding.md ("How gdb places breakpoints"); the basic setup
+(frame base, CFI, 64-bit format) is in 3.3.
+
+The proof of concept measured each item below with GCC's guality tests
+on the 4C (gcc.dg, 3,042 checks of a variable at a breakpoint; its
+figures, recounted from its logs but not rerun). 1,337 checks passed
+before the items and 2,628 after (`-O2`: 128 and 317 of 372). lcc
+1.29.16 passes 896 (`-O2`: 32). The same tests on x86-64 with GCC 16
+and gdb 18 pass 3,220 of 3,507.
+
+Four of the items need changes to dwarf2out, outside `config/e2k`, which
+have no target hook today: the register-number checks, call-site
+parameters named by the callee's register, dropping discriminators and
+writing `prologue_end`. The proof of concept added target macros for
+the last three (`DWARF_CALL_SITE_INCOMING_REGNO`,
+`DWARF2_LINE_DISCRIMINATORS`, `DWARF2_PROLOGUE_END_STMT`); a port that
+wants them upstream has to propose them there.
+
+- **Register numbers.** Map every register without a DWARF number
+  (`%g0`–`%g31`, the predicates, the CTPRs, `%b[64..127]`) to
+  `IGNORED_DWARF_REGNUM` in `DEBUGGER_REGNO`, not `INVALID_REGNUM`
+  (`debugger_reg_number` asserts on that): gdb fails a whole command on
+  an unknown number. dwarf2out checks for that value only for a value
+  in one register, a typed register value and an entry value
+  (`dwarf2out.cc:14655-14657`, `:16409-16411`, `:16684-16686`).
+  `based_loc_descr` (an address in such a register, `:15185-15271`,
+  which goes through `DWARF_FRAME_REGNUM`, by default `DEBUGGER_REGNO`:
+  `defaults.h:442`) and `multiple_reg_loc_descriptor` (a value in
+  several, `:14686-14751`) write the number as it is, giving
+  `DW_OP_bregx` or `DW_OP_regx 0xfffffffe`. Both need the check too.
+  x86's ignored registers are never a base or part of a value.
+- **`getsp` for var-tracking.** var-tracking finds stack adjustments
+  only in the pattern or a `REG_FRAME_RELATED_EXPR` note, as `(set sp
+  (plus sp const))` (`var-tracking.cc:746-811`); a `REG_CFA_DEF_CFA`
+  note doesn't count. With only the latter, the proof of concept put
+  every stack slot a frame size off the frame base (`DW_OP_fbreg 64`
+  for `%r8 + 64` in an 80-byte frame). Describe the prologue's `getsp`
+  as `(set sp (plus sp (const_int -size)))`, as 7.3 also asks for
+  scheduling.
+- **Keep VTA on** (`-fvar-tracking-assignments`, GCC's default with
+  `-O -g`). In the proof of concept, VTA with the fixes above passed
+  2,159 checks against 1,364 without it, and `-fcompare-debug` over
+  benchmark sets 2 and 3 and 7-Zip showed no code difference.
+- **Notes inside wide instructions.** A label printed inside braces
+  gets the wide instruction's start (`spec/isa/bundle.md`). Move
+  var-location notes, lexical-block ends and statement markers
+  (`NOTE_INSN_BEGIN_STMT`) that fall inside a wide instruction to its
+  end. With `-O -g` the markers are final's only source of `is_stmt`
+  rows (`final.cc:2474-2482`, `opts.cc:1466-1473`); under
+  `-fselective-scheduling` GCC leaves markers off by default. final
+  rebuilds the block notes (`reemit_insn_block_notes`, `final.cc:1756`)
+  just before it calls `TARGET_ASM_FUNCTION_PROLOGUE` (`:1775`), so move
+  them from that hook. bfin's and TILE-Gx's `reorder_var_tracking_notes`
+  (`bfin.cc:4068`, `tilegx.cc:4796`) move only var-location notes.
+
+  Moving markers is a trade: a stop at a line then sees what the earlier
+  lines in its instruction did, and has run whatever of its own line
+  shares that instruction (the proof of concept's figure: 379 checks
+  gained, 21 lost). Refinements found there:
+  - A marker moved past its wide instruction must not cross a jump,
+    call or return (it then marked the fall-through, the return point or
+    the next function). The exception is the next block's markers, which
+    the bundler packs after a jump.
+  - A marker whose lexical block has no operation after the instruction
+    stays at the start, together with the locations before it that
+    already hold there; otherwise the block has no range there ("No
+    symbol").
+  - At `-O1` and up a marker can keep its instruction's start when
+    nothing before it there changes what a variable shows (3–10% of
+    markers in real code).
+- **Debug insns and `schedule_ebbs`.** sched-deps ties a debug insn to
+  the previous debug insn, the last call, pending memory flushes and the
+  registers it reads, and to the insn just before it only when that
+  insn is not a note (`sched-deps.cc:3120-3166`). Jumps go on a list
+  that debug insns don't look at (`:3810-3823`). Extended-block
+  scheduling (7.3) can therefore move a debug insn at a block's head
+  above the jump that ends the previous block. In the proof of concept a
+  line's breakpoint landed before its guarding branch (guality pr55665.C
+  read a static as 0 before its initialization). Put each debug insn
+  back in its block after scheduling. x86's block-local sched2 never
+  shows this.
+- **Inlined calls.** An inlined call's operations scheduled into its
+  caller's wide instructions give the inlined scope ranges there, and
+  gdb then shows the inlined frame at the caller's lines (25 ranges of a
+  devirtualized `Circle::area` over its caller's loop). Give such an
+  operation the scope it shares with the statement in effect.
+  Operations of plain lexical blocks keep their scope, since statements
+  with no operations of their own leave several markers at one wide
+  instruction.
+- **Copies of a statement.** gdb gives a line one breakpoint location
+  per block, at the lowest address, so a line copied by unrolling, tail
+  duplication or loop versioning breaks only in the copy placed first,
+  which may not run. Give each further copy a `DW_TAG_lexical_block`
+  inside the statement's block, holding an artificial `DW_TAG_label` at
+  the copy's address. In the proof of concept, which unrolls at `-O2`, a
+  4-way unrolled loop's line then had 18 locations instead of 1.
+- **Line-table flags.** Write no discriminators, as lcc doesn't: gdb
+  drops a statement's `is_stmt` row when an operation scheduled ahead
+  of it gave the same line a row with one. GCC's own `.debug_line`
+  writer emits any non-zero discriminator (`dwarf2out.cc:29396-29397`)
+  and drops them only under `-gstrict-dwarf` before DWARF 4
+  (`:29256-29259`); `SUPPORTS_DISCRIMINATOR` guards only the `.loc` path
+  (`:29319`). `DW_LNS_set_prologue_end` matters less: gdb ignores it in
+  a unit with location lists from a GCC producer, which every optimized
+  GCC unit is, and goes to the function's entry
+  (stack-and-unwinding.md, "How gdb places breakpoints"), so marking
+  each function's first statement with it (the proof of concept does)
+  changed no check. It would matter only in units without location
+  lists, where gdb otherwise asks `e2k_skip_prologue`, which skips
+  whole leading wide instructions with `getsp`, `setwd` or `setbn`,
+  statements scheduled into them included. GCC has the opcode
+  (`LI_set_prologue_end`) but never emits it (`dwarf2out.cc:3038-3039`,
+  `:29266-29271`). Because a function breakpoint in optimized GCC code
+  stops at the entry, before `setwd` and `getsp`, a frame base whose
+  location list starts after `getsp` (3.3) leaves the variables
+  described through it unavailable at that stop; register arguments
+  show.
+- **Entry values.** dwarf2out writes a call-site parameter's location
+  from the caller's argument register (`dwarf2out.cc:24662-24665`),
+  which is `%b[i]` (DWARF 64 + i). The callee's `DW_OP_entry_value`
+  names `%r<i>` (DWARF i), and gdb matches the two by number
+  (`spec/abi/registers.md`). So describe call-site parameters by the
+  callee's register (the proof of concept: `INCOMING_REGNO` under its
+  `DWARF_CALL_SITE_INCOMING_REGNO`). SPARC's handling
+  (`HAVE_window_save`, `var-tracking.cc:9729-9782`) is for a window that
+  moves at the callee's `save`, and doesn't apply.
+
+  gdb also needs the callee. dwarf2out names it (`DW_AT_call_origin`)
+  only from a `SYMBOL_REF` call address or a call MEM whose `MEM_EXPR`
+  is the `FUNCTION_DECL` (`dwarf2out.cc:28792-28810`). Keep the
+  `MEM_EXPR` on the MEM of a call through a CTPR, and let
+  `TARGET_DELEGITIMIZE_ADDRESS` look through `disp`'s unspec so that
+  indirect calls get a `DW_AT_call_target`. gdb then shows
+  `n=n@entry=8`.
+- **Variables var-tracking doesn't track.** dwarf2out describes such a
+  variable by its `DECL_RTL`, which regrename doesn't update
+  (`regrename.cc` never touches it). In the proof of concept regrename
+  moved the pointer register of an over-aligned local beside an
+  `alloca`, and gdb read a stale `%r0` (guality pr36728). Its fix:
+  before var-tracking, point such a `DECL_RTL` at the register the
+  variable's own accesses use, when they all agree. It showed only with
+  `-ffixed-g16` … `-ffixed-g31`; otherwise the pointer sat in a global
+  register, which has no DWARF number (below).
+- **`%b[]` across `setbn` and `abn`.** These rename every `%b`
+  register, and no RTL pattern says so (3.3). The proof of concept puts
+  a clobber of every `%b[N]` after each `setbn` and where each kernel's
+  back edge goes before var-tracking, and deletes the clobbers after
+  it.
+- **Modulo-scheduled kernels.** A kernel runs several iterations at
+  once, and all of the loop's markers share its start, so no variable
+  the loop sets has a single value there. Turn the kernel's debug binds
+  into resets (deleting them let a variable keep its value from before
+  the loop: "best = -1" after a search). Keep its statement markers, or
+  the loop's lines have no row. Put the last binds that hold after the
+  exit copies on the exit edge. Where an iteration's value is still in
+  its ring register at the kernel's start (its instance named by the
+  frame formula, landed and not past its last use), bind it there;
+  successive stops then show consecutive iterations (x = 30, 33, 36, 39
+  on the 4C).
+- **`-Og`.** lcc's `-Og` is `-O0`. At `-Og` the proof of concept keeps
+  each source line's operations in wide instructions of their own, in
+  line order, and doesn't modulo-schedule. It does this with a
+  dependence from every operation of a line to every operation of the
+  next, keyed by `INSN_LOCATION`'s line so that `-g` changes no code.
+  The cost is 21% more wide instructions over sets 2 and 3; in return,
+  breakpoints on lines stop exactly (`-Og`: 327 of 372).
+- **What DWARF can't fix.**
+  - Values in `%g16`–`%g31` have no location, because those registers
+    have no DWARF numbers. Of the 242 checks that failed on E2K but
+    passed on x86-64, 115 passed with `-ffixed-g16` … `-ffixed-g31`, the
+    largest single cause. `-g` must not change code to avoid this.
+  - A parameter whose register the callee reuses (the result goes to
+    `%r0`, the first argument's register) survives only as an entry
+    value. That needs the call's target, so an indirect call through a
+    pointer the caller can't describe gives none (guality pr41353-1.c,
+    21 checks; aarch64 also xfails pr54200.c, unanalysed upstream: gcc
+    f31ddad8ac8).
+  - A breakpoint on a predicated statement stops whatever the
+    predicate.
+  - Where a line's first wide instruction also ends the previous line,
+    the stop comes either before the previous line is done or after
+    some of this line's operations ran (gdb ignores `op_index` rows).
+  - An operation hoisted above its statement's branch has already run
+    at the statement's breakpoint.
+  - Inside a pipelined loop, a variable computed in a later stage stays
+    unknown.
+- **C++ needs ALT's gdb 15.2-alt1.2.** OS Elbrus's 15.2-29.023 aborts
+  printing a lambda that captures by reference (stack-and-unwinding.md,
+  "Implicit pointers"). With all of the above, the proof of concept
+  passed 172 of 204 g++.dg checks (l++: 36), and the misses fail on
+  x86-64 too.
+
 ---
 
 ## 7. Scheduling for a VLIW/EPIC machine
@@ -2118,11 +2342,12 @@ Copy TILE-Gx (gcc-tilegx), which prints the same `{ }` syntax:
 2. In `FINAL_PRESCAN_INSN` remember the current insn's mark; in
    `ASM_OUTPUT_OPCODE` print `{` before the first insn of a group and `}`
    after the last (`tilegx_asm_output_opcode`, tilegx.cc:5463).
-3. Move var-location debug notes out of the middle of groups
-   (`reorder_var_tracking_notes`, tilegx.cc:4796): a label printed
-   inside the braces gets the wide instruction's start address, before
-   the instruction's results are written (`spec/isa/bundle.md`, "What a
-   compiler can rely on").
+3. Move var-location notes, lexical-block ends and statement markers
+   out of the middle of groups (`reorder_var_tracking_notes`,
+   tilegx.cc:4796, moves the first kind): a label printed inside the
+   braces gets the wide instruction's start address, before the
+   instruction's results are written (`spec/isa/bundle.md`, "What a
+   compiler can rely on"). The rules and their exceptions are in D13.
 4. Known pitfalls TILE-Gx handled: a call must end its wide instruction;
    inline `asm` is never put in braces; the profiler call prints its own
    group.
@@ -3624,6 +3849,17 @@ and Blackfin (`bfin_gen_bundles`, bfin.cc:3989).
      (inferred).
 
    Build such a test with lcc too before debugging the port.
+7. **Debug information**: GCC's guality tests on hardware
+   (`tools/dejagnu`, `E2K_TIMEOUT=60`; gcc.dg, c-c++-common, g++.dg),
+   with the remote's gdb (ALT's 15.2-alt1.2 on the 4C for C++). Run the
+   same tests built by lcc and on x86-64 for comparison. Built by lcc
+   1.29.16 they pass 364 of 397 gcc.dg checks at `-O0`, 340 of 372 at
+   `-Og`, 32 of 372 to 376 at each optimized level and none of 37 in the
+   `-O3 -fomit-frame-pointer -funroll-loops` variant (l++: 36 of 204
+   g++.dg checks); for that, a wrapper drops the options lcc lacks and
+   adds `-Wno-attributes`, and guality.h's `"X"` asm constraints, which
+   lcc rejects, become `"g"` (the proof of concept's runs, recounted from
+   its logs). D13 has the proof of concept's own figures.
 
 ---
 

@@ -765,10 +765,45 @@ lcc's 64-bit objects use DWARF version 2 in the **64-bit DWARF format**:
 `0xffffffff` and an 8-byte length, and section offsets are 8 bytes
 (`-mptr32` objects use the 32-bit format: [mode32.md](mode32.md), "C
 runtime") [lcc 1.29.16 and 1.31.05, `-g -c`; `readelf -x`,
-`--debug-dump`]. GCC's default is the 32-bit format and `-gdwarf64`
-selects lcc's (gcc `common.opt:3758-3764`); a consumer reads each
-unit's format from its own header (DWARF 5 section 7.4), so objects of
-both kinds can be linked together (inferred).
+`--debug-dump`]. It is lcc's default, and `-gdwarf32` selects the
+32-bit format: lcc 1.28 deprecated `--dwarf2-64bit` and
+`--no-dwarf2-64bit` as renamed to `-gdwarf64` and `-gdwarf32`, noting
+that `-gdwarf64` may be dropped since the mode is on by default
+[lcc-doc: `changelog_128.html`, `lcc_options.htm`; lcc 1.29.16 and
+1.31.05 take all four spellings, the old ones with a warning, although
+1.31's changelog lists them as removed].
+
+In the 32-bit format every offset from one debug section into another
+is an `R_E2K_32_ABS` relocation: lcc's `.debug_info` offsets into
+`.debug_abbrev` and `.debug_line` and its `.debug_pubnames` offset into
+`.debug_info` (three in a small object: lcc writes no `.debug_str` or
+`.debug_aranges`); GCC adds one for every reference into `.debug_str`,
+`.debug_line_str`, `.debug_loclists` and `.debug_rnglists`, and
+`.debug_aranges`' offset into `.debug_info` (70 in the proof-of-concept
+GCC's `-gdwarf32 -O2` object of `folddebug_opt.c`). MCST's ld rejects
+such an offset of 4 GiB or more ("relocation truncated to fit:
+R_E2K_32_ABS"; bfd `elfxx-e2k.c:183-186`, `complain_overflow_bitfield`,
+applied to debug sections as to any other, `:6077-6105`). So once one
+of the sections that others point into (`.debug_info`, `.debug_abbrev`,
+`.debug_line`, `.debug_str`, `.debug_line_str`, `.debug_loclists`,
+`.debug_rnglists`) passes 4 GiB in a linked program, the program links
+only in the 64-bit format, where these offsets are `R_E2K_64_ABS` [lcc
+and gcc: `readelf -r` of `tools/abi/probes/folddebug_opt.c` objects,
+`-O2 -g` with and without `-gdwarf32`; binutils:
+`tools/abi/probes/folddebug_reloc.s`]. The `.debug_frame` gas builds
+from `.cfi` directives is 32-bit whatever the DWARF format: its CIE
+pointers are `R_E2K_32_ABS` under `-gdwarf64` too [binutils: the
+proof-of-concept GCC's `folddebug_opt.c` with `-gdwarf64
+-fdwarf2-cfi-asm`, four of them].
+
+GCC's default is the 32-bit format, and `-gdwarf64` selects lcc's (gcc
+`common.opt:3758-3764`). Unipro's clang 20.1.8 writes DWARF version 4
+in the 32-bit format by default [unipro]. A consumer reads each unit's
+format from its own header (DWARF 5 section 7.4), so objects of both
+kinds can be linked together (inferred). MCST's gdb reads GCC's DWARF 5
+in either format [hw: `folddebug_opt.c` built by the proof-of-concept
+GCC at `-O2 -g`, with and without `-gdwarf32`, gives the same session
+on the 4C].
 
 For `DW_OP_call_frame_cfa` gdb returns its frame base, which for E2K
 frames is an offset into the procedure stack (`this_psp - psp_base`,
@@ -831,11 +866,39 @@ registers.md, "How MCST's gdb reads them".
 **Line tables.** lcc writes `.debug_line` itself and never emits
 `.loc`: before every row it puts a `.LM.N` label and a
 `DW_LNE_set_address`. With `-g` the table is DWARF version 2 with
-`minimum_instruction_length` 8 and rows at wide-instruction starts, one
-per statement at `-O0` [lcc 1.29.16 and 1.31.05, `e2k-v3`, `-O0 -g -S`
-and `-c`; `readelf --debug-dump=rawline`]. `-O3 -gline-tables-only`
-gave a one-function file a single row, at the function's start [lcc
-1.29.16 and 1.31.05].
+`minimum_instruction_length` 8 and rows at wide-instruction starts: one
+per statement at `-O0` and, from `-O1` up, one per function, at its
+opening brace, as with `-O3 -gline-tables-only` [lcc 1.29.16 and
+1.31.05, `e2k-v3`, `-O0 -g` to `-O4 -g`, `-S` and `-c`; `readelf
+--debug-dump=rawline`; `tools/abi/probes/folddebug_opt.c`: 37 rows at
+`-O0`, 5 at `-O1`, 4 from `-O2` up].
+
+**Optimized code.** lcc's `-O0` runs a separate, non-optimizing
+compiler (`ecc`; `-O1` to `-O4` run `ecf_opt`), and `-Og` means `-O0`
+[lcc-doc: `attribute_gnu.html` (`optimize`), `lcc_options.htm`; lcc
+1.29.16 and 1.31.05 give the same assembly for both, and `-v` shows
+`ecc64` and `ecf_opt64`]. From `-O1` up lcc's debug information gives
+names, types, function ranges, frame bases and the globals' addresses,
+and no other location [lcc 1.29.16 and 1.31.05, `e2k-v3`, `-O1` to
+`-O4 -g`; `tools/abi/probes/folddebug_opt.c`, `readelf --debug-dump`]:
+
+- no parameter or local has a `DW_AT_location` (each has one at `-O0`);
+- lexical blocks have no address range (gdb then reads their variables
+  into the enclosing block: gdb `dwarf2/read.c:10137-10155`), an inlined
+  call leaves no `DW_TAG_inlined_subroutine`, and there is no
+  `.debug_loc` or `.debug_ranges`;
+- the line table has one row per function (above).
+
+lcc lists `-fvar-tracking` and `-fvar-tracking-assignments` among the
+GCC options it ignores [lcc-doc: `lcc_options.htm`, section 37]. Under
+MCST's gdb every argument and local of such a function is `<optimized
+out>`, and `next` runs the rest of the function. A breakpoint on a line
+inside a function goes to the nearest later line that has a row
+(`find_line_common`, gdb `symtab.c:3625-3667`), the next function's
+opening brace, and lands after that function's prologue, where `break`
+on that function lands; in a file's last function no later line has a
+row ("No line N in file") [hw: `tools/abi/probes/folddebug_opt.sh`, 4C
+(ALT's gdb 15.2-alt1.2) and 8C2 (OS Elbrus's 15.2-29.023)].
 
 `-gline` is line data for the `ldis` disassembler. lcc's manual says
 its layout suits `ldis` rather than gdb, and that `-g` and `-gline`
@@ -881,6 +944,70 @@ plain assembly no debug sections at all, so hand-written `.S` files,
 glibc's and the kernel's among them, can be stepped only by instruction
 [binutils: `debuginfo_loc.sh`].
 
+**How gdb places breakpoints** [gdb source, `OpenE2K/gdb` 818fc87ba33]:
+
+- A breakpoint on a line goes to that line's `is_stmt` rows
+  (`symtab.c:3516-3550`). If the line has none, it goes to the nearest
+  later line that has one (`find_line_common`, `symtab.c:3625-3667`;
+  `linespec.c:2084-2089`). Of the rows found, gdb keeps one per block,
+  the first in the table, which is the lowest address
+  (`linespec.c:2091-2124`). So of a line copied within one block
+  (unrolling, tail duplication, loop versioning) only the copy at the
+  lowest address gets the breakpoint, whether or not it runs. This is
+  gdb's rule on every target.
+- A `DW_TAG_lexical_block` becomes a gdb block only if it has an
+  address range and holds a symbol or a using directive
+  (`dwarf2/read.c:10122-10194`); one without a range has its children
+  read into the enclosing block. A `DW_TAG_label` with `DW_AT_low_pc` is
+  such a symbol; one without it is listed as optimized out
+  (`dwarf2/read.c:18887-18901`). A block that holds only a label at a
+  copy's address therefore gives that copy a breakpoint location of its
+  own [proof-of-concept GCC: a 4-way unrolled loop's line had 18
+  locations instead of 1].
+- gdb drops a row for the same line as the row before it once that
+  line has had a row with a non-zero discriminator since the line last
+  changed (`dwarf_record_line_p`, `dwarf2/read.c:18143-18183`, gdb PR
+  17276). An operation scheduled into an earlier wide instruction gives
+  its line a row ahead of the statement's `is_stmt` row; with a
+  discriminator on it, the `is_stmt` row is the one dropped
+  [proof-of-concept GCC: guality pr43141.c]. lcc writes no
+  discriminators [lcc].
+- gdb ignores rows with a non-zero `op_index`
+  (`dwarf2/read.c:18255-18258`), so a line table can't name an
+  operation inside a wide instruction by `op_index` (`-gline`'s rows at
+  syllable addresses, above, are another matter). Where one wide
+  instruction ends one line and starts the next, a stop there comes
+  either before the first line is done or after some of the second's
+  operations ran.
+- For a breakpoint on a function, gdb takes the function's entry
+  address when it trusts the compile unit's locations: its producer
+  string reads as GCC 4.5 or later and some variable in the unit has a
+  location list (`dwarf2/read.c:6217-6239`; `symtab.c:3690-3702`, and
+  `:3913-3916` with the loop's condition). Otherwise it takes the
+  function's first row with `prologue_end` (gdb 15, `symtab.c:3923-3935`)
+  and, without one, `e2k_skip_prologue`, which skips the leading wide
+  instructions whose header word is 0 or that hold `getsp` (in ALS0)
+  or `setwd`, `setbn` or `setbp` (CS1 opcode 0, 1 or 4;
+  `e2k-tdep.c:428-503`), statements scheduled into them included; if
+  that stops inside a row, it moves on to the next row
+  (`symtab.c:3955-3967`). gdb doesn't read lcc's producer (`GNU C17
+  (LCC) 1.29.16`) as GCC's, and lcc's DWARF 2 line tables have no
+  `prologue_end`, so a breakpoint on an lcc function always goes
+  through `e2k_skip_prologue` [lcc; gdb `producer.c`]. GCC defines
+  `DW_LNS_set_prologue_end` but never emits it (gcc
+  `dwarf2out.cc:3038-3039`, `:29266-29271`); its optimized units have
+  location lists, so a breakpoint on a function stops at its entry,
+  before `setwd` and `getsp` [hw: `folddebug_opt.c` built by the
+  proof-of-concept GCC at `-O2 -g`, 4C: `break dot` at `dot`'s first
+  instruction, which holds `setwd`, although the line table marks
+  `prologue_end` at the next one].
+- gdb plants a breakpoint by writing `setsft` over the first 8 bytes of
+  the wide instruction (`e2k-tdep.c:506-540`), which traps whatever its
+  operations' predicates are. A breakpoint on an if-converted
+  statement, such as a predicated `call`, stops even when the predicate
+  is false [proof-of-concept GCC: guality pr54519-1.c at `-Os`]. A
+  conditional breakpoint (`break N if …`) is the workaround.
+
 **TLS variables**: [elf.md](elf.md), "Thread-local storage".
 
 **`next` over `longjmp`.** gdb's `next` over a call that ends in
@@ -895,6 +1022,18 @@ fails
 stops it: to its end in `tools/abi/probes/debuginfo_misc.c` [hw: 4C,
 8C2, 2C3]. The `libc.so.6` of ALT and of OS Elbrus has no SystemTap
 notes gdb could use instead [hw: `readelf -n`, 4C, 8C2, 2C3].
+
+**Implicit pointers.** MCST's gdb 15.2 stops with an internal error
+("coerce_pieced_ref: Assertion `closure->pieces.size () == 1'
+failed", `gdb/dwarf2/expr.c:597`) when it prints a variable made of
+several `DW_OP_implicit_pointer` pieces, which is GCC's `-O2 -g`
+description of a lambda that captures two variables by reference.
+ALT's gdb 15.2-alt1.2 applies upstream commit 958d06262a7a (gdb PR
+30693, by its package changelog) and prints such a lambda as `{__k =
+<synthetic pointer>, __argc = <synthetic pointer>}` (a member itself as
+`<optimized out>`); OS Elbrus's 15.2-29.023 aborts [hw:
+`tools/abi/probes/folddebug_lambda.cc` built by the proof-of-concept
+GCC, 4C and 8C2].
 
 ## setjmp/longjmp, contexts
 

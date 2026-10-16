@@ -628,6 +628,25 @@ What a compiler's locations must allow for:
   read `<optimized out>`]. gdb subtracts 1 only below an ordinary
   frame, so a frame interrupted by a signal may be looked up at its PC
   itself (not checked).
+- **A call-site parameter names the callee's register.** To find the
+  value behind a callee's `DW_OP_entry_value (DW_OP_regN)`, gdb finds
+  the caller's `DW_TAG_call_site` by the caller's PC, the return
+  address (`call_site_for_pc`), looks there for the parameter whose
+  `DW_AT_location` is `DW_OP_regN` with the same N, and evaluates that
+  parameter's `DW_AT_call_value` in the caller's frame (gdb
+  `dwarf2/loc.c:1118-1135`, `:1190-1246`). So `DW_AT_call_return_pc`
+  must be the address of the wide instruction after the call's. The
+  window moves at the call, so an argument the caller puts in `%b[i]`
+  (DWARF 64 + i) arrives as the callee's `%r<i>` (DWARF i): the
+  call-site parameter must say DWARF i, or gdb finds no match ("Cannot
+  find matching parameter at DW_TAG_call_site"). gdb also checks that
+  the call site's callee is the function stopped in, from
+  `DW_AT_call_origin` or a `DW_AT_call_target` evaluated in the
+  caller's frame (`dwarf2/loc.c:655-700`, `:1194-1222`), so an
+  indirect call whose target the caller can't describe gives no entry
+  values [gdb source; hw: proof-of-concept GCC code with
+  `DW_OP_reg0`/`DW_OP_reg1` call-site parameters showed `a=a@entry=…`,
+  `n=n@entry=10` on the 4C].
 - **No DWARF number reaches** gdb's `$sp` and `$fp`
   ([stack-and-unwinding.md](stack-and-unwinding.md), "Debug
   information"), an extended part or a v5+ high half, besides the

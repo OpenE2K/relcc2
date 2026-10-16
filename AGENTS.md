@@ -132,6 +132,10 @@ differ from v6 (measured: timing.md, "Elbrus-2C3 (v6)").
   `v6.16c` ones are refused; the community qemu's v6 is the 16C). `bench.py`, `run.py`,
   `profile.py` and `validate.py` take `--ssh-port`; give `validate.py`
   `--cpu 0` (no core 2).
+- Timing runs on any of the machines go under their shared lock:
+  `flock -w 3600 /tmp/relcc2-claude-timing.lock <command>` on the
+  Elbrus machine. Native GCC builds (`tools/gcc-native`) take no lock,
+  so time nothing else on a machine while one runs.
 - Nearly every Elbrus system ships MCST's lcc as the default compiler (OS
   Elbrus and ALT Linux), so tests may assume lcc on the target.
 - The port targets 64-bit unprotected mode only. 32-bit (`-mptr32`) and
@@ -143,325 +147,137 @@ differ from v6 (measured: timing.md, "Elbrus-2C3 (v6)").
 ## Repository layout
 
 ```
-spec/isa/      ISA spec: operations-v3.md, operations-v5.md (what v4/v5 add:
-               the 8C2), operations-v6.md (v6: the 2C3),
-               operations-v7.md: every operation, what it does, latency, lcc's use,
-               which probe ran it; generated from operations-v*.yaml,
-               hwbugs.md (MCST's errata from the kernel source and our
-               own low-confidence observations),
-               bundle.md (wide instruction format), control-transfer.md
-               (branches, calls, CTPRs), semantics.md (what operations
-               compute), apb.md (array prefetch), speculation.md
-               (speculative operations, diagnostic values, DAM),
-               loops.md (loop mode, %lsr, rotation),
-               x86-support.md (the x86 translator's facilities and
-               what native code can take from them),
-               predicates.md (everything about predicates: state,
-               every operation that writes or reads one, encoding,
-               limits per wide instruction, timing, lcc's use, how to
-               use them),
-               monitors.md (performance counters through perf),
-               binutils-ops.yaml
-               (every operation), registers.yaml (state and AAU registers),
-               reservations.yaml (what each operation takes in a wide
-               instruction per ISA version: channels, pairs, ALES,
-               literals, control-operation syllables, bundling
-               restrictions, divider issue distances; generated),
-               lcc-usage.yaml (operation counts in lcc's system libraries)
-spec/abi/      ABI spec for e2k64: data layout, registers + DWARF, calling
-               convention, stacks and unwinding, ELF/relocations/PIC/TLS,
-               atomics, source-level conventions (macros, asm
-               constraints, modifiers and clobbers, options,
-               pragmas), kernel-interface.md (system calls, process
-               entry, auxv, contexts,
-               also shared between threads, signals and their frames,
-               hardware and data stacks, overflow signals, address
-               space, -pg, sanitizers, static PIE),
-               kernel-build.md (what compiling MCST's Linux kernel
-               asks of a compiler: lcc's kernel options, global
-               registers, check_stack, asm idioms, kernel-mode code
-               generation, build tools that read compiler output),
-               mode32.md and protected-mode.md (lcc's 32-bit and
-               protected modes, for completeness),
-               lcc-builtins.md (lcc 1.31's builtins and <e2kintrin.h>:
-               the spec for lcc-compatible builtins; lcc-builtins.yaml
-               from lcc's manual, -names.yaml every name lcc knows,
-               -check.yaml what each operation builtin compiles to,
-               -misc.yaml the MAS/barrier/CPU/sysreg/header cases)
-spec/NOTICE.md attribution and licence of spec/
-doc/           plans for the owner: gcc-port-plan.md (how to write the GCC port)
-docs/          spec-poc-findings.md: spec problems found by toolchains/gcc-claude
-               (kept by the agent working there)
-tools/setup/   install reference toolchains into toolchains/; e2k-ssh and
-               e2k-scp (and sshkey.py for Python tools): ssh/scp to the
-               Elbrus machines with relcc2's key only
-tools/isa-extract/  generate spec/isa YAML from binutils; check it against gas;
-                    count_lcc_ops.py (lcc-usage.yaml), gen_operations.py
-                    (operations-v{3,5,6,7}.md), count_lcc_preds.py
-                    (how lcc's libraries use predicates), list_pred_ops.py
-                    (the operations that write or read predicates),
-                    check_literals.py (what gas makes of each literal),
-                    gen_reservations.py (reservations.yaml) and
-                    check_reservations.py (checks it on compiled code,
-                    and each wide instruction's size against gas's rule)
-tools/isa-decode/   decoder written from spec/isa; corpus; compare with objdump
-tools/isa-timing/   latency/hazard microbenchmarks run on hardware over SSH
-tools/isa-score/    scores a compiled program's use of E2K parallelism:
-                    the compiler's schedule vs the best schedule of the
-                    same operations, per block and loop, static;
-                    profile.py weights it by a sampled run on the 4C
-                    (README.md)
-tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
-                    writes semantics.s) and array prefetch probes (apb.c;
-                    gen_apb.py writes apb.s and apb-cases.h; apb-loop.c,
-                    apb-lcc.c) and speculation probe (spec.c;
-                    gen_spec.py writes spec.s and spec-cases.h) and
-                    monitor events (pmu.c, gen_pmu.py; pmu.h is a
-                    helper for counting in any probe) and loop
-                    mode (loops.c; gen_loops.py writes loops.s and
-                    loops-cases.h) and memory accesses in one wide
-                    instruction (samewi.c, samewi.s) and every v5
-                    operation (sem5.c; gen_sem5.py writes sem5.s)
-                    and every v6 operation (sem6.c; gen_sem6.py
-                    writes sem6.s) and the v6 control operations
-                    (ctl6.c; gen_ctl6.py writes ctl6.s) and store/load
-                    values against erratum #123567 (stldv.c;
-                    gen_stldv.py writes stldv.s)
-                    and global register rotation (abg.c, abg.s),
-                    and combined FP and integer operations
-                    (fcomb.c, icomb.c; gen_fcomb.py and
-                    gen_icomb.py write their .s files),
-                    and byte-swapped accesses (mas_be.c,
-                    mas_be.s, mas_be-v5.s, mas_be_loops.c),
-                    and what lcc's speculative FP code does after
-                    feclearexcept (specfp.c, specfp-kern.c)
-                    and predicates (preds.c, gen_preds.py: timing,
-                    logic, movep, calls, two writers in one
-                    instruction, %spred, %pcnt, loop exits, false and
-                    diagnostic conditions) and the random predicates
-                    (rndpred.c, gen_rndpred.py; check_rndpred.py on the
-                    host) and the recovery points of the x86 binary
-                    translator (rp.c, rp.s: srp, slrp, crp, %rpr)
-                    and the translator's facilities for native code
-                    (native.c, native.s; gen_native.py writes
-                    native-rot.s and native6.s: srp/crp cost,
-                    __clear_cache cost, UPSR.fsm, %bgr rotation delays,
-                    the v6 wait on memory)
-                    and every v3 packed operation (semp.c;
-                    gen_semp.py writes semp.s)
-                    and square roots and reciprocals (sqrt.c,
-                    gen_sqrt.py, check_sqrt.py on the host)
-                    and MAS cache hints and kinds (mas_hint.c,
-                    gen_mas_hint.py; mas_mod.c, mas_mod.s) and
-                    store-to-load timing (stld.c, stld.s)
-                    and the remaining v3-v5 user-mode operations:
-                    scalar (semx.c, gen_semx.py, semx-sets.h;
-                    check_semx.c on an x86 host; divx.c, divx.s),
-                    80-bit (semfx.c, gen_semfx.py; check_semfx.c on
-                    an x86 host), memory, tag and descriptor
-                    (semc.c, gen_semc.py; stmqp.c, stmqp.s),
-                    field extract (getf.c, getf.s), v1-v2 operations on
-                    v3+ (v2ops.c, v2ops.s), control operations from user
-                    mode (ctlops.c, ctlops.s),
-                    and memory accesses: spill and fill of tags,
-                    diagnostic addresses, misaligned 16-byte and
-                    page-crossing accesses (memx.c; gen_memx.py writes
-                    memx.s, memx-v5.s and their -cases.h),
-                    and the FP environment: every ordinary FP
-                    operation under each rounding mode and fz/daz
-                    against SSE (fpenv.c; gen_fpenv.py writes fpenv.s,
-                    fpenv-v6.s, fpenv-ops.h; check_fpenv.c on an x86
-                    host), glibc's fenv functions (fenvlib.c),
-                    denormal costs (fpcost.c, gen_fpcost.py),
-                    and software prefetch, cache fill levels and line
-                    sizes (pf.c, gen_pf.py; pf-lcc.c for lcc's loops),
-                    and tag operations and the last unchecked ALU
-                    operations (tagx.c, gen_tagx.py, check_tagx.c), the
-                    user state registers and 80-bit status bits
-                    (sregs.c, sregs.s, check_sregs.c), AAU and v6 MAS
-                    leftovers, UPSR.ac and wait fields (memleft.c,
-                    gen_memleft.py), control leftovers: vfrpsz, ipd and
-                    pref, ctcond type 9, v6 qpcheck/abgc/fill
-                    (ctlleft.c, gen_ctlleft.py), aaurw operands and
-                    not-taken ct after return (aaurwct.c,
-                    gen_aaurwct.py), and the ISA leftovers of the audit
-                    (isaleft.c; gen_isaleft.py: ,sm loads under a
-                    diagnostic predicate, predicate tags across calls,
-                    UPSR.ac and APB, movaqp against fmt and mrng,
-                    %aabfN, %lsr.ldovl, 128-bit registers across a
-                    spill, APB programs in sequence), how soon
-                    loop-register writes take effect (lsrw.c,
-                    gen_lsrw.py) and lcc's APB loop entry (bapent.py,
-                    bapent.c),
-                    and rechecks of the PoC's findings (pocchk.c;
-                    gen_pocchk.py writes pocchk.s and pocchk-cases.h:
-                    divide latency by quotient, two writes of one
-                    register, false-predicate interlocks, dbl and
-                    combined ops, misaligned costs, %g across signals;
-                    pocchk2.c, gen_pocchk2.py: fmul_addd operands, loads
-                    never read, window and call costs, the wbs rule,
-                    atomic spacing, store pairs, APB disp and backward
-                    areas, stores of FP and integer results across
-                    clusters; pocchk3.c, gen_pocchk3.py: APB halves, the
-                    v3 mrng limit, loads beside areas; pocchk4.c,
-                    gen_pocchk4.py: flag-form latencies and dbl = 0
-                    reads; pocchk5.c, gen_pocchk5.py: rounding, sqrt,
-                    flag ops, fcmp latency; damwb.c, gen_damwb.py: a
-                    DAM lock and check together, write-back conflicts;
-                    stbase.c, gen_stbase.py: I35's daxpy kernels,
-                    write-back conflicts as written; damlist.c,
-                    gen_damlist.py: I45's list reversal, store-then-load
-                    loops; pocchk6.c, gen_pocchk6.py: array prefetch
-                    against %lsr states, lcc's APB alignment;
-                    foldisa.c, gen_foldisa.py: where v5's getfz, addcd
-                    and plog results go, packed results and write-back
-                    conflicts; foldisa_getfz.c, read with -S: the shapes
-                    lcc turns into getfz; foldp93.c, gen_foldp93.py:
-                    misaligned 16-byte array prefetch streams;
-                    foldp93_slp.c, read with -S: what lcc pairs into
-                    128-bit operations),
-                    the APB leftovers (apbleft.c, gen_apbleft.py: narrow
-                    and misaligned AAU accesses and their costs, monitor
-                    counts of APB's slowdowns), every other monitor
-                    event and the uncore PMUs (pmu2.c, gen_pmu2.py), the
-                    timing leftovers (timeleft.c, gen_timeleft.py: store
-                    data, narrow 80-bit operands, divider pairs and
-                    runs, byte throughput, store banks, store/load
-                    aliasing, fetch after a taken transfer, v6 lock MAS
-                    and icall; timeleftv.c, gen_timeleftv.py recheck
-                    them; their generated files are not kept in git:
-                    run the generators first), calls under a false
-                    predicate (callsstack_pcall.c/.s: their cost and
-                    chain-stack spill), the store-to-load leftovers
-                    (memorycxx_stld.c, gen_memorycxx_stld.py: AAU,
-                    16-byte and line-crossing accesses, stores that
-                    miss L1, the 2C3's line penalty; its generated
-                    files are not kept in git either) and a store in a
-                    DAM lock load's own instruction (memorycxx_dam.c,
-                    gen_memorycxx_dam.py), run on hardware;
-                    -DSPEC_V5, -DLOOPS_V5, -DAPB_V5, -DSTLD_V5
-                    builds add v5 cases
-tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
-                    compiled to assembly and read, as are atomics.c,
-                    asmops.c and stackprot.c; tagtrap.c, dbl.c,
-                    ldouble.c, ctpr.c, dso/run.sh and elfops/run.sh run
-                    on hardware, as do litmus.c, getsp.c and
-                    reenter.c with their .s files, and litmus_rmw.c;
-                    sysabi.c/.s (the kernel interface: FP state across
-                    handlers, alternate stacks, frame placement, stack
-                    exhaustion and growth, auxv, maps, %clkr, UPSR.ac,
-                    system call costs), sigeh.cc with sigeh-c.c
-                    (exceptions and cancellation across signal frames),
-                    pgprof.c (-pg with gprof) and lockloss.c
-                    (gen_lockloss.py: what breaks an atomic's lock),
-                    ctxsig.c/.s (contexts, edited signal frames, globals
-                    across system calls), ctlcost.cc (what longjmp,
-                    exceptions and backtraces cost), hwscan.c/.s (GC
-                    root scanning), stackregs.c/.s (the stack registers),
-                    tagempty.c/.s (registers a window gains),
-                    abileft.c/.s (signals in made contexts, switching
-                    from handlers, data-stack overflow) and
-                    abileft-san.c (lcc's sanitizers), ctxthr.c
-                    (contexts shared between threads, fork, thread
-                    exits), accerr.c with getsp.s (si_code and si_addr
-                    of stack overflows and bad accesses), kernleft.c/.s
-                    (system-call entries, edited signal frames and
-                    %bgr, cross-thread context switches), and the PoC
-                    rechecks pocabi1_va.cc, pocabi1_valist.cc,
-                    pocabi1_fm.c, pocabi1_mp.c/.s (message passing),
-                    pocabi1_a16run.c with pocabi1_tear.s, pocabi2.c/.s
-                    (a call's wbs bounds; extended parts across
-                    signals) and pocplan_tail.c (lcc's tail calls),
-                    callsstack_tail.c/.s with callsstack_tailx.cc (tail
-                    calls that release the frame, getsp rounding,
-                    predicated movtd), callsstack_clash.c/.s
-                    (stack-clash probing) and debuginfo.c/.s with
-                    debuginfo.gdb, debuginfo_misc.c and
-                    debuginfo_gline.c (how MCST's gdb reads DWARF
-                    locations, TLS, lcc's line tables; debuginfo.sh
-                    builds them and runs gdb there), glibcbuild_entry.c/.s
-                    (the state a process starts in, static and
-                    dynamic), glibcbuild_cancel.c (cancellation
-                    through C cleanup regions, built by lcc and GCC)
-                    and memorycxx_abi_x.cc (the C++ ABI across
-                    compilers: member pointers, guards, array cookies,
-                    thread_local, typeid), folddebug_opt.c (lcc's
-                    debug information for optimized code;
-                    folddebug_opt.sh builds it and runs gdb there) and
-                    folddebug_lambda.cc (gdb's implicit-pointer abort;
-                    needs a GCC for E2K) run on hardware;
-                    memorycxx_abi.cc (l++'s mangled names, member
-                    pointers, guards, cookies) is read with -S and nm;
-                    debuginfo_loc.sh (gas's .loc, .label and
-                    @TLS_DTPREL) and folddebug_reloc.s (ld's 32-bit
-                    DWARF offset limit) run on the host; ctxtls.c
-                    (TLS across a context switch),
-                    pocabi1_atom16.c, pocabi1_ord.c, pocabi1_nfx.c,
-                    pocabi2_nfx.c and pocplan.c are read with -S;
-                    mode32/ (32-bit mode: layout32.c must compile with
-                    -mptr32, callconv32.c is read with -S, the rest,
-                    lat32.c with gen_lat32.py, asan32.c, atom32.c and
-                    dbg32.* included, runs on hardware through run.sh,
-                    with --ship-libs on the 4C) and protected/
-                    (protected mode: pmcc.c and pm6464.c read with -S,
-                    pmrun.c, pmasm.c and pmcxx.cc run by run.sh, and
-                    pmleft.c, pmomp.c, pmmin.s and the pmlib*/pmdl.c
-                    library probes by run.sh --left, static on the
-                    4C); execstack.sh (GNU-stack census) and
-                    prefrel.sh (R_E2K_PREF) link and read; sanitize.c
-                    is read with -S; kernelbuild.py compiles probes
-                    with lcc, and optionally a GCC, for what building
-                    MCST's kernel asks of a compiler: its options,
-                    global registers and register variables,
-                    check_stack/check_mem/avoid_stack, its asm idioms,
-                    kernel-mode code generation, -ffix-lcc-bug123567,
-                    -pg for recordmcount, module relocations, and with
-                    --compare-wsz the windows of kernel objects built
-                    on the host with make O=...); glibcbuild_lcc.py
-                    does the same for glibc's E2K code (register-variable
-                    names, -mptr64, C cleanups, pragmas, and counts
-                    lcc's pragmas in glibc and Linux);
-                    find_builtins.py, gen_builtins.py and
-                    gen_builtins_misc.py ask lcc 1.31.05 about its builtins;
-                    asmconv.py asks lcc about inline-asm constraints,
-                    modifiers, clobbers and %#, prefetch.py what
-                    __builtin_prefetch becomes for each target
-tools/abi/builtins/ lcc-compatible builtins test: gen.py writes ops.c
-                    (a result hash per operation builtin), models.c checks
-                    the rest against reference models, run.py compares a
-                    compiler with lcc on hardware and reports the
-                    builtins it lacks as missing
-tools/abi/compat/   ABI compatibility suite: gen.py writes caller/callee
-                    pairs, run.py builds every compiler pair (with several
-                    --target values, pairs of compilers for different
-                    targets, linked and run for the last one) and runs them
-                    under qemu-e2k or, with --remote, on hardware over SSH
-                    (removing the programs afterwards unless
-                    --keep-remote); known.txt lists known differences
-tools/gcc-native/   native GCC builds on an Elbrus machine (draft): gcc-native.sh
-                    pushes a GCC commit (default: the PoC worktree
-                    toolchains/gcc-claude-native) to the 8C2, bootstraps
-                    it there (stage 1 by lcc, then by itself), runs
-                    check-gcc there and times lcc-built against
-                    self-built cc1plus; remote.sh is its machine side
-tools/dejagnu/      DejaGnu boards for GCC's testsuite: e2k-qemu (MCST
-                    qemu-e2k, any -cpu), e2k-4c, e2k-8c2, e2k-2c3 (address
-                    from the environment), e2k-ssh; run-gcc-tests.sh runs
-                    GCC's testsuite with them (build tree or installed
-                    compiler, -j N either way; board variants pass their
-                    flags; remote_spawn runs the remote's gdb for
-                    guality); smoke/ and run-smoke.sh check a board, also
-                    with -mptr32 and -mptr128 programs
-OpenE2K/       submodules (see above)
-toolchains/    untracked: installed toolchains, corpus builds, scratch output;
-               gcc/ (GCC mainline, blobless clone) and gcc-tilegx/ (worktree
-               at 54a5f478487, the last commit with TILE-Gx) as references;
-               gcc-claude/ (experimental agent-written E2K backend, see
-               decision 2) and gcc-claude-native/ (a worktree of it on
-               branch native-build, for tools/gcc-native, so native
-               builds never touch the PoC agent's checkout)
+README.md, COPYING   overview; GPL-3.0-or-later for everything outside spec/
+spec/          CC BY-SA 4.0 (spec/NOTICE.md). Every ABI rule carries its source
+               mark, every ISA section its status ([checked], [hw], [source]...)
+spec/isa/      ISA. README.md: the YAML data and how it is generated and checked
+  bundle.md            wide-instruction format, syllables, encodings, gas syntax
+  control-transfer.md  branches, calls, CTPRs, fetch costs
+  semantics.md         what operations compute (checked against models)
+  timing.md            latencies, hazards, throughput, memory; data in
+                       timing-e2s.yaml (4C), -e8c2.yaml, -e2c3.yaml
+  predicates.md, loops.md (loop mode, %lsr, rotation), apb.md (array
+  prefetch), speculation.md (speculation, diagnostic values, DAM, MAS),
+  monitors.md (perf counters), x86-support.md (the x86 translator's
+  facilities), hwbugs.md (MCST's errata; our low-confidence anomalies)
+  operations-v{3,5,6,7}.md  every operation, on the page of the version
+                       that added it (v5 = v4 and v5): GENERATED from the
+                       hand-written operations-v*.yaml; edit the YAML
+  binutils-ops.yaml, registers.yaml, reservations.yaml, lcc-usage.yaml:
+                       generated by tools/isa-extract; never hand-edit
+spec/abi/      e2k64 ABI. README.md: the file table and the source marks.
+               data-layout, registers (+ DWARF), calling-convention (+ C++
+               ABI), stack-and-unwinding, elf, atomics, source-compat,
+               kernel-interface, kernel-build (what building MCST's Linux
+               asks of a compiler); mode32 and protected-mode (for
+               completeness only); lcc-builtins.md + lcc-builtins*.yaml
+doc/           gcc-port-plan.md: the plan the owner codes the port against
+docs/          untracked. spec-poc-findings.md (the PoC agent's list),
+               poc-benchmarks.md and poc-roadmap.md (the PoC),
+               mcst-coordination.md (owner's: things to raise with MCST)
+tools/setup/   install reference toolchains into toolchains/; e2k-ssh,
+               e2k-scp, sshkey.py: the only way to reach the machines
+tools/isa-extract/  spec/isa YAML from binutils and its checks: extract_*
+               (binutils-ops, registers, lcc-builtins.yaml), check_encodings
+               and check_literals (against gas), gen_operations
+               (operations-v*.md), gen_/check_reservations, count_lcc_ops
+               (lcc-usage.yaml), count_lcc_preds and list_pred_ops
+               (predicates.md), compare_sheet; docstrings say what each does
+tools/isa-decode/   decoder written from spec/isa only (e2kdis.py), corpus,
+               compare_objdump.py; hand-written corpus .s files declare
+               their ISA range with "isets: N-M" in their first three lines
+tools/isa-timing/   bench.py: latency, throughput, hazard and control
+               kernels on hardware over SSH (its docstring lists the kinds)
+tools/isa-score/    static schedule scoring, profile.py (perf on hardware),
+               validate/ (model against hardware); README.md
+tools/isa-probes/   ISA probes, run on hardware (below)
+tools/abi/probes/   ABI probes: read with -S, run on hardware, or asking lcc
+tools/abi/compat/   ABI compatibility suite, the port's acceptance test:
+               gen.py, run.py (qemu or --remote), known.txt (expected
+               differences); spec/abi/README.md
+tools/abi/builtins/ lcc-compatible builtins test; spec/abi/lcc-builtins.md
+tools/gcc-native/   native builds and bootstraps of the PoC on the 8C2
+               (draft); README.md
+tools/dejagnu/      DejaGnu boards for GCC's testsuite (qemu, 4C, 8C2, 2C3,
+               any SSH host) and run-gcc-tests.sh; README.md
+OpenE2K/       submodules (see Sources)
+toolchains/    untracked: installed toolchains, builds, all scratch output.
+               gcc/ (GCC mainline) and gcc-tilegx/ (last commit with
+               TILE-Gx) as references; gcc-claude/ (the PoC, decision 2);
+               gcc-claude-native/ (its worktree on branch native-build for
+               tools/gcc-native, so native builds never touch the PoC
+               agent's checkout)
 x86_64/        untracked: Unipro debs
+secrets/       untracked: relcc2's SSH key; never commit or copy it
 ```
+
+### Probes
+
+A probe settles one question by compiling or running a small program.
+To find the probe behind a fact, or the facts behind a probe:
+
+- Spec sections name their probe in the status mark or the text
+  (`[hw: tools/abi/probes/glibcbuild_cancel.c; 4C, 8C2, 2C3]`):
+  `grep -rn NAME spec doc` goes from a probe to what it settled.
+- operations-v*.md's "Run on hardware" column lists, per operation, the
+  probes whose assembly executes it (from `PROBES` in
+  `gen_operations.py`, which also records the machines).
+- mode32.md and protected-mode.md have tables of their probes.
+- Each probe's header comment gives the build line (which lcc
+  directory), where it runs, how to read the output and its spec
+  section. Read it before running anything.
+
+Conventions:
+
+- `X.c` is the driver, `X.s` the kernels; `gen_X.py` writes `X.s` and
+  `X-cases.h` when they are generated. `-v4`/`-v5`/`-v6` files add cases
+  for later CPUs, built in with the define the header names
+  (`-DSPEC_V5`, `-DTL_V6`, ...).
+- The multi-MB generated files are not in git: run their generators
+  first (Conventions).
+- A new `.s` in tools/isa-probes needs an entry in `gen_operations.py`'s
+  `PROBES`, or the generator stops.
+- `check_*` files run on the build host, not the Elbrus: reference
+  models to compare with the hardware's output (the `.c` ones need x86
+  SSE or x87).
+- Timing runs take the machines' shared lock:
+  `flock -w 3600 /tmp/relcc2-claude-timing.lock ./probe` on the Elbrus
+  machine (`bench.py --wrap` takes the same prefix).
+- Name prefixes such as `pocchk`, `pocabi`, `fold`, `callsstack_`,
+  `memorycxx_`, `glibcbuild_` and `*left` name the task that wrote the
+  probe (PoC findings rechecked before folding, audit leftovers), not its
+  subject: go by the header.
+
+tools/isa-probes, by family:
+
+| Family | Probes |
+|---|---|
+| Operation semantics against models | `semantics`, `semp`, `semx`, `semfx`, `semc`, `sem5`, `sem6`, `ctl6`, `getf`, `divx`, `sqrt`, `fcomb`, `icomb`, `tagx`, `sregs`, `stmqp`, `v2ops`, `ctlops` |
+| FP environment | `fpenv`, `fenvlib`, `fpcost`, `specfp` |
+| Speculation, DAM, MAS | `spec`, `damwb`, `damlist`, `p28`, `mas_be`, `mas_hint`, `mas_mod`, `mas6` |
+| Loops, predicates, rotation | `loops`, `lsrw`, `preds`, `rndpred`, `abg` |
+| Array prefetch | `apb`, `apb-loop`, `apb-lcc`, `apb-stream`, `bapent` |
+| Memory and timing | `memx`, `samewi`, `stld`, `stldv`, `stbase`, `pf`, `pf-lcc`, `callsstack_pcall`, `memorycxx_stld`, `memorycxx_dam` |
+| Monitors | `pmu`, `pmu2`; `pmu.h` counts events inside any probe |
+| x86 translator facilities | `rp`, `native` |
+| Leftovers and PoC rechecks | `*left`, `timeleftv`, `aaurwct`, `pocchk*`, `foldisa`, `foldp93` |
+
+tools/abi/probes, by how they are used:
+
+- **Routine**: `layout.c` must compile (a check); `callconv.c` is the
+  calling-convention probe, read with `-S`.
+- **Read with `-S`** (or `-c` and nm): `atomics.c`, `asmops.c`,
+  `stackprot.c`, `sanitize.c`, `ctxtls.c`, `pocplan.c`,
+  `memorycxx_abi.cc`, `pocabi*_{atom16,ord,nfx}.c`.
+- **Run on hardware**: the other `.c`/`.cc` files (many with a `.s`),
+  and `dso/`, `elfops/`, `mode32/` and `protected/` through their
+  `run.sh`.
+- **Link or assemble on the host**: `execstack.sh`, `prefrel.sh`,
+  `debuginfo_loc.sh`, `folddebug_reloc.s`.
+- **Ask lcc, compile only**: `asmconv.py`, `prefetch.py`,
+  `kernelbuild.py`, `glibcbuild_lcc.py`; `find_builtins.py`,
+  `gen_builtins.py` and `gen_builtins_misc.py` write
+  `spec/abi/lcc-builtins-*.yaml`.
 
 ## Setup
 
@@ -550,779 +366,284 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
 
 ## Current state
 
-### ISA (spec/isa) — largely complete for code generation
+### ISA (spec/isa): largely complete for code generation
 
-- `binutils-ops.yaml`: every ALU operation (4,271 table entries, 2,957 after
-  folding alias spellings such as `plog_128`/`plog_and` → `plog_0x80`),
-  with ISA versions, channels, opcode, format and operand formats. Control
-  operations from `e2k-opc.c` are in `manual_ops`.
-- `bundle.md`: wide instruction layout, every syllable (HS, SS, ALS, ALES,
-  CS0, CS1, AAS, LTS, PLS, CDS), operand encodings, operand roles per
-  format, channel pairs for quad operations, bundling restrictions,
-  assembler syntax notes, known objdump bugs. Each section is marked
-  [checked] (byte-exact against gas), [decoded] (our decoder agrees with
-  objdump on the corpus) or [source] (read only).
-- Still [source] only: `vfbg`, `puttsd`, `%bgrpred` (gas doesn't accept them), v7 `dtbp`
-  and ctcond type 11, `staa`/`ldaa`/`incr` decoding (hidden by an objdump
-  bug; encoding is checked).
-- Timing measured on the 4C (v3) by `tools/isa-timing/bench.py`
-  (`spec/isa/timing.md`, data in `timing-e2s.yaml`, with `measured_on`):
-  scheduled latencies match the guide (int 1, FP/mul 4, L1 load 3,
-  `disp`→`ct` 5, ...); crossing between the clusters ALC0–2 and ALC3–5
-  costs +1 for integer/load results and +2 for FP ones (the guide's
-  int→FP +1 is this crossing; a store takes its data like an FP operand:
-  FP data +2 only across clusters, integer data no crossing cost); a stall costs about a
-  whole latency extra (exactly: an operand e cycles early stalls
-  4 × ceil(e/4)); an FP-side result routed to an integer op is a cycle
-  late when an integer op or load issues in its channel 2 cycles after
-  it (write-back conflict); everything user code touches is interlocked except
-  `rwd %lsr` → `rrd %lsr` (4 cycles). Also measured: packed integer ops
-  (1 cycle, 4 to integer consumers; the guide says FP class), conversions
-  (4; an FP-side result read in another format, e.g. a double as a
-  single, costs 5–6), FP compares (+2 over integer ones), predicate logic (as the guide;
-  `andp` chains within one instruction). Control transfer
-  (`spec/isa/control-transfer.md`, hw): a taken `ibranch` costs 6 cycles,
-  a prepared `ct`/`call`/return issued in time costs nothing; every call
-  and return empties `%ctpr1–3` (a taken `ct` through an empty or
-  diagnostic CTPR traps, a false one doesn't); gas forbids preparing and
-  transferring through the same CTPR in one instruction before v6.
-  Operation semantics (`spec/isa/semantics.md`, hw): `sxt` 4–6 zero-extend
-  (the guide is wrong), `merge` picks the first operand when the
-  predicate is false, shift counts are modulo the width, division by
-  zero is SIGFPE, FP `lt`/`le` signal on quiet NaNs, `fmax`/`fmin` are
-  x86-style, `fmul_add` rounds twice, combined operations `X_Y a, b, c` are two ordinary operations chained, `Y(c, X(a, b))` (encoded as the first one's opcode plus the second's; `_sub` is c − (a X b), `_rsub` (a X b) − c), MAS bit 3 makes any aligned load or store byte-swapped at no cost (misaligned: SIGBUS; lcc folds `bswap` into it only under `-ffast`; it saves 5 cycles on dependent load paths, nothing in pipelined loops), `fcmpud*f` is the quiet FP compare into a register (x86 ZF/PF/CF layout; MCST's qemu wrongly raises invalid), `cmpand*` tests `a & b`, `movtd`/`getpl` to a CTPR only in ALC0, a taken `ibranch` hides a stall in its own instruction; every other v3 user-mode ALU operation has a checked model (`semx.c`, `semfx.c`, `semc.c`: x86 SSE and x87 references match every line on the 4C and 8C2): `smulx`/`umulx` 32×32→64, `insfs`/`insfd` field insert, `getf` field extract (rotate, keep *len* bits, zero/sign-extend; v1–v4 take the sign bit from a BYTE field of the descriptor, v5 from the field's top; `getf.c` exhaustive on both), 64÷32 `sdivx`/`udivx`/`smodx`/`umodx` (SIGFPE on a quotient that doesn't fit; the remainders by a leading-zero shift rule), `fdtoifd`/`fstoifs` = `roundsd`, `fscale*` (v4) = `ldexp`, the `*_f{b,h,w,d}` forms return x86 EFLAGS and `cctop*` test them, the 80-bit `fx*` operations are exactly x87 code (an `fxadddd` rounds to 64 bits, then to double), the protected-mode, segment and privileged loads and stores fault, `stmqp` (v5) is a byte-masked store that needs 16-byte alignment; memory accesses to one address in one wide instruction take effect ALC2 before ALC5 and a load before a store in its cluster (a load in ALC5 sees an ALC2 store; the ALC5 store of two wins; bundle.md). Speculation
-  (`spec/isa/speculation.md`, hw): `,sm` faults give diagnostic values
-  that trap (SIGILL `ILL_ILLOPN`) only at a non-speculative use,
-  including a diagnostic predicate; `ld,sm` is semi-speculative (pages
-  in valid pages, diagnostic for invalid ones, one kernel entry per
-  invalid region), `mas=0x3` loads fully speculative; a speculative FP
-  op that would set a flag not already set gives a diagnostic instead
-  (the kernel starts processes with all flags set); data speculation:
-  lock load `mas=0x4,sm` (ALC0/3; without `,sm` no entry), check load `mas=0x3` (ALC2/5, same
-  register) that reloads and sets `%MLOCK` for `rbranch` only if the
-  entry was lost (overlapping store, trap, no lock load), kept across
-  shallow calls and register overwrites, exactly 32 entries; mod 7 is a fully
-  speculative lock, mod 2 a check that keeps the entry, stores with mod
-  3/5 drop their data register's entry (5 writes nothing), mod 4 stores
-  skip the DAM; a fully speculative load recovers through `rbranch ?
-  %dt_alN`, taken when the `,sm` operation in ALC N of that instruction
-  has a diagnostic operand (lcc's `-fno-semi-spec-ld`); with an
-  exception unmasked a speculative FP op always gives a diagnostic
-  (SIGILL at the use instead of SIGFPE); a `,sm` store under a
-  diagnostic predicate is still done, with bit 30 of each data word set,
-  and a diagnostic store address traps even with `,sm`; memory keeps a
-  tag per 32-bit word and only the fill MAS (mod 4 without `,sm`, lcc's
-  spill reload) reads it back, every other load drops it (`memx.c`); an
-  `ld,sm` crossing into a bad page is wholly diagnostic, a crossing store
-  writes nothing, `si_addr` is the page boundary; misaligned
-  `ldqp`/`stqp` are SIGBUS on v5, fine on v6; lcc marks most
-  FP operations `,sm` (all of them in pipelined loops, divisions too)
-  and stores whose data or predicate are speculative, so lcc `-O3` code
-  dies with SIGILL after `feclearexcept` unless built with
-  `-fno-spec-fp` (`specfp.c`). Performance monitors
-  (`spec/isa/monitors.md`, hw): perf's raw `cpu` events (`0xMMEE`,
-  event lists in the kernel's `tools/perf/pmu-events/arch/e2k`), two
-  instruction and two data monitors on v3, user-mode counting allowed
-  on the 4C, `%dimar0/1` readable with `rrd` in user mode; `EXEC`
-  counts wide instructions, `TICKS` cycles, `BUB_E2` 4-cycle stall
-  steps, `CONF_ALUn_OUT` write-back conflicts, plus DAM, L1 and spill
-  events; sampling is throttled and breakpoints miss hits, so neither
-  gives exact per-address counts. Loop mode (`spec/isa/loops.md`, hw):
-  a loop with `alc` and `ct ? %NOT_LOOP_END` runs `lcnt + ecnt`
-  iterations (`vlc` = 0: endless), `rwd %lsr` (and `%lsr1`) needs 4
-  cycles before the loop (iterations issued sooner count down the old
-  `%lsr`) and also sets `%ilcr`, whose reads lag 5 cycles; `%lsr` then
-  `%lsr1` may be consecutive; `%lsr.ldovl` limits how far ahead the AAU
-  fetches (write 255, as lcc does); `%pcntN` is
-  true while `pcnt ≤ N`, `%lcntex` only after the loop; `loop_mode`
-  stores are dropped while `pcnt > 0` and in the last iteration from
-  store number `strmd` on (`semc` turns it off), loads never; `abn`
-  makes the old `%b[0]` the new `%b[2]`, `abp` the old `%pred0` the new
-  `%pred1`; a one-instruction loop runs one iteration per cycle;
-  AAU stores obey the store rules and a dropped one doesn't advance its
-  index; a quad store (`staaq`) counts as two for `strmd`, and splitting
-  it is SIGILL; `mova` stops in epilogue iterations unless `ldmc`; `vlc` = 0 with an exit predicate makes a while loop; calls
-  don't change `%lsr` but a callee's loop does (save it around them);
-  counts and rotation survive signals and page faults; lcc mostly
-  peels the prologue and uses no `pcnt`/`ecnt` in counted loops (NPB
-  LU's `buts` does use them), runs big loops in one stage naming
-  `%b[0..127]` like `%r`, and keeps values crossing a rotating loop
-  above its ring. Array prefetch
-  (`spec/isa/apb.md`, hw): the program format, what a `mova` reads
-  (`base + AAIND + disp + step × n + ind`, zero-extended, diagnostic
-  instead of a fault), latency 5, and the correctness rules: a call, a
-  return or a `%ctpr2` write stops the program (the next `mova` is
-  SIGILL), and after any interrupt the kernel recomputes positions from
-  `%ilcr − %lsr`, so APB is correct only in a `loop_mode` loop counted
-  by `%lsr` (written before `bap`) with every area advanced once per
-  iteration; the buffer doesn't see stores, so nothing may write an
-  element a later `mova` reads (lcc versions loops that may alias);
-  area size is the prefetch depth (about 1 KiB runs a stream from
-  memory at L1 speed); `dcd` 2 (4C) or 3 (8C2) keeps other data cached
-  at no cost; a write to `%aabf0` stops the unit at the next trap (lcc's
-  loop end). lcc's loops are 2–22× faster with it. Loads
-  are scheduled for L1;
-  `--memory` measures beyond-L1 latency for reference only.
-  Throughput (`bench.py` `tp`): every channel takes an operation every
-  cycle at full width (6 integer, 4 FP, 4 loads, 2 stores; 64-bit
-  packed FP likewise, v4+ also putting the packed adds, `pfmuls` and the
-  combined packed forms in ALC2/5), except the
-  divider in ALC5 shared by all divides (latency 11–18 by the
-  quotient's size; 1 cycle apart stalls 4,
-  `sdivd` wants 3, `fsqrts` also conflicts at 5) and L1 banks (two
-  stores agreeing in address bits 6–7, or a store and a load in one
-  32-byte block, can take 2 cycles, but only when instructions store
-  to the same addresses again: in a stream they cost nothing). The Elbrus-8C2 (v5,
-  `timing-e8c2.yaml`, timing.md "Elbrus-8C2") has every v3 latency,
-  hazard and control delay except `pfdivd`/`pfsqrttd` (16, v3 14) and an
-  FP result reaching an 80-bit operation's single or double operand
-  (2 cycles later; a same-cluster load 1); v5 adds 6 FP ops per cycle (ALC2/5),
-  128-bit `qp*` ops with scalar latencies; `ldqp` bypasses L1 (served
-  by L2: latency 11, one per cycle; `ldq` into a pair goes through L1,
-  latency 3; lcc loads 128-bit data as two `ldd`); an APB area delivers
-  16 bytes a cycle (also v3); `%aaind` and `%aaincr` are 64-bit, `fmt`
-  7 is SIGILL; all 195 v5 ALU operations have measured latencies (1, 2,
-  4, 5, 6 or 8 by class, as their 64-bit counterparts) and are fully
-  pipelined (`getfz*` and `addcd` give integer results, `plog` and
-  `qplog` packed ones: 4 cycles to an integer consumer and no write-back
-  conflict, as v3's `pandd`); FP min/max is 2 cycles (also v3); a 64-bit FP-side result
-  feeding a `qp` operation pays the crossing cost; L2 11, L3 about 32,
-  memory about 180 cycles. isa-score models these
-  and is within 2% on the 8C2's kernels and 1.00 on CoreMark
-  (`validate.py --target v5.8c2 --period 30011`; until 2026-10-12
-  `sum -O2` read 0.92 because perf's TICKS samples lock to a short call
-  repeated back to back: validate now puts a random delay between
-  calls; monitors.md). Other v5 hardware results: `%lsr1` is the 64-bit loop
-  count (write it after `%lsr`); misaligned APB areas give data; the
-  compat suite passes for every pair (the registers a window gains are
-  empty: 0 with tag 5 on the 8C2 and 2C3, stale bits with tag 5 on the
-  4C; `tagempty.c`); Elbrus
-  Linux's libatomic is built for v5, so v3 and v5 code can share
-  16-byte atomics there; quad lock/check loads work like doubleword
-  ones (entries per register, 32); `stqp`/`staaqp` count as one store
-  for `strmd`; `movaqp` reads 16 bytes, also misaligned and at full
-  speed (lcc reads unaligned streams so and splits their stores into
-  two `staad`; it pairs small straight-line groups into `qp`
-  operations too, but not small-matrix products); all 703 v5 ALU
-  operations match the community qemu (MCST's differs in
-  `qpslld`/`qpsrld` counts >= 64), packed eq/od compares are quiet,
-  round-to-integral mode bit 3 suppresses inexact, and FP ops set the
-  denormal flag (also v3; no emulator does); global register rotation
-  (`abg`, `%bgr`; loops.md) is an x87-style stack: `abgd` pushes and
-  traps on overflow, `abgi` pops, reading an invalid rotating global
-  traps only in ALC4/5 and non-speculatively (the same on the 4C).
-  The Elbrus-2C3 (v6; timing.md "Elbrus-2C3 (v6)", semantics.md "v6
-  operations"): every v3–v5 operation computes the same (about 195,000
-  probe lines identical to the 8C2's) and every v3/v5 latency, crossing,
-  stall rule and CTPR delay holds, except: **L1 loads 5 cycles** in
-  either cluster, `ldqp` through L1 (5, four a cycle), integer compare /
-  predicate logic → predicated op 1, no divider–ALC5 conflict (a
-  store and a load in one 32-byte block still take 1 or 2 cycles by
-  run, as on the 4C), `fxsqrtu` 18; L2 13 cycles (2 MiB, no L3),
-  memory ~220; APB areas deliver 32 bytes a cycle and keep their
-  positions across traps (lcc's v6 APB loops enter 17 cycles after
-  `bap` but need 19 with one area, 21 with two); a compare before a
-  taken return is seen. The v6 operations
-  (`sem6.c`): fused `fma*` (5 cycles, rounded once), `clmul` 4, packed
-  compares into a predicate (any/all lane, 4 / 5 to `ct`), `qpsrad`,
-  `qpcext`, `pmrgp`, `qpcheck*` (SIGBUS unless equal), x87 helpers
-  `mkfsw`/`modbgv`/`vfbgv`; the community qemu gets the packed FMAs
-  wrong. Control (`ctl6.c`): a taken `ibranchd` costs 12 cycles
-  however early its register is ready, `icalld` + return 23 (`disp` +
-  `call` 14), a `disp`/`movtd` and `ct` through one CTPR in one
-  instruction falls through, `abgc`/`rbgc` only move `%bgr.cur` (the
-  x87 stack checks are `vfbgv`). `pmu.c`, `profile.py` (CoreMark 1.03,
-  Linpack 0.99) and the compat suite run there. APB (apb.md, "v6"):
-  positions survive traps in any loop shape, so the v3–v5 one-advance
-  rule is gone, and a `mova` wider than its area's format reads
-  unaligned data (odd strides). MAS (speculation.md, "v6 encodings",
-  `mas6.c`): acquire/release forms 0x13/0x53 run (acquire load 10.4
-  cycles in a chain, release store ~4 against 15.8 for `wait` + store),
-  0x12 `,sm` is the fully speculative load, 0x11/0x13 `,sm` the lock
-  loads. lcc's v6 code uses `fmad` only under `-ffast-math`. v4 is not
-  measured; v7 is out of scope (no silicon).
+Measured on the 4C (v3), 8C2 (v5) and 2C3 (v6). v4 is not measured;
+what the spec says about v7 (no silicon) comes from binutils, the
+kernel and the community qemu. Sections carry source marks ([hw], [checked], [source], ...);
+most files end with "Emulators" and "Not checked yet" (the open work).
 
-  Every v3 operation's latency (`bench.py --only v3op`, 807 chains,
-  timing.md "Every v3 operation"; the three machines agree except as
-  noted): every FP-side result reaches an integer op 2 cycles later, the
-  divider's integer results included (integer divides 11 to FP, 13 to
-  integer; `smodx`/`umodx` 10/12); a double `sqrt` is `fsqrtid` 11 +
-  `fsqrttd` 14; `frcps`/`frsqrts` 6; 80-bit add/sub/conversions 5, `movx`
-  4; reading `%pfpfr`/`%fpcr`/`%fpsr` delivers in 11, `%upsr`/`%ip` in 2;
-  `wait` costs 6–7 cycles with nothing outstanding. FP environment
-  (semantics.md, `fpenv.c` against SSE on an x86 host): ordinary FP is
-  SSE with MXCSR bit for bit, flags included, in all rounding modes and
-  with `%pfpfr`'s `fz` (bit 15) and `daz` (bit 6), the 2C3's fused
-  `fma*` aside in one NaN case; a denormal operand or tiny result makes
-  a multiply 5 cycles, nothing else is slower; lcc links MCST's
-  `crtfastmath.o` (fz + daz) for `-ffast-math`. Caches and prefetch
-  (timing.md "Memory", `pf.c`): 32-byte L1 and 64-byte L2/L3 lines, no
-  hardware data prefetcher on the three; a prefetch with MAS 0 fills L1,
-  0x20 (lcc's) only L2, 0x40 only the 8C2's L3, 0x60 (lcc's locality 0)
-  nothing, which makes a stream 3–5× slower.
+| Topic | Where |
+|---|---|
+| Every operation (versions, channels, encoding); register numbers | `binutils-ops.yaml`, `registers.yaml` (generated; `README.md` covers the fields and checks) |
+| Wide instruction format, bundling rules, instruction size, objdump bugs | `bundle.md` (`vfbg`, `puttsd`, `%bgrpred`, v7 `dtbp`, ctcond 11 and `staa`/`ldaa` decoding are still [source]) |
+| Latencies, crossings, stalls, hazards, throughput, memory | `timing.md`; per-machine data in `timing-e2s.yaml`, `-e8c2`, `-e2c3` |
+| Exact results, FP environment, tags, v5 and v6 operations | `semantics.md` |
+| Branches, calls, CTPRs, instruction fetch | `control-transfer.md` |
+| Speculation, diagnostic values, DAM, MAS, recovery points | `speculation.md` |
+| Loop mode, `%lsr`, rotation, `abg`/`%bgr`; array prefetch | `loops.md` ("For a compiler"); `apb.md` |
+| Predicates | `predicates.md` ("The short version") |
+| Performance monitors through perf | `monitors.md` |
+| The x86 translator's facilities usable by native code | `x86-support.md` |
+| Per-version resources for a scheduler | `reservations.yaml` (generated) |
 
-  Predicates (`spec/isa/predicates.md`; `preds.c`, `rndpred.c` on all
-  three machines, identical except the v6 return fix): at most 4
-  compares (ALC0, 1, 3, 4), 4 ELPs and 3 CLP/MLPs (two levels) and 6
-  RLP/MRGC entries (one per cluster and predicate, negation per
-  channel) per wide instruction; a callee starts with a copy of the
-  caller's predicates and the caller gets its own back, so they are
-  callee-saved for free; an operation under a false predicate does
-  nothing (no memory access, no fault, no operand check, no
-  interlock); readers in the writer's own instruction see the old
-  value; two compares writing one predicate leave the higher channel's,
-  a CLP beats a compare and the higher CLP another; `movep c, v` writes v only when c (the guide
-  has the operands reversed); `%pcnt` and `%pred` on one operation are
-  anded; ctcond 6/7/14/15 ignore the predicate while `pcnt` ≠ 0 unless
-  `semc`; a diagnostic predicate traps non-`,sm` operations and makes
-  `,sm` results diagnostic, either polarity. `%spredK` makes the
-  instruction issue without waiting for ALC K's operands (the
-  operation then sees a diagnostic operand, and `%spred` is true):
-  6 against 10 cycles a load-use step. `%rndpred1`–`15` read two LFSRs
-  in the user-writable `%rndpr` (x¹⁷+x¹⁴+1, x¹⁸+x¹¹+1), stepped once
-  per instruction that reads them, true 2⁻² … 2⁻²⁴ of the time; the
-  model in `check_rndpred.py` reproduces every read. lcc uses
-  predicates in 47% of its wide instructions (`landp` trees, opposite
-  predicates for both arms, a conditional `ct` per path) and relies on
-  the higher channel winning when two enabled writes hit one register.
+Facts that change how code is written or probed:
 
-  Recovery points (speculation.md, `rp.c`): `srp`/`slrp`/`crp` and
-  `%rpr` serve MCST's x86 binary translator: `srp` writes its own
-  address and BR to `%rpr` (user-readable and writable) and starts
-  "generations mode", in which a lock-wait load is SIGILL on v3/v5 and
-  a lock-wait load, a fault or an instruction-cache fill is the
-  recovery-point exception (SIGBUS) on v6; memory is not rolled back;
-  the kernel returns a trap inside a registered region to the
-  translator's recovery IP. Nothing for a compiler.
-
-  Leftovers measured on 2026-10-12 (all three machines unless noted):
-  a 32-bit half with tag 1 is **diagnostic only with bit 30 set**, else
-  empty (a plain use of an empty value doesn't trap); `puttagd`/`puttags`
-  refuse to make a diagnostic or pointer tag (SIGILL `ILL_PRVOPC`), their
-  `,sm` forms make a diagnostic value, and lcc's `puttagd` only ever
-  clears tags; `fxdivt<a><r>` is the single/double src1 ÷ the 80-bit src2
-  (semfx.c had them swapped), 16 cycles (8C2 18 through src1); FP traps
-  are precise at the operation (`%pfpfr` masks for ordinary ops, `%fpcr`
-  for 80-bit), `%pfpfr` bits 26–31 do nothing, only divides and the
-  square root write `%fpsr.c1`; `rrs` of a 32-bit register keeps the
-  upper half under `dbl = 0`, `%idr` gives the Linux CPU (= sched_getcpu,
-  2 cycles), `rrd %clkr` waits for nothing; under `dbl = 0` a 64-bit read
-  of a 32-bit result waits 4; AAU loads take 9/11/13 cycles (v3/v5/v6);
-  `UPSR.ac` traps every misaligned access, stores included; `wait`
-  fields beyond bit 8 (v6/v7) and their costs, `wait trap`; ctcond type
-  9 (`%MLOCK || %cmpN`) runs on v3–v6 and can end a test-and-set loop;
-  `vfrpsz` checks the handed-over pairs (a system call takes 1 to 4);
-  `ipd` and `pref` matter only for cold code; v6 `qpcheck` delays
-  nothing, `abgc` acts on the next instruction (timing.md, semantics.md,
-  speculation.md, control-transfer.md, atomics.md, x86-support.md).
-
-  The translator's facilities for native code (x86-support.md,
-  `native.c`, `pocchk4.c`): every x86 flag operation takes 2 cycles in
-  its cluster and 4 across (32×32 multiplies 6 to an integer op, also
-  into `cctop`) and `cctop*` reaches a predicated op in 2 (v6 1) and
-  `ct` in 3, so an overflow test is two operations and 4 cycles; `srp`/`crp` cost
-  nothing; libgcc's `__clear_cache` (MAS 0xf) costs about 140 cycles
-  for a line and 7 a line in bulk; `UPSR.fsm` makes predicate FP
-  compares read unordered as x86 flags (`lt`/`le`/`eq` true); v3–v5
-  rename `%g24`–`%g31` the instruction after `abgd`/`abgi` and 10
-  cycles after `rws %bgr`, v6 doesn't rename them at all; the v6
-  watch-for-modification `wait` works in user mode, wakes as fast as
-  spinning and on every interrupt.
-
-  Measured on 2026-10-13 (all three machines unless noted; timing.md,
-  apb.md, monitors.md, control-transfer.md, speculation.md, bundle.md):
-  write-back conflicts are decided on the schedule as written (`nop`s
-  count; I35: the PoC's daxpy stalled every other iteration, and which
-  base instance a store reads costs nothing); a load that a store just
-  kept out of L1 is served by L2 (value at 9/11/13 cycles): the stored
-  doubleword 1 cycle later on every version, on the 8C2 any load of the
-  stored 32-byte line 2–3 cycles later that reads unwritten bytes (I45:
-  CoreMark's list reversal; lcc's v5 code pays it too), on the 2C3 the
-  stored doubleword at another width up to 4 cycles later, and a load
-  16 KiB × k away for up to 2 empty cycles (2C3 3); a store under a
-  false predicate sends nothing; an early predicate read stalls in
-  2-cycle steps on v3/v5 (4 on v6); the store bank is address bits 6–7
-  only; divider pairs conflict only 1 apart, except after
-  `smodx`/`umodx` and single-precision roots (by operand and gap
-  layout), and runs don't follow from pairs; a callee whose `setwd`
-  grows the window waits for every outstanding load (68 against 27
-  cycles on the 4C); a store in a DAM check's instruction with the
-  same low 12 bits fails the check; the DTLB holds 768 4 KiB pages (a
-  miss 15/17/45 cycles), the ITLB 256–383; a prepare fetches `ipd`
-  256-byte lines and nothing when its page misses the ITLB; a MAS 0x60
-  prefetch reads nothing (lcc's locality-0 loops are slow for their
-  shape); `icall` costs 6 cycles more than a prepared call (2C3); AAU
-  loads take any MAS, misaligned AAU loads and stores work on every
-  version (v5 `ldaaqp`/`staaqp` need 16-byte alignment); a column walk
-  with 4 KiB pages is a table walk an element, and L2-bound loads beside
-  a fetching area stall (`STALL_AAU`); on v3–v5 epilogue `mova`s need
-  `ldmc`; lcc 1.31 versions long v3/v4 APB loops on alignment
-  (`-faligned` makes NPB CG 2.0× faster on the 4C); a wide
-  instruction's size follows gas's rule (bundle.md, "Counting the
-  size"). `pmu2.c` covers the remaining monitor events; the uncore PMUs
-  need `perf_event_paranoid` ≤ 0.
+- **Interlocks** (timing.md, "Hazards"). The hardware interlocks
+  everything user code touches, so code without delays is correct,
+  only slow. The exceptions are a `%lsr`/`%lsr1` write, which reads and
+  the loop's `alc` see only 4 cycles later (`%ilcr` reads 5), and, on v3
+  and v5, a compare or predicate logic followed by a predicated op in a
+  taken return's instruction (keep them 2 instructions apart).
+- **Timing** (timing.md). On v3 and v5: integer 1, FP and multiply 4,
+  L1 load 3 (v6: 5), `disp` → `ct` 5. Crossing between ALC0–2 and
+  ALC3–5 costs +1 for integer and load results and +2 for FP ones.
+  FP-side results, multiplies and divides included, reach integer ops 2
+  cycles later. A late operand stalls in 4-cycle steps. An FP-side
+  result going to an integer op is a cycle late when an integer op or
+  load issues in its channel 2 cycles after it (a write-back conflict,
+  decided on the schedule as written; `nop`s count). Under `dbl = 0`, a
+  64-bit read of a
+  32-bit result waits 4. Every channel issues every cycle except the
+  shared ALC5 divider. A callee whose `setwd` grows the window waits for
+  all outstanding loads. There is no hardware data prefetcher, and a
+  MAS 0x60 prefetch fetches nothing.
+- **Control transfer** (control-transfer.md). A prepared `ct`, `call` or
+  return issued in time is free; a taken `ibranch` costs 6. Every call
+  and return empties `%ctpr1`–`3`, and a taken `ct` through an empty
+  CTPR traps. Don't prepare and transfer through one CTPR in one
+  instruction: gas refuses it before v6, and v6 falls through.
+- **Results** (semantics.md) where the guide is wrong or names mislead:
+  - `sxt` 4–6 zero-extend.
+  - `merge` gives the first operand when the predicate is false.
+  - `movep c, v` writes v when c (the guide swaps the operands).
+  - Shift counts are modulo the width.
+  - FP `lt`/`le` signal on quiet NaNs.
+  - `fmax`/`fmin` are x86's: a NaN or two zeros give b.
+  - Combined `X_Y a, b, c` is `Y(c, X(a, b))` rounded twice, so `_sub`
+    is c − (a X b). v6 `fma*` is fused.
+  - Ordinary FP is SSE/MXCSR bit for bit. 80-bit `fx*` is x87 under
+    `%fpcr`/`%fpsr`, not `%pfpfr`.
+  - MAS bit 3 byte-swaps aligned accesses for free (misaligned: SIGBUS).
+- **Speculation** (speculation.md). A faulting `,sm` operation gives a
+  diagnostic value, which traps (SIGILL `ILL_ILLOPN`) only at a
+  non-speculative use. So does a speculative FP op that would raise a
+  flag not yet set (processes start with every flag set; the
+  consequences are under Gotchas). A 32-bit half with tag 1 is diagnostic only with
+  bit 30 set. Only the fill MAS (lcc's spill reload) reads memory tags
+  back.
+- **Loops and APB** (loops.md, apb.md). A callee's loop changes `%lsr`,
+  so save it around calls. On v3–v5, array prefetch is correct only in
+  a `loop_mode` loop counted by `%lsr` that advances every area once
+  per iteration. A call, return or `%ctpr2` write stops it (the next
+  `mova` is SIGILL). The buffer doesn't see stores. v6 keeps positions
+  across traps in any loop.
+- **Predicates** (predicates.md). One wide instruction takes at most 4
+  compares (ALC0, 1, 3, 4), 4 ELPs, 3 CLP/MLPs and 6 RLP/MRGC entries.
+  Predicates are callee-saved for free. An op under a false predicate
+  does nothing (no access, fault or wait), except a `movtd` into a
+  CTPR, which is SIGILL under any predicate. Readers in the writer's own
+  instruction see the old value. Of two writers, the higher channel
+  wins, and lcc relies on that.
+- **v5 and v6 against v3** (timing.md, "Elbrus-8C2" and "Elbrus-2C3";
+  the v6 sections of semantics.md, control-transfer.md and apb.md).
+  v5 keeps v3's latencies and rules (except `pfdivd`/`pfsqrttd`, 16, and
+  FP results into an 80-bit op's narrow operand, +2), issues 6 FP
+  operations a cycle (v4 added ALC2/5; v3: 4), adds 128-bit `qp*` ops, serves `ldqp` from L2 (11 cycles), traps a misaligned
+  `ldqp`/`stqp` with SIGBUS, and keeps the 64-bit loop count in
+  `%lsr1`. v6 computes everything as v5 does. Its L1 loads take 5
+  cycles in either cluster and `ldqp` goes through L1. ALC5 operations
+  no longer conflict with a divide. v6 adds fused `fma*` and
+  acquire/release MAS forms, and a taken `ibranchd` costs 12.
+- **Monitors** (monitors.md). User-mode counting works on all three
+  machines with perf's raw `cpu` events. Uncore PMUs need
+  `perf_event_paranoid` ≤ 0. Sampling is throttled, breakpoints miss
+  hits, and TICKS samples lock onto short code called back to back; a
+  random delay between calls removes it (monitors.md).
 
 ### Hardware errata (spec/isa/hwbugs.md)
 
-MCST's errata as its kernel lists them (`cpu_features.h`), with which of
-our machines each covers (4C = E2S rev 2, 8C2 = E8C2 rev 3, 2C3 = E2C3
-rev 1), and our own anomalies, marked low confidence (they may be our
-bugs). The ones that matter for code: `CODE_PLACEMENT` (all three; gas
-works around it), the v6 MAS store-release being broken on E2C3 ≤ rev 2
-(use `wait` + store, as lcc and the kernel do), `ibranchd`/`rbranch`
-corrupting an inactive CTPR on all v6 CPUs, and #123567 (a load right
-after an intersecting store, 8C2), which `stldv.c` did not reproduce
-and the default `e2k-v5.8c2` lcc doesn't avoid (only
-`-ffix-lcc-bug123567`, which MCST's kernel passes, does).
-Our own (low confidence): on the 2C3 a `mova` outside `loop_mode` is
-SIGILL while `%lsr` says a counted loop has ended (`vlc` 1, `lcnt` 0,
-`ldmc` 0: after any finished counted loop, glibc's `strncmp` included;
-deterministic; perhaps v6 behaviour rather than a bug); the 4C's kernel
-moves `%g24`–`%g31` by `%bgr.cur` places across a signal taken under a
-nonzero `%bgr.cur`.
+The kernel's errata (`cpu_features.h`) mapped to our machines (4C E2S
+rev 2, 8C2 E8C2 rev 3, 2C3 E2C3 rev 1), and our own anomalies (low
+confidence). These matter for code:
+
+- `CODE_PLACEMENT` (all three): gas works around it (Gotchas).
+- The v6 MAS store-release is broken on E2C3 rev ≤ 2; use `wait` plus
+  a store, as lcc and the kernel do.
+- `ibranchd`/`rbranch` corrupt an inactive CTPR on every v6 CPU.
+- #123567 (8C2, a load right after an intersecting store) has not been
+  reproduced. lcc avoids it only with `-ffix-lcc-bug123567`, which
+  MCST's kernel passes.
+
+Ours: the 2C3's `mova` SIGILL after a finished counted loop (Gotchas),
+and the 4C's kernel shifting `%g24`–`%g31` across a signal taken under
+a nonzero `%bgr.cur`.
 
 ### Operation reference (spec/isa/operations-v3.md, -v5.md, -v6.md, -v7.md)
 
-Split by our hardware: `operations-v3.yaml` has everything up to v3
-(the 4C), `operations-v5.yaml` what v4 and v5 add (the 8C2; its header
-also covers v5's behaviour changes, lcc's v5 idioms and v3
-equivalents), `operations-v6.yaml` and `operations-v7.yaml` what v6
-(the 2C3) and v7 (no hardware) add. Every
-operation from v2 on (2,149 after leaving out the v1-only ones: no
-working Elbrus-3M exists) has a rule in the file of the version that
-introduced it (the generator checks this): what it
-computes, how a compiler uses it, where the details are;
-`gen_operations.py` joins the rules with binutils' ISA versions and
-channels, the measured latencies, lcc's use (`count_lcc_ops.py` counts
-mnemonics in lcc 1.29.16's v3 and v5 sysroot libraries: about 360
-operations) and the probes whose assembly runs each operation, and
-fails if an operation has no rule or two. Every v3–v5 user-mode
-operation has run on hardware except `mmurr` (monitors.md), and every v6 ALU operation but `ibranchd`/`icalld` ran
-on the 2C3; v7 ones come from the community qemu or are known by
-name only. The v1–v2-only operations are SIGILL on v3 and v5 (except two
-reused encodings); `setsft` is a software trap (SIGTRAP).
+`gen_operations.py` generates each page from hand-written rules
+(`operations-v{3,5,6,7}.yaml`; edit those, never the `.md`) joined with
+`binutils-ops.yaml`, the timing tables, `lcc-usage.yaml` and the probes
+that run each operation. Every operation from v2 on has exactly one rule,
+in the file of the version that introduced it; `--check` fails on a
+missing or duplicate rule. Every v3–v5 user-mode operation has run on
+hardware except `mmurr`, and every v6 ALU operation except
+`ibranchd`/`icalld`. v7 operations come from the community qemu or by
+name only.
 
 ### Schedule scoring (tools/isa-score)
 
-`score.py PROGRAM` compares, for every basic block and single-block
-loop, the compiler's schedule ("achieved", interlock stalls and
-write-back conflicts included, loads in L1) with the best list schedule
-of the same operations on the chosen ISA version ("possible", keeping
-the compiler's registers or true dependences only; loops by initiation
-interval). It is static (owner: no emulator runs). `profile.py PROGRAM
---remote ...` weights the same blocks by a run on the 4C: perf samples
-the EXEC and TICKS monitors (spec/isa/monitors.md), whose exact
-instruction addresses give per-block execution counts and measured
-cycles, and it reports measured against modelled cycles per block plus
-a stall breakdown. To compare schedulers use operations per cycle of
-the achieved schedule, static or weighted by the run: on CoreMark and
-Linpack it ranks lcc > Unipro clang > gcc-claude, as the 4C does; the
-possible/achieved score does not. `validate/` (under two minutes)
-puts every kernel within 1% on the 4C and 2% on the 8C2 (`k_empty`, a
-few cycles of call, aside); the model also knows the `dbl = 0` 64-bit
-read wait (which explains gcc-claude's `matrix_mul_matrix` step), the
-8C2's late narrow 80-bit operand, AAU load latencies, `aaurw` taking its
-operand like store data and a not-taken `ct` after `return`; on the benchmarks the
-model is within 6% once `profile.py` measures which transfers were
-taken (a second sampled run, EXEC − `NO_CT_TAKEN`): fetch bubbles are
-taken `ibranch`es (6 cycles) and taken `ct`s waiting for a late
-prepare, nothing else (control-transfer.md, "Instruction fetch"). v6
-uses the 2C3's latencies (`validate.py --target v6.2c3`: within 1%
-except lcc's APB loops, 1.02–1.09: they enter 17–19 cycles after `bap`
-and the first `mova`s stall, which the model doesn't carry into the
-loop block); v7 uses v6's. Since 2026-10-13 the model decides
-write-back conflicts on the schedule as written, charges the store-bank
-cycle only for repeated addresses, times loops as the mean of 6 of 10
-simulated iterations, and models the store-to-load cases by ISA version
-(I35, I45).
+`score.py` compares each block's and single-block loop's schedule as
+compiled ("achieved") with the best list schedule of the same operations
+("possible"). By the owner's rule it is static, with no emulator runs;
+execution counts come only from hardware (`profile.py --remote`
+weights the blocks by a sampled perf run). Compare schedulers by **operations per cycle** of the achieved
+schedule, not by the possible/achieved score. The model is within 1–2%
+on `validate/`'s kernels on all three machines (lcc's v6 APB loop entry
+aside) and within 6% on whole benchmarks once taken transfers are
+measured. The README covers rules, accuracy and limits.
 
-### ABI (spec/abi) — written, checked by the compat suite under qemu-e2k and on the 4C (v3)
+### ABI (spec/abi) — written, checked by the compat suite under qemu and on all three machines
 
-(Also on the 8C2 and the 2C3: the compat suite passes on both, and the
-hardware probes `tagtrap`, `dbl`, `ldouble`, `ctpr`, `getsp`, `reenter`,
-`winsize` and `litmus` print the same on the 2C3 as on the 8C2; the
-compat run there pairs lcc's 2C3 code with Unipro's `-march=elbrus-v6`.)
+The ABI of 64-bit unprotected mode (`e2k64`). `spec/abi/README.md`
+indexes the files and defines the source mark every rule carries. Each
+probe in `tools/abi/probes` (with `mode32/`, `protected/`) says in its
+header what it checks and whether it is read with `-S` or run on hardware.
 
-Key facts: arguments in 8-byte slots, slots 0..7 in registers (callee
-`%dr0..7`, caller `%db[0..7]`), 9–16-byte values on even slots, stack area
-always reserved for all slots at the caller's `USD`; results ≤ 64 bytes in
-registers, larger ones written to the caller's argument area (no hidden
-pointer); variadic calls store the last fixed and all variadic arguments
-in memory, and `va_arg` aligns 16-byte values by address;
-unprototyped calls pass both ways (Unipro gets this wrong); callers extend
-narrow integers to 64 bits and lcc callees re-extend; window units are
-pairs of 64-bit registers; DWARF 0–63 = `%r0..63`, 64–127 = `%b[0..63]`;
-exceptions use `.eh_frame` only for FDE/LSDA lookup (CFI ignored) and pass
-data in DWARF 64/65 (`%b[0]`, `%b[1]`).
+Headline facts, with where the details are:
 
-ELF (`spec/abi/elf.md`, run on the 4C): `e_flags` top byte is the ISA
-version or CPU model, `EF_E2K_INCOMPAT` marks non-forward-compatible code;
-64-bit literals hold their halves swapped and PC-relative fields count
-from the bundle start; no GOT register (each function does `rrd %ip` +
-`_GLOBAL_OFFSET_TABLE_` literal); calls go through `disp` and the PLT,
-which runs in the callee's new window and clobbers `%dr8`+ and `%ctpr1`;
-lazy binding calls `_dl_fixup(link_map, reloc_offset)` directly; TLS is
-variant I with TP in `%g13`, `__tls_get_addr(module, offset)`, GD/IE/LE
-only and no linker relaxation. MCST ld problems: `R_E2K_ISLOCAL` can't be
-linked, an ifunc referenced with `@GOTOFF` in a PIE fails silently, a
-static link with an ifunc crashes ld; gold (not shipped) breaks dynamic
-links. A `getsp` amount must be a window register or `%g16`+ (the
-kernel can't read `%g0`–`%g15` when the stack grows: SIGSEGV for large
-allocations); after a signal handler the kernel restores `%g16`–`%g31`
-(only those; the guide says all globals; registers.md) and only to code
-interrupted outside a system call, while a system call through entry 3
-returns them empty (0, tag 5), so they can't hold values across one
-(kernel-interface.md; a port's `"call"` clobber must cover them); a `jmp_buf`'s IP (byte 8) can be replaced by a label to
-re-enter a frame (nonlocal goto); lcc's `&&label` is an index, not an
-address. No stack protector is needed (return addresses live in the
-chain stack); lcc 1.31's `-fstack-protector` uses a constant canary
-`0x000d0aff` and protects every function, and its `-strong`/`-all` do
-nothing.
+- **Calls** (calling-convention.md): 8-byte slots, slots 0–7 in
+  registers (callee `%dr0`–`%dr7`, caller `%db[0]`–`%db[7]`), 9–16-byte
+  values on even slots, stack reserved for every slot at the caller's
+  `USD`; results up to 64 bytes in registers, larger ones written to the
+  caller's argument area (no hidden pointer); variadic calls put the last
+  fixed and every variadic argument in memory, `va_arg` aligns 16-byte
+  values by address; unprototyped calls work both ways; callers extend
+  narrow integers to 64 bits and lcc callees re-extend. A sibling call
+  may give its frame back with a positive `getsp` before its `ct` (lcc's
+  don't: "Tail calls that release the frame").
+- **Registers** (registers.md): window units are pairs of 64-bit
+  registers; a `call` needs Q ≤ `wbs` < `wsz` (else SIGSEGV); DWARF 0–63
+  are `%r0`–`%r63`, 64–127 `%b[0]`–`%b[63]` (MCST's gdb rejects 128 and
+  up); `%g13` is the thread pointer, `%g12` the static chain. Compiler
+  temporaries in globals belong in `%g16`–`%g31`, as lcc's do: around a
+  signal handler the kernel saves and restores only those, and only for
+  code interrupted outside a system call, so a handler's writes to
+  `%g0`–`%g15` reach the interrupted code. A system call through entry
+  3 returns `%g16`–`%g31` empty (0, tag 5), so the port's `"call"`
+  clobber must cover them. A `getsp` amount must be in a window register
+  or `%g16`+. `setwd dbl` affects only 32-bit integer ALU results. A
+  function holding 80-bit or v5+ 128-bit values in registers needs
+  `nfx = 0`, or the extended part is lost when the window spills (on the
+  8C2 and 2C3 at every signal handler).
+- **Floating point** (registers.md): `long double` is x87 extended in
+  one register (mantissa + 16-bit extended part); 80-bit operations use
+  `%fpcr`/`%fpsr`, not `%pfpfr`. The kernel does not save or restore the
+  FP control registers around signal handlers.
+- **Stacks, unwinding, debug information** (stack-and-unwinding.md):
+  return addresses live in the chain stack (no stack protector needed);
+  exceptions use `.eh_frame` only to find the FDE and LSDA (CFI is
+  ignored) and pass data in `%b[0]`/`%b[1]`; with lcc's runtime nothing
+  unwinds across a signal frame (no `linux-unwind.h`). MCST's gdb reads
+  `%b[]` locations through the `%br` in effect, and GCC must write
+  `.debug_line` itself ("Debug information"; plan D13).
+- **ELF, PIC, TLS** (elf.md): the top byte of `e_flags` is the ISA
+  version or CPU, `EF_E2K_INCOMPAT` marks code that isn't forward
+  compatible; 64-bit literals hold swapped halves, PC-relative fields
+  count from the bundle start; no GOT register (`rrd %ip` + a literal in
+  each function); the PLT clobbers `%dr8`+ and `%ctpr1`; TLS variant I,
+  GD/IE/LE only, no relaxation. Only the `e2k-v3` sysroot links
+  forward-compatible programs: ld intersects its inputs' CPUs and every
+  CPU tree's sysroot is marked for its CPU, while MCST's qemu ignores
+  `e_flags` ("Mixing targets in one program"). MCST ld's bugs are there.
+- **Atomics** (atomics.md): a read-modify-write is a lock-wait load (MAS
+  0x7, ALC0) and a wait-unlock store (MAS 0x2) with `rbranch`; any load,
+  store or system call between them loses the lock, and a lock left open
+  makes the next lock-wait load SIGBUS (compare-exchange stores on both
+  outcomes). Message passing reorders on all three machines unless the
+  release has lcc's `wait` and the acquire uses the loaded value.
+  16-byte atomics are libatomic calls with a lock on v3/v4 and inline
+  `ldqp`/`stqp` on v5+; never mix the two on one object.
+- **Kernel interface** (kernel-interface.md): system calls are `sdisp`
+  entry 3, no vDSO; the state a `_start` meets ("Process entry"); the
+  signal frame sits right below `USD` (no red zone); running out of a
+  hardware stack is SIGKILL; stack-clash probes must go page by page
+  ("Probing"); a context resumed by another thread runs with that
+  thread's `%g13`, so TLS addresses must not be kept across a switch.
+  The 4C runs MCST's older 6.1-1.9 kernel; the file marks where it
+  differs.
+- **Source compatibility** (source-compat.md, lcc-builtins.md):
+  predefine `__e2k__`, `__iset__`, `__ptr64__`, never `__LCC__`; lcc's
+  asm constraints, modifiers and clobbers, options and pragmas; its
+  `__builtin_e2k_*` and `<e2kintrin.h>`. The C++ ABI is generic Itanium
+  (calling-convention.md, "C++ ABI beyond calls").
+- **Building MCST's kernel and glibc** (kernel: kernel-build.md, plan
+  D11; glibc: kernel-interface.md "Process entry", source-compat.md,
+  stack-and-unwinding.md "C cleanups and cancellation", plan D12):
+  what they ask of a compiler beyond the ABI (lcc-only options, reserved
+  globals, `check_stack`, asm idioms GCC deletes, the `"FP"` register).
 
-Atomics (`atomics.md`, lcc output, MAS meanings from MCST qemu): every
-read-modify-write is a lock-wait load (MAS 0x7, ALC0) plus wait-unlock
-store (MAS 0x2) with `rbranch` (= `ibranch ? %MLOCK`), whatever the
-order; fences and seq_cst/release accesses use `wait ld_c, st_c`.
-16-byte atomics are libatomic calls with a lock on v3/v4 and inline
-`ldqp`/`stqp` on v5+; mixing them on one object breaks. What breaks
-the lock (`lockloss.c`, all three): any load or store by the thread, to
-any address, and any system call between the lock-wait load and the
-store (always), an interrupt (about one window in 10^6); `%MLOCK` is
-valid only in the store's instruction; a lock left open makes the next
-lock-wait load SIGBUS (so compare-exchange stores on both outcomes);
-other cores are held off a 64-byte block for 1,024–1,536 cycles; a CAS
-loop against fetch-adds nearly starves on one 4C chip; misaligned
-lock-wait is SIGBUS. Memory ordering (atomics.md): `litmus.c`'s
-setup shows only a load passing an earlier store (which `wait st_c`
-stops) and two stores in one instruction becoming visible in either
-order, but when the reader already holds the lines, message passing
-fails on all three machines (up to 42% of tries with plain accesses;
-`pocabi1_mp.c`): a release needs lcc's `wait` and an acquire lcc's use
-of the loaded value; with both, nothing reordered. lcc's 16-byte
-atomics on v5/v6 are in atomics.md (exchange is its own lock loop, a v6
-relaxed load is one `ldqp`, v5's two `ldd` can tear). Source-level
-conventions (`source-compat.md`): define `__e2k__`, `__iset__`,
-`__ptr64__`, never `__LCC__` (glibc's headers key lcc-only code on it);
-asm `r` = register or even pair, `x` = extended register; lcc treats
-`swapcontext` as returns-twice and zero-inits maybe-uninitialised locals
-against tag traps.
+32-bit (`-mptr32`, mode32.md) and protected (`-mptr128`,
+protected-mode.md) modes are documented for completeness only. MCST's
+qemu loads no ELF32 (the community `qemu-e2k32` does, without entries
+3/6 and the GD bound), neither emulator runs protected code, and a
+binutils built without `--enable-new-pm-abi` (ours) makes a PLT that
+breaks dynamic protected programs.
 
-`long double` (`ldouble.c`, hw): exact x87 extended arithmetic in one
-register (mantissa + 16-bit extended part, `movif`/`movfi`); the extended
-part survives a window spill only with `nfx = 0`; 80-bit ops use
-`%fpcr`/`%fpsr` (rounding, x87 precision control, flags), not `%pfpfr`;
-stores write only 10 bytes.
+**Compat suite** (`tools/abi/compat`; usage in `run.py`'s docstring and
+spec/abi/README.md): `gen.py` writes caller/callee tests for the rules of
+calling-convention.md, `va_list`, `longjmp` and C++ exceptions across
+compilers included; `run.py` builds every ordered pair of compilers,
+links with lcc and runs under qemu or, with `--remote`, on hardware. It
+is the acceptance test for the owner's port:
 
-Other measured facts: `setwd dbl` affects only 32-bit integer ALU ops
-(loads always write the whole register, FP ops never extend; Unipro
-uses `dbl = 1`, lcc `dbl = 0` except at `-O2`+ in functions that need
-unsigned 32-bit results zero-extended, about 18% of them); `std,sm` of a register with a tagged upper
-half doesn't trap. MCST's libffi (`src/e2k/`) agrees with
-calling-convention.md on every rule and filled its gaps (no slot
-backfill, callee owns the argument area, large results overlap memory
-arguments, `%g12` as static chain).
+```
+python3 tools/abi/compat/gen.py toolchains/compat/gen
+python3 tools/abi/compat/run.py toolchains/compat/gen \
+    --cc gcc='...' --cxx gcc='...' --pairs lcc:gcc,gcc:lcc,gcc:gcc
+# hardware: --target v3 --remote claude@ringo.lan; mixed targets:
+# --target v3,v5.8c2 --cc gcc-v3@v3='... -march=elbrus-v3'
+```
 
-Compat suite (`tools/abi/compat`): 1,931 generated tests per compiler pair
-(scalars, aggregates of 1–1024 bytes, packed/aligned/bit-field/union
-types, large results, long argument lists, variadic, unprototyped,
-integer extension, `va_list` across compilers, `longjmp` across
-compilers, C++ exceptions across compilers, C++ classes that are not
-trivially copyable as results and arguments, 300 random signatures). It is
-the acceptance test for the owner's GCC port:
-`run.py GENDIR --cc gcc='...' --cxx gcc='...'
---pairs lcc:gcc,gcc:lcc,gcc:gcc`. lcc's v3 code also passes it under qemu
-as v5, v6 and v7 (`--runner`). Found so far
-(in `known.txt` and calling-convention.md): Unipro's unprototyped calls,
-Unipro callees not re-extending narrow arguments, Unipro's
-`va_arg(__int128)` at odd slots, and timeouts of Unipro `-O0` callees
-under qemu only: they spill a partly written slot whose upper half is
-qemu's empty value, and qemu loops forever on that store (hardware
-stores it without trapping; a real tag trap needs a diagnostic half,
-`tools/abi/probes/tagtrap.c`). The `valist` unit showed that
-`va_arg` must align 16-byte values by address, because lcc's `static`
-variadic functions have an 8-byte-aligned slot area; probes made while
-studying it showed that lcc callers store only the last fixed and the
-variadic arguments.
-C++ exceptions interoperate; the runtime aligns exception objects to 16
-bytes only. Mixed targets (`run.py --target v3,v5.8c2`, `v3,v6.2c3`,
-`v3,v3.4c`) pass on the 8C2, 2C3 and 4C with only Unipro's known
-differences: the calling convention doesn't depend on the target. ld
-intersects the CPUs its inputs run on and every file of a CPU tree's
-sysroot is marked for that CPU, so only the `e2k-v3` sysroot gives
-forward compatible programs; ld.so refuses libraries for another CPU,
-and MCST's qemu ignores `e_flags` (elf.md, "Mixing targets in one
-program"). With a GCC driver (the experimental GCC at
-`-march=elbrus-v3/-v5/-v6`, 2026-10-13) every pair with lcc's v3,
-v5.8c2 and v6.2c3 code passes all 1,931 tests on the three machines.
-
-Signals, threads and sanitizers (kernel-interface.md, hw on all three):
-a handler runs on the stacks of the made context it interrupts
-(`SA_ONSTACK` moves only the data frame); handlers can `swapcontext`/
-`setcontext` freely, each context keeping its mask and its own
-`[signal stack]`; a thread's `getsp` is accepted into any mapping below
-its stack, and glibc stacks sit right above one, so only the one-page
-guard catches an overflow (a large frame filled upward writes the
-mapping below first; lcc emits no stack-clash probes); lcc's ASan and
-LSan work on all three machines, MSan not on the 2C3's lower layout,
-and LSan reports blocks held only in window registers as leaks. With
-`nfx = 1` the high half of a v5+ 128-bit register is lost when its
-window spills (a signal handler included): lcc uses `nfx = 0` in every
-function that uses one (registers.md).
-
-Kernel interface (`kernel-interface.md`, `sysabi.c`, hw on all three):
-system calls are `sdisp` entry 3 with 4 pairs handed over (`%#` =
-`wsz − 4`), fast calls entry 6, no vDSO, `AT_HWCAP` 0; the FP control
-registers are **not saved or restored around signal handlers** (the
-handler inherits the interrupted state and leaks its changes back); the
-signal frame is 4,272 bytes right below `USD` (no red zone), an
-alternate stack needs about 4,700 bytes (glibc's `MINSIGSTKSZ` 2,048 is
-refused); running out of a hardware stack is SIGKILL, never a catchable
-SIGSEGV; the first deep recursion in the main thread is quadratic (the
-kernel grows the data stack by each `getsp` and rewrites every chain
-frame's `ussz`: 49 s for 250,000 levels on the 4C; threads and a
-pre-grown stack are fast); a new thread's hardware stacks start at its
-creator's current size; `%clkr` is per core (unsynchronised on the 4C and
-2C3); glibc's fast `clock_gettime` costs 1,200–1,400 cycles on the 4C
-and 8C2 (the `lt` clock source), 234 on the 2C3; the 2C3's kernel uses
-the lower address layout; lcc's `-pie`/`-static-pie` don't imply
-`-fPIE`. With lcc's runtime an exception or a forced unwind cannot cross
-a signal frame (throwing from a handler and cancelling a C++ thread
-blocked in a system call kill the process; backtraces through handlers
-work), so the port needs no `linux-unwind.h`
-(`stack-and-unwinding.md`, "Signal frames, cancellation"). lcc's inline
-asm (`source-compat.md`, `asmconv.py`): `%#`, `%=`, `%c`, `%n`, `%H`
-modifiers, `"call"`/`"b[N]"`/`"ctprN"`/`"predN"` clobbers, constants
-printed unsigned at the C type's width.
-
-Second half of the 2026-10-12 audit (kernel-interface.md,
-stack-and-unwinding.md, elf.md; hw on all three): `makecontext_e2k`
-passes every argument, a switch costs about 3,200 cycles round trip,
-contexts keep their own FP state and signal mask, `freecontext_e2k`
-fails only for the running context, and lcc treats any function named
-`setcontext` as never returning; every `longjmp` is a system call
-(about 3,000 cycles + 130–175 a frame); a C++ throw costs 26,000–30,000
-cycles one frame up and about 3,000 more a frame (7–13 system calls);
-glibc's `backtrace` always reads the whole chain stack; a conservative
-GC finds callers' register values only in the procedure stack (32-byte
-pairs on v3, 16 bytes a register on v5+), and Elbrus Linux's Boehm GC
-misses pointers a stopped thread holds only in `%g0`–`%g15`; the stack
-registers read in user mode (layouts in stack-and-unwinding.md, "Stack
-registers"); no split stacks; an executable without a GNU-stack note
-gets a non-executable stack, and lcc rejects nested functions.
-
-Contexts shared between threads (kernel-interface.md, "Contexts and
-threads"; `ctxthr.c`, hw on all three): any thread may resume any
-suspended context, which keeps its stacks, FP mode and mask but runs
-with the resuming thread's `%g13`, so TLS addresses must not be kept
-across a switch (GCC folds `&tls` and `__errno_location` across
-`swapcontext`; only a value-returning or `noipa` accessor is safe:
-`ctxtls.c`). A switch reads the target `ucontext_t` before locking it,
-so a switch that lost a race can later resume an old state. A thread
-exiting in a context that was freed or remade frees its hardware stacks
-twice (and a `[signal stack]` is unmapped twice); on the 4C's 6.1-1.9
-kernel any exit after a switch does. Fiber libraries and libgo must
-keep their worker threads alive.
-
-Overflow signals (kernel-interface.md, `accerr.c`, hw on all three): a
-`getsp` the kernel won't grow the stack for is SIGSEGV at the
-interrupted `USD`'s bottom − 1, `SEGV_BNDERR` on the 8C2 and 2C3 and
-`SEGV_ACCERR` on the 4C, only because the 4C's ALT kernel is MCST's
-6.1-1.9 tree (OpenE2K/linux 6a2673970ea0; 6.1-1.17 changed that
-constant; ALT ships MCST's tree unchanged). The 4C's movable trampoline
-page has the same cause.
-
-Kernel leftovers (kernel-interface.md, `kernleft.c`, hw on all three):
-an `sdisp` to a disabled entry leaves the CTPR empty (SIGILL at the
-call); entry 4 runs the old table; `sigreturn` applies an edited
-`bgr` and every `g`/`gtag`/`gext` slot; a handler starts with `%bgr`
-0xff; a switch into a context another thread ran last costs 500–1,700
-cycles more only when that thread ran on another core.
-
-PoC findings folded on 2026-10-13 (calling-convention.md, registers.md,
-kernel-interface.md, source-compat.md, speculation.md): a variadic
-call's last fixed argument comes after the hidden result pointer and
-`this`; `va_list` is `char *` (C++ `Pc`); lcc links `crtfastmath.o`
-for `-ffast-math` with `-shared` and `-static` too, and dlopen of such a
-library switches the loading thread and its later threads to fz + daz;
-a `call` needs Q ≤ `wbs` < `wsz` (Q the pairs its function inherited,
-4 in C), else SIGSEGV at the call, system calls included; with
-`nfx = 1` the 8C2 and 2C3 lose an extended register part at every
-signal handler (the 4C when the handler spills the window), and lcc
-sets `nfx = 0` in functions that compute with 80-bit values; lcc's tail
-calls don't release the caller's frame, so the stack grows 16 bytes a
-call; GCC reuses loads across an asm without `"memory"`; lcc speculates
-conditional loads but never volatile or atomic ones; lcc's 64-bit
-objects use the 64-bit DWARF format, and MCST's gdb rejects DWARF
-register numbers from 128 up.
-
-Calls and the data stack (2026-10-16; calling-convention.md, "Tail
-calls that release the frame", kernel-interface.md, "Probing",
-predicates.md; hw on all three, false-call timing on the 4C and 2C3): a
-tail call may give its frame back with a positive `getsp` before its
-`ct` (or in its instruction), and the callee then behaves as after a
-direct call (stack pointer, locals, rewritten stack arguments, large
-results, signals, `backtrace`, MCST's unwinder; 10^6 chained calls in
-constant stack), so GCC's sibling calls fit; `getsp` rounds its sum
-down to 16, and nothing bounds a release. A false `call` costs what a
-false `ct` costs, and the one chain frame it spills when the chain
-register file is full costs nothing measurable. Stack-clash probes
-every 4 KiB, allocated page by page (`getsp -4096` and a store), make
-glibc's one-page guard enough for a large frame; 8 KiB probes can miss
-it, a `getsp` is no probe, and probes after one big `getsp` let a
-signal frame land below the guard; an E2K call probes nothing
-(inferred). A `movtd` into a CTPR under a predicate is SIGILL.
-
-Debug information (2026-10-16; registers.md, "How MCST's gdb reads
-them", stack-and-unwinding.md, "Debug information", elf.md, "Thread-local
-storage"; gdb on hand-written DWARF, all three machines): MCST's gdb
-reads DWARF 64 + k through the `%br` in effect (a caller's as saved at
-its call), so `%b[]` locations end at every `setbn` and `abn`; in a
-caller's frame, registers from 2 × `wbs` up show the callee's, and
-lookups use the return address − 1. A bare `DW_OP_regN` of a 16-byte
-float is read from the caller's frame (MCST's gdb 15 port, which also
-breaks `next` over `longjmp`); pieces, GCC's form for register pairs,
-read right, and lcc's one-register `long double` and a v5 `%qpr` value
-have no correct location. A frame base register is valid from the
-instruction after its write; `_Unwind_GetCFA` is gdb's `$sp` (the
-frame's stack pointer at its call), not the entry value. gas makes a
-`.loc` row only at the next `.loc` unless it has `view`, so GCC writes
-`.debug_line` itself as lcc does; lcc's `-gline` rows name syllables
-(`.label`) and gdb ignores them. gdb reads TLS in lcc's and GCC's forms
-(GCC needs `TARGET_ASM_OUTPUT_DWARF_DTPREL`: `.dword x@TLS_DTPREL`).
-lcc describes no locations above `-O0` (one line row per function; its
-`-Og` is `-O0`), and the 64-bit DWARF format is its default
-(`-gdwarf32` the other; MCST's ld fails 32-bit offsets past 4 GiB).
-gdb puts a line breakpoint on `is_stmt` rows, one per block at the
-lowest address, drops rows after a discriminator, ignores
-`prologue_end` in GCC units with location lists (entry address) and
-traps predicated statements whatever the predicate; call-site
-parameters must name the callee's `%r<i>`; OS Elbrus's gdb aborts on
-GCC's by-reference lambdas (ALT's is patched). Advice: plan D13.
-
-Kernel build (2026-10-16; `spec/abi/kernel-build.md`, compile only:
-lcc 1.29.16 and 1.31.05 for v3, v5 and v6, the PoC GCC, `OpenE2K/linux`
-files built on the host): the kernel's `lcc-option(s)` silently drop
-whatever a compiler rejects, so a GCC loses every kernel option,
-`-ffixed-g16` … `g25` included (`%g16`–`%g25` hold kernel state,
-`%g26`–`%g31` are scratch). lcc doesn't reserve a register variable's
-register; GCC fixes it and warns (fatal under `-Werror`) when it is
-call-clobbered. `check_stack` (the kernel's `__interrupt`, about 90
-functions) makes lcc refuse anything needing the data stack and skip
-the argument area of calls. The kernel relies on lcc keeping
-non-volatile asms with unused outputs (`barrier()`, per-CPU stores)
-and not merging or hoisting state-register reads; GCC does both. It
-also needs `%L`/`%H` on 16-byte operands, 39 asm operands (GCC's
-limit is 30), lcc's pragmas under `-Werror`, inline 128-bit multiplies
-(no libgcc) and lcc's `-pg` shape for recordmcount. MCST's `defconfig`
-uses `-fsemi-spec-ld`; lcc honours `-fno-jump-tables` only at `-O0`;
-1.31's `-fno-dam` keeps pipelined loops' DAM (`-fno-swp-dam`); the
-default 8C2 lcc doesn't apply the #123567 workaround.
-
-glibc build (2026-10-16; kernel-interface.md "Process entry",
-source-compat.md, stack-and-unwinding.md "C cleanups and cancellation";
-lcc 1.29.16 and 1.31.05, the PoC GCC; hw on all three): a process starts
-with `%dr0`–`%dr7` 0, every predicate false, 4 pairs handed over, no
-frame below and `getsp 0` = `&argc` (16-byte aligned); ld.so hands
-`_dl_fini` in `%dr0` and its leftover globals (diagnostic ones on the
-4C). glibc's `_start` and `_start2` find `argc` through `register ...
-asm ("FP")`, lcc's name for the stack pointer at entry (= its
-`__builtin_frame_address (0)`; GCC and Unipro reject it); configure
-passes `-mptr64`; ld.so calls `__cpu_init` unrelocated and again from
-`_dl_init`, and a non-lcc glibc takes it from libgcc; 544 lcc pragma
-lines in glibc's E2K files are errors for GCC under `-Wall -Werror`
-(of them only `noprefetch` matters to a port: without it lcc puts APB
-into `strlen` on v5/v6).
-Static glibc leaves `__libc_stack_end` NULL (`pthread_getattr_np` fails
-for the main thread). lcc emits no landing pads for C cleanup
-attributes, so MCST's libc never runs its `__libc_cleanup_push`
-handlers on cancellation (`dl_load_write_lock` stays held after a
-cancelled `dl_iterate_phdr` callback); MCST's `__gcc_personality_v0`
-aborts (`_Unwind_SetGR` index 24); and with a working one a
-cancellation that must land beyond a signal frame (a thread blocked in
-a system call) is lost.
-
-Memory and the C++ ABI (2026-10-16; timing.md "More store-to-load
-cases", speculation.md, calling-convention.md "C++ ABI beyond calls",
-data-layout.md; timing on the 4C and 2C3, the rest on all three): a
-store may share a DAM lock load's instruction (gas allows only the
-lock's cluster): the lock reads first, and a store to a locked byte
-always loses the entry, to other bytes never. On the 2C3 any load that
-overlaps the stored bytes without being exactly them at the store's
-width (16-byte, AAU and crossing stores alike) pays up to 4 cycles
-after the store, after a line-crossing store any load of its second
-line too, and other bytes of the line usually pay 1 cycle after it
-(some processes never do); on the 4C a crossing store costs only its 4
-cycles and AAU stores follow `std` from 1 cycle after the store. l++ is the generic Itanium C++ ABI
-(`__float80` is `long double`, member-function pointers `{ptr, adj}`,
-8-byte guards, cookies of max (8, align)), but it puts a guard in its
-variable's COMDAT group and GCC doesn't, so an l++ object linked before
-a GCC object with the same guarded inline static fails; lcc's `alignof`
-of a vector of 32+ bytes is its size, GCC's (`BIGGEST_ALIGNMENT` 128)
-16. The 8C2's store-to-load cases are still to be timed.
-
-32-bit mode (`spec/abi/mode32.md`, for completeness; hw on all three):
-ILP32 with 8-byte `long long` and `double`; every data access is
-`ldgd*`/`stgd*` (two 32-bit operands summed mod 2^32 within GD =
-[0, 0xf000_0000), beyond it `SEGV_BNDERR`) and indirect calls use
-`getpl`; argument slots as in 64-bit mode, but 32-bit values fill only
-the low half and lcc extends narrow integers neither as caller nor in
-results; ELFCLASS32 with the same `e_flags`, `/lib32/ld-linux.so.2`,
-`R_E2K_32_*` relocations, TLS at TP + 8; system calls through entries 1
-and 5 (the entry, not the task, picks the compat ABI), no time64 calls;
-the modes cannot be mixed in one process; lcc's 32-bit ASan stops at
-startup on the 8C2 and 2C3 (MCST's maps parser skips only three
-mappings above 4 GiB and `[trampolines]` is a fourth); `ldgd*`/`stgd*`
-cost what `ld*`/`st*` do and `getpl` → `ct` is 9; gdb and gcore work. MCST's qemu loads no ELF32; the community
-qemu-e2k32 runs it without entries 3/6 and the GD bound.
-
-Protected mode (`spec/abi/protected-mode.md`, for completeness; hw on
-all three, the 4C static): pointers are 16-byte tagged descriptors
-(base, size, curptr; a v6 procedure label carries the module index),
-checked on every access (`SEGV_BNDERR`, `ILL_ILLOPN`); every call hands
-over 8 pairs, `%qr0` is an AP to the argument area, slots are 16 bytes,
-slots 1–7 in registers, results up to 128 bytes in registers and larger
-ones through a hidden AP in slot 1; no stack-pointer check (the kernel
-sets `%core_mode.no_stack_prot` before v7); loads keep memory tags and
-empty values trap; the machines' lib128 reuses freed memory at once; a
-binutils built without `--enable-new-pm-abi` (the default, ours
-included) makes a PLT that breaks dynamic programs; lcc 1.31.05 makes
-`intptr_t` a descriptor. Neither emulator runs protected code. Only
-`cudtoap` makes a read-only AP (a store through it is `SEGV_ACCERR`),
-and lcc never emits `cudtoap` or `ldcud`; psl overflows at 0xffe0;
-`rrd %usd.lo` sees a `getsap` from 3 cycles on; user shared libraries,
-OpenMP and static ELF32 protected programs work; root can clear
-`no_stack_prot` (sysctl `debug.no_stack_prot`).
+`known.txt` lists the known differences (all Unipro's); any other
+failure fails the run. A test that times out only under qemu may be qemu
+hanging on a store of a register with an empty tagged half, which
+hardware stores (calling-convention.md, "Unused parts of a slot"). The
+PoC GCC at `-march=elbrus-v3`/`v5`/`v6` passed every pair with lcc's
+v3, v5.8c2 and v6.2c3 code on the three machines (2026-10-13). Builtins
+have their own acceptance test, `tools/abi/builtins/run.py --cc gcc=...`:
+it compares every builtin with lcc on hardware and lists missing ones.
 
 ### GCC port planning (doc/gcc-port-plan.md)
 
-A plan for the owner, written for someone new to GCC: pipeline and
-backend anatomy, files to create (LoongArch's 2022 series as the model),
-cross-build commands against lcc's sysroot, milestones M0–M8, design
-decisions (D11, D12: what compiling MCST's kernel and glibc needs;
-D13: debug information for optimized code),
-VLIW scheduling, and what to take from ia64, TILE-Gx, C6x and SPARC
-(with file:line references into `toolchains/gcc`). Owner's
-decisions so far: follow lcc's conventions wherever there is a choice
-(`setwd dbl` per function; `.ignore strict_delay` with the compiler inserting
-every delay, `.accept strict_delay` around user asm); use MCST's
-unwinder and libgcc E2K files; default `-march=elbrus-v3`, forward
-compatible; `%g12` as static chain; provide lcc-compatible
-`__builtin_e2k_*` builtins (`<e2kintrin.h>`, generated from
-spec/abi/lcc-builtins.yaml) but no x86 or NEON intrinsics and no
-predefined x86 feature macros (2026-10-06). spec/abi/lcc-builtins.md
-specifies them for lcc 1.31.05 (2026-10-07): 497 names (a sweep of about
-60,000 candidates found only `__builtin_e2k_get_cpu_iset` missing from
-the manual, which misspells it), 357 of 448 operation builtins are the
-operation with the arguments in order, the rest and every header helper
-were checked against models on the 4C, 8C2 and 2C3
-(`tools/abi/builtins/run.py` is the port's acceptance test; it lists
-the builtins a compiler lacks, so it can be used while they are added). Key facts behind it: MCST gas
-assigns channels to ops outside braces, so a first port can print one op
-per line, and the hardware interlocks everything but `%lsr`, so such code
-is correct without padding, only slow; GCC has no
-loop-rotation support and only sel-sched does check-free control
-speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
-(gccint) into `toolchains/gcc-docs/`.
+A plan for the owner, written for someone new to GCC: backend anatomy,
+files to create (LoongArch's 2022 series as the model), cross-building
+against lcc's sysroot, milestones M0–M8, design decisions D1–D13 (D11,
+D12: building MCST's kernel and glibc; D13: debug information), VLIW
+scheduling, what to take from ia64, TILE-Gx, C6x and SPARC, and in
+section 11 what relcc2 provides alongside.
+
+Owner's decisions (plan section 11, "Decisions and open questions"):
+
+- Follow lcc's conventions wherever there is a choice: `setwd dbl` per
+  function (D7); `.ignore strict_delay` with the compiler inserting every
+  delay, `.accept strict_delay` around user asm (D9).
+- Use MCST's unwinder and libgcc E2K files (section 3.3).
+- Default `-march=elbrus-v3`, forward compatible (no `EF_E2K_INCOMPAT`).
+- `%g12` is the static chain (recorded here; plan D1 lists it among the
+  call-clobbered registers).
+- `UPSR.fsm` is never changed (2026-10-11).
+- Provide lcc-compatible `__builtin_e2k_*` builtins and `<e2kintrin.h>`,
+  generated from spec/abi/lcc-builtins.yaml, but no x86 or NEON
+  intrinsics and no predefined x86 feature macros (2026-10-06).
+
+A first port can print one operation per line with no braces: MCST gas
+assigns the channels, and with its `strict_delay` padding left on (no
+`.ignore strict_delay`) it pads after compares; the hardware interlocks
+the rest except the cases under "Interlocks" above, so such code is
+correct, only slow (plan section 2).
+GCC has no loop-rotation support, and only sel-sched does check-free
+control speculation (sections 7.6, 7.7).
 
 ## Next steps (proposed, owner to choose)
 
@@ -1353,132 +674,101 @@ None at the moment.
 
 ## Gotchas
 
-- On the 2C3 an array prefetch probe outside a `%lsr`-counted loop must
-  write `%lsr` first (0 will do): after any finished counted loop
-  (glibc's `strncmp` runs one) its `mova` is SIGILL (hwbugs.md).
+Traps that cost a day if unknown; details in the files named.
 
-- On the 2C3 `clock_gettime` advances in about 330 ns steps (clock source
-  `sclkr`): time short loops with `%clkr` there (`mas_be.c`'s ns figures
-  read 0).
+### Emulators
 
-- MCST's qemu cannot deliver hardware exceptions as signals: a memory
-  fault (null or read-only page), division by zero, a taken `ct` through
-  an empty CTPR, a too-small `setwd`, a diagnostic-operand trap all stop
-  it with "exception handling is unimplemented - aborting". Test those
-  on the 4C. (The community qemu delivers SIGSEGV but returns from a
-  division by zero with no signal, and its `,sm` loads under a
-  diagnostic predicate read memory.)
+Confirm anything that matters on hardware; MCST's qemu is the reference
+where the two disagree. Full difference tables: the "Emulators" sections
+of apb.md, speculation.md, predicates.md, loops.md, protected-mode.md,
+and `tools/dejagnu/README.md`, "Known limits".
 
-- gas inserts an empty wide instruction, which runs, before any jump
-  target at offsets 0x1c0–0x1ff of each 1 KiB block (its
-  `CODE_PLACEMENT` workaround): align timing probes so it can't
-  lengthen a measured distance, and check distances with objdump.
+- **No hardware exceptions (MCST's qemu).** A memory fault, division by
+  zero, `ct` through an empty CTPR, too small a `setwd` or a diagnostic
+  operand stops it ("exception handling is unimplemented - aborting").
+  The community qemu gives SIGSEGV, but no signal for division by zero.
+- **Too lenient (MCST's qemu): broken code passes.** It keeps an
+  atomic's lock across loads and stores before the unlock store
+  (hardware livelocks; atomics.md), gives `%b[]` `setbn`'s new base in
+  the same instruction (hardware: the old one; registers.md), and runs
+  a predicated `movtd` into a CTPR conditionally (gas accepts it;
+  hardware traps under any predicate; predicates.md, "RLP"). Run
+  atomics and hand-written prologues on hardware.
+- **Array prefetch.** MCST's qemu restarts every area when a signal
+  handler returns (lcc `-O2`+ loops then compute wrong results) and
+  models none of APB's limits (apb.md).
+- **Speculation.** MCST's qemu never takes `rbranch ? %dt_alN`, has no
+  untouched pages and computes speculative FP normally; the community
+  qemu aborts on `%dt_al`. Use `tools/isa-probes/spec.c` on hardware.
+- **Wrong results.** Both emulators raise invalid on quiet FP compares
+  (`fcmpud*f`, packed `eq`/`neq`/`od`/`uod`) and never set the denormal
+  flag. MCST's qemu takes `qpslld`/`qpsrld` counts modulo 64 (hardware:
+  0 from 64 up). The community qemu gets v6 packed FMAs wrong
+  (semantics.md).
+- **FP state.** MCST's qemu applies `%pfpfr` to 80-bit operations and
+  ignores x87 precision control (hardware: `%fpcr`/`%fpsr`). The
+  community qemu zero-extends `fadds` results under `dbl = 1` and starts
+  processes with the FP flags clear; the kernel sets all six (`%pfpfr`
+  0x1fbf, `%fpsr` 0x3f) (registers.md).
 
-- MCST's qemu is too lenient in two ways that hide broken code: it
-  keeps an atomic's lock across loads and stores between the lock-wait
-  load and the wait-unlock store (hardware always fails the store, so
-  such a loop livelocks; atomics.md), and it applies `setbn`'s new base
-  to `%b[]` operands in the same instruction (hardware uses the old one;
-  registers.md). Run atomics and hand-written prologues on hardware.
+### Machines
 
-- MCST's libm needs the sticky FP flags set: lcc built it with
-  speculative FP, so after `feclearexcept` many functions (`sqrt` of a
-  negative, `sin`, `exp`, `pow`, `fmod`, ...) die with SIGILL inside
-  libm, and its `fmod`/`remainder` hang in `FE_DOWNWARD` on some exact
-  multiples (registers.md, "MCST glibc's FP bugs";
-  `tools/abi/probes/libmchk.c`). Expect testsuite noise from both.
+- **2C3 array prefetch.** After any finished `%lsr`-counted loop
+  (glibc's `strncmp` runs one) a `mova` outside such a loop is SIGILL;
+  probes write `%lsr` first, 0 will do (hwbugs.md).
+- **2C3 clock.** `clock_gettime` moves in ~330 ns steps; time short
+  loops with `%clkr` (timing.md).
+- **2C3 store-to-load timing depends on the process's history.** Time
+  it in fresh processes and read each step's cycles
+  (`memorycxx_stld.c trace`; timing.md, "The 2C3's line penalty").
 
-- MCST's glibc `fesetenv (FE_DFL_ENV)` unmasks the denormal exception
-  and sets x87 precision control to single (registers.md): after it a
-  denormal operand traps (SIGFPE, or SIGILL in speculative lcc code) and
-  `long double` rounds to 24 bits. Expect noise from tests that call it.
+### MCST's runtime and tools (testsuite noise)
 
-- The community qemu (the owner's; to be fixed later) differs from the
-  4C and MCST's qemu in two ways: under `dbl = 1` it zero-extends 32-bit
-  FP results such as `fadds` (`is_alop_affected_by_dbl`), and it starts
-  processes with the FP exception flags clear, while the kernel sets all
-  six in `%pfpfr` and `%fpsr` (`%pfpfr` 0x1fbf, `%fpsr` 0x3f). Use MCST's
-  qemu (`toolchains/qemu-mcst`) as the reference for both.
+- **Sticky FP flags.** After `feclearexcept`, lcc's speculative FP
+  code (MCST's libm included: `sqrt` of a negative, `sin`, `exp`,
+  `pow`, ...) dies with SIGILL unless built with `-fno-spec-fp`; libm's
+  `fmod`/`remainder` hang in `FE_DOWNWARD` on some exact multiples;
+  `fesetenv (FE_DFL_ENV)` unmasks the denormal trap and sets x87
+  precision to single (registers.md, "MCST glibc's FP bugs";
+  speculation.md, "What lcc speculates").
+- **MCST's `libgcc_s.so.1`** aborts when a cancellation or
+  `pthread_exit` unwinds into a GCC-built C frame with a cleanup; use
+  the PoC's `libgcc_s` or `-static-libgcc` (stack-and-unwinding.md, "C
+  cleanups and cancellation").
+- **MCST's gdb** misreads a 16-byte float given as a bare `DW_OP_regN`;
+  `next` over a call ending in `longjmp` runs to the end (registers.md,
+  "How MCST's gdb reads them").
+- **l++ and GCC objects** defining one guarded inline static: "multiple
+  definition of `guard variable`" when l++'s comes first. Link GCC's
+  first or use `-fno-gnu-unique` (calling-convention.md).
+- **MCST ld.** `R_E2K_ISLOCAL` can't be linked, an ifunc in a PIE fails
+  silently, a static link with an ifunc crashes ld; gold breaks dynamic
+  links (elf.md, "Rarely used operators, ifunc and gold").
+- **Linux built by anything but lcc.** `lcc-option(s)` silently drop
+  what the compiler rejects, `-ffixed-g16`…`g25` included, and GCC then
+  deletes `barrier()`: check `V=1` lines and object code (kernel-build.md).
 
-- MCST's qemu restarts every array prefetch area from its start when a
-  signal handler returns, so code built by lcc at `-O2` and above can
-  compute wrong results there if the program receives signals (lcc's
-  loops in `apb-lcc.c`: 600 wrong of 900). It models none of APB's
-  limits either. Test APB on the 4C.
+### gas, objdump, Unipro
 
-- Checked speculation can't be tested under emulation: MCST's qemu never
-  takes `rbranch ? %dt_alN` and has no untouched pages (so fully
-  speculative loads never fail there), and the community qemu aborts on
-  `%dt_al`. Use the 4C (`tools/isa-probes/spec.c`).
-
-- MCST's qemu applies `%pfpfr` (rounding, flags) to 80-bit operations
-  and ignores x87 precision control; the hardware uses `%fpcr`/`%fpsr`.
-  Check `long double` rounding and flags on hardware.
-
-- gas accepts a predicated `movtd` into a CTPR (`movtd,0 %dr1, %ctpr1 ?
-  %pred0`) and MCST's qemu runs it conditionally, but the hardware traps
-  (SIGILL `ILL_ILLOPC`) whatever the predicate's value
-  (spec/isa/predicates.md, "RLP"). Prepare unconditionally.
-
-- MCST's gdb 15.2 reads a 16-byte float described as a bare
-  `DW_OP_regN` from the caller's frame (lcc `-O0`'s own `__float128`
-  parameters print garbage), and `next` over a call that ends in
-  `longjmp` runs on to the program's end (spec/abi/registers.md, "How
-  MCST's gdb reads them"). Expect guality noise from both.
-
-- MCST gas gives a `.loc` without a `view` operand its row only at the
-  next `.loc` (the last one gets none), and plain assembly gets no debug
-  sections even with `--gdwarf-5` or `-g`
-  (spec/abi/stack-and-unwinding.md, "Debug information").
-
-- Building `OpenE2K/linux` with anything but lcc: the kernel's
-  `lcc-option`/`lcc-options` (`scripts/Makefile.compiler`) drop every
-  option, or whole group, the compiler rejects without a word,
-  `-ffixed-g16` … `g25` included, and GCC then deletes the kernel's
-  `barrier()` and other non-volatile asms with unused outputs
-  (spec/abi/kernel-build.md). Check the `V=1` command lines and the
-  object code, not just that it compiles.
-
-- Linking an l++ C++ object before a GCC one that defines the same
-  guarded inline static fails ("multiple definition of `guard variable
-  for ...`"): the two put the guard in different COMDAT groups
-  (spec/abi/calling-convention.md, "C++ ABI beyond calls"). Link GCC's
-  objects first or build them with `-fno-gnu-unique`.
-
-- Store-to-load timing on the 2C3 depends on the process's history: a
-  long sweep of kernels switched off a line penalty that fresh
-  processes pay in 3 or 4 of 4 steps, and a latency read as "every step
-  clean" hides rows where half the steps pay. Time such cases in fresh
-  processes (`memorycxx_stld.c trace`) and look at the cycles a step
-  (spec/isa/timing.md, "The 2C3's line penalty").
-
-- MCST's `/lib64/libgcc_s.so.1` aborts (SIGABRT in `_Unwind_SetGR`)
-  whenever a cancellation or `pthread_exit` (presumably an exception
-  too) unwinds into a C frame that GCC built with `-fexceptions` and a
-  cleanup: its `__gcc_personality_v0` is broken. Run such PoC-built
-  programs with the PoC's `libgcc_s` (`LD_LIBRARY_PATH`) or
-  `-static-libgcc` (spec/abi/stack-and-unwinding.md, "C cleanups and
-  cancellation").
-
-- Unipro's assembly needs fixes to assemble with MCST gas: write `%empty`
-  instead of `%empty.hi`, compile with `-fno-addrsig` and `-fno-PIC` (gas
-  rejects its GOT label arithmetic), and avoid atomics (gas rejects its
-  locked-store syntax).
-- Store operand order: gas reads *data, address, offset* by default;
-  `.ignore ld_st_style` (emitted by both lcc and Unipro) switches to
-  *address, offset, data*, the order objdump prints.
-- objdump prints any `staa`/`ldaa` without MAS 0x3f as `aaurw`/`aaurr`
-  `%unknown_aau_reg` and drops the `incr`; `compare_objdump.py` reports these
-  as "known objdump bug".
-- binutils' opcode table lists `plog`/`qplog` with 64-bit operand formats;
-  the older sheet has 128-bit packed for `qplog`. gas accepts both.
-- `gas` rejects a store in ALC2 with a load in ALC3, and a store in ALC5 with
-  a load in ALC0, in one bundle.
-- Hand-written corpus `.s` files declare their ISA range with
-  `isets: N-M` in the first three lines.
+- **Store operand order.** gas reads *data, address, offset*;
+  `.ignore ld_st_style` (lcc and Unipro emit it) makes it *address,
+  offset, data*, objdump's order.
+- **`CODE_PLACEMENT` padding.** gas puts an empty wide instruction, which
+  runs, before jump targets at offsets 0x1c0–0x1ff of each 1 KiB block:
+  align timing probes around it and check with objdump (hwbugs.md).
+- **Debug lines.** A `.loc` without `view` gets its row only at the next
+  `.loc`; plain assembly gets no debug sections even with `-g`
+  (stack-and-unwinding.md, "Debug information").
+- **objdump** shows `staa`/`ldaa` without MAS 0x3f as `aaurw`/`aaurr
+  %unknown_aau_reg` and drops `incr` (`compare_objdump.py`'s "known
+  objdump bug").
+- **Unipro's assembly** needs `%empty` for `%empty.hi`, `-fno-addrsig`,
+  `-fno-PIC` and no atomics for MCST gas (isa-decode's `build_corpus.sh`).
 
 ## Conventions
 
+- Compare compilers against lcc at `-O3`: it is lcc's base level, about
+  GCC's `-O2` (lcc's `-O2` is about GCC's `-O1`).
 - Commit messages: imperative subject, wrapped body explaining why, ending
   with the attribution line the harness provides. Author email is
   configured in the repo (`a1ba.omarov@gmail.com`).

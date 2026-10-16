@@ -117,6 +117,8 @@ PROBES = {
     "isaleft-v5.s": ("isaleft.c", "8C2, 2C3"),
     "apbleft.s": ("apbleft.c", "4C, 8C2, 2C3"),
     "apbleft-v5.s": ("apbleft.c", "8C2, 2C3"),
+    "apbst.s": ("apbst.c", "4C, 8C2, 2C3"),
+    "apbst-v5.s": ("apbst.c", "8C2, 2C3"),
     "stbase.s": ("stbase.c", "4C, 8C2, 2C3"),
     "timeleft.s": ("timeleft.c", "4C, 8C2, 2C3"),
     "timeleft-v6.s": ("timeleft.c", "2C3"),

@@ -256,7 +256,7 @@ tools/isa-probes, by family:
 | FP environment | `fpenv`, `fenvlib`, `fpcost`, `specfp` |
 | Speculation, DAM, MAS | `spec`, `damwb`, `damlist`, `p28`, `mas_be`, `mas_hint`, `mas_mod`, `mas6` |
 | Loops, predicates, rotation | `loops`, `lsrw`, `preds`, `rndpred`, `abg` |
-| Array prefetch | `apb`, `apb-loop`, `apb-lcc`, `apb-stream`, `bapent` |
+| Array prefetch | `apb`, `apb-loop`, `apb-lcc`, `apb-stream`, `apbst`, `apbst-lcc`, `bapent` |
 | Memory and timing | `memx`, `samewi`, `stld`, `stldv`, `stbase`, `pf`, `pf-lcc`, `callsstack_pcall`, `memorycxx_stld`, `memorycxx_dam` |
 | Monitors | `pmu`, `pmu2`; `pmu.h` counts events inside any probe |
 | x86 translator facilities | `rp`, `native` |
@@ -436,8 +436,10 @@ Facts that change how code is written or probed:
   so save it around calls. On v3–v5, array prefetch is correct only in
   a `loop_mode` loop counted by `%lsr` that advances every area once
   per iteration. A call, return or `%ctpr2` write stops it (the next
-  `mova` is SIGILL). The buffer doesn't see stores. v6 keeps positions
-  across traps in any loop.
+  `mova` is SIGILL). The buffer doesn't see stores, unless on v3–v5
+  1 ≤ `%lsr.ldovl` ≤ the store's distance in iterations (lcc does this;
+  the 2C3 follows no such rule). v6 keeps positions across traps
+  in any loop.
 - **Predicates** (predicates.md). One wide instruction takes at most 4
   compares (ALC0, 1, 3, 4), 4 ELPs, 3 CLP/MLPs and 6 RLP/MRGC entries.
   Predicates are callee-saved for free. An op under a false predicate

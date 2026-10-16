@@ -215,18 +215,21 @@ stream, then read a few movas later):
 Which stores a `mova` sees depends on how far the prefetch has run, so a
 compiler must treat it as unpredictable: **use APB for an array only if
 nothing writes, during the loop, an element of it that a later `mova`
-reads**. Stores to elements already read are harmless. lcc keeps to this
-[lcc, `-O3 -faligned`]: it uses APB for `a[i] = a[i] * 2` and for
-`a[i] = b[i] * 2` with `restrict`; without `restrict` it versions the
-loop on a run-time comparison of the pointers (`a ≤ b` among others)
-before the APB version; it never uses APB for `a[i + 2] = a[i] * 2`.
-Both qemus read memory when the `mova` executes, so they return the
-stored value. A small `%lsr.ldovl` keeps the unit fewer iterations
-ahead, and on v3 and v5 the movas then see stores `ldovl` or more
-iterations ahead of them; but it costs most of APB's speed, and the
-2C3 doesn't see stores less than 12 iterations ahead even at `ldovl` 1,
-so it is no way around this rule ([loops.md](loops.md), "Array-prefetch
-depth").
+reads**, or, on v3–v5 only, with 1 ≤ `%lsr.ldovl` ≤ the store's
+distance d in iterations (the iterations from the store to the `mova`
+that reads its element; `ldovl` < d when the store is in the
+iteration's `alc` instruction; measured on the 4C and 8C2 for `ldovl`
+1–8). Stores to elements already read are harmless. lcc
+[lcc, `-O3 -faligned`] uses APB for `a[i] = a[i] * 2` and for `a[i] =
+b[i] * 2` with `restrict`; without `restrict` it versions the loop on a
+run-time comparison of the pointers (`a ≤ b` among others) before the
+APB version; it never uses APB for `a[i + 2] = a[i] * 2`. From a
+distance of 5 elements on it does, on v5 and v6 [lcc 1.29.16 `-O3`],
+with a small `ldovl`, and its v6 loops computed right although the 2C3
+follows no `ldovl` rule ([loops.md](loops.md), "Stores into a streamed
+array"). A small `ldovl` costs much of APB's speed in fast loops (on
+the 8C2 a 2-cycle loop runs 7.4× slower at `ldovl` 1). Both qemus read
+memory when the `mova` executes, so they return the stored value.
 
 ## Starting, pausing and stopping [hw]
 

@@ -3214,14 +3214,24 @@ check-free semi-speculative form works.
     element (the kernel counts epilogue iterations only with `ldmc`,
     `iset_v3.c:194-196`: a few runs in a million on the 4C and the
     8C2), and on the 2C3 the first one is SIGILL
-    (`spec/isa/hwbugs.md`). lcc's APB loops have no epilogue
-    iterations; a pipelined kernel that drains through `ecnt` must set
-    `ldmc` or keep its movas out of the drain stages.
+    (`spec/isa/hwbugs.md`). lcc's APB loops often have epilogue
+    iterations (many of NPB's, most of LU's, have `ecnt` > 0), always
+    with `ldmc` 0 and every `mova` in a `loop_mode` instruction: the
+    drain stages' movas are disabled, which is right, since what they
+    would read belongs to iterations past the end. A kernel that needs a
+    `mova`'s data in a drain stage must set `ldmc`
+    (`spec/isa/loops.md`, "Semantics").
   - no store during the loop to an element of a streamed array that a
     later `mova` reads: the buffer doesn't see stores, and how far it
     has prefetched varies. Stores to elements already read are fine;
     lcc versions loops that may alias on a run-time pointer comparison
-    (`spec/isa/apb.md`, "Stores into a prefetched array").
+    (`spec/isa/apb.md`, "Stores into a prefetched array"). On v3–v5
+    1 ≤ `%lsr.ldovl` ≤ d, the store's distance in iterations (`ldovl`
+    < d with the store in the `alc` instruction; measured for `ldovl`
+    1–8), makes the movas see such stores, at a large cost in fast
+    loops. lcc 1.29.16 does this from a distance of 5 elements on v5
+    and v6, but the 2C3 follows no such rule, so a port shouldn't on
+    v6 (`spec/isa/loops.md`, "Stores into a streamed array").
 
   Size each area for the prefetch depth: about 1 KiB (`asz` 4) lets one
   stream from memory run at L1 speed. Spread the areas over both halves

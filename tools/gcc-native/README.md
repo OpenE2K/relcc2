@@ -44,6 +44,26 @@ the lcc-built one (`cp/pt.cc`, `fold-const.cc`, ... about 1,000 s in
 all, identical output), and lcc itself compiling the same files at
 `-O3` takes 20% longer.
 
+**Bootstrap 8 passed** (`5ec2d06d909`, 2026-10-16; 7 h 10 min on the
+8C2 at `-j 4`): stage 2 and 3 objects are identical. `pack` made the
+native tarball from its install:
+`gcc-e2k-0.4+native-build.7-e2k-elbrus-8c2-native-elbrus-linux-9.5.5.tar.xz`,
+123 MB. Its binaries are marked `elbrus-8c2`, because they link with
+the 8C2's system libraries.
+
+Unpacked in a fresh directory on the 8C2, the tarball:
+- builds and runs C and C++ programs;
+- builds busybox 1.37.0, whose testsuite gives 956 PASS and 6 FAIL. All
+  6 also fail with lcc's build (checked on the 4C);
+- builds coreutils 9.5, whose `make check` gives 527 PASS, 125 SKIP and
+  1 FAIL.
+
+The coreutils failure is `tests/rm/r-root`, which lcc's build passes.
+It drives `rm` under gdb with a breakpoint script on `remove.c:391`.
+gdb finds 4 locations for that line in the PoC's `-g -O2` build
+against 1 in lcc's, so the script sees more hits than calls. This is
+a debug-information matter, not a wrong result.
+
 ## What it is for
 
 The experimental back end (`toolchains/gcc-claude`, AGENTS.md decision 2)
@@ -168,6 +188,7 @@ $G push-dejagnu                  # once per machine without runtest
 $G test 'execute.exp dg.exp'     # make -k check-gcc RUNTESTFLAGS=...
 $G bench-inputs                  # preprocess the benchmark sources once
 $G bench NAME:stage1 NAME        # lcc-built against self-built cc1plus
+$G pack                          # native tarball from a finished bootstrap
 $G fetch                         # logs, .sum files, bench results here
 $G compare OLD NEW               # two fetched builds, contrib/compare_tests
 $G clean                         # remove build NAME; clean --all: everything
@@ -256,8 +277,7 @@ tools/gcc-native/cross.sh --stage pack         # repack only
 
 ## Not done yet
 
-- A bootstrap whose comparison passes, and the native tarball from its
-  install.
+- Native `check-gcc` on the bootstrapped compiler.
 - `test` and `bench` against a real build.
 - Running the suite from a host-side DejaGnu (`tools/dejagnu`) against a
   natively built compiler. That would need a board that compiles on the

@@ -34,6 +34,9 @@
 #   bash remote.sh bench CPU REPEAT FLAGS SPEC...
 #       SPEC  NAME (its last stage), NAME:stage1 (the lcc-built stage 1 of
 #             a bootstrap), NAME:stage2, or NAME:inst (the installed one)
+#   bash remote.sh pack NAME VERSION COMMIT OS
+#       a stripped copy of build NAME's install as gcc-e2k-VERSION, with
+#       a README, packed as gcc-e2k-VERSION-e2k-CPU-native-OS.tar.xz
 #   bash remote.sh diffcc SPEC-A SPEC-B JOBS [FLAGS...]
 #       compile GCC's C torture tests (and with two installed compilers
 #       the C++ ones) with both compilers at each FLAGS (default -O0,
@@ -374,6 +377,61 @@ cmd_status() {
     du -sh "$D" 2>/dev/null | sed 's/^/disk: /'
 }
 
+cmd_pack() {
+    [ $# -eq 4 ] || die "pack NAME VERSION COMMIT OS"
+    local name=$1 version=$2 commit=$3 os=$4
+    local b=$D/build-$1 log=$D/log-$1 stage=$D/pack-$1 top=gcc-e2k-$2 cpu tarball
+    [ "$(cat "$log/status" 2>/dev/null)" = ok ] || die "build $name has not finished"
+    rm -rf "$stage"
+    mkdir -p "$stage"
+    # A stripped copy of the install, moved to a directory of its own: GCC
+    # finds its programs and libraries relative to bin/, wherever it lies.
+    (cd "$b" && nice -n 19 make install-strip DESTDIR="$stage/root") \
+        > "$log/pack.log" 2>&1 || die "make install-strip failed: $log/pack.log"
+    mv "$stage/root$D/inst-$name" "$stage/$top"
+    rm -rf "$stage/root"
+    # The CPU the binaries are marked for: ld intersects its inputs', so
+    # the machine's system libraries decide (elf.md, "Mixing targets").
+    cpu=$(readelf -h "$stage/$top/bin/gcc" | sed -n 's/^ *Flags: *[^,]*, *\([^,]*\),.*/\1/p')
+    cpu=${cpu:-unknown}
+    cat > "$stage/$top/README.txt" <<README
+GCC for Elbrus (E2K), relcc2 proof of concept $version, native
+
+An experimental GCC back end for E2K written by an AI agent from the
+relcc2 specification of the ISA and ABI.  It is not the hand-written port
+meant for upstream and is not supported by MCST or the GCC project.
+
+  GCC         relcc2 PoC $version, commit $commit
+  host        e2k, binaries marked $cpu: they run on that CPU only,
+              because they link with the build machine's system libraries
+  system      $os ($(ldd --version | sed -n '1s/.*) //p')), built on
+              $(hostname) with its /usr/bin/as and /usr/bin/ld
+  built by    a GCC bootstrap: stage 1 by lcc, stages 2 and 3 by the PoC
+              itself, stage 2 and 3 objects compared equal
+  target      e2k-unknown-linux-gnu, 64-bit unprotected mode, default
+              -march=elbrus-v3 (programs link with the system libraries,
+              which mark them for this machine's CPU too)
+  languages   C, C++, LTO; --enable-checking=yes (slower than release)
+  left out    libsanitizer, libitm, libssp, libquadmath, Fortran
+
+Using it: unpack anywhere and put bin/ in PATH.  It uses the system's
+binutils and glibc.  C++ programs need this compiler's libstdc++, newer
+than the system's: link with -static-libstdc++ -static-libgcc, or point
+LD_LIBRARY_PATH (or -Wl,-rpath) at lib64/.
+
+Configured with:
+$(sed -n 's/^configure //p' "$log/settings")
+
+Licence: GCC is GPL-3.0-or-later; libgcc and libstdc++ carry the GCC
+Runtime Library Exception.  Source: the commit above.
+README
+    tarball=$D/$top-e2k-$cpu-native-$os.tar.xz
+    tar -C "$stage" --owner=0 --group=0 --numeric-owner --sort=name -cf - "$top" \
+        | xz -T4 -6 > "$tarball"
+    rm -rf "$stage"
+    ls -l "$tarball"
+}
+
 cmd_clean() {
     [ $# -eq 1 ] || die "clean NAME | --all"
     if [ "$1" = --all ]; then
@@ -392,7 +450,7 @@ cmd_clean() {
     echo "removed $1"
 }
 
-[ $# -ge 1 ] || die "usage: remote.sh check|build|test|bench-inputs|bench|diffcc|triage|status|clean ..."
+[ $# -ge 1 ] || die "usage: remote.sh check|build|test|bench-inputs|bench|diffcc|triage|status|pack|clean ..."
 cmd=$1
 shift
 case $cmd in
@@ -404,6 +462,7 @@ bench)        cmd_bench "$@" ;;
 diffcc)       cmd_diffcc "$@" ;;
 triage)       cmd_triage "$@" ;;
 status)       cmd_status "$@" ;;
+pack)         cmd_pack "$@" ;;
 clean)        cmd_clean "$@" ;;
 *)            die "unknown command $cmd" ;;
 esac

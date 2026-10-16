@@ -60,6 +60,11 @@
 #   fetch               copy log-NAME and bench/ to toolchains/gcc-native/HOST/
 #   compare OLD NEW     compare two fetched builds: status, step times,
 #                       testsuite (GCC's contrib/compare_tests)
+#   pack                pack build NAME's install (after a bootstrap) as
+#                       gcc-e2k-VERSION-e2k-CPU-native-OS.tar.xz and copy
+#                       it here: VERSION from the PoC tag before the
+#                       commit (as cross.sh), OS from the machine's
+#                       /etc/os-release, CPU from the binaries' ELF flags
 #   clean [--all]       remove build NAME (or the whole work directory)
 #   xcheck [--fresh] [--lcc DIR]
 #                       on this host, not the machine: compile all of
@@ -261,6 +266,21 @@ fetch)
     ssh_ "cd $rdir && tar -c --exclude=lock --exclude=pid log-$name \$(ls -d bench 2>/dev/null)" \
         | tar -C "$out" -xmf -
     echo "fetched into $out"
+    ;;
+pack)
+    commit=$(ssh_ "sed -n 's/^source: \([0-9a-f]*\).*/\1/p' $rdir/log-$name/settings")
+    [ -n "$commit" ] || die "no source commit recorded for $name"
+    tag=$(git -C "$src" describe --tags --abbrev=0 --match 'v[0-9]*' "$commit")
+    n=$(git -C "$src" rev-list --count "$tag..$commit")
+    branch=$(git -C "$src" branch --contains "$commit" --format='%(refname:short)' | head -1)
+    version=${tag#v}
+    [ "$n" = 0 ] || version=$version+${branch:-dev}.$n
+    os=$(ssh_ '. /etc/os-release; printf "%s-%s" "$NAME" "$VERSION"' | tr 'A-Z ' 'a-z-')
+    out=$(remote_sh pack "$name" "$version" "$commit" "$os") || die "pack failed"
+    echo "$out"
+    f=$(echo "$out" | awk '{print $NF}' | tail -1)
+    "$root/tools/setup/e2k-scp" ${port:+-P "$port"} "$remote:$f" "$root/toolchains/gcc-native/"
+    echo "copied to toolchains/gcc-native/$(basename "$f")"
     ;;
 compare)
     [ $# -eq 2 ] || die "compare OLD NEW (names of fetched builds)"

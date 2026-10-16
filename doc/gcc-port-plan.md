@@ -3135,6 +3135,34 @@ check-free semi-speculative form works.
     `&decl` plus an integer computed from no pointer let the loop
     pipeline (II 9 for four elements, 122 cycles an iteration before):
     FT.W 0.64 → 0.54 s on the 8C2, 0.58 → 0.49 s on the 2C3.
+  - *Vectorized loops and the vectorizer's scalar copies need it too*
+    (P93). For a pointer reference whose address evolves in the loop
+    nest, `dr_analyze_indices` puts the multiple of the access size of
+    its constant offset into the access function and the remainder into
+    the base object (tree-data-ref.cc:1425–1442), so 16-byte references
+    whose offsets differ by 8 modulo 16 get different base objects and
+    may alias, where the 8-byte scalar ones shared one: NPB SP's back
+    substitution stores `rhs[m][i][j][k]` against `rhs[m][i1][j][k]` and
+    `rhs[m][i2][j][k]`, offsets 8, 33,808 and 67,608 from one pointer
+    (class A). Pointers made after points-to analysis get points-to
+    information only from whoever makes them: the vectorizer's
+    data-reference pointers take their base's
+    (`vect_duplicate_ssa_name_ptr_info`, tree-vect-data-refs.cc:5549–5568),
+    but the addresses its runtime checks compute get none, and later
+    passes may base the loop's own references on them (the PoC's NPB MG
+    `resid`: the scalar loop loads through check addresses dumped `PT =
+    anything`). And the vectorizer's `&array` makes a local array
+    addressable (gimplification marks it, gimplify.cc:7799, reached
+    through `force_gimple_operand`), after which any pointer without
+    points-to information may alias it (`may_be_aliased`, tree.h:6502;
+    `ptr_deref_may_alias_decl_p`, tree-ssa-alias.cc:318–331): MG's `u1`,
+    `u2`. The PoC tags the vectorizer's loops and its scalar fallbacks
+    and epilogues as well, tells one pointer's references apart by the
+    bytes each covers up to the loop's bound, and gives addressable
+    local arrays cliques. Without that 32 of SP's loops went unpipelined
+    (with it, 12.36 → 11.35 s on the 8C2, still slower than SP without
+    16-byte vectors, 10.91 s) and MG took 2.2 times as long (0.92 →
+    0.41 s).
 - **Rotating registers**: two different things share the name.
   *Window shifting* — each call slides the register window, as SPARC's
   `save`/`restore` and E2K's `call wbs=` do — is handled by hardware and
@@ -3371,6 +3399,131 @@ check-free semi-speculative form works.
   `A[i*N+j]` with unsigned 32-bit indices isn't vectorized because the
   index may wrap; lcc keeps the wrap too (`-mdmodel=medium` lets it
   compute indices in 32 bits, source-compat.md, not drop the wrap).
+- **Auto-vectorization with 16-byte vectors (v5 and later)** (P93).
+  lcc's way first (decision 7): its loop vectorizer goes to 128 bits
+  where it knows the alignment (NPB SP's global arrays: `movaqp`,
+  `qpfmul_subd`, `qpfmul_addd` and `staaqp` in its solvers and flux
+  loops) and in a few loop kinds (byte loops, FP selects, `a = b × c +
+  a`), keeps other loops at 64 bits unless `-faligned` (or `-ffast`),
+  and reads a stream of unknown alignment with `movaqp`, storing its
+  results as two `staad` or versioning the loop on the address; in
+  straight-line code it pairs small groups of like operations into
+  128-bit ones but leaves small-matrix products scalar
+  (spec/isa/operations-v5.md, "How lcc uses them"; spec/isa/apb.md,
+  "128-bit movas (v5+)"). The modes are V2DF, V4SF, V2DI, V4SI, V8HI
+  and V16QI in one register (`nfx = 0` in a function that uses one,
+  registers.md) with the `qp*` operations. A 16-byte load is two `ldd`
+  + `qppackdl` on v5 (`ldqp` is served by L2: 11 cycles, one a cycle)
+  and one `ldqp` on v6. A store is `stqp` only where 16-byte alignment
+  is known (on v5 a misaligned one is SIGBUS); otherwise lcc writes
+  `qpswitchd` + two `std`, on v6 too, and bytes where even 8-byte
+  alignment is unknown (a 16-byte `memcpy` through `void *` is sixteen
+  `stb`). In pipelined loops `movaqp` from an `fmt` 5 area reads 16
+  bytes at any alignment as fast as aligned, on v5 and v6, and
+  `staaqp` stores them where 16-byte aligned (v5; any address on v6).
+  The proof of concept (`-mvect128`, on by default for v5 and later)
+  found what else this takes (its figures, not rechecked):
+  - *Alignment reaching RTL.* For a `MEM_REF` whose pointer has a
+    known alignment, `get_object_alignment` takes the pointer's and
+    consults the access type's only when the pointer's isn't known
+    (builtins.cc:282–333; a `TARGET_MEM_REF`'s never counts as known,
+    :321). The vectorizer gives a misaligned access a type of lesser
+    alignment and marks its pointers `ALIGN = 16` where it peeled for
+    alignment and 8 for the rest (tree-vect-stmts.cc:9426–9440 for
+    stores, :11481–11496 for loads), so an aligned access rebased on a
+    pointer known only to 8 bytes expands as misaligned: in the PoC's
+    heat-3d every aligned load became two `ldd` and a `qppackdl`, none
+    a `movaqp`, until its 16-byte moves took the alignment of a vector
+    `MEM_REF` type that covers the whole access. This didn't reproduce
+    on 2026-10-16 (ivopts' rebased pointers carried no alignment, so
+    the type's 16 bytes applied), but the mechanism is there: check
+    what the peeled accesses' `MEM_ALIGN` is after expand.
+  - *Costs from the pipeliner's II.* GCC's per-statement costs didn't
+    predict pipelined loops (PolyBench 5% slower on the 8C2). Compare
+    the II the pipeliner reaches for the vector loop with the scalar
+    loop's: per wide instruction six ALCs (stores among them), two
+    stores (ALC2, ALC5), four movas, and on v5 16 bytes a cycle from
+    one area (two `movaqp` of one area take 2 cycles; v6 32 bytes).
+    Channels by binutils (spec/isa/reservations.yaml; timing.md,
+    "Elbrus-8C2"): packed FP add, subtract and multiply and their
+    horizontal and combined forms (`qpfmul_addd`) in all six ALCs;
+    logic, shifts, permutes (`qppermb`, `qpshufb`, `qpmerge`),
+    `qppackdl`, `qpswitchd`, FP compares, FP min/max and conversions in
+    ALC0, 1, 3 and 4; integer add, subtract, compare, min/max, average,
+    sign and horizontal add in ALC0 and 3 only; integer multiplies,
+    packs and sums of differences in ALC1 and 4 only. A multiply folded
+    into its add (`fmul_add`) counts once in both loops; loads of one
+    stream a whole number of vectors apart are read and packed once; an
+    in-order FP reduction (`FOLD_LEFT_REDUCTION`,
+    tree-vectorizer.h:108–112) adds the lanes one after another, 4
+    cycles each. The code around the loop runs unpipelined: the PoC
+    weighs it at about ten times its operation count (NPB SP's loops of
+    30 to 60 iterations ran 1.8 times as long when it was weighed at
+    four).
+  - *Alias information must survive vectorization* ("Where alias
+    information goes in the pass pipeline", above).
+  - *Basic-block SLP with 16-byte vectors only cost the PoC*: inside
+    loops that are pipelined later it got in the pipeliner's way (NPB
+    LU: ten loops unpipelined, 7% slower), and outside loops the
+    packing cost more than issuing the scalar operations side by side
+    (NPB BT's 5×5 block routines on the 2C3: 12% slower). lcc does pair
+    small groups but keeps BT's routines and LU's `jacld`, `blts` and
+    `buts` scalar. The PoC costs narrower groups as without 16-byte
+    vectors.
+  - *Loop entry.* A pipelined loop's prologue reads with ordinary loads
+    (array prefetch is correct on v3–v5 only inside the counted loop,
+    apb.md). The PoC's v5 prologues used `ldqp`, one a cycle from L2:
+    heat-3d's vector loop (20 stages at II 3) was entered through 56
+    wide instructions holding 90 `ldqp`; two `ldd` + `qppackdl`
+    instead, as lcc loads 16 bytes, cut the L2 traffic but made the
+    prologue 120 wide instructions instead of 74 (heat-3d is
+    memory-bound on the 8C2 either way: 2.75 cycles an element
+    vectorized, 2.85 scalar). Each scalar loop vectorizing adds around
+    the vector one (iterations peeled for alignment, the epilogue) runs
+    unpipelined, about 40 cycles on every way in; costed so, SP's loops
+    of 30 to 60 elements stay scalar.
+  - *v6 is not v5.* On the 2C3 16-byte loads, stores and movas issue at
+    the same rate at any alignment (timing.md, "Misaligned loads and
+    stores"; apb.md), so peeling for alignment buys no issue slots; but
+    a load crossing a 32-byte line has the L2's latency unless both
+    lines are already in L1 (the same list), and any load of a line
+    stored 1 to 4 cycles before is served by L2, aligned or not
+    (timing.md, "More store-to-load cases"). The PoC's PolyBench ran at
+    0.77 of its scalar speed (gemm 0.23) until it read misaligned
+    blocks through array prefetch too; that needs apb.md's rule that
+    nothing the loop stores is read by a later `mova` ("Stores into a
+    prefetched array").
+  - *Loops the vectorizer makes.* The scalar epilogue (also the path
+    taken when the vector loop is skipped) gets the runtime
+    profitability threshold − 1 as its upper bound when that exceeds
+    the peeled iterations (`vect_gen_scalar_loop_niters`,
+    tree-vect-loop-manip.cc:3002–3040, recorded at :4051; the
+    versioning fallback keeps the original bound), so a pipeliner that
+    takes a large bound for a long loop misjudges it: LAME's per-band
+    epilogues (bound 151) were entered with 21 elements through 25
+    instructions of prologue, 3% slower on the 8C2, until the PoC
+    marked such loops (epilogues, peeled iterations, fallbacks and
+    later copies of them).
+  - *Lane by lane.* A loop with no whole-vector load or store
+    (`VMAT_ELEMENTWISE` accesses, tree-vectorizer.h:197–199, or a
+    one-lane `VMAT_STRIDED_SLP` store, tree-vect-stmts.cc:2144; Lua's
+    one-byte type-tag stores into 16-byte values) is the scalar loop
+    unrolled with packing, which pipelining already overlaps, plus a
+    runtime test on every call (Lua 2.5% slower until the PoC rejected
+    loops with no whole-vector access cost).
+  - *Open:* column loops on v6. PolyBench cholesky's `init_array`
+    (`B[r][s] += A[r][t] * A[s][t]`, A down a column, B from memory)
+    vectorized and unrolled by two read the column through four areas
+    and ran 1.37 times as long on the 2C3; not unrolling vector loops
+    fixed it but made syrk 18% slower. The areas' prefetch depth
+    against a stream from memory (apb.md, "Area size is the prefetch
+    depth") and the 2C3's line-crossing loads are the suspects, not
+    measured.
+  The PoC's result (`-O2` against `-mno-vect128`): PolyBench 1.027 times
+  as fast on the 8C2 and 1.037 on the 2C3 (gemm 1.59 / 1.54, jacobi-1d
+  1.65 / 1.87, none more than 2% slower), 1.12 times lcc 1.29.16 `-O3`
+  on both; its set 2 (NPB, PolyBench at other sizes, Lua, SQLite, LAME)
+  took 0.999 and 1.008 times as long.
 - **Rotating registers only for values that need them** (P41): a value
   whose last use issues no later than the next iteration's definition
   (lifetime at most II, not carried, not read after the loop) can stay
@@ -4063,8 +4216,11 @@ a few ways, a guide to what an `-march=elbrus-v5` mode needs first:
   takes effect after 4 cycles like `%lsr`, and the two writes may be in
   consecutive instructions).
 - **128-bit data**: two `ldd` + `qppackdl` for loads (`ldqp` goes to L2,
-  latency 11), `stqp` for 16-byte stores, `qp*` operations with their
-  64-bit latencies; for 16-byte atomics lcc's `ldqp`/`stqp` sequences
+  latency 11), `stqp` for 16-byte stores where 16-byte aligned (else
+  `qpswitchd` + two `std`, as lcc), `movaqp` in array prefetch loops at
+  any alignment, with `staaqp` where aligned and two `staad` otherwise,
+  as lcc (vectorizing with them: 7.7, "Auto-vectorization with 16-byte
+  vectors"), `qp*` operations with their 64-bit latencies; for 16-byte atomics lcc's `ldqp`/`stqp` sequences
   (`spec/abi/atomics.md`, "16-byte atomics"), but with every atomic load
   one `ldqp`: lcc's relaxed load is two `ldd`, which tear once they are
   a few cycles apart (and once in 4 million reads even in consecutive
@@ -4136,6 +4292,15 @@ Measured on an Elbrus-2C3 (timing.md "Elbrus-2C3 (v6)", semantics.md
   a predicate) for `cbranch` on vectors and the string functions,
   `qpmrgp` for a select by a predicate, `qpsrad` for 64-bit arithmetic
   shifts, `clmull`/`clmulh` for carry-less multiplies.
+- **16-byte vectors at any alignment**: `ldqp`, `stqp`, `ldaaqp`,
+  `staaqp` and `movaqp` issue at the same rate misaligned (timing.md,
+  "Misaligned loads and stores"; apb.md), so peeling for alignment buys
+  no issue slots; but a load crossing a 32-byte line has the L2's
+  latency unless both lines are in L1, and lcc's v6 code still splits
+  stores of unknown alignment (`qpswitchd` + two `std`). Read
+  misaligned blocks of an array the loop also stores through array
+  prefetch rather than `ldqp`, where apb.md's store rule allows (7.7,
+  "Auto-vectorization with 16-byte vectors").
 - **APB**: 32 bytes a cycle per area, so two `movaqp` from one area per
   iteration cost nothing extra. Areas keep their positions across traps,
   so any loop shape works, but write `%lsr` (0 will do) before a program

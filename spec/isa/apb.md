@@ -173,7 +173,7 @@ and each step adds `size(fmt) × AAINCR[incr]` bytes. A `mova` reads
 | `movab`, `movah`, `movaw` | Zero-extended |
 | `be = 1` | Byte-swapped; for `movaq` the whole 16 bytes |
 | `movaq,0 ind=I` | Low half from `I`, high half from `I + 8` (gas writes it as two AAS entries, `ind` I and I + 8, in channels 0 and 1); `movaq,2` likewise in channels 2 and 3 (4C, 8C2, 2C3: `tagx.c` `movaq`; with `fmt` 5 the area steps 16 bytes) |
-| `movaq` / `movaqp` | `movaq` fills a register pair (`%qrN`); `movaqp` is v5+: 16 bytes into one quad register (lcc uses it on v5, v6 with `fmt = 5`, `mrng = 0`). gas accepts `movaqp` for every `-mcpu` (v2–v7), but on v3 (the 4C) it does not trap: from an `fmt` 5 or 4 area it writes **a diagnostic value** (`eaed0f70eaed0f70`, tag 1 in both halves) into the low 64-bit register, and a plain use of it is SIGILL `ILL_ILLOPN` (`tagx.c` `movaqp`, `movaqp4`, `movaqp_use`). v3 code must not use it |
+| `movaq` / `movaqp` | `movaq` fills a register pair (`%qrN`); `movaqp` is v5+: 16 bytes into one quad register (lcc uses it on v5, v6 with `fmt = 5` and `mrng` 0, or 16 where one `movaqp` reads each element). gas accepts `movaqp` for every `-mcpu` (v2–v7), but on v3 (the 4C) it does not trap: from an `fmt` 5 or 4 area it writes **a diagnostic value** (`eaed0f70eaed0f70`, tag 1 in both halves) into the low 64-bit register, and a plain use of it is SIGILL `ILL_ILLOPN` (`tagx.c` `movaqp`, `movaqp4`, `movaqp_use`). v3 code must not use it |
 
 ### Diagnostic results [hw]
 
@@ -798,8 +798,40 @@ On v5 `movaqp` gives data only from an `fmt` 5 area with `mrng` 16 or
 more (0 is 32): from `fmt` 1–4 it is diagnostic whatever `mrng`, as any
 `mova` wider than its area's format is there; v6 reads it from those
 too ("v6"). `mrng` 8 is diagnostic on both (`ind` + 16 > `mrng`), so a
-compiler sets `mrng` ≥ `ind` + 16, as lcc's 0 does [hw: `isaleft.c`
+compiler sets `mrng` ≥ `ind` + 16, as lcc's 0 and 16 do [hw: `isaleft.c`
 `q_*`; 8C2, 2C3].
+
+**Speed** [hw: `tools/isa-probes/foldp93.c`, cases from
+`gen_foldp93.py`; the 8C2, and the 2C3 on core 0 and core 1, two runs
+each, 2026-10-16]: a misaligned base costs nothing. A one-instruction
+`loop_mode` loop reads one area (`asz` 5) from a base 0 to 15 bytes off
+a 16-byte boundary and sums what it reads (the sums are checked, right
+at every offset); cycles a step, best of five, for 512 steps from L1
+and 1 Mi steps from memory:
+
+| A step | 8C2, L1 | 8C2, memory | 2C3, L1 | 2C3, memory |
+|---|---|---|---|---|
+| one `movaqp`, `fmt` 5 (16 bytes) | 1.02 | 1.15–1.20 | 1.02 | 1.05 |
+| two `movaqp` of one area, `ind` 0 and 16 (32 bytes; lcc's sum loops) | 2.02 | 2.29–2.41 | 1.03 | 1.42–1.43 |
+| two `movad`, `fmt` 4, `ind` 0 and 8 (the same 16 bytes as halves) | 1.02 | 1.15–1.21 | 1.02 | 1.05 |
+| one `movaqp` from an `fmt` 4 area (v6 only, "v6") | — | — | 1.02 | 1.05 |
+
+Every offset gives the same figures from L1 to the hundredth; from
+memory the runs differ by up to 0.12 cycle whatever the offset. So on
+v5 too a stream of 16-byte elements of any alignment can be read with
+one `movaqp` an element, as fast as an aligned one and as two `movad`;
+only stores need 16-byte alignment on v5 (`staaqp`, "AAU stores"). The
+two-`movaqp` row is the area's limit ("Timing"; "v6": 16 bytes a cycle
+on v5, 32 on v6).
+
+lcc's v5 code reads such streams so: `x[k] = x[k] − y[k] × z[k]`
+through `restrict` pointers of unknown alignment is three `movaqp` from
+`fmt` 5 areas (`mrng` 16) and a `qpfmul_subd` a step, the result
+stored as two `staad`, its low half and, after `qpswitchd`, its high
+half at + 8. With `-faligned`, and over rows of global arrays, lcc
+versions the loop on the address (`cmpandedb`, bit 3) between a loop
+with `staaqp` and one with `movad` and `staad` [lcc 1.29.16 `-O3`,
+v5.8c2 and v6.2c3: `tools/isa-probes/foldp93_slp.c`, `pr` and `gl`].
 
 ## How lcc uses APB [lcc, guide]
 

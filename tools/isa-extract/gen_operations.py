@@ -87,6 +87,7 @@ PROBES = {
     "pocchk6.s": ("pocchk6.c", "4C, 8C2, 2C3"),
     "foldisa.s": ("foldisa.c", "8C2, 2C3"),
     "foldisa-v3.s": ("foldisa.c", "4C"),
+    "foldp93.s": ("foldp93.c", "8C2, 2C3"),
     "damwb.s": ("damwb.c", "4C, 8C2, 2C3"),
     "abg.s": ("abg.c", "4C, 8C2"),
     "pmu.s": ("pmu.c", "4C, 8C2, 2C3"),

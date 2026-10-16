@@ -33,7 +33,10 @@ header: |
     operation pays the cluster-crossing cost even in the same channel
     (timing.md, "Elbrus-8C2").
   - **Six FP operations a cycle**: `fadd`, `fmul`, `fmul_add` and the
-    `qpf*` operations also issue in ALC2 and ALC5 (timing.md).
+    packed FP add, subtract and multiply operations (`qpfaddd`,
+    `qpfmuld`, the horizontal and combined forms such as `qpfmul_addd`)
+    also issue in ALC2 and ALC5 (timing.md); packed FP compares, min/max
+    and conversions stay in ALC0, 1, 3 and 4.
   - **Memory**: `ldqp` is served by L2 (11 cycles, one a cycle), so lcc
     loads 128-bit data as two `ldd` + `qppackdl`, or with `movaqp` from
     the array prefetch buffer; `ldq` (a register pair) goes through L1.
@@ -118,7 +121,40 @@ header: |
   right shifts stay scalar, and `short` dot products keep the 64-bit
   `pmaddh`. `__int128` addition stays scalar (no `addcd`), and a
   16-byte `memcpy` of unknown alignment is `qppackdl`, `qpswitchd` and
-  16 byte stores.
+  sixteen `stb`, also between `double *` (two `std` with `-faligned`).
+
+  Loops over arrays whose alignment lcc knows go to 128 bits at `-O3`
+  too: NPB SP's arrays are global, and its `compute_rhs`, `lhsx`,
+  `lhsy`, `lhsz`, `txinvr`, `ninvr`, `pinvr` and solvers (`x_solve` …)
+  read through `movaqp` and store with `staaqp` around `qpfmul_subd`,
+  `qpfmul_addd`, `qpfaddd` and `qpfmuld` [lcc 1.29.16 `-O3`, NPB SP
+  class A]. A stream of unknown alignment is read with `movaqp` as
+  well and its results stored as two `staad` (apb.md, "128-bit movas
+  (v5+)").
+
+  Straight-line code is another matter: at `-O3` (and `-O4`) lcc pairs
+  small groups of like operations on neighbouring data into 128-bit
+  operations [lcc 1.29.16 and 1.31.05 for v5.8c2 and v6.2c3:
+  `tools/isa-probes/foldp93_slp.c`, read with `-S`]. Two doubles of a
+  structure through `restrict` pointers (`r->x = a->x + b->x; r->y =
+  a->y + b->y`) become two `ldd` each, `qppackdl`, one `qpfaddd`, then
+  `qpswitchd` and two `std` (v6: one `ldqp` an operand, the same
+  stores); two longs, four ints and sixteen bytes written out likewise
+  (`qpaddd`, `qpaddw`, `qpaddb`), and eight floats of an unrolled loop
+  as two `qpfadds` (sixteen byte adds as a loop stay two 64-bit
+  `paddb`), stored with `stqp` where the destination is a
+  16-byte-aligned global array (through a pointer to a 16-byte-aligned
+  type only under `-faligned`); five doubles scaled by one value are
+  two `qpfmuld` and an `fmuld`, and two multiply-adds `qpfmuld` +
+  `qpfaddd`, not `qpfmul_addd`. It pairs nothing through pointers that
+  may alias, nor the lanes of a complex multiply, and leaves products
+  of small matrices scalar: unrolled 4×4 and 5×5 products stay `fmuld`
+  with `faddd`/`fsubd` (on v5 partly fused into `fmul_addd`/
+  `fmul_subd`), only their results packed (`qppackdl` + `stqp`) where
+  they go to aligned global arrays. NPB BT's 5×5 block routines
+  (`matmul_sub`, `binvcrhs`, `binvrhs`) and LU's `jacld`, `blts` and
+  `buts` have no 128-bit operation at all [lcc 1.29.16 `-O3`, NPB
+  class A].
 
   ## What v3 code does instead
 

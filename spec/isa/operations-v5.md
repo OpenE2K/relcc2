@@ -27,7 +27,10 @@ named):
   operation pays the cluster-crossing cost even in the same channel
   (timing.md, "Elbrus-8C2").
 - **Six FP operations a cycle**: `fadd`, `fmul`, `fmul_add` and the
-  `qpf*` operations also issue in ALC2 and ALC5 (timing.md).
+  packed FP add, subtract and multiply operations (`qpfaddd`,
+  `qpfmuld`, the horizontal and combined forms such as `qpfmul_addd`)
+  also issue in ALC2 and ALC5 (timing.md); packed FP compares, min/max
+  and conversions stay in ALC0, 1, 3 and 4.
 - **Memory**: `ldqp` is served by L2 (11 cycles, one a cycle), so lcc
   loads 128-bit data as two `ldd` + `qppackdl`, or with `movaqp` from
   the array prefetch buffer; `ldq` (a register pair) goes through L1.
@@ -112,7 +115,40 @@ absolute differences, per-lane shift counts and `long` arithmetic
 right shifts stay scalar, and `short` dot products keep the 64-bit
 `pmaddh`. `__int128` addition stays scalar (no `addcd`), and a
 16-byte `memcpy` of unknown alignment is `qppackdl`, `qpswitchd` and
-16 byte stores.
+sixteen `stb`, also between `double *` (two `std` with `-faligned`).
+
+Loops over arrays whose alignment lcc knows go to 128 bits at `-O3`
+too: NPB SP's arrays are global, and its `compute_rhs`, `lhsx`,
+`lhsy`, `lhsz`, `txinvr`, `ninvr`, `pinvr` and solvers (`x_solve` …)
+read through `movaqp` and store with `staaqp` around `qpfmul_subd`,
+`qpfmul_addd`, `qpfaddd` and `qpfmuld` [lcc 1.29.16 `-O3`, NPB SP
+class A]. A stream of unknown alignment is read with `movaqp` as
+well and its results stored as two `staad` (apb.md, "128-bit movas
+(v5+)").
+
+Straight-line code is another matter: at `-O3` (and `-O4`) lcc pairs
+small groups of like operations on neighbouring data into 128-bit
+operations [lcc 1.29.16 and 1.31.05 for v5.8c2 and v6.2c3:
+`tools/isa-probes/foldp93_slp.c`, read with `-S`]. Two doubles of a
+structure through `restrict` pointers (`r->x = a->x + b->x; r->y =
+a->y + b->y`) become two `ldd` each, `qppackdl`, one `qpfaddd`, then
+`qpswitchd` and two `std` (v6: one `ldqp` an operand, the same
+stores); two longs, four ints and sixteen bytes written out likewise
+(`qpaddd`, `qpaddw`, `qpaddb`), and eight floats of an unrolled loop
+as two `qpfadds` (sixteen byte adds as a loop stay two 64-bit
+`paddb`), stored with `stqp` where the destination is a
+16-byte-aligned global array (through a pointer to a 16-byte-aligned
+type only under `-faligned`); five doubles scaled by one value are
+two `qpfmuld` and an `fmuld`, and two multiply-adds `qpfmuld` +
+`qpfaddd`, not `qpfmul_addd`. It pairs nothing through pointers that
+may alias, nor the lanes of a complex multiply, and leaves products
+of small matrices scalar: unrolled 4×4 and 5×5 products stay `fmuld`
+with `faddd`/`fsubd` (on v5 partly fused into `fmul_addd`/
+`fmul_subd`), only their results packed (`qppackdl` + `stqp`) where
+they go to aligned global arrays. NPB BT's 5×5 block routines
+(`matmul_sub`, `binvcrhs`, `binvrhs`) and LU's `jacld`, `blts` and
+`buts` have no 128-bit operation at all [lcc 1.29.16 `-O3`, NPB
+class A].
 
 ## What v3 code does instead
 
@@ -154,7 +190,7 @@ Lane-wise unless noted, with twice the lanes of the 64-bit operation of the same
 
 | Operations | ISA | ALC | Does | Lat | lcc v3 / v5 | Run on hardware |
 |---|---|---|---|---|---|---|
-| `qpaddb`, `qpaddh`, `qpaddw`, `qpaddd`, `qpsubb`, `qpsubh`, … (16 operations) | 5–8 | 0,3 | Add or subtract, wrapping or saturating. **Use:** `add`, `sub`, `ssadd`, `usadd`, … on `V16QI`, `V8HI`, `V4SI`, `V2DI`. | 1 (v5) | 0 / 158 | memx, sem5 (8C2, 2C3) |
+| `qpaddb`, `qpaddh`, `qpaddw`, `qpaddd`, `qpsubb`, `qpsubh`, … (16 operations) | 5–8 | 0,3 | Add or subtract, wrapping or saturating. **Use:** `add`, `sub`, `ssadd`, `usadd`, … on `V16QI`, `V8HI`, `V4SI`, `V2DI`. | 1 (v5) | 0 / 158 | foldp93, memx, sem5 (8C2, 2C3) |
 | `qpmaxsb`, `qpmaxsh`, `qpmaxsw`, `qpmaxub`, `qpmaxuh`, `qpmaxuw`, … (14 operations) | 5–8 | 0,3 | Maximum, minimum, rounding average (x86 `pmax*`, `pmin*`, `pavg*`). **Use:** `smax`, `umin`, `uavg*_ceil`; lcc's `strlen` merges blocks with `qpminub`. | 1 (v5) | 0 / 78 | sem5 (8C2, 2C3) |
 | `qpcmpeqb`, `qpcmpeqh`, `qpcmpeqw`, `qpcmpeqd`, `qpcmpgtb`, `qpcmpgth`, `qpcmpgtw`, `qpcmpgtd` | 5–8 | 0,3 | All-ones lanes where a = b, or a > b signed. **Use:** `vec_cmp`; byte search (`qpcmpeqb` then `qpsgn2mskb`). | 1 (v5) | 0 / 416 | sem5 (8C2, 2C3) |
 | `qpmullh`, `qpmulhh`, `qpmulhuh`, `qpmulhrsh`, `qpmullw`, `qpmaddh`, `qpmaddubsh`, `qpsignb`, `qpsignh`, `qpsignw` | 5–8 | 0,1,3,4 | Multiplies (low, high signed or unsigned, rounded high, 32-bit low), `pmaddwd`-style and signed × unsigned byte dot steps, `psign`. **Use:** `mulv8hi3` `qpmullh`, `mulv4si3` `qpmullw`, `smulv8hi3_highpart` `qpmulhh`, `umulv8hi3_highpart` `qpmulhuh`, `smulhrsv8hi3` `qpmulhrsh`, `sdot_prodv4siv8hi` `qpmaddh` + `qpaddw`, `abs` as `qpsign* a, a`; `qpmaddubsh` saturates its pair sums to 16 bits, so it is no exact `usdot_prod`. lcc's vectorizer uses only `qpmullh` and `qpmullw` (under `-faligned`; a `V16QI` multiply is `qpmullh` + `qpmulhh` with `qpand` masks and a `qppermb` merge, also at `-O3`); its high-half and dot-product loops stay scalar or use the 64-bit `pmaddh`. Its x86 headers map `_mm_mulhi_epi16`, `_mm_mulhi_epu16`, `_mm_mulhrs_epi16`, `_mm_madd_epi16`, `_mm_maddubs_epi16` (operands swapped) and `_mm_sign_epi8` one to one. Its v5 libraries: `qpmullw` 95 (libgfortran's `matmul_i4`). | 1 (v5), 2 (v5) | 0 / 95 | sem5 (8C2, 2C3) |

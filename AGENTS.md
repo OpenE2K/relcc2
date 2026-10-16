@@ -316,7 +316,10 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     foldisa.c, gen_foldisa.py: where v5's getfz, addcd
                     and plog results go, packed results and write-back
                     conflicts; foldisa_getfz.c, read with -S: the shapes
-                    lcc turns into getfz),
+                    lcc turns into getfz; foldp93.c, gen_foldp93.py:
+                    misaligned 16-byte array prefetch streams;
+                    foldp93_slp.c, read with -S: what lcc pairs into
+                    128-bit operations),
                     the APB leftovers (apbleft.c, gen_apbleft.py: narrow
                     and misaligned AAU accesses and their costs, monitor
                     counts of APB's slowdowns), every other monitor
@@ -697,7 +700,10 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   Linux's libatomic is built for v5, so v3 and v5 code can share
   16-byte atomics there; quad lock/check loads work like doubleword
   ones (entries per register, 32); `stqp`/`staaqp` count as one store
-  for `strmd`; `movaqp` reads 16 bytes, also misaligned; all 703 v5 ALU
+  for `strmd`; `movaqp` reads 16 bytes, also misaligned and at full
+  speed (lcc reads unaligned streams so and splits their stores into
+  two `staad`; it pairs small straight-line groups into `qp`
+  operations too, but not small-matrix products); all 703 v5 ALU
   operations match the community qemu (MCST's differs in
   `qpslld`/`qpsrld` counts >= 64), packed eq/od compares are quiet,
   round-to-integral mode bit 3 suppresses inexact, and FP ops set the
@@ -1321,10 +1327,9 @@ speculation. `tools/setup/build-gcc-docs.sh` builds GCC's manuals
 ## Next steps (proposed, owner to choose)
 
 0. `docs/spec-poc-findings.md` (the PoC agent's file, untracked): every
-   entry through I52, A29 and P91 is folded into `spec/` and `doc/` and
-   removed from it (I35, I45, I52, A24–A29 and P86–P91 on 2026-10-13;
-   I35 and I45 are explained); P92 is open; new ones continue as I53,
-   A30, P93.
+   entry through I54, A31 and P94 is folded into `spec/` and `doc/` and
+   removed from it (I53, I54, A30, A31 and P92–P94 on 2026-10-16); none
+   is open; new ones continue as I55, A32, P95.
 1. Extend the compat suite (see Current state). It runs on the 4C with
    `run.py --target v3 --remote ...`; all pairs match qemu except the
    tag-trap tests, which pass on the 4C and on the 8C2 (v5, `--target

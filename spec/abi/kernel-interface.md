@@ -7,7 +7,7 @@ space, threads, profiling and static PIE. Marks as in
 [README.md](README.md); **kernel** paths are relative to
 `OpenE2K/linux/arch/e2k/` (generic kernel files start with `linux/`),
 **glibc** paths to `OpenE2K/glibc/sysdeps/unix/sysv/linux/e2k/` unless
-they start with `sysdeps/`, `csu/` or `elf/`; **compiler-rt** is MCST's
+they start with `sysdeps/`, `csu/`, `elf/` or `nptl/`; **compiler-rt** is MCST's
 compiler-rt 11.1.0 from the same tarball as **libgcc**.
 
 **hw** here means the 4C (ALT Linux, kernel `6.1.158-mcst-e4c`), the 8C2
@@ -253,7 +253,7 @@ it must provide [glibc; lcc]:
 - `register long *fp asm ("FP")` is the stack pointer at entry, here
   `%usd.ptr`: `_start` reads `argc` as `*(int *) fp` and `argv` as
   `fp + 1` (`start.c:59, 84-85`), and `_start2` passes `fp` to
-  `_dl_start` and reads `argc` from `*fp` (`dl-machine.h:329-343`).
+  `_dl_start` and reads `argc` from `*fp` (`sysdeps/e2k/dl-machine.h:329-343`).
   lcc's `crt1.o` does exactly that (`getsp -0x40`, `addd 0x40`, `ldw`
   at +0, `argv` at +8) [lcc]. What `"FP"` means to lcc, and that its
   `__builtin_frame_address (0)` is the same value:
@@ -289,7 +289,7 @@ executable stack also starts from `__libc_stack_end`
 (inferred, not run).
 
 **ld.so calls `__cpu_init` before it relocates itself**
-(`dl-machine.h:335-338`): it checks every library's `e_flags` with
+(`sysdeps/e2k/dl-machine.h:335-338`): it checks every library's `e_flags` with
 `__builtin_cpu_is` (`runtime_compatible_host`, `ldsodefs.h:59, 88`)
 before its own constructors run, and they then run `__cpu_init` a second
 time. What that asks of `__cpu_init` is in
@@ -1299,7 +1299,7 @@ to `RLIMIT_STACK`, and the failing `getsp` gives the same SIGSEGV.
 below it: a single `getsp` that reaches past the gap into another
 mapping is accepted. The gap then stays unmapped: the kernel finds the
 mapping that holds the new bottom and extends nothing
-(`find_extend_vma_locked`, `mm/mmap.c:2214-2219`), and a fault never
+(`find_extend_vma_locked`, `linux/mm/mmap.c:2214-2219`), and a fault never
 grows `[stack]` ("Overflow signals" below), so a store into the gap
 gets `SEGV_MAPERR`. A SIGSEGV handler on an alternate stack ran in
 every case:
@@ -1358,7 +1358,7 @@ So:
   `getsp` into a lower mapping extends nothing (above), so the first
   probe below `[stack]` faults. Page by page, each `getsp` grows
   `[stack]` through `expand_downwards`, which keeps `stack_guard_gap`
-  (256 pages, 1 MiB) free above the next mapping (`mm/mmap.c:2091-2099,
+  (256 pages, 1 MiB) free above the next mapping (`linux/mm/mmap.c:2091-2099,
   2164`); the kernel grows `[stack]` in 16 KiB steps from its start, so
   the refusal comes up to 16 KiB above that gap.
 
@@ -1369,13 +1369,16 @@ Not covered (inferred, not tested):
   cover one large frame whose top lies within a page of memory already
   touched. Frames smaller than the probe interval that never store to
   their own memory can add up past the guard; GCC's model counts calls
-  as implicit probes on x86 (the pushed return address) and AArch64
-  (the saved LR, with a 1 KiB caller guard).
+  as implicit probes on x86 (the pushed return address:
+  `ix86_adjust_stack_and_probe`, `gcc/config/i386/i386.cc:8278-8283`)
+  and AArch64 (the saved LR, with a 1 KiB caller guard:
+  `STACK_CLASH_CALLER_GUARD`, `gcc/config/aarch64/aarch64.h:101`)
+  [source: GCC master `ea32419e8c4`].
 - **A signal frame is larger than a page**: 4,272 bytes (above), so with
   `USD` less than 176 bytes above a one-page guard part of the frame
   lies below the guard. Whether the kernel writes that part before it
   faults on the guard depends on the order of its copies (it writes the
-  frame in many separate copies, `arch/e2k/kernel/signal.c:383-414` and
+  frame in many separate copies, `kernel/signal.c:383-414` and
   others).
 
 Page-by-page allocation costs more only the first time the main

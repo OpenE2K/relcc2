@@ -85,7 +85,10 @@ didn't write, on v6 a load of the stored doubleword at another width
 2 to 4 cycles after it, and at 4 any load of it but the stored bytes
 (same base register, not written since, literal offsets, the base
 assumed 32-byte aligned; v4 gets v3's rule; until 2026-10-13 every
-version had the doubleword rule only, 8 cycles late); a divide 1 cycle after another waits 4 (every
+version had the doubleword rule only, 8 cycles late; not modelled yet:
+the cases measured on 2026-10-16, timing.md "More store-to-load
+cases": 16-byte, AAU and line-crossing stores, the second line after a
+crossing store, and the 1-cycle penalty on other bytes of the line); a divide 1 cycle after another waits 4 (every
 operation of the ALC5 divider: divides, square roots and reciprocal
 estimates, integer, FP, packed and 80-bit), an `fsqrts` or `pfsqrts` 5
 cycles after another 2, and anything within 9 cycles of an `smodx` or

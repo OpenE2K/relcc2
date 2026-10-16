@@ -18,11 +18,11 @@ sources (`toolchains/gcc`, paths `gcc/...`); **[lcc-doc]** lcc's manual
 output, compile only: lcc 1.29.16 for `e2k-v3`, `e2k-v5.8c2` and
 `e2k-v6.2c3` (the erratum option also `e2k-v3.4c`, `e2k-v4.8c`,
 `e2k-v4.1c+` and `e2k-v6.16c`) and 1.31.05 for `e2k-v3`, `e2k-v5.8c2`
-and `e2k-v6.2c3`, which agree unless a version is named; **[gcc]** the
-proof-of-concept GCC back end (`toolchains/gcc-claude`, 2026-10-16),
-compile only, for what GCC's middle end does with the same input (where
-a result is that back end's own, such as a missing modifier or a
-library call, the text says so). Kernel paths: `asm/` is
+and `e2k-v6.2c3`, which agree unless a version is named; **[gcc]** GCC's own
+target-independent behaviour (front end, middle end, generic options),
+observed with the proof-of-concept back end (`toolchains/gcc-claude`,
+2026-10-16), compile only. What that back end itself lacks is not
+recorded here; the requirements below say what any port needs. Kernel paths: `asm/` is
 `arch/e2k/include/asm/`; other paths are under `arch/e2k/` unless they
 start with `include/`, `scripts/`, `kernel/sched/`, `kernel/trace/` or
 `mm/slub`, or say "top".
@@ -158,12 +158,11 @@ them (`asm/compiler.h:114-195`).
   of the file names (`%g16`, `%g25` and `%g26`–`%g31` in files that
   include the declaring headers, all sixteen in a file that includes
   none); in `ttable.o` that clobbers user globals before the kernel
-  saves them. Even with `-ffixed-g16` … `-ffixed-g25` the
-  proof-of-concept back end's `iset_v3.o` (host build) puts addresses in
-  `%dg26` and `%dg27` and values in `%g28` and `%g29` in
-  `save_scratch_gregs_v3` before that function stores those registers,
-  so it saves its own temporaries instead of the user's; lcc's
-  `iset_v3.o` touches `%g26`–`%g31` only in the kernel's asm.
+  saves them. `-ffixed-g16` … `-ffixed-g25` alone is not enough for
+  `iset_v3.o`: `save_scratch_gregs_v3` stores `%g26`–`%g31` itself, so a
+  temporary the compiler puts there before the store would be saved
+  instead of the user's value. lcc's `iset_v3.o` touches `%g26`–`%g31`
+  only in the kernel's asm.
 
 A compiler building this kernel must therefore get `-ffixed-g16` …
 `-ffixed-g25` in every file and `-ffixed-g16` … `-ffixed-g31` in the
@@ -326,12 +325,10 @@ beside `%H`, for tagged 16-byte loads and stores, AAU clearing and
 `asm/base_regs_types.h:39-43`), `__uint128_t` and union operands,
 inputs and `"=&r"` outputs (`e2k_api.h:2338, 3895-3938, 5048-5055,
 5821-5855, 5971-5983, 6119-6353`). lcc 1.29.16 and 1.31.05 print the
-same. The proof-of-concept back end lacks `%L` ("invalid operand
-code"), rejects a 16-byte struct with `r` as an input and with `"=&r"`
-("impossible constraint"), prints the next register for `%H` of an
-8-byte operand and fails internally on `%H` of a constant [gcc]: a
-port needs both modifiers on 16-byte operands and 16-byte structs in
-register pairs.
+same. A port needs both modifiers on 16-byte operands, and must take
+a 16-byte struct in a register pair for `r` inputs and `"=&r"` outputs,
+as lcc does; `%L` and `%H` on an 8-byte operand or a constant are
+errors in lcc and should be in a port too.
 
 ### Operand count [lcc, gcc, source]
 
@@ -492,10 +489,11 @@ helpers, but it selects `ARCH_SUPPORTS_INT128` (`Kconfig:70`), so
 (`include/linux/math64.h:157-174`). lcc compiles 128-bit multiplies and
 shifts inline (`muld` and `umulhd`) at `-O2`, `-O3` and `-Os`, and calls
 helpers only for 128-bit division (`__udivti3`, `__umodti3`), which the
-kernel doesn't use. The proof-of-concept back end calls `__multi3` for
-both functions at `-O2`/`-O3` and also `__ashlti3`/`__lshrti3`/
-`__ashrti3` at `-Os` [gcc], which would leave vmlinux with undefined
-symbols (inferred): a port needs these inline. `clz`, `ctz`,
+kernel doesn't use. GCC calls `__multi3`, and at `-Os` also
+`__ashlti3`/`__lshrti3`/`__ashrti3`, for a 128-bit multiply or shift its
+back end doesn't expand inline [gcc], which would leave vmlinux with
+undefined symbols (inferred): a port must expand them inline (`muld`
+and `umulhd`, shift pairs). `clz`, `ctz`,
 `popcount`, `ffs`, `bswap` and `parity` are inline in both.
 
 ## Erratum #123567 and `-ffix-lcc-bug123567` [lcc, source]

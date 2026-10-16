@@ -599,8 +599,9 @@ or a `pthread_cleanup_push`, while the thread is blocked in `read`
   = 64 [gcc]. MCST's own comment there (`unwind-dw2-e2k.c:385-395`)
   says its `e2k-linux-gcc` numbered `%b[0]`–`%b[7]` as 17–24 and warns
   that libgcc and libraries built by different compilers then don't
-  work together, so `libgcc_s`'s `unwind-c.o` was probably built by that
-  compiler (inferred). A GCC-built program that keeps C `-fexceptions`
+  work together; `libgcc_s`'s `unwind-c.o` was built by a compiler that
+  numbered these registers differently (it passes 24 and 25, where that
+  comment's numbering ends at 24). A GCC-built program that keeps C `-fexceptions`
   cleanups needs its own `__gcc_personality_v0` (its own `libgcc_s`, or
   `-static-libgcc`) even where `/lib64/libgcc_s.so.1` is MCST's.
 - **A landing pad beyond a signal frame doesn't work with MCST's

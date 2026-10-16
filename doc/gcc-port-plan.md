@@ -1468,7 +1468,8 @@ Owner's decision: emit what lcc emits.
 ### D10. What GCC needs that its defaults get wrong
 
 Found by the proof-of-concept backend (`docs/spec-poc-findings.md`),
-each one cost it a debugging session:
+each one cost it a debugging session, except where an item says it was
+measured for the port directly:
 
 - **`DEFAULT_PCC_STRUCT_RETURN` 0**, or every struct is returned in
   memory and all struct results break.

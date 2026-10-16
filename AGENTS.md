@@ -1201,8 +1201,8 @@ asm ("FP")`, lcc's name for the stack pointer at entry (= its
 passes `-mptr64`; ld.so calls `__cpu_init` unrelocated and again from
 `_dl_init`, and a non-lcc glibc takes it from libgcc; 544 lcc pragma
 lines in glibc's E2K files are errors for GCC under `-Wall -Werror`
-(of them only `noprefetch` changes lcc's code: no APB in `strlen` on
-v5/v6).
+(of them only `noprefetch` matters to a port: without it lcc puts APB
+into `strlen` on v5/v6).
 Static glibc leaves `__libc_stack_end` NULL (`pthread_getattr_np` fails
 for the main thread). lcc emits no landing pads for C cleanup
 attributes, so MCST's libc never runs its `__libc_cleanup_push`
@@ -1223,7 +1223,7 @@ width (16-byte, AAU and crossing stores alike) pays up to 4 cycles
 after the store, after a line-crossing store any load of its second
 line too, and other bytes of the line usually pay 1 cycle after it
 (some processes never do); on the 4C a crossing store costs only its 4
-cycles and AAU stores follow `std`. l++ is the generic Itanium C++ ABI
+cycles and AAU stores follow `std` from 1 cycle after the store. l++ is the generic Itanium C++ ABI
 (`__float80` is `long double`, member-function pointers `{ptr, adj}`,
 8-byte guards, cookies of max (8, align)), but it puts a guard in its
 variable's COMDAT group and GCC doesn't, so an l++ object linked before
@@ -1459,6 +1459,6 @@ None at the moment.
 - Keep tools reproducible: generated files record the source commit; never
   hand-edit generated YAML.
 - Generated probe files are committed unless they are several MB: those
-  (the timeleft probes) are listed in `.gitignore`, and
+  (the timeleft and memorycxx_stld probes) are listed in `.gitignore`, and
   `gen_operations.py` runs their generators (its `GENERATED` list)
   before it scans the probes.

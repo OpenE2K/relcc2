@@ -40,7 +40,8 @@ Marks:
   condition per instruction.
 - An operation under a false predicate does nothing: it writes nothing,
   touches no memory (no fault even at address 0), checks no operand,
-  and makes no later instruction wait for it [hw].
+  and makes no later instruction wait for it [hw]. The exception is a
+  `movtd` into a CTPR, which is SIGILL under any predicate ("RLP").
 - A predicate is ready for a predicated operation or `merge` 2 cycles
   after an integer compare or predicate logic (1 on v6), for a `ct` 3;
   4 and 5 after an FP compare. Inside one instruction, predicate logic
@@ -343,7 +344,8 @@ CTPR held a `disp`; the same `movtd` without the predicate works [hw:
 `tools/abi/probes/callsstack_tail.c` `movtdp`, 4C, 8C2, 2C3]. The trap
 is at the `movtd` itself: it comes also when the following `ct` is
 under the same false predicate (`q`), and `si_addr` is the `movtd`'s
-instruction (checked on the 4C and 2C3). gas accepts the form and
+instruction (checked on the 4C and 2C3 with a scratch probe that was not
+kept; `callsstack_tail.c` prints only the signal and `si_code`). gas accepts the form and
 MCST's qemu runs it conditionally; the community qemu raises
 `illopc` for it, with `%pcnt` too ("Conditional write to ctpr is not
 allowed", `target/e2k/translate.c:5508-5511`) [source]. To choose
@@ -371,7 +373,7 @@ two entries) and only the lower channel on v7.
 | memory | a load or store is not performed: `ldd`/`std` at address 0 under a false (or negated true) predicate don't fault (`fm_*`) |
 | operands | not checked: a diagnostic operand doesn't trap ([speculation.md](speculation.md)) |
 | timing | a reader of its destination doesn't wait for it (timing.md, "Hazards") |
-| what may still happen | a `movtd` into a CTPR is SIGILL under any predicate, false included (above) [hw]; in a KVM guest kernel, a privileged operation (`strd`) under a false predicate can still raise a privileged-action exception (kernel `kvm/guest/mmu_regs_access.h`) [source]; native and user mode not known |
+| what may still happen | a `movtd` into a CTPR is SIGILL under any predicate, false included (above) [hw]; in a KVM guest kernel, a privileged operation (`strd`) under a false predicate can still raise a privileged-action exception (kernel `kvm/guest/mmu_regs_access.h`) [source]; whether privileged operations do this natively or in user mode is not known |
 
 **Under a diagnostic predicate** (either polarity: `? %predN` and `?
 ~%predN` alike) [hw, `dg_*`; stores `spec.c` `st_*`]:

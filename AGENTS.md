@@ -171,8 +171,9 @@ spec/isa/      ISA spec: operations-v3.md, operations-v5.md (what v4/v5 add:
 spec/abi/      ABI spec for e2k64: data layout, registers + DWARF, calling
                convention, stacks and unwinding, ELF/relocations/PIC/TLS,
                atomics, source-level conventions (macros, asm
-               constraints, modifiers and clobbers, options),
-               kernel-interface.md (system calls, auxv, contexts,
+               constraints, modifiers and clobbers, options,
+               pragmas), kernel-interface.md (system calls, process
+               entry, auxv, contexts,
                also shared between threads, signals and their frames,
                hardware and data stacks, overflow signals, address
                space, -pg, sanitizers, static PIE),
@@ -364,7 +365,11 @@ tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     debuginfo.gdb, debuginfo_misc.c and
                     debuginfo_gline.c (how MCST's gdb reads DWARF
                     locations, TLS, lcc's line tables; debuginfo.sh
-                    builds them and runs gdb there) run on hardware;
+                    builds them and runs gdb there), glibcbuild_entry.c/.s
+                    (the state a process starts in, static and
+                    dynamic) and glibcbuild_cancel.c (cancellation
+                    through C cleanup regions, built by lcc and GCC)
+                    run on hardware;
                     debuginfo_loc.sh (gas's .loc, .label and
                     @TLS_DTPREL) runs on the host; ctxtls.c
                     (TLS across a context switch),
@@ -389,7 +394,10 @@ tools/abi/probes/   C probes for the ABI (layout.c must compile; callconv.c is
                     kernel-mode code generation, -ffix-lcc-bug123567,
                     -pg for recordmcount, module relocations, and with
                     --compare-wsz the windows of kernel objects built
-                    on the host with make O=...);
+                    on the host with make O=...); glibcbuild_lcc.py
+                    does the same for glibc's E2K code (register-variable
+                    names, -mptr64, C cleanups, pragmas, and counts
+                    lcc's pragmas in glibc and Linux);
                     find_builtins.py, gen_builtins.py and
                     gen_builtins_misc.py ask lcc 1.31.05 about its builtins;
                     asmconv.py asks lcc about inline-asm constraints,
@@ -1170,6 +1178,29 @@ uses `-fsemi-spec-ld`; lcc honours `-fno-jump-tables` only at `-O0`;
 1.31's `-fno-dam` keeps pipelined loops' DAM (`-fno-swp-dam`); the
 default 8C2 lcc doesn't apply the #123567 workaround.
 
+glibc build (2026-10-16; kernel-interface.md "Process entry",
+source-compat.md, stack-and-unwinding.md "C cleanups and cancellation";
+lcc 1.29.16 and 1.31.05, the PoC GCC; hw on all three): a process starts
+with `%dr0`–`%dr7` 0, every predicate false, 4 pairs handed over, no
+frame below and `getsp 0` = `&argc` (16-byte aligned); ld.so hands
+`_dl_fini` in `%dr0` and its leftover globals (diagnostic ones on the
+4C). glibc's `_start` and `_start2` find `argc` through `register ...
+asm ("FP")`, lcc's name for the stack pointer at entry (= its
+`__builtin_frame_address (0)`; GCC and Unipro reject it); configure
+passes `-mptr64`; ld.so calls `__cpu_init` unrelocated and again from
+`_dl_init`, and a non-lcc glibc takes it from libgcc; 544 lcc pragma
+lines in glibc's E2K files are errors for GCC under `-Wall -Werror`
+(of them only `noprefetch` changes lcc's code: no APB in `strlen` on
+v5/v6).
+Static glibc leaves `__libc_stack_end` NULL (`pthread_getattr_np` fails
+for the main thread). lcc emits no landing pads for C cleanup
+attributes, so MCST's libc never runs its `__libc_cleanup_push`
+handlers on cancellation (`dl_load_write_lock` stays held after a
+cancelled `dl_iterate_phdr` callback); MCST's `__gcc_personality_v0`
+aborts (`_Unwind_SetGR` index 24); and with a working one a
+cancellation that must land beyond a signal frame (a thread blocked in
+a system call) is lost.
+
 32-bit mode (`spec/abi/mode32.md`, for completeness; hw on all three):
 ILP32 with 8-byte `long long` and `double`; every data access is
 `ldgd*`/`stgd*` (two 32-bit operands summed mod 2^32 within GD =
@@ -1208,9 +1239,9 @@ OpenMP and static ELF32 protected programs work; root can clear
 A plan for the owner, written for someone new to GCC: pipeline and
 backend anatomy, files to create (LoongArch's 2022 series as the model),
 cross-build commands against lcc's sysroot, milestones M0–M8, design
-decisions (D11: what compiling MCST's kernel needs), VLIW scheduling,
-and what to take from ia64, TILE-Gx, C6x and SPARC (with file:line
-references into `toolchains/gcc`). Owner's
+decisions (D11, D12: what compiling MCST's kernel and glibc needs),
+VLIW scheduling, and what to take from ia64, TILE-Gx, C6x and SPARC
+(with file:line references into `toolchains/gcc`). Owner's
 decisions so far: follow lcc's conventions wherever there is a choice
 (`setwd dbl` per function; `.ignore strict_delay` with the compiler inserting
 every delay, `.accept strict_delay` around user asm); use MCST's
@@ -1348,6 +1379,14 @@ None at the moment.
   `barrier()` and other non-volatile asms with unused outputs
   (spec/abi/kernel-build.md). Check the `V=1` command lines and the
   object code, not just that it compiles.
+
+- MCST's `/lib64/libgcc_s.so.1` aborts (SIGABRT in `_Unwind_SetGR`)
+  whenever a cancellation or `pthread_exit` (presumably an exception
+  too) unwinds into a C frame that GCC built with `-fexceptions` and a
+  cleanup: its `__gcc_personality_v0` is broken. Run such PoC-built
+  programs with the PoC's `libgcc_s` (`LD_LIBRARY_PATH`) or
+  `-static-libgcc` (spec/abi/stack-and-unwinding.md, "C cleanups and
+  cancellation").
 
 - Unipro's assembly needs fixes to assemble with MCST gas: write `%empty`
   instead of `%empty.hi`, compile with `-fno-addrsig` and `-fno-PIC` (gas

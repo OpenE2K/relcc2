@@ -1,13 +1,14 @@
 # Kernel interface (Linux 6.1, e2k64)
 
 What compilers and language runtimes need from MCST's Linux 6.1 for
-64-bit unprotected processes: system calls, the auxiliary vector,
-contexts, signals, the stacks, the address space, threads, profiling and
-static PIE. Marks as in [README.md](README.md); **kernel** paths are
-relative to `OpenE2K/linux/arch/e2k/` (generic kernel files start with
-`linux/`), **glibc** paths to `OpenE2K/glibc/sysdeps/unix/sysv/linux/e2k/`
-unless they start with `sysdeps/`, `csu/` or `elf/`; **compiler-rt** is
-MCST's compiler-rt 11.1.0 from the same tarball as **libgcc**.
+64-bit unprotected processes: system calls, the state a process starts
+in, the auxiliary vector, contexts, signals, the stacks, the address
+space, threads, profiling and static PIE. Marks as in
+[README.md](README.md); **kernel** paths are relative to
+`OpenE2K/linux/arch/e2k/` (generic kernel files start with `linux/`),
+**glibc** paths to `OpenE2K/glibc/sysdeps/unix/sysv/linux/e2k/` unless
+they start with `sysdeps/`, `csu/` or `elf/`; **compiler-rt** is MCST's
+compiler-rt 11.1.0 from the same tarball as **libgcc**.
 
 **hw** here means the 4C (ALT Linux, kernel `6.1.158-mcst-e4c`), the 8C2
 and the 2C3 (Elbrus Linux 9.5.5, kernels `6.1.0-1.17-e8c2` and
@@ -39,6 +40,9 @@ threads, `fork` and thread exits) and `kernleft.c` with `kernleft.s`
 `%bgr`, switching to a context another thread ran), built by the cross
 lcc 1.29.16 for each CPU (`e2k-v3.4c`, `v5.8c2`, `v6.2c3`); `ctxtls.c`
 (thread-local storage across a switch) is read with `lcc -S`.
+`glibcbuild_entry.c` with `glibcbuild_entry.s` (the state a process
+starts in, static and dynamic) is built by the cross lcc 1.29.16 for
+each CPU (`e2k-v3`, `v5.8c2`, `v6.2c3`).
 
 ## System calls
 
@@ -217,6 +221,79 @@ glibc uses a fast call only when its bit is set in `AT_FAST_SYSCALLS`
 (33) is defined but never supplied (kernel `include/asm/elf.h:280-293`,
 `linux/fs/binfmt_elf.c:253-292`; 0 on all three machines [hw]), glibc's
 `libc-vdso.h` is empty, and the time functions go through entry 6.
+
+## Process entry [source; hw: `glibcbuild_entry.c` with `glibcbuild_entry.s`]
+
+The kernel starts a process at its ELF entry as if returning into a
+frame that has no caller (kernel `kernel/process.c:953-1148`,
+`start_thread`, and `chain_stack_frame_init`, `:2328-2358`). glibc's
+`_start` (`crt1.o`, `start.c:46-96`) and ld.so's `_start2`
+(`sysdeps/e2k/dl-machine.h:321-352`) are C functions, so this is the
+state compiled code meets first. `glibcbuild_entry.s`, linked as the
+entry point (`-Wl,-e,glibcbuild_entry`), records it and jumps to
+`_start` [hw: lcc 1.29.16, the `e2k-v3` build on the 4C, `v5.8c2` on
+the 8C2, `v6.2c3` on the 2C3, each static and dynamic; the three agree
+unless a cell names one]:
+
+| State | Static program (the kernel's) | Dynamic program (what ld.so hands the program's `_start`) |
+|---|---|---|
+| `%dr0` | 0: no `rtld_fini` | `_dl_fini`, in ld.so: ld.so's assembly `_start` calls `_start2`, loads `_dl_fini` from its GOT into `%dr8` and calls the entry `_start2` returned, with `wbs = 4` (glibc `sysdeps/e2k/e2k64/dl-machine.h:155-178`) |
+| `%dr1`–`%dr7` | 0 with tag 0: the kernel clears the 4-pair parameter area (`C_ABI_PSIZE_UNPROT`, `process.c:964, 1024-1035`; `%qr0` is 0 outside protected mode) | ld.so's leftovers, tag 0 |
+| window | `%wd.psize` 4 pairs (64 bytes), `%br` 0 | the same; called from an 8-pair window with `wbs` 4 (`%cr1.lo` `wbs` 4, `wpsz` 4) |
+| frame below | none: `%cr0.hi` (the return address) and `%cr1` read 0 | ld.so's `_start`, which stores to address 0 if the program's `_start` returns |
+| `%usd.ptr` (`getsp 0`) | the address of `argc`, a 64-bit word; `argv[0]` at +8, `envp` after `argv`'s null, then the auxiliary vector; 16-byte aligned (`process.c:979`), not always 32 | the same: ld.so's `_start` makes no frame. When ld.so runs a program named on its own command line, `_fix_user_stack` has first moved `argv`, `envp` and `auxv` down over ld.so's arguments (`sysdeps/e2k/dl-machine.h:286-318`) |
+| predicates | all false (`cr0` zeroed, `process.c:2335`) | all false |
+| global registers | 0 with tag 5 (empty), all 32; on the 4C (6.1-1.9) `%g0`–`%g15` are 0 with tag 0 | `%g13` is the thread pointer; the others hold ld.so's leftovers, on the 4C four of them diagnostic (`%g17`, `%g18` `4000000040000000`, `%g20`, `%g21` `4afafafa4afafafa`, tag 5) |
+| FP control | `%pfpfr` 0x1fbf, `%fpcr` 0x37f, `%fpsr` 0x3f (`INIT_FPU_REGISTERS`, `process.c:1103`; [registers.md](registers.md)) | the same |
+| other | `%bgr` 0xff; `%rndpr` 0x0003ffff0001ffff (`E2K_INITIAL_RNDPR`, `process.c:1148`); `%rpr` 0 (`:1141`); `%upsr` 1, 0 on the 2C3 ([x86-support.md](../isa/x86-support.md)); `%lsr` 0xff0000000000 and `%ilcr` 0, on the 4C 0x6000000000 and 9 (where these come from: "Not checked yet") | the same, except `%lsr` and `%ilcr`, which hold what ld.so's loops left |
+
+What glibc's C entry code relies on, and so what a compiler that builds
+it must provide [glibc; lcc]:
+
+- `register long *fp asm ("FP")` is the stack pointer at entry, here
+  `%usd.ptr`: `_start` reads `argc` as `*(int *) fp` and `argv` as
+  `fp + 1` (`start.c:59, 84-85`), and `_start2` passes `fp` to
+  `_dl_start` and reads `argc` from `*fp` (`dl-machine.h:329-343`).
+  lcc's `crt1.o` does exactly that (`getsp -0x40`, `addd 0x40`, `ldw`
+  at +0, `argv` at +8) [lcc]. What `"FP"` means to lcc, and that its
+  `__builtin_frame_address (0)` is the same value:
+  [source-compat.md](source-compat.md), "Inline assembly" (register
+  variables).
+- `rtld_fini` is the first argument, `%dr0`.
+- `_start` never returns: glibc's stores to address 0 after
+  `__libc_start_main` (`start.c:95`), and ld.so's `_start` does the
+  same after the program's.
+- `_start` inherited 4 pairs, so its calls need `wbs` ≥ 4
+  ([registers.md](registers.md), "Window and rotating-base units");
+  every C call meets that.
+- In a dynamic program the global registers hold ld.so's values, on the
+  4C some of them diagnostic: code before `main` must not store a
+  global it has not written with a plain store (one of a diagnostic
+  value is SIGILL, [speculation.md](../isa/speculation.md), "Diagnostic
+  values").
+
+**`__libc_stack_end` is NULL in static programs** [glibc; hw]. E2K's
+`_start` passes 0 as `__libc_start_main`'s `stack_end` (`start.c:88-92`)
+and the static `__libc_start_main` stores it (`csu/libc-start.c:262`);
+in a dynamic program ld.so sets it from `_start2`'s `fp`
+(`sysdeps/unix/sysv/linux/dl-sysdep.c:129`), equal to `usd.ptr` [hw].
+So in a static program `pthread_getattr_np` fails for the main thread
+with `ENOENT` (it looks for the mapping that holds `__libc_stack_end`,
+`nptl/pthread_getattr_np.c:84-135`) on all three machines, and code that
+finds the main thread's stack that way (garbage collectors, stack
+guards) needs `%sbr` or `/proc/self/maps` there
+([stack-and-unwinding.md](stack-and-unwinding.md), "What they tell a
+collector or a fiber library"). `dlopen` of a library that needs an
+executable stack also starts from `__libc_stack_end`
+(`elf/dl-load.c:2455`), so it presumably fails in a static program
+(inferred, not run).
+
+**ld.so calls `__cpu_init` before it relocates itself**
+(`dl-machine.h:335-338`): it checks every library's `e_flags` with
+`__builtin_cpu_is` (`runtime_compatible_host`, `ldsodefs.h:59, 88`)
+before its own constructors run, and they then run `__cpu_init` a second
+time. What that asks of `__cpu_init` is in
+[source-compat.md](source-compat.md), "CPU detection at run time".
 
 ## Auxiliary vector [hw]
 
@@ -1527,6 +1604,12 @@ drivers expect anyway. A static link with an ifunc crashes ld
 ## Not checked yet
 
 - `sigreturn` with an edited `uc_mcontext.cr0_hi` (resuming elsewhere).
+- Where the 8C2's and 2C3's kernels set `%lsr` to 0xff0000000000 at
+  `exec` (not found in 6.1-1.19's source), and where the 4C's
+  0x6000000000 with `%ilcr` 9 comes from ("Process entry"; nothing a
+  compiler relies on).
+- `dlopen` of a library that needs an executable stack from a static
+  program, whose `__libc_stack_end` is NULL ("Process entry").
 - Stack-clash probing ("Threads", "Probing"): small frames that never
   store to their memory adding up past a guard (an E2K call probes
   nothing); a signal arriving while `USD` is less than 176 bytes above

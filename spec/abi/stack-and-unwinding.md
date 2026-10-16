@@ -236,9 +236,15 @@ hardware-stack positions from `access_hw_stacks` modes 4 and 5 instead
   the thread function's `usd.ptr` was 1,472 bytes above `%sbr`; the true
   top (`…900`) appeared in a signal frame's `uc_mcontext.sbr` [hw, all
   three]. Take a thread's top from `pthread_getattr_np` (the end of the
-  mapping, a little above the true top). In a signal handler `%sbr` is
-  the handler's own top, the signal frame's address (`round_down (USD −
-  4272, 256)`, [kernel-interface.md](kernel-interface.md), "Signals"),
+  mapping, a little above the true top). In a static program
+  `pthread_getattr_np` fails for the main thread (`ENOENT`), because
+  MCST's static glibc leaves `__libc_stack_end` NULL
+  ([kernel-interface.md](kernel-interface.md), "Process entry") [hw:
+  `glibcbuild_entry.c`, 4C, 8C2, 2C3]; take the main thread's top from
+  `%sbr` or `/proc/self/maps` (`[stack]`) there. In a signal handler
+  `%sbr` is the handler's own top, the signal frame's address
+  (`round_down (USD − 4272, 256)`,
+  [kernel-interface.md](kernel-interface.md), "Signals"),
   rounded down to a page: in the test 2 pages below the interrupted
   `%sbr` in the main thread and 1 in the thread, as the interrupted
   stack pointers happened to lie. `uc_mcontext.sbr` is the interrupted
@@ -551,6 +557,95 @@ cross the signal frame as `siglongjmp` does, so the C thread survives
 (glibc `nptl/unwind.c`; inferred). A port that uses MCST's unwinder inherits all of
 this; it needs no `MD_FALLBACK_FRAME_STATE_FOR` (signal frames have no
 FDE and are skipped like any other frame without one).
+
+### C cleanups and cancellation [hw: `tools/abi/probes/glibcbuild_cancel.c`; 4C, 8C2, 2C3]
+
+`glibcbuild_cancel.c` is built by lcc 1.29.16 (`e2k-v3`, `-O2`) with
+and without `-fexceptions` and by the proof-of-concept GCC (`gcc -O2`
+with and without `-fexceptions`, `g++ -O2 -static-libstdc++`), and run
+under MCST's `libgcc_s.so.1` and under one built by that GCC from MCST's
+unwinder (and with `-static-libgcc` on the 4C); the three machines
+agree. Each case cancels a thread inside a region whose handler is an
+`__attribute__ ((cleanup))` (the shape of glibc's `__libc_cleanup_push`)
+or a `pthread_cleanup_push`, while the thread is blocked in `read`
+(SIGCANCEL's handler then unwinds from beyond a signal frame) or polls
+`pthread_testcancel` (no signal frame), or has the thread call
+`pthread_exit`:
+
+| Region; how the thread meets the cancellation | lcc (any flags); GCC without `-fexceptions` | GCC `-fexceptions` under MCST's `libgcc_s` | GCC `-fexceptions` under GCC's `libgcc_s` or `-static-libgcc`; `g++` under either |
+|---|---|---|---|
+| cleanup attribute; blocked in `read` | cancelled, cleanup **not run** | **SIGABRT** | **cancellation lost**: the thread goes back into `read` (seen waiting in `pipe_read` after `pthread_cancel`, 4C); when `read` returns, neither the rest of the callee nor the rest of the function holding the region runs, the cleanup doesn't run, and the thread ends with 0, not `PTHREAD_CANCELED` |
+| cleanup attribute; `pthread_testcancel` loop | cancelled, cleanup not run | SIGABRT | cancelled, cleanup runs |
+| cleanup attribute; `pthread_exit` in a callee | exits, cleanup not run | SIGABRT | exits, cleanup runs |
+| `pthread_cleanup_push`; blocked in `read` | cancelled, handler runs | the same | the same |
+| `pthread_cleanup_push` around a cleanup attribute; blocked in `read` | cancelled, only the outer handler runs | SIGABRT | lost until `read` returns; then the inner cleanup runs and the process dies with SIGSEGV |
+| the same; `pthread_testcancel` | cancelled, only the outer handler runs | SIGABRT | cancelled, both run |
+| a `dl_iterate_phdr` callback; blocked in `read` or polling | cancelled, but `dl_load_write_lock` stays held: the next `dl_iterate_phdr` in another thread hangs | the same | the same |
+
+- **MCST's `__gcc_personality_v0` aborts.** It calls `_Unwind_SetGR
+  (context, 24, …)` and then 25 for the exception pointer and selector,
+  while MCST's `_Unwind_SetGR` accepts only 64 and 65 (`%b[0]`,
+  `%b[1]`, the values of lcc's `__builtin_eh_return_data_regno`) and
+  calls `abort ()` for any other index (`unwind-dw2-e2k.c:382-430`)
+  [libgcc; the call sites in the `libgcc_s.so.1` of lcc's sysroot and of
+  the 4C, 8C2 and 2C3; gdb on the 4C: `abort` ← `_Unwind_SetGR` ←
+  `__gcc_personality_v0` ← `_Unwind_ForcedUnwind`]. So a C frame with
+  a cleanup landing pad kills the process when a forced unwind
+  (cancellation, `pthread_exit`) reaches it under MCST's `libgcc_s`,
+  with or without a signal frame, and presumably an exception too
+  (inferred: only forced unwinds ran). lcc never emits such frames, and
+  libstdc++'s `__gxx_personality_v0` passes 64 and 65 and works; the
+  proof-of-concept GCC also gives `__builtin_eh_return_data_regno (0)`
+  = 64 [gcc]. MCST's own comment there (`unwind-dw2-e2k.c:385-395`)
+  says its `e2k-linux-gcc` numbered `%b[0]`–`%b[7]` as 17–24 and warns
+  that libgcc and libraries built by different compilers then don't
+  work together, so `libgcc_s`'s `unwind-c.o` was probably built by that
+  compiler (inferred). A GCC-built program that keeps C `-fexceptions`
+  cleanups needs its own `__gcc_personality_v0` (its own `libgcc_s`, or
+  `-static-libgcc`) even where `/lib64/libgcc_s.so.1` is MCST's.
+- **A landing pad beyond a signal frame doesn't work with MCST's
+  unwinder**, whoever compiled the frames: the cancellation is lost or
+  the process dies (for lcc's C++, `sigeh.cc` in "Signal frames,
+  cancellation" above). The unwinder lands by rewriting the chain stack
+  with `set_backtrace` and returning; the return through the signal
+  frame runs `sigreturn`, which puts the thread back into the
+  interrupted system call (SIGCANCEL is installed with `SA_RESTART`,
+  glibc `nptl/pthread_cancel.c:90`), and the rewritten frames act only
+  when that call returns (inferred; why the landing pad in the region's
+  own function is skipped while an inner one runs was not traced). As
+  above, only a jump buffer, which glibc's stop function leaves with
+  `longjmp`, crosses the signal frame.
+- **MCST's libc drops its `__libc_cleanup_push` regions.** lcc defines
+  `__EXCEPTIONS` for the files glibc builds with `-fexceptions`
+  (`syslog.c`, `getpass.c`, `scandir*.c`, `dl-iteratephdr.c` and
+  `sysdeps/unix/sysv/linux/check_pf.c`: `misc/Makefile:133-135`,
+  `dirent/Makefile:36-39`, `elf/Makefile:173`,
+  `sysdeps/unix/sysv/linux/Makefile:343`), so their `__libc_cleanup_push`
+  is the cleanup attribute (`sysdeps/nptl/libc-lockP.h:161-183`), which
+  lcc drops: the `libc.so.6` of the sysroot and of the three machines
+  has no LSDA at all (one CIE, augmentation `zR`, no
+  `.gcc_except_table`) [lcc]. A thread cancelled inside them leaves
+  `dl_load_write_lock` held [hw, above], and presumably `syslog_lock` or
+  `__check_pf`'s lock, `getpass`'s stream or `scandir`'s memory and
+  directory (inferred from their handlers). glibc's jump-buffer regions
+  still run, as `pthread_cleanup_push`'s do: libio's and stdio's
+  `_IO_cleanup_region_start` (`__libc_cleanup_region_start`) and nptl's
+  `__pthread_cleanup_push` (in `pthread_cond_wait`, for one) [source;
+  inferred].
+- **For a glibc built by GCC** (inferred; no such build has run yet),
+  compiling those files with `-fexceptions` gives them landing pads:
+  under MCST's `libgcc_s` any cancellation that crosses one aborts, and
+  under a working one a thread cancelled while blocked inside `syslog`,
+  `getaddrinfo`'s `__check_pf`, or a `dl_iterate_phdr` or `scandir`
+  callback loses the cancellation. Keeping glibc's internal regions off
+  the cleanup attribute on E2K, as MCST's `pthread.h` does for the
+  public macros (`sysdeps/nptl/pthread.h:574-576`), would avoid both:
+  `__libc_cleanup_push` would then expand to a
+  `__libc_cleanup_region_start` region (`sysdeps/nptl/libc-lock.h:163-185`),
+  whose jump buffers glibc's stop function runs as the unwind passes
+  them and before its final `longjmp` (`nptl/unwind.c:72-102`). User C
+  code built with `-fexceptions`, and C++, keep the signal-frame
+  problem; glibc's `tst-cancel*` tests will show it.
 
 ## Scanning for roots [hw: `tools/abi/probes/hwscan.c` with `hwscan.s`, lcc 1.29.16 `-O2`; 4C, 8C2 and 2C3 unless marked]
 
@@ -884,3 +979,18 @@ much as returning normally through 100 frames, or as a `swapcontext`
 round trip, two context switches (3,200 to 3,300 cycles;
 `tools/abi/probes/ctxsig.c` measured both in one harness:
 [kernel-interface.md](kernel-interface.md), "User contexts") [hw].
+
+## Not checked yet
+
+- What a glibc built by GCC does on cancellation inside its
+  `__libc_cleanup_push` regions, and whether keeping them on jump
+  buffers fixes it ("C cleanups and cancellation"; inferred only, until
+  glibc's `tst-cancel*` tests run under such a build).
+- Why a cancellation lost across a signal frame skips the landing pad in
+  the region's own function but runs one in a callee (`attr_read`
+  against `mixed_read` in `glibcbuild_cancel.c`): it needs the chain
+  stack traced across `sigreturn`.
+- What `syslog`, `getpass` and `scandir` leave behind when their thread
+  is cancelled in MCST's libc (only `dl_iterate_phdr`'s lock was run).
+- Whether a C++ exception, not only a forced unwind, reaching a GCC C
+  cleanup frame aborts under MCST's `__gcc_personality_v0`.

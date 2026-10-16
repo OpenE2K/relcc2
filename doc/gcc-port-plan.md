@@ -323,7 +323,21 @@ mainline libgcc this way, `docs/spec-poc-findings.md` A7, A10, A11):
   proprietary `liblcc`. Define and fill `__cpu_info` in libgcc instead
   (from `%idr`; layout and codes in source-compat.md). MCST's static
   `libc.a` references it too, so without it every static link that pulls
-  in `dlopen`, NSS or iconv fails.
+  in `dlopen`, NSS or iconv fails. A glibc built by GCC links only
+  `-lgcc` into ld.so and `libc.so`, so its `__cpu_init` comes from
+  libgcc, and ld.so calls it before relocating itself and again from
+  `_dl_init`: use only hidden symbols, PC-relative or `@GOTOFF`, call
+  nothing, and allow a second call (source-compat.md, "CPU detection at
+  run time"; the proof of concept's `cpuinfo.o` already fits).
+- **The port's own `libgcc_s` is required for C `-fexceptions`
+  cleanups.** MCST's `libgcc_s.so.1` has a broken
+  `__gcc_personality_v0` (it passes `_Unwind_SetGR` index 24, which
+  MCST's `_Unwind_SetGR` answers with `abort ()`), so any C frame with a
+  cleanup landing pad aborts the process when a cancellation or
+  `pthread_exit` reaches it (an exception presumably too); lcc never
+  emits such frames, and libstdc++'s personality is fine. The same
+  unwinder built by GCC works (`spec/abi/stack-and-unwinding.md`, "C
+  cleanups and cancellation").
 - `__builtin_return_address (0)` is `rrd %cr0.hi` masked to bits 0–47.
 - MCST also adds `_Unwind_GetPCSP` to the `GCC_3.0` node of the generic
   `libgcc-std.ver.in`. libgcc_s must export it: MCST's glibc dlopens
@@ -378,7 +392,9 @@ mainline libgcc this way, `docs/spec-poc-findings.md` A7, A10, A11):
   - Let GCC write `.debug_line` itself (the `configure.ac` row in 3.2).
 
 Until libgcc builds (M3), link against the system's `libgcc_s.so.1`
-from lcc's sysroot.
+from lcc's sysroot, and expect C code built with `-fexceptions` that
+has cleanups (`__attribute__ ((cleanup))`) to abort when unwound
+(above).
 
 Source-level and runtime interface rules from lcc's own documentation,
 written up in `spec/abi/source-compat.md` and `spec/abi/atomics.md`:
@@ -1830,6 +1846,48 @@ unused and merges or hoists identical ones (its documented semantics),
 and the kernel's `barrier()`, per-CPU stores and state-register reads
 rely on lcc doing neither, so a GCC-built kernel needs those asms
 `volatile`.
+
+### D12. Building MCST's glibc
+
+What compiling `OpenE2K/glibc` (2.35) asks of a compiler beyond user
+code (`spec/abi/source-compat.md`, `spec/abi/kernel-interface.md`,
+"Process entry", `spec/abi/stack-and-unwinding.md`, "C cleanups and
+cancellation"; `tools/abi/probes/glibcbuild_*`):
+
+- **`-mptr64`**: configure appends it to `CC` and `CXX` for `e2k` and
+  `e2k64` hosts, so every configure test fails unless the driver
+  accepts it (a no-op; the kernel's `recordmcount.pl` passes it too,
+  D11). No other lcc option reaches a non-lcc build.
+- **`register long *fp asm ("FP")`**: glibc's `_start` and ld.so's
+  `_start2` read `argc` and `argv` through it. lcc binds `"FP"` to the
+  stack pointer at function entry (the same value as its
+  `__builtin_frame_address (0)`); give the port that name, or patch the
+  two places to `__builtin_frame_address (0)` with the same meaning.
+  Nothing else in 2.35 binds a non-register name (`memusage.h`'s
+  `"%SP"`/`"%r9"` is dead code).
+- **lcc's pragmas**: 544 lines in 113 E2K files (`loop count`,
+  `noprefetch`, `asm_inline`, `unroll`, `no_asm_inline`), and glibc
+  builds with `-Wall -Werror` by default, so register them as no-ops,
+  as for the kernel (D11), or configure with `--disable-werror`. Only
+  `noprefetch` matters once the port uses array prefetch (M7): lcc puts
+  APB into glibc's `strlen` loop on v5 and v6 without it.
+- **`__cpu_init` in libgcc**, relocation-free and safe to run twice
+  (3.3).
+- **Cancellation**: glibc compiles `syslog.c`, `getpass.c`,
+  `scandir*.c`, `dl-iteratephdr.c` and `check_pf.c` with `-fexceptions`,
+  where its internal `__libc_cleanup_push` becomes
+  `__attribute__ ((cleanup))`. lcc emits no landing pads for those, so
+  MCST's libc never runs them; GCC does, and then a cancellation that
+  crosses one aborts under MCST's `libgcc_s` and, under a working one,
+  is lost when the thread was blocked in a system call (MCST's unwinder
+  cannot land beyond a signal frame). Keeping those regions on glibc's
+  jump-buffer path on E2K, as MCST's `pthread.h` does for
+  `pthread_cleanup_push`, should avoid both (inferred; a glibc change,
+  not a compiler one; `tst-cancel*` will tell).
+
+Not the port's to fix: MCST's static glibc leaves `__libc_stack_end`
+NULL, so `pthread_getattr_np` fails for the main thread of every static
+program (`spec/abi/kernel-interface.md`, "Process entry").
 
 ---
 

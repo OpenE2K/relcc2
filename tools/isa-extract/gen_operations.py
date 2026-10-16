@@ -130,6 +130,7 @@ PROBES = {
     "callsstack_tail.s": ("abi/callsstack_tail.s", "4C, 8C2, 2C3"),
     "callsstack_clash.s": ("abi/callsstack_clash.s", "4C, 8C2, 2C3"),
     "debuginfo.s": ("abi/debuginfo.s", "4C, 8C2, 2C3"),
+    "glibcbuild_entry.s": ("abi/glibcbuild_entry.s", "4C, 8C2, 2C3"),
 }
 ABI_PROBES = "tools/abi/probes"
 

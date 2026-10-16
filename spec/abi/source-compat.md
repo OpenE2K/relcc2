@@ -2,10 +2,13 @@
 
 What a compiler must provide, beyond the binary interface, so that code
 and headers written for lcc build unchanged: predefined macros,
-inline-assembly constraints and register names, and the lcc options and
-behaviours that change generated code. Probes: `tools/abi/probes/asmops.c`,
-`tools/abi/probes/execstack.sh` (nested functions, Fortran internal
-procedures); macros from `lcc -dM -E -xc /dev/null`.
+inline-assembly constraints and register names, the lcc options and
+behaviours that change generated code, and lcc's pragmas. Probes:
+`tools/abi/probes/asmops.c`, `tools/abi/probes/execstack.sh` (nested
+functions, Fortran internal procedures),
+`tools/abi/probes/glibcbuild_lcc.py` (what building glibc's E2K code
+asks: register-variable names, pointer-size options, C cleanups,
+pragmas); macros from `lcc -dM -E -xc /dev/null`.
 
 ## Predefined macros (lcc, unipro, lcc-doc)
 
@@ -76,6 +79,32 @@ proof-of-concept backend's libgcc does that from `%idr`, matching lcc's
 values under qemu (v3, v5, v6) and on the 4C
 (`docs/spec-poc-findings.md` A10).
 
+**`__cpu_init` must work before ld.so is relocated, and twice.** ld.so's
+`_start2` calls it first, before `_dl_start` relocates ld.so (glibc
+`sysdeps/e2k/dl-machine.h:335-338`;
+[kernel-interface.md](kernel-interface.md), "Process entry"), because
+ld.so checks libraries with `__builtin_cpu_is` before it runs any
+constructor of its own. Then `_dl_init` runs it again, relocated: the
+`.ctors.65434` entry is the only `DT_INIT_ARRAY` slot of
+`ld-linux.so.2` (an `R_E2K_64_RELATIVE` to `__cpu_init`), and
+`LD_DEBUG=files` prints "calling init: /lib64/ld-linux.so.2" [lcc:
+`readelf` of the sysroot's and the 4C's `ld-linux.so.2`; hw: 4C].
+glibc's lcc build links `liblcc.a` into ld.so (`elf/Makefile:1333-1341`:
+`-lgcc -llcc`) and into `libc.so` (`Makeconfig:743-751`); a build by
+another compiler links only `-lgcc`, so `__cpu_init` and `__cpu_info`
+must then come from libgcc. Either way `__cpu_init` may use only hidden
+symbols, addressed PC-relatively or `@GOTOFF` from a PC-relative
+`_GLOBAL_OFFSET_TABLE_` (glibc's `PI_STATIC_AND_HIDDEN`,
+`sysdeps/e2k/configure.ac`): no GOT loads, no calls through the PLT, no
+absolute literals. lcc's `cpuinfo_init.o` is exactly that: its code
+carries one `R_E2K_64_PC_LIT _GLOBAL_OFFSET_TABLE_` and 18
+`R_E2K_64_GOTOFF_LIT __cpu_info` relocations and calls nothing, its only
+absolute relocation is the constructor entry, and both symbols are
+hidden in the object and local in `ld-linux.so.2` [lcc: `readelf -r`
+and `-s` of `liblcc.a`]. The proof-of-concept libgcc's `cpuinfo.o`
+likewise has only `PC_LIT` and `GOTOFF_LIT` relocations in its code
+[gcc].
+
 ## Inline assembly (lcc-doc, lcc)
 
 Constraints, as lcc 1.28+ defines them:
@@ -113,7 +142,8 @@ Constraints, as lcc 1.28+ defines them:
   identical `addd`, and merges two `rrd %lsr`, but keeps every read of
   `%upsr`, `%ip`, `%clkr`, `%sclkr` and `%fpsr` [lcc 1.29.16, 1.31.05:
   `kernelbuild.py` `open`; [kernel-build.md](kernel-build.md),
-  "State-register reads"]. GCC ignores the pragma with a warning (below).
+  "State-register reads"]. GCC ignores the pragma with a warning
+  ("Pragmas" below).
 
 Register variables (`register T v asm("...")`, lcc 1.29+): a name without
 a prefix is ordinary registers, so a 16-byte variable at `%g2` occupies
@@ -132,6 +162,26 @@ not already fixed, and deletes the first of two consecutive writes
 [source: `gcc/reginfo.cc:737-790`; gcc]. MCST's kernel relies on
 `-ffixed-g16` … `-ffixed-g25` ([kernel-build.md](kernel-build.md),
 "Global registers").
+
+lcc also binds two names that are not registers, each with or without
+`%` [lcc 1.29.16 and 1.31.05 at `-O0` and `-O2`;
+`tools/abi/probes/glibcbuild_lcc.py`]:
+
+| Name | Reads | Used by |
+|---|---|---|
+| `"FP"`, `"%FP"` | the stack pointer at function entry, the top of the frame: the frame's `getsp` result plus the frame size (`getsp 0` without a frame), unchanged by `alloca`; equal to lcc's `__builtin_frame_address (0)` (their difference folds to 0) | glibc's `_start` (`sysdeps/unix/sysv/linux/e2k/start.c:59`) and ld.so's `_start2` (`sysdeps/e2k/dl-machine.h:329`), to find `argc` ([kernel-interface.md](kernel-interface.md), "Process entry") |
+| `"SP"`, `"%SP"` | the current stack pointer: the frame's `getsp` result (`getsp 0` without a frame), the new bottom after `alloca` | only `sysdeps/e2k/memusage.h:21`, which nothing includes: glibc 2.35 dropped `memusage.h` (upstream commit 83b8d5027d), and `libmemusage` takes the stack pointer from `__builtin_frame_address (0)` instead (`CURRENT_STACK_FRAME`, `sysdeps/e2k/e2k64/nptl/pthreaddef.h:32`, through `sysdeps/unix/sysv/linux/machine-sp.h`) |
+
+Other spellings (`fp`, `sp`, `USD`, `%usd`), the 64-bit names `dr0`
+and `dg16`, and state registers (`ip`, `lsr`, `pfpfr`) are error #1118
+"unknown register name"; `pred0` and `ctpr1` are refused ("cannot be
+used for allocation"). `"r9"` is window register 9, and lcc moves the
+rotating base up a pair (`setbn rbs` 5 instead of 4) to keep it out of
+`%b[]`. So glibc 2.35's E2K code needs only `"FP"` from a compiler, or a
+patch that uses `__builtin_frame_address (0)` in those two places,
+which then must mean the stack pointer at entry, as in lcc (nptl's
+`CURRENT_STACK_FRAME` uses it too). The proof-of-concept GCC and
+Unipro's clang reject all four names [gcc; unipro].
 
 ### Other constraints (lcc)
 
@@ -288,24 +338,37 @@ uapi-style `read` (`tools/abi/probes/pocplan.c` `sys_read_twice`: `ldb`
 before and after the asm) [lcc 1.29.16 `-O2` and `-O3`, v3.4c, v5.8c2,
 v6.2c3; 1.31.05 `-O3`, v3, v6.2c3].
 
-lcc also has `#pragma asm_inline`, `#pragma no_asm_inline` and
-`#pragma asm_length (N)` (the asm's length in cycles, 0–14, E2K only)
-(**lcc-doc** `pragma_mcst.html`). glibc uses the first two
-(`sysdeps/e2k/dl-machine.h:89-95`, `sysdeps/e2k/fpu/e_coshf.c:44`) and
-the kernel the last two (`__no_asm_inline`, `asm/compiler.h:43-101`;
-it never uses `asm_inline`); MCST's libgcc `__e2k_clear_cache` uses
-`no_asm_inline` (`config/e2k/clear-cache.c`). lcc accepts them under
-`-Wall -Werror` [lcc]. GCC ignores unknown pragmas with a warning from
-`-Wunknown-pragmas`, which `-Wall` includes, so under the kernel's
-`-Werror` these and lcc's loop pragmas (`loop count (N)`, `unroll
-(N)`, `ivdep`, ...) stop the build [gcc; [kernel-build.md](kernel-build.md),
-"lcc's pragmas"].
+lcc's `asm_inline`, `no_asm_inline` and `asm_length` pragmas, and what
+other compilers do with them, are in "Pragmas" below.
 
 Register names for `-ffixed-<reg>` and `-fcall-used-<reg>` (as in GCC):
 `g0`..`g31`, `r0`..`r63`, `pred0`..`pred31`.
 
 ## Options and behaviours that change generated code (lcc-doc)
 
+- **Pointer size**: `-mptr64` (`-m64`), `-mptr32` (`-m32`) and
+  `-mptr128` (`-m128`) compile for 64-bit, 32-bit and protected mode
+  (**lcc-doc** `lcc_options.htm`); `-mptr64` and `-m64` define
+  `__ptr64__` and `_LP64`, as the default does [lcc]. glibc's configure
+  appends `-mptr64` to `CC` and `CXX` for `e2k` and `e2k64` hosts
+  (`-mptr32` for `e2k32`, `-mptr128` for `e2k128`; `configure.ac:58-71`),
+  so every configure test and every compile passes it, and MCST's kernel
+  build passes it too ([kernel-build.md](kernel-build.md), "ftrace"): a
+  compiler that builds either must accept `-mptr64` (a no-op in a
+  64-bit-only port). The proof-of-concept GCC rejects all six spellings
+  [gcc]; Unipro's clang accepts `-m64` and `-m32` (both still
+  `__ptr64__`) but not `-mptr64` [unipro]. No other lcc option reaches a
+  glibc build by another compiler: `-fasm-entries-first`,
+  `-fno-ipa-attrs`, `-masm-inline`, `-Werrror` (lcc's stricter
+  `-Werror`), `-llcc` and the rest are
+  added only when configure finds `lcc:` in `$CC -v`
+  (`configure.ac:572-579`; `sysdeps/e2k/Makefile:1-22`,
+  `Makeconfig:730-751, 919-929`). For such a build MCST's makefiles add
+  only `-fno-strict-aliasing` to `s_sin.c`, `s_sinl.c`, `erand48_r.c`
+  and `makecontext.c` (the last also `-Wno-stringop-overread
+  -Wno-array-bounds`; `sysdeps/e2k/Makefile:72-84`) and build
+  `elf/dl-runtime.c` with `-fno-exceptions` (`elf/Makefile:154-170`)
+  [glibc].
 - **Alignment**: `-mstrict-align` (no unaligned accesses created by
   optimisation) is the default up to v4, which has no efficient unaligned
   access; from v5 the default is `-mno-strict-align`.
@@ -378,8 +441,19 @@ Register names for `-ffixed-<reg>` and `-fcall-used-<reg>` (as in GCC):
   A compiler that wants lcc's behaviour can mark `setcontext` noreturn
   by name; one that doesn't is correct in both cases.
 - **`__attribute__((cleanup))`**: lcc runs the cleanup only on a normal
-  exit from the scope, not while a C++ exception unwinds through a C
-  function (GCC runs it in both cases).
+  exit from the scope: not while a C++ exception unwinds through a C
+  function, and not when the thread is cancelled or calls
+  `pthread_exit` inside the scope (GCC with `-fexceptions` runs it in
+  all of these). lcc emits no personality, LSDA or landing pad for it
+  in C, with or without `-fexceptions`, at `-O0` and `-O2`, although
+  `-fexceptions` makes it define `__EXCEPTIONS` for C as GCC does
+  [lcc 1.29.16 and 1.31.05: `glibcbuild_lcc.py`; hw:
+  `tools/abi/probes/glibcbuild_cancel.c`, 4C, 8C2, 2C3]. glibc's
+  internal `__libc_cleanup_push` is such a cleanup whenever
+  `__EXCEPTIONS` is defined (`sysdeps/nptl/libc-lockP.h:161-183`), so
+  MCST's lcc-built libc never runs those handlers on cancellation
+  ([stack-and-unwinding.md](stack-and-unwinding.md), "C cleanups and
+  cancellation").
 - **`__attribute__((no_caller_stack))`** (lcc only): for functions whose
   arguments and result all fit in registers; the caller may omit the
   argument area the convention otherwise reserves, so the callee must not
@@ -389,6 +463,78 @@ Register names for `-ffixed-<reg>` and `-fcall-used-<reg>` (as in GCC):
   `-mset-prepare-ct-delays-e48c` applies the 48C's prepare-to-transfer
   delays (default with `-mtune=elbrus-48c`), so those delays differ on
   that CPU.
+
+## Pragmas (lcc-doc, lcc, gcc, unipro)
+
+lcc's own pragmas, from **lcc-doc** `pragma_mcst.html` (1.29.16; 1.31.05
+adds `apb_cache (N)`, `apb_aligned` and `no_rtmd`). lcc 1.29.16 and
+1.31.05 accept the loop and asm pragmas silently under `-Wall -Werror`
+(`tools/abi/probes/glibcbuild_lcc.py`) [lcc]. Uses are counted in
+`OpenE2K/glibc`'s `sysdeps/e2k` and `sysdeps/unix/sysv/linux/e2k`, and
+in `OpenE2K/linux`'s `arch/e2k` (lines, files), leaving out those a GCC
+build never compiles: under an `#if` on `__LCC__` that is false for GCC,
+or in a header only lcc includes (the script's survey):
+
+| Pragma | Meaning (lcc-doc) | glibc E2K | Linux `arch/e2k` | For a GCC port |
+|---|---|---|---|---|
+| `loop count (N)` (the manual also writes `loop_count`) | the next loop runs about N iterations (ignored under `-fprofile-use`) | 223, 40 | 37, 17 | accept and ignore: GCC has no pragma for an iteration estimate |
+| `unroll (N)`, `unroll` | unroll the next loop N times, or fully without N; also raises an unknown iteration estimate to N times the pipelining minimum | 84, 18 | 18, 7 | `GCC unroll N` |
+| `noprefetch`; `prefetch` | no array prefetch (APB) for the loop's regular loads; or force it. Software prefetch is not affected | 122, 25; 0 | 3, 1; 0 | accept; a port that uses APB honours `noprefetch` (below) |
+| `ivdep` | assume no loop-carried dependence where none is proven (1.31: ignored with `-m128`) | 0 | 16, 3 | `GCC ivdep` |
+| `novector`; `vector always`, `vector aligned`, `vector unaligned`, `vector nontemporal` | no vectorising; force it, assume aligned (8 bytes on v1–v4, 16 from v5) or unaligned accesses, keep stores out of the caches | 0 | 6, 1; 3, 2 (`aligned`) | `GCC novector`; ignore the rest |
+| `no_dam`, `no_rtmd` (1.31) | no data speculation (DAM), no run-time memory disambiguation in the loop | 0 | 4, 1 (`no_dam`) | ignore unless the port does either |
+| `swp`, `noswp`, `comb_oper`, `no_comb_oper`, `cache_opt`, `no_cache_opt`, `reduce recurrence`, `spmv`, `nonesting`, `split_fuse` (ignored by lcc), `apb_cache (N)`, `apb_aligned` (1.31) | force or forbid software pipelining, combined operations, early loads in pipelined loops (`cache_opt`), recurrence breaking; mark a sparse matrix-vector loop; no loop nesting; the cache levels APB loads fill; APB loads aligned to their format | 0 | 0 | ignore |
+| `asm_inline`, `no_asm_inline` | let lcc schedule the next `asm` with the code around it, or not (as `-masm-inline` does for all); anywhere but right before an `asm` they are error #3350 | 109, 74 (49 more in `bits/mathinline.h`, which `math/math.h:1344-1346` includes only for lcc); 6, 4 | 0; 2, 2 | ignore |
+| `asm_length (N)` | the next `asm` takes N cycles (0–14) | 0 | 24, 2 (`barrier ()`, `asm/compiler.h:43-67, 152-158`) | ignore |
+| `diag_suppress N` and the other `diag_*`, `diagnostic push`, `pop` | EDG's message numbers | 0 (8 `diag_suppress` in 7 generic files, lcc only) | 3, 1 | ignore |
+| `unknown_control_flow (f)`, `no_inline (list)`, `hot (list)`, `no_side_effect (list)`, `no_instrument_function (f)`, `no_profile_instrument_function (f)` (all deprecated) | `returns_twice`, `noinline`, `hot`, nothing (ignored), `no_instrument_function`, `no_profile_instrument_function` | 0 | 0 | the attributes, if ever needed |
+
+So a GCC build of glibc meets 544 lines in 113 of its E2K files. The
+generic files MCST changed guard theirs: `stdlib/strtod_l.c`, `lshift.c`
+and `rshift.c` (21 `loop count`) with `#if defined __e2k__ && defined
+__LCC__`, the `diag_suppress`es and `locale/lc-ctype.c`'s
+`no_asm_inline` with other `__LCC__` tests. glibc's E2K code puts
+`asm_inline` or `no_asm_inline` before its asms
+(`sysdeps/e2k/dl-machine.h:89-95`, `sysdeps/e2k/fpu/e_coshf.c:44`), the
+kernel `no_asm_inline` and `asm_length` (`__no_asm_inline` is both,
+`asm/compiler.h:43-101`; [kernel-build.md](kernel-build.md), "lcc's
+pragmas"), and MCST's libgcc `no_asm_inline` (`__e2k_clear_cache`,
+`config/e2k/clear-cache.c`). lcc in turn warns about GCC's loop pragmas
+and ignores them (`GCC unroll`, `GCC ivdep`, `GCC novector`: warning
+#1675 "unrecognized GCC pragma", under `-Wunknown-pragmas`, so an error
+only with `-Werror`; lcc-doc `pragma_gnu.html`: not supported "since lcc
+has its own"), and accepts `GCC diagnostic` without acting on it
+(lcc-doc; glibc's makefiles work around that, e.g.
+`stdlib/Makefile:235-241`) [lcc].
+
+**Under `-Wall -Werror` they are errors for other compilers.** `-Wall`
+enables `-Wunknown-pragmas` (GCC `c-family/c.opt:1599-1601`); every lcc
+pragma tried is an error with the proof-of-concept GCC [gcc] and with
+GCC 16.2.1 on x86-64, and with Unipro's clang except `unroll` with or
+without N, which clang knows [unipro]. glibc builds with `-Wall` and, by
+default (`--enable-werror`, `configure.ac:312-318`), `-Werror`
+(`Makeconfig:913-929`); the kernel likewise
+([kernel-build.md](kernel-build.md), "What a GCC build meets first"). So
+a GCC build of glibc stops at the first E2K string or math file unless
+the compiler registers the pragmas, glibc is configured with
+`--disable-werror`, or `-Wno-unknown-pragmas` is added. GCC does not
+report a `_Pragma` that comes from a macro defined in a system header:
+user code that expands the installed `fpu_control.h` (`_FPU_GETCW` and
+the like, lines 86-89) or `bits/fenv.h` (`__fenv_getpfpfr` and the like,
+lines 95-102) builds cleanly under GCC's `-Wall -Werror`, and fails only
+when the header is included from a non-system directory, as glibc's own
+build includes `sysdeps/e2k/fpu/fpu_control.h:88-91`, or with
+`-Wsystem-headers` [gcc; GCC 16.2.1 on x86-64]. Unipro's clang reports
+them from the installed headers too [unipro].
+
+Ignoring them loses only hints, except perhaps `noprefetch` in a port
+that uses array prefetch: lcc `-O3` puts `bap` and two `mova`s into
+glibc's `strlen` loop shape for `v5.8c2` and `v6.2c3` and none with
+`noprefetch` (`loop count (8)` and `unroll (1)` alone leave them; lcc's
+`v3` code has no APB in that loop) [lcc 1.29.16, 1.31.05]. glibc's
+comment gives the reason as "otherwise APB is applied, 1 cycle"
+(`sysdeps/e2k/strlen.c:77`): presumably APB costs these short string
+loops more than it gains (inferred; neither loop was timed).
 
 ## GNU extensions lcc lacks (lcc, lcc-doc, unipro)
 

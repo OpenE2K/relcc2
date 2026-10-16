@@ -344,18 +344,19 @@ operands (`gcc/genconfig.cc:285, 320`; `gcc/cfgexpand.cc:3453`), so
 
 ### lcc's pragmas [lcc-doc, lcc, gcc]
 
-lcc's asm pragmas are in [source-compat.md](source-compat.md) ("What
-lcc assumes an asm does"). The kernel puts `_Pragma ("no_asm_inline")`
-and `_Pragma ("asm_length(N)")` before many asms (`__no_asm_inline` is
-both, `asm/compiler.h:43-101`; it never uses `asm_inline`), and uses
-lcc's loop pragmas: `loop count (N)`, `unroll (N)`, `vector aligned`,
-`novector`, `ivdep`, `no_dam` and `noprefetch` (`asm/xor.h`,
-`asm/regs_state.h`, `asm/pgtable.h`, `lib/string.c`, `lib/checksum.c`,
-`kernel/traps.c`, `mm/`, `crypto/chacha-e2kv*.c`). lcc accepts the asm
-pragmas under `-Wall -Werror`; GCC reports "ignoring '#pragma
-asm_length'" and the loop pragmas under `-Wunknown-pragmas` (part of
-`-Wall`), an error with the kernel's `-Werror`. A compiler must accept
-and ignore (or use) them.
+What each of lcc's pragmas means, how often glibc's and the kernel's E2K
+code use it and what other compilers do with it is in
+[source-compat.md](source-compat.md), "Pragmas". The kernel puts
+`_Pragma ("no_asm_inline")` and `_Pragma ("asm_length(N)")` before many
+asms (`__no_asm_inline` is both, `asm/compiler.h:43-101`; it never uses
+`asm_inline`), and uses lcc's loop pragmas: `loop count (N)`, `unroll
+(N)`, `vector aligned`, `novector`, `ivdep`, `no_dam` and `noprefetch`
+(`asm/xor.h`, `asm/regs_state.h`, `asm/pgtable.h`, `lib/string.c`,
+`lib/checksum.c`, `kernel/traps.c`, `mm/`, `crypto/chacha-e2kv*.c`). lcc
+accepts the asm pragmas under `-Wall -Werror`; GCC reports "ignoring
+'#pragma asm_length'" and the loop pragmas under `-Wunknown-pragmas`
+(part of `-Wall`), an error with the kernel's `-Werror`. A compiler must
+accept and ignore (or use) them.
 
 ## Code generation in kernel mode
 

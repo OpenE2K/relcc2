@@ -567,8 +567,9 @@ variable in a global register or address it relative to one: the
 experimental GCC numbered the globals from 128 and gdb rejected 44 of
 the variables its guality tests checked (`tools/dejagnu/README.md`,
 "Guality"; [source, hw] on the 8C2). Such a variable has to be described
-some other way (for example copied to a window register) or left out as
-optimized out.
+some other way or left out as optimized out (a copy to a window register
+made only under `-g` would make `-g` change code:
+[gcc-port-plan.md](../../doc/gcc-port-plan.md), D13).
 
 **Exception handling** uses DWARF 64 and 65 (`%b[0]`, `%b[1]`) as
 `__builtin_eh_return_data_regno (0)` and `(1)` (libgcc). A compiler that

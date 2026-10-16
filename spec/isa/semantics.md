@@ -65,7 +65,7 @@ a shift and an `and` (or two shifts) elsewhere:
 | 0–5; 0–4 | offset: src1 is rotated right by it |
 | 6–11; 6–10 | *len*, the bits kept (0–63; 0–31) |
 | 12 | 1: sign-extend from the field's top bit; 0: zero-extend |
-| 13–15; 13–14 | v1–v4: BYTE, which byte holds the sign bit (below); v5+: ignored by `getf`, the low-zero count of `getfz` |
+| 13–15 | v1–v4: BYTE, which byte holds the sign bit (below; `getfd` 13–15, `getfs` 13–14); v5+: ignored by `getf`; bits 13–15 are the low-zero count of `getfzd` and `getfzs` |
 | 16 and up | ignored |
 
 `tools/isa-probes/getf.c` runs every offset, length, sign bit and BYTE
@@ -114,8 +114,42 @@ only on a whole 64-bit register: after `sxt 6` (zero-extension) under
 (`((x ^ y) >> 3) & 0x1ff` returned: `setwd dbl = 1`, `xors`, `getfd`)
 [lcc 1.29.16 `-O3`, v3 and v5]. So it never reads a 32-bit result's
 upper half, which under `dbl = 0` arrives 4 cycles after the producer
-instead of 1 (timing.md, "Formats") and may be diagnostic. Where it
-doesn't use `getf` and could:
+instead of 1 (timing.md, "Formats") and may be diagnostic.
+
+**`getfz` in lcc's v5 code.** lcc emits `getfzd`/`getfzs` where the
+source shifts a field left by 1 to 7 bits, written as a shift, a
+multiply or an array index, and not where the same value is written as
+a mask with its zeros (below) [lcc 1.29.16 `-O3` for v5.8c2 and
+v6.2c3, lcc 1.31.05 for v5.8c2; `tools/isa-probes/foldisa_getfz.c`]:
+
+| Source | lcc's code (1.29.16, v5.8c2 and v6.2c3) |
+|---|---|
+| `((x >> 7) & 0xff) << 4`, its `* 16` form, `p[(i >> 7) & 0xff]` with 16-byte elements | `getfzd x, 0x8303` (offset 3, *len* 12, 4 zero bits); v3: `shrd x, 3` + `andd 0xff0` |
+| the same index with 2-, 4- or 8-byte elements | `getfzd` with 1–3 zero bits |
+| a bit-field shifted left; a signed field shifted left, `((x << 40) >> 50) << 3` | one `getfzd`; `getfzd x, 0x7447` (bit 12 set, v5's sign rule) |
+| a 32-bit field shifted left | one `getfzs` |
+| a 32-bit index | `sxt 6` (zero-extension) first, as for `getfd` |
+| a field at bit 0 shifted left: `(x & 0xfff) << 4`, `t[x & 0xff]`, `t[(unsigned char) x]` | mostly two operations: `andd` or `sxt 4`, then `shld` |
+| a byte that an inline function uses as a table index, as in glibc's `strcasecmp` for E2K (`ch1 = (a0) & 0xff; TOLOWER (ch1)`) | `getfzd a0, 0x42be` (offset 62, the field wrapping round to bit 0, 2 zero bits) |
+| `t[(unsigned char) (x >> 8)]` | `shrd`, `sxt 4` and `shld`; lcc 1.31.05: `getfzd x, 0x4286` |
+| a field shifted left by 8 or more: `((x >> 16) & 0xff) << 8` | `shrd` + `andd`: no single `getfz`, as the 3-bit count allows 7 zeros at most |
+
+So `getfz` sits where indexes are scaled. Lua 5.4.7 built so for
+v5.8c2 has 189, 174 of them in `luaV_execute` (mostly the
+instruction's 8-bit A, B and C fields times 16, a `TValue`: `getfzd i,
+0x8303`, A × 16, 83 times there and 87 in all; also A and B times 8 and
+the Bx and Ax fields times 4, 8 or 16) and four `getfzs i, 0xe3c9` in
+`lcode.c` that move the B field (bits 16–23) to A's place (bits 7–14),
+two of them with the descriptor in a register [lcc 1.29.16 `-O3`,
+v5.8c2]; lcc's v5 libraries have 1,192 (`lcc-usage.yaml`), among them
+libc's `_des_crypt` 384 (each with a register descriptor),
+`__strncasecmp_nonascii` 98 and `__strcasecmp_nonascii` 68 and
+libcrypt's `__init_des_r` 248, `setkey_r` 225 (169 of them `getfzs x,
+0x225f`, `(x & 0xff) << 1`) and `_ufc_mk_keytab_r` 27 [lcc: objdump of
+lcc 1.29.16's v5.8c2 sysroot] (found by the proof-of-concept back end,
+I53).
+
+Where lcc doesn't use `getf` and could:
 
 - **Low masks wider than 32 bits**: `x & 0xffffffffff` is `andd` with a
   64-bit literal (two literal syllables of the four an instruction
@@ -123,44 +157,14 @@ doesn't use `getf` and could:
   `x & 0xffffffff` is `sxt 6, x` with none.
 - **v5 masks with low zeros**: `(x >> 8) & 0xff0` is `shrd` + `andd`,
   `x & 0xfff0` an `andd` with a 32-bit literal; `getfzd` does each in
-  one operation with a 16-bit descriptor. lcc emits `getfz` where the
-  source shifts a field left by 1 to 7 bits, written as a shift, a
-  multiply or an array index: `((x >> 7) & 0xff) << 4`, its `* 16`
-  form and `p[(i >> 7) & 0xff]` with 16-byte elements are `getfzd x,
-  0x8303` (offset 3, *len* 12, 4 zero bits; its v3 code is `shrd x, 3`
-  + `andd 0xff0`), 2-, 4- and 8-byte elements take 1–3 zero bits, a
-  bit-field shifted left and a signed field shifted left (`((x << 40)
-  >> 50) << 3`: `getfzd x, 0x7447`, bit 12 set, v5's sign rule) are one
-  `getfzd` too, and a 32-bit field is one `getfzs`. A 32-bit index is
-  first zero-extended (`sxt 6`), as for `getfd`. The same values
-  written as masks with their zeros stay as written: `(x >> 3) & 0xff0`
-  (the first example's value) is `shrd` + `andd`, `x & 0x7f80` an
-  `andd` where `((x >> 7) & 0xff) << 7` is `getfzd x, 0xe3c0`, and `x &
-  0xfff0` an `andd` where `((x >> 4) & 0xfff) << 4` is `getfzd x,
-  0x8400`. A field at bit 0 shifted left mostly stays two operations
-  (`(x & 0xfff) << 4`, `t[x & 0xff]`, `t[(unsigned char) x]`: `andd` or
-  `sxt 4`, then `shld`), but a byte that an inline function uses as a
-  table index, as in glibc's `strcasecmp` for E2K (`ch1 = (a0) & 0xff;
-  TOLOWER (ch1)`), is `getfzd a0, 0x42be` (offset 62, the field wrapping
-  round to bit 0, 2 zero bits). lcc 1.31.05 also makes `t[(unsigned
-  char) (x >> 8)]` `getfzd x, 0x4286`, where 1.29.16 emits `shrd`, `sxt
-  4` and `shld`. A field shifted by 8 or more can't be one `getfz` (the
-  3-bit count allows 7 zeros at most): `((x >> 16) & 0xff) << 8` is
-  `shrd` + `andd` [lcc 1.29.16 `-O3` for v5.8c2 and v6.2c3, lcc 1.31.05
-  for v5.8c2; `tools/isa-probes/foldisa_getfz.c`]. So `getfz` sits where
-  indexes are scaled. Lua 5.4.7 built so for v5.8c2 has 189: 174 in
-  `luaV_execute`, mostly the instruction's 8-bit A, B and C fields times
-  16 (a `TValue`; `getfzd i, 0x8303`, A × 16, 87 times), also A and B
-  times 8 and the Bx and Ax fields times 4, 8 or 16; in `lcode.c` four
-  `getfzs i, 0xe3c9` move the B field (bits 16–23) to A's place (bits
-  7–14), two of them with the descriptor in a register [lcc 1.29.16
-  `-O3`, v5.8c2]. lcc's v5 libraries have 1,192 (`lcc-usage.yaml`): in
-  libc `_des_crypt` 384 (each with a register descriptor),
-  `__strncasecmp_nonascii` 98 and `__strcasecmp_nonascii` 68, in
-  libcrypt `__init_des_r` 248, `setkey_r` 225 (169 of them `getfzs x,
-  0x225f`, `(x & 0xff) << 1`) and `_ufc_mk_keytab_r` 27 [lcc: objdump of
-  lcc 1.29.16's v5.8c2 sysroot] (found by the proof-of-concept back end,
-  I53).
+  one operation with a 16-bit descriptor. lcc keeps such masks as
+  written even where it makes `getfz` of the same value written as a
+  shifted field (above): `(x >> 3) & 0xff0` is `shrd` + `andd` where
+  `((x >> 7) & 0xff) << 4` is `getfzd x, 0x8303`, `x & 0x7f80` an `andd`
+  where `((x >> 7) & 0xff) << 7` is `getfzd x, 0xe3c0`, and `x & 0xfff0`
+  an `andd` where `((x >> 4) & 0xfff) << 4` is `getfzd x, 0x8400` [lcc
+  1.29.16 `-O3` for v5.8c2 and v6.2c3, lcc 1.31.05 for v5.8c2;
+  `foldisa_getfz.c`].
 - **Variable-length masks**: `x & ((1UL << n) − 1)` is four operations
   (`sxt`, `shld`, `subd`, `andd`); `shld n, 6` + `getfd x, t` are two.
 - **Descriptors with bit 15 set as 32-bit literals**: `getf` ignores

@@ -54,7 +54,10 @@ named):
   and `qpswitchd` give packed results, as v3's `pandd` does: 1 cycle
   to packed and FP operations and to store data in their cluster (3
   from the other), 4 to integer operations and load addresses
-  (timing.md, "Elbrus-8C2").
+  (measured for `plog`; for `qplog`, `psrcd`, `qppackdl` and
+  `qpswitchd` only to `addd` and to store data in their cluster,
+  `qplog` also to `plog`, the rest inferred: timing.md,
+  "Elbrus-8C2").
 - **Unchanged**: the ABI, and every v3 latency, hazard and control
   delay (timing.md, "Elbrus-8C2") but two: `pfdivd` and `pfsqrttd`
   take 2 cycles more, and an FP operation's result reaches the single
@@ -80,8 +83,8 @@ In its v5 sysroot libraries (`lcc-usage.yaml`, disassembled):
   upper-case bytes, `qplog_0xf8` (a | (b & c)) ORs in 0x20 there.
 - **Multi-precision arithmetic** (`__mpn_add_n`, `__mpn_mul_1`,
   `strtod`): `addcd`/`addcd_c` and `subcd`/`subcd_c` chain the carry.
-- **Scaled indexes**: `getfzd`/`getfzs` (1,192 times: libc's
-  `_des_crypt` 384, `__strncasecmp_nonascii` 98 and
+- **Scaled indexes**: `getfzd`/`getfzs` (1,192 times, among them
+  libc's `_des_crypt` 384, `__strncasecmp_nonascii` 98 and
   `__strcasecmp_nonascii` 68, libcrypt's DES 500) for a field shifted
   left by 1–7 bits, mostly an index scaled to its element size
   (semantics.md, "Field extract").

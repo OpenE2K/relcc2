@@ -253,8 +253,11 @@ back: in 3,000,000 runs of such a loop (`De`: `lcnt` 62 + `ecnt` 2, no
 on the 4C and on the 8C2, and none with `ldmc` 1 (`Dem`) or with `ecnt`
 0 (`D`) [hw, two runs each]. So a `mova` that runs in an epilogue
 iteration needs `ldmc` = 1, with or without `loop_mode`. lcc's loops
-with `ecnt` > 0 (in NPB only FT's) have no array prefetch [lcc 1.29.16
-`-O3`, v3, v3.4c, v5.8c2, v6.2c3].
+with `ecnt` > 0 (in NPB FT's, and LU's `buts` and `blts`: "How lcc
+builds loops") have no array prefetch [lcc 1.29.16 `-O3`, v3, v3.4c,
+v5.8c2, v6.2c3; LU class W rechecked on 2026-10-16: on v3 and v3.4c
+`buts` and `blts` have no `mova` at all, on v5 and v6 none in those
+loops].
 
 **Array-prefetch depth (`ldovl`)** [hw: `tools/isa-probes/isaleft.c`
 `ovst`, `ovs`, `ovtouch`; 4C, 8C2, 2C3]. `ldovl` limits how far ahead
@@ -459,11 +462,12 @@ v3, v5, v6]:
   its rings, and on v3 (and in v5 and v6 `blts`) the function's own
   `%b` area lies inside the ring, so values crossing it are only in
   `%r`.
-- Inside such a loop a `%b[k]` above the ring is out of reach: MCST's
-  qemu raises the window-bounds exception for k ≥ 2(`rsz` + 1)
-  (`OpenE2K/qemu-e2k-mcst/target/e2k/reg-index.h:40`) [source], and gdb
-  shows it as `<unavailable>` ([registers.md](../abi/registers.md),
-  "How MCST's gdb reads them"). lcc's loops never name one.
+- MCST's qemu treats a `%b[k]` above the ring as out of reach inside
+  such a loop: it raises the window-bounds exception for
+  k ≥ 2(`rsz` + 1) (`OpenE2K/qemu-e2k-mcst/target/e2k/reg-index.h:40`)
+  [source], and gdb shows it as `<unavailable>` ([registers.md](../abi/registers.md),
+  "How MCST's gdb reads them"); the hardware is not checked ("Not
+  checked yet"). lcc's loops never name one.
 
 Loops without a trip count (`while`, early exits): `%lsr` without `vlc`
 (`0x20ff0000000000`: `ldovl` 255, `strmd` 1), the same `loop_mode`,

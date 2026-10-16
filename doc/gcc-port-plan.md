@@ -366,13 +366,13 @@ mainline libgcc this way, `docs/spec-poc-findings.md` A7, A10, A11):
   are in the same file, "Contexts and threads".
 - DWARF, for MCST's gdb (`spec/abi/registers.md`, "How MCST's gdb
   reads them"; `spec/abi/stack-and-unwinding.md`, "Debug information"):
-  - gdb ignores CFI and misreads `DW_OP_call_frame_cfa`, so
-    `DW_AT_frame_base` must be a register expression. The register is
-    valid only after the instruction that writes it, so start the frame
-    base's location list there.
-  - Make `TARGET_DEBUG_UNWIND_INFO` return `UI_NONE` (gdb has no CFI
-    unwinder). dwarf2out then builds `DW_AT_frame_base` as a location
-    list of register expressions from its own CFA tracking
+  - gdb ignores CFI (it has no CFI unwinder) and misreads
+    `DW_OP_call_frame_cfa`, so `DW_AT_frame_base` must be a register
+    expression. The register is valid only after the instruction that
+    writes it, so start the frame base's location list there. To get
+    that, make `TARGET_DEBUG_UNWIND_INFO` return `UI_NONE`: dwarf2out
+    then builds `DW_AT_frame_base` as a location list of register
+    expressions from its own CFA tracking
     (`convert_cfa_to_fb_loc_list`) instead of `DW_OP_call_frame_cfa`
     (`dwarf2out.cc:24422-24442`); the default hook answers `UI_DWARF2`
     whenever DWARF debug info is on (`targhooks.cc:2417-2433`). This
@@ -950,8 +950,8 @@ uses `%b[]`.
 
 **Registers above `%r63`** (P59, P92): a window has up to 112 pairs,
 but `%r` names reach 64 registers and the rest only through `%b[]`
-(registers.md; `%b[64..127]` have no DWARF number, registers.md, "lcc's
-big-window layout"). lcc uses them in big FP kernels: NPB LU's `jacld`
+(registers.md; its "How MCST's gdb reads them": `%b[64..127]` have no
+DWARF number). lcc uses them in big FP kernels: NPB LU's `jacld`
 and `jacu` run at `wsz = 0x60` with all of `%b[0..127]` as plain names
 (`setbn rsz = 0x3f, rbs = 0x20`, no `abn`), `rhs` at 0x60 too, but its
 small loops rotate (below), and `buts` at 0x5b on v6 and 0x60 on v5 (v3
@@ -2030,10 +2030,11 @@ program (`spec/abi/kernel-interface.md`, "Process entry").
 
 ### D13. Debug information for optimized code
 
-From `-O1` up lcc describes names and types only: no locations, and one
-line row per function (`spec/abi/stack-and-unwinding.md`, "Optimized
-code"). "As lcc does" gives nothing to follow here, and whatever GCC's
-var-tracking delivers is new to Elbrus users. The consumer is MCST's
+From `-O1` up lcc describes names, types, function ranges, frame bases
+and the globals' addresses only: no parameter or local location, and
+one line row per function (`spec/abi/stack-and-unwinding.md`,
+"Optimized code"). "As lcc does" gives nothing to follow here, and
+whatever GCC's var-tracking delivers is new to Elbrus users. The consumer is MCST's
 gdb 15.2. How it reads registers is in `spec/abi/registers.md` ("How
 MCST's gdb reads them"); how it uses line tables and blocks is in
 stack-and-unwinding.md ("How gdb places breakpoints"); the basic setup
@@ -2043,8 +2044,10 @@ The proof of concept measured each item below with GCC's guality tests
 on the 4C (gcc.dg, 3,042 checks of a variable at a breakpoint; its
 figures, recounted from its logs but not rerun). 1,337 checks passed
 before the items and 2,628 after (`-O2`: 128 and 317 of 372). lcc
-1.29.16 passes 896 (`-O2`: 32). The same tests on x86-64 with GCC 16
-and gdb 18 pass 3,220 of 3,507.
+1.29.16 passes 896 (`-O2`: 32). The proof of concept's own run of the
+same tests on x86-64 (GCC 16, gdb 18; not rerun here) passed 3,220 of
+3,507 checks; why x86-64 counts more checks than E2K's 3,042 was not
+recorded.
 
 Four of the items need changes to dwarf2out, outside `config/e2k`, which
 have no target hook today: the register-number checks, call-site
@@ -2298,9 +2301,11 @@ Written in `.md` with `define_automaton`, `define_cpu_unit`,
   cluster.
   These match guide 6.1. Where the guide is wrong or silent: packed
   integer ops take 1 cycle (multiply 2) to packed/FP consumers and 4 to
-  integer ones (v5's `plog`, `qplog`, `psrcd`, `qppackdl` and
-  `qpswitchd` too, while `getfz*` and `addcd`/`subcd` are integer; a
-  packed result is store data in 1, 3 from the other cluster);
+  integer ones (v5's `plog` too; `qplog`, `psrcd`, `qppackdl` and
+  `qpswitchd` likewise where measured, to `addd` and to store data in
+  their cluster; `getfz*` and `addcd`/`subcd` are integer; a packed
+  result is store data in 1, 3 from the other cluster: timing.md,
+  "Elbrus-8C2");
   conversions 4 (6 to integer), but an FP-side result
   read in another format than it was produced in costs 5 or 6 (a
   double read as a single, a single as a double: timing.md, "Formats";
@@ -3486,13 +3491,14 @@ check-free semi-speculative form works.
     the same rate at any alignment (timing.md, "Misaligned loads and
     stores"; apb.md), so peeling for alignment buys no issue slots; but
     a load crossing a 32-byte line has the L2's latency unless both
-    lines are already in L1 (the same list), and any load of a line
-    stored 1 to 4 cycles before is served by L2, aligned or not
-    (timing.md, "More store-to-load cases"). The PoC's PolyBench ran at
-    0.77 of its scalar speed (gemm 0.23) until it read misaligned
-    blocks through array prefetch too; that needs apb.md's rule that
-    nothing the loop stores is read by a later `mova` ("Stores into a
-    prefetched array").
+    lines are already in L1 (the same list), and a load of the stored
+    line 1 cycle after the store, or one that overlaps the stored bytes
+    without matching them up to 4 cycles after, is served by L2,
+    aligned or not (timing.md, "More store-to-load cases"). The PoC's
+    PolyBench ran at 0.77 of its scalar speed (gemm 0.23) until it read
+    misaligned blocks through array prefetch too; that needs apb.md's
+    rule that nothing the loop stores is read by a later `mova`
+    ("Stores into a prefetched array").
   - *Loops the vectorizer makes.* The scalar epilogue (also the path
     taken when the vector loop is skipped) gets the runtime
     profitability threshold − 1 as its upper bound when that exceeds
@@ -3742,8 +3748,9 @@ check-free semi-speculative form works.
   on L2 (NPB LU's blts, buts and jacld at 1.5 times their modelled
   cycles in the PoC on the 8C2). lcc runs them as `loop_mode` loops that
   don't overlap iterations (no `abn`; only induction and recurrence
-  values cross the back edge; `buts`'s smaller loops, the first of
-  about 160 operations, do rotate) with APB where it can: jacld and jacu in
+  values cross the back edge; one or two of `blts`'s and `buts`'s
+  smaller loops rotate, among them `buts`'s first, of about 160
+  operations) with APB where it can: jacld and jacu in
   kernels of 105–106 wide instructions with 20 `mova`s on v5 and v6
   (116 on v3), blts in 112 with 85 (129 on v3, with plain loads) (lcc
   `-O3`, NPB LU class W; their values in `%b[]`, D1, "Registers above
@@ -4233,10 +4240,10 @@ a few ways, a guide to what an `-march=elbrus-v5` mode needs first:
 - **`getfzd`/`getfzs`** (v5 field extract) in place of v3 sequences.
   lcc uses them for a field shifted left by 1–7 bits, mostly array
   indexes scaled to the element size (`p[(i >> 7) & 0xff]` with 16-byte
-  elements: `getfzd i, 0x8303` against v3's `shrd` + `andd`; 174 in
-  Lua's `luaV_execute`), and leaves the same value written as a mask
-  with its zeros (`(i >> 3) & 0xff0`) as `shrd` + `andd`
-  (spec/isa/semantics.md, "Field extract"). GCC makes no such
+  elements: `getfzd i, 0x8303` against v3's `shrd` + `andd`; Lua's
+  `luaV_execute` has 174 `getfz`, 83 of them this one), and leaves the
+  same value written as a mask with its zeros (`(i >> 3) & 0xff0`) as
+  `shrd` + `andd` (spec/isa/semantics.md, "Field extract"). GCC makes no such
   difference for 64-bit values: both reach the back end as a right
   shift and an `and` with 0xff0 [host GCC 16.2.1, x86-64, `-O2`: `shrq
   $3` + `andl $4080` for both], so a pattern for `(and (lshiftrt x k)
@@ -4253,8 +4260,9 @@ a few ways, a guide to what an `-march=elbrus-v5` mode needs first:
   latency class, and match a three-input logic pattern only where the
   result goes to packed, FP or store consumers (spec/isa/timing.md,
   "Elbrus-8C2"). lcc 1.29.16's v5 libraries use scalar `plog` only for
-  copysigns feeding `fmuld` (8, in libgcc's `__divdc3`:
-  spec/isa/lcc-usage.yaml); lcc 1.31.05 also chains it into the stores
+  copysigns feeding `fmuld` (8, in libgcc's `__divdc3` [lcc: objdump of
+  lcc 1.29.16's v5.8c2 `libgcc_s`; the count in
+  spec/isa/lcc-usage.yaml]); lcc 1.31.05 also chains it into the stores
   of a vectorized loop.
 
 Everything else (latencies, hazards, control transfer, the ABI) is the

@@ -189,7 +189,7 @@ operand. Cases seen:
 | v3: `mrng` > 24 + *g*, where *g* is the largest of 1, 2, 4 and 8 dividing both the area's start (base + `%aaind` + `disp`) and its step in bytes | **every** `mova` from the area is diagnostic, `ind` 0 included. An area stepping one element from an aligned start takes `mrng` ≤ 25 for bytes, 26 for halves, 28 for words and 32 for doublewords: 24 + the element size is always safe, since v3 already needs the start aligned to the element. A byte area stepping 8, 24 or 40 bytes from a doubleword boundary takes 32, stepping 2 bytes 26, stepping 4 or 12 bytes 28. A start 1, 2 or 4 bytes past a doubleword, set through the base, `%aaind` or `disp`, allows 25, 26 or 28. Backward areas (steps −1, −2, −8 bytes) behave as forward ones. The 8C2 and the 2C3 give data in all of these (`tools/isa-probes/pocchk3.c` `m_*`: 321 areas, each read by eight wide instructions of two movas, at `ind` 0 and at `ind` = `mrng` − size; the rule predicts every one on the 4C; the proof-of-concept back end's I48) |
 | v3: a `mova` at an `ind` that is not a multiple of its own size (`movah` at `ind` 1, `movaw` at 2, `movad` at 4, in areas of their own format) | diagnostic. The 8C2 and the 2C3 return the bytes there (`m_*`, the reads at `ind` = `mrng` − size). Narrow movas at offsets aligned to their own size inside a wider element work (`movab` at 3, `movah` at 6, `movaw` at 4 in a doubleword area: `apb.c` `narrow`) |
 | `mova` wider than `fmt` (`movad` on `fmt = 3`) | diagnostic (v3, v5, whatever `mrng`; v6 reads data whenever `ind` + size ≤ `mrng`, "v6") |
-| Base not aligned to `fmt` (v3, and v4 by lcc's changelog) | diagnostic. lcc's code that assumes the alignment (`-faligned`, `__builtin_assume_aligned`) dies with SIGILL `ILL_ILLOPN` at the first non-speculative use of what it read (a dot product of doubles 1 or 4 bytes off: the copy of the sum into the result register), where the same v3 code runs right on the 8C2 and the 2C3 [hw: `tools/isa-probes/pocchk6.c` `align`, lcc 1.29.16 and 1.31.05]. lcc proves the alignment, versions long loops (1.31) or needs `-faligned` ("How lcc uses APB") [lcc]; v5 allows unaligned 2, 4, 8 bytes and v6 16 bytes [guide, lcc-doc]. Whatever `UPSR.ac` says: with it set, misaligned areas give the same and never trap ([x86-support.md](x86-support.md); `isaleft.c` `ac_*`) |
+| Base not aligned to `fmt` (v3, and v4 by lcc's changelog) | diagnostic. lcc's code that assumes the alignment (`-faligned`, `__builtin_assume_aligned`) dies with SIGILL `ILL_ILLOPN` at the first non-speculative use of what it read (a dot product of doubles 1 or 4 bytes off: the copy of the sum into the result register), where the same v3 code runs right on the 8C2 and the 2C3 [hw: `tools/isa-probes/pocchk6.c` `align`, lcc 1.29.16 and 1.31.05]. lcc proves the alignment, versions long loops (1.31) or needs `-faligned` ("How lcc uses APB") [lcc]; v5 allows unaligned 2, 4, 8 bytes and v6 16 bytes [guide, lcc-doc] (the 8C2 reads `movaqp` from an `fmt` 5 area right at any offset 0–15: "128-bit movas (v5+)", Speed). Whatever `UPSR.ac` says: with it set, misaligned areas give the same and never trap ([x86-support.md](x86-support.md); `isaleft.c` `ac_*`) |
 | Two areas whose `abs`/`asz` overlap | diagnostic |
 | Element in an unmapped page | diagnostic; no signal. The prefetch running past the end of an array into an unmapped page is harmless (lcc's loops over arrays that end at a `PROT_NONE` page are correct) |
 
@@ -789,10 +789,11 @@ take 1 only when they straddle a 64-byte boundary [hw: `apbleft.c`
 element into all of `%qprM` and steps 16 bytes. A base misaligned by 8
 or by 4 bytes still returns the right (unaligned) 16 bytes, as v5's
 doubleword movas do with a misaligned base (the 4C gives a diagnostic
-value there). `be = 1` reverses all 16 bytes (the low half of the
-result is the swapped high doubleword). An area with `fmt` 7 makes the
-`movaqp` (any `mova`) SIGILL `ILL_ILLOPC` on the 8C2, the 2C3 and the
-4C (the `fmt` field, above).
+value there), and so does a base at any offset 0–15 on the 8C2 and the
+2C3 ("Speed", below). `be = 1` reverses all 16 bytes (the low half of
+the result is the swapped high doubleword). An area with `fmt` 7 makes
+the `movaqp` (any `mova`) SIGILL `ILL_ILLOPC` on the 8C2, the 2C3 and
+the 4C (the `fmt` field, above).
 
 On v5 `movaqp` gives data only from an `fmt` 5 area with `mrng` 16 or
 more (0 is 32): from `fmt` 1–4 it is diagnostic whatever `mrng`, as any
@@ -802,12 +803,13 @@ compiler sets `mrng` ≥ `ind` + 16, as lcc's 0 and 16 do [hw: `isaleft.c`
 `q_*`; 8C2, 2C3].
 
 **Speed** [hw: `tools/isa-probes/foldp93.c`, cases from
-`gen_foldp93.py`; the 8C2, and the 2C3 on core 0 and core 1, two runs
-each, 2026-10-16]: a misaligned base costs nothing. A one-instruction
-`loop_mode` loop reads one area (`asz` 5) from a base 0 to 15 bytes off
-a 16-byte boundary and sums what it reads (the sums are checked, right
-at every offset); cycles a step, best of five, for 512 steps from L1
-and 1 Mi steps from memory:
+`gen_foldp93.py`; the 8C2 and the 2C3, 2026-10-16: two runs on each
+machine at offsets 0, 4 and 8, and the 0–15 run twice on the 8C2 and
+once on each 2C3 core]: a misaligned base costs nothing. A
+one-instruction `loop_mode` loop reads one area (`asz` 5) from a base 0
+to 15 bytes off a 16-byte boundary and sums what it reads (the sums are
+checked, right at every offset); cycles a step, best of five, for 512
+steps from L1 and 1 Mi steps from memory:
 
 | A step | 8C2, L1 | 8C2, memory | 2C3, L1 | 2C3, memory |
 |---|---|---|---|---|

@@ -369,14 +369,21 @@ Counted loops (`for` with a known trip count):
 
 lcc writes `%lsr` = `vlc` | `ldovl` 255 | `strmd` (1 if the loop
 stores, else 0) | `lcnt` = n (`addd 0x20ff2000000000`, `insfd` of n),
-at least 4 cycles before the loop, and never uses `pcnt` or `ecnt` in
-the loops probed: it **peels the prologue** (the first stages run
+at least 4 cycles before the loop, and in most loops probed uses no
+`pcnt` or `ecnt`: it **peels the prologue** (the first stages run
 before the loop, with `,sm` operations) and leaves the epilogue to the
-last-iteration store rule and speculative loads. The kernel is one
+last-iteration store rule and speculative loads. Some of NPB LU's
+loops are counted with both: `buts`'s first loop writes `%lsr` =
+0xa2ff2200000000 | n (`ecnt` 2, `pcnt` 2, `strmd` 5) on v3, v5 and v6,
+and the v3 code's rotating loops in `buts` and `blts` 0xa8ff2800000000 |
+n (`ecnt` 8, `pcnt` 8, `strmd` 5); their DAM lock loads (`mas=0x4,sm`)
+and check loads (`mas=0x3`) run under `? %pcnt0` and higher [lcc
+1.29.16 `-O3`, NPB LU class W]. The kernel is one
 instruction or a few, each with `loop_mode`, the last with `alc`, `abn`
 (and `abp` when predicates rotate) and `ct %ctpr1 ? %NOT_LOOP_END`, the
 CTPR prepared before the loop. Rotating `%b[]` carry values between
-stages (`setbn rsz = 3..8`); stores often go through the array
+stages (`setbn rsz = 3..8` in the small kernels probed, up to 0x3b in
+NPB LU's `rhs`, below); stores often go through the array
 prefetch unit (`staad … %aad0[ %aasti1 ]` with `incr`). Example,
 `a[i] = b[i] * s` with `restrict`:
 
@@ -410,7 +417,7 @@ instructions plus their `nop` cycles]:
 | `blts` | 129 wide instructions, 239 cycles; 341 operations, 94 plain loads | 112 wide instructions, 253 cycles; 322 operations, 85 `movad` |
 
 `jacld` stores 100 elements an iteration (75 `staad`, 25 `std`, all in
-ALC2 and ALC5) with no frame access, re-reads all 20 `u` elements it
+ALC2 and ALC5) with no frame access in the kernel, re-reads all 20 `u` elements it
 needs through array prefetch rather than carrying the previous
 iteration's, and names 177 distinct registers in the v5 kernel (98
 `%b[]` under `setwd wsz = 0x60; setbn rsz = 0x3f, rbs = 0x20`, 63 `%r`,
@@ -419,6 +426,44 @@ wide instructions and 51 of its 66 computed values in its last 26, two
 a cycle. `blts` carries `v[i][j-1][k][0..4]` in registers; 5 of its 9
 `fdivd` are on that recurrence, which bounds its operations to 209
 cycles an iteration on all three versions (isa-score's `score.py`).
+
+Around these loops lcc keeps the function's own layout and puts what
+crosses a loop out of the loop's way [lcc 1.29.16 `-O3`, NPB LU class W,
+v3, v5, v6]:
+
+- The one-stage kernels (those above and `buts`'s main loop, 320–470
+  operations; `buts`'s first loop, about 160 operations in 61–65 wide
+  instructions, rotates) name `%b[]` like `%r`. `jacld` and `jacu` go up
+  to `%b[127]` under the function's `setbn rsz = 0x3f, rbs = 0x20, rcur
+  = 0`, set at entry. A value of the enclosing loop stays in a register
+  the kernel doesn't write (`%r3`–`%r5` are read inside as invariants).
+  On v5 and v6, where the kernel names 177 registers, `jacld` and
+  `jacu` store three such values to the frame before the loop (`,sm`
+  stores) and fill them after it (`mas = 0x4`). In `jacld` these are
+  the bound `iend`, the argument `k`, and a zero for an AAU descriptor.
+  v3's kernels name 172–173 registers (`jacld` 173, `jacu` 172) and
+  spill nothing.
+- `rhs` (`wsz = 0x60`, `setbn rsz = 0x3f, rbs = 0x20` between its
+  loops) has 31 small loops that rotate. Each is 3–11 wide instructions
+  with `abn`, under its own `setbn rbs = 0x20, rcur = 0`, with `rsz`
+  0xc–0x34 on v3, 0x26–0x3b on v5 and 0x1b–0x3b on v6. They name up to
+  `%b[119]` and read their invariants from 1–7 `%r`. A value that lives
+  across such a loop is in `%r` or in a `%b[k]` above that loop's ring
+  (k ≥ 2(`rsz` + 1)), never in the ring: `%b[97..127]` on v3 and
+  `%b[107..127]` on v5 and v6, across 27–30 of the 31 loops on v3,
+  15–17 on v5 and 11–13 on v6 (the ranges between a path-by-path
+  liveness bound and a straight-line one), the lowest of them at least
+  9 registers above the ring. After the loop's closing `setbn rsz =
+  0x3f`, `%b[k]` names the same `%dr(64 + k)` again. In `buts` and
+  `blts` the same holds: on v5 and v6 `buts`'s crossing values sit above
+  its rings, and on v3 (and in v5 and v6 `blts`) the function's own
+  `%b` area lies inside the ring, so values crossing it are only in
+  `%r`.
+- Inside such a loop a `%b[k]` above the ring is out of reach: MCST's
+  qemu raises the window-bounds exception for k ≥ 2(`rsz` + 1)
+  (`OpenE2K/qemu-e2k-mcst/target/e2k/reg-index.h:40`) [source], and gdb
+  shows it as `<unavailable>` ([registers.md](../abi/registers.md),
+  "How MCST's gdb reads them"). lcc's loops never name one.
 
 Loops without a trip count (`while`, early exits): `%lsr` without `vlc`
 (`0x20ff0000000000`: `ldovl` 255, `strmd` 1), the same `loop_mode`,
@@ -588,3 +633,7 @@ only. A C compiler still has no use for them.
 ## Not checked yet
 
 (v7 is out of scope: not in silicon.)
+
+- What the hardware does with a `%b[k]` beyond the ring (k ≥
+  2(`rsz` + 1)): MCST's qemu raises the window-bounds exception, and
+  lcc's loops never name one ("How lcc builds loops").

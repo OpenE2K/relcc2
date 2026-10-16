@@ -948,25 +948,93 @@ fixed instead broke vector results returned in `%b[0]` (pr123753,
 pr86363 at `-Os`). Under real pressure (a full window) allocation still
 uses `%b[]`.
 
-**Registers above `%r63`** (P59): a window has up to 112 pairs, but `%r`
-names reach 64 registers and the rest only through `%b[]`
-(registers.md). lcc uses them in big FP kernels: NPB LU's `jacld`,
-`jacu` and `rhs` run at `wsz = 0x60` with all of `%b[0..127]` as plain
-names (`setbn rsz = 0x3f, rbs = 0x20`, no `abn`), `buts` at 0x5b (lcc
-`-O3`, v3–v6). It keeps such a window also at calls that are few or go
-to small leaves (SP's `x_solve`, BT's `initialize`, LU's `error`):
-`setbn rsz = wsz − 0x21, rbs = 0x20, rcur = rsz − 3` puts `%b[0..7]` at
-the top four pairs and `%b[8 + i]` at `%dr(64 + i)` whatever the size,
-and the calls use `wbs = wsz − 4`, so those registers stay below the
-callee and survive calls like `%r`. Where hot calls go to big callees
-(LU's `ssor`) it keeps 0x22 and grows only around pipelined loops, whose
-rings (`rcur = 0`) take the bottom of that area. The proof of concept,
-with only `%r` and `%b[0..7]`, spilled (`jacld` 223 frame accesses,
-lcc's 0–6) and ran `jacld` 3.4 times as long as lcc on the 2C3; making
-`%b[8..63]` call-clobbered lost, as IRA's caller saves
+**Registers above `%r63`** (P59, P92): a window has up to 112 pairs,
+but `%r` names reach 64 registers and the rest only through `%b[]`
+(registers.md; `%b[64..127]` have no DWARF number, registers.md, "lcc's
+big-window layout"). lcc uses them in big FP kernels: NPB LU's `jacld`
+and `jacu` run at `wsz = 0x60` with all of `%b[0..127]` as plain names
+(`setbn rsz = 0x3f, rbs = 0x20`, no `abn`), `rhs` at 0x60 too, but its
+small loops rotate (below), and `buts` at 0x5b on v6 and 0x60 on v5 (v3
+runs it at 0x2c, its big one-stage loop included, and grows it to 0x3f
+and 0x5c only around its two rotating loops) (lcc `-O3`, NPB LU class
+W). It keeps such a window also at calls that are few or go to small
+leaves (SP's `x_solve`, BT's `initialize`, LU's `error`): `setbn rsz =
+wsz − 0x21, rbs = 0x20, rcur = rsz − 3` puts `%b[0..7]` at the top four
+pairs and `%b[8 + i]` at `%dr(64 + i)` whatever the size, and the calls
+use `wbs = wsz − 4`, so those registers stay below the callee and
+survive calls like `%r`. Where hot calls go to big callees (LU's
+`ssor`) it keeps a smaller window (0x24 on v3, 0x1f on v5, 0x22 on v6)
+and grows it only around pipelined loops, whose rings (`rcur = 0`)
+start at the outgoing pairs' base (`rbs = wsz − 4`), the window growing
+to exactly `rbs + rsz + 1`. The proof of concept, with only `%r` and
+`%b[0..7]`, spilled (`jacld` 223 frame accesses, lcc's 0–6) and, in an
+earlier version, ran `jacld` 3.4 times as long as lcc on the 2C3;
+making `%b[8..63]` call-clobbered lost, as IRA's caller saves
 (`-fcaller-saves`, on at `-O2`) put values crossing calls there and
 saved them at every call, and values crossing pipelined loops took the
 rings' names. (lcc's LU `rhs` spills too: 126–263 frame accesses.)
+
+How lcc keeps values and rings apart there (lcc 1.29.16 `-O3`, NPB LU
+class W, v3, v5, v6; spec/isa/loops.md, "How lcc builds loops"). The
+big loops (the main loops of `jacld`, `jacu`, `blts` and `buts`,
+about 320–470 operations) don't rotate: they name `%b[]` like `%r` under the
+function's own `setbn`. A value that crosses such a loop stays in a
+register the kernel doesn't write (`%r3`–`%r5` are read inside
+`jacld`'s and `jacu`'s kernels as invariants) or goes to the frame:
+`jacld` and `jacu` on v5 and v6 store three values of the enclosing
+loop before the kernel and fill them after it. A loop that rotates
+(`rhs`'s 31, of 3–11 wide instructions, and one or two in each of
+`blts` and `buts`, among them `buts`'s first loop, about 160 operations
+in 61–65 wide instructions) sets its own ring at the bottom of the area
+(`rbs = 0x20, rcur = 0`, `rsz` 0xc–0x3b by loop in `rhs`) and reads its
+invariants from `%r`. A value that crosses it sits in `%r` or in a
+`%b[k]` above that loop's ring, never in the ring.
+
+The proof of concept tried `%b[8..127]` as 120 hard registers,
+`%r64`–`%r183` under the layout above. Its pipeliner runs after
+allocation (7.7). The registers were allocatable, preserved across
+calls, and last in the allocation order, bottom up; the pipeliner
+copied a value there in and out of a loop as it does for `%b[0..7]`
+(gcc-claude, not committed; the proof of concept's figures, not
+rechecked):
+- *Alone*, IRA put values that live across pipelined loops there, low
+  in the area, so each ring had to lie above them. 27 of NPB LU's loops
+  no longer fitted a ring, `jacld`'s invariants found no free register,
+  and LU.W ran 50% slower.
+- *With all of `%b[]` clobbered on each innermost loop's entry and exit
+  edges for allocation* (the clobbers deleted after reload), these
+  registers held only values of one iteration and of code outside
+  loops, so a ring could overlap them. `jacld`'s kernel came to 107
+  wide instructions at II 105 (the proof of concept's figures) with 18
+  spill loads and no spill stores. Before, it had 121, with 61 loads
+  and 15 stores; lcc's v5 and v6 kernel has 105 and no frame access.
+  But other loops' invariants then filled `%r`. A pass after allocation
+  also still left a value in `%b[8]` ahead of a loop (a spill reload
+  before `jacu`'s loop in `ssor`, carried around it). The pipeliner
+  can't move that value without a free register, so the loop stayed
+  unpipelined. LU.W was 9–11% slower on the 8C2 and the 2C3 (9.63 →
+  10.68 s, 8.29 → 9.01 s), BT.W 6% slower on the 2C3, and SP, CG, EP,
+  FT, IS and MG the same.
+
+`jacld` is 15–21% of LU's gap to lcc. On the 4C (LU.W, `TICKS` sampled
+every 100,000 cycles, one run each), lcc takes 11,125 samples in
+`jacld`, 20,748 in `rhs` and 101,943 in `ssor` with `blts`, `buts` and
+`jacu` (134,000 in all, 19.0 s). gcc-claude v0.4 `-O2`, which inlines
+those three into `ssor`, takes 15,024, 25,900 and 118,555 (159,600,
+22.6 s): `jacld` 15% of the difference, `rhs` 20%, `ssor` with its
+callees 65%. The build the proof of concept measured earlier gave
+14,642, 25,804 and 111,945 (`jacld` a fifth).
+
+So with allocation before the pipeliner, the proof of concept found two
+ways to get these registers into pipelined code. One is loops that
+don't rotate: one stage, like lcc's big loops, with every value in a
+fixed register, using the `%b[]` names left free under the function's
+base, and no `setbn` of the loop's own. The other is pipelining before
+allocation. Keeping values that cross loops out of these registers
+during allocation (the clobbers) isn't enough. lcc's placement points
+to a third, untried: allocate the area from the top, so that values
+crossing loops sit high, and keep each ring below the lowest of them;
+that needs each loop's ring size where values are placed (inferred).
 
 ### D2. Window size
 
@@ -3521,7 +3589,8 @@ check-free semi-speculative form works.
   on L2 (NPB LU's blts, buts and jacld at 1.5 times their modelled
   cycles in the PoC on the 8C2). lcc runs them as `loop_mode` loops that
   don't overlap iterations (no `abn`; only induction and recurrence
-  values cross the back edge) with APB where it can: jacld and jacu in
+  values cross the back edge; `buts`'s smaller loops, the first of
+  about 160 operations, do rotate) with APB where it can: jacld and jacu in
   kernels of 105–106 wide instructions with 20 `mova`s on v5 and v6
   (116 on v3), blts in 112 with 85 (129 on v3, with plain loads) (lcc
   `-O3`, NPB LU class W; their values in `%b[]`, D1, "Registers above

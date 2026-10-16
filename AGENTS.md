@@ -640,8 +640,11 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   index; a quad store (`staaq`) counts as two for `strmd`, and splitting
   it is SIGILL; `mova` stops in epilogue iterations unless `ldmc`; `vlc` = 0 with an exit predicate makes a while loop; calls
   don't change `%lsr` but a callee's loop does (save it around them);
-  counts and rotation survive signals and page faults; lcc peels the
-  prologue and uses no `pcnt`/`ecnt` in counted loops. Array prefetch
+  counts and rotation survive signals and page faults; lcc mostly
+  peels the prologue and uses no `pcnt`/`ecnt` in counted loops (NPB
+  LU's `buts` does use them), runs big loops in one stage naming
+  `%b[0..127]` like `%r`, and keeps values crossing a rotating loop
+  above its ring. Array prefetch
   (`spec/isa/apb.md`, hw): the program format, what a `mova` reads
   (`base + AAIND + disp + step × n + ind`, zero-extended, diagnostic
   instead of a fault), latency 5, and the correctness rules: a call, a

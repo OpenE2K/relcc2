@@ -2006,7 +2006,10 @@ Written in `.md` with `define_automaton`, `define_cpu_unit`,
   cluster.
   These match guide 6.1. Where the guide is wrong or silent: packed
   integer ops take 1 cycle (multiply 2) to packed/FP consumers and 4 to
-  integer ones; conversions 4 (6 to integer), but an FP-side result
+  integer ones (v5's `plog`, `qplog`, `psrcd`, `qppackdl` and
+  `qpswitchd` too, while `getfz*` and `addcd`/`subcd` are integer; a
+  packed result is store data in 1, 3 from the other cluster);
+  conversions 4 (6 to integer), but an FP-side result
   read in another format than it was produced in costs 5 or 6 (a
   double read as a single, a single as a double: timing.md, "Formats";
   a `define_bypass` per format pair); FP compare → predicated op
@@ -2230,7 +2233,9 @@ channel N at t − 2 a cycle late, when its consumer is an integer
 operation or an FP one in the other cluster: with the consumer at the
 producer's latency, a 4-cycle stall step. FP-side here means FP
 arithmetic, integer multiplies and the multiply flag forms (`smulx_fw`,
-`umulx_fw`). The delay holds whatever channel N issued at t − 1
+`umulx_fw`); not packed integer results (`pandd`, `plog`, `qplog`),
+which reach an integer consumer in 4 but suffer no conflict (timing.md,
+"Write-back conflicts"). The delay holds whatever channel N issued at t − 1
 (measured on all three machines with `damwb.c`), so keep, per channel,
 the FP-side operations of the last two cycles. Keeping only the
 channel's latest one missed the conflict in the proof of concept: with
@@ -3765,6 +3770,31 @@ a few ways, a guide to what an `-march=elbrus-v5` mode needs first:
   two-instruction lock loop; GCC's fallback for it is a compare-exchange
   loop (A29).
 - **`getfzd`/`getfzs`** (v5 field extract) in place of v3 sequences.
+  lcc uses them for a field shifted left by 1–7 bits, mostly array
+  indexes scaled to the element size (`p[(i >> 7) & 0xff]` with 16-byte
+  elements: `getfzd i, 0x8303` against v3's `shrd` + `andd`; 174 in
+  Lua's `luaV_execute`), and leaves the same value written as a mask
+  with its zeros (`(i >> 3) & 0xff0`) as `shrd` + `andd`
+  (spec/isa/semantics.md, "Field extract"). GCC makes no such
+  difference for 64-bit values: both reach the back end as a right
+  shift and an `and` with 0xff0 [host GCC 16.2.1, x86-64, `-O2`: `shrq
+  $3` + `andl $4080` for both], so a pattern for `(and (lshiftrt x k)
+  m)`, m contiguous with 1–7 low zeros, gives `getfz` for both. combine
+  writes `(x & 0xfff) << 4` as `(and (ashift x 4) 0xfff0)` [x86-64:
+  `salq $4` + `movzwl`], a `getfz` whose offset is the width minus the
+  shift (lcc's `getfzd x, 0x42be` is one); a 32-bit index arrives
+  shifted, zero-extended and shifted again (`shrl $7`, `movzbl`, `salq
+  $4`) and needs a pattern of its own. A descriptor with bit 15 set
+  fits a sign-extended 16-bit literal (semantics.md). `getfz`, `addcd`
+  and `subcd` are integer operations (1 cycle to anything in their
+  cluster, 2 to an integer operation in the other); `plog` is packed: 4
+  cycles to an integer consumer. So give `plog`/`qplog` the packed
+  latency class, and match a three-input logic pattern only where the
+  result goes to packed, FP or store consumers (spec/isa/timing.md,
+  "Elbrus-8C2"). lcc 1.29.16's v5 libraries use scalar `plog` only for
+  copysigns feeding `fmuld` (8, in libgcc's `__divdc3`:
+  spec/isa/lcc-usage.yaml); lcc 1.31.05 also chains it into the stores
+  of a vectorized loop.
 
 Everything else (latencies, hazards, control transfer, the ABI) is the
 same as v3 on the 8C2.

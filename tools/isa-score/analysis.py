@@ -575,6 +575,7 @@ def achieved(block, seed=None, iterations=1, trace=None, taken=None,
                     if key[0] != "lp":
                         avail[key] = (op, op.chan, issue)
                 if model.CLASSES.get(op.cls, {}).get("fpside") \
+                        and op.cls not in model.NO_WB_CONFLICT \
                         and op.unit == "alc":
                     fpside.append((op, op.chan, issue, st))
             last_store = [x for x in last_store if x[3] >=

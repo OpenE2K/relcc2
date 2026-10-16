@@ -467,6 +467,7 @@ back end, I44):
 | x86 flag form (`adds_fw`), `add_addd` (`pocchk4.c` `lat`); `and_addd`, `shl_addd`, `add_xord` (`timeleft.c` `lat`) | 1 (not the 2 an integer op waits) | 3 |
 | `faddd`, `fmuld`; `muld`, `smulx` (`timeleft.c` `lat`) | 4 (not the 6 an integer op waits) | 6 |
 | `smulx_fw`, `umulx_fw` (`pocchk4.c`, `timeleft.c` `lat`) | 4 (not the 6 an integer op waits) | 6 |
+| packed integer: `pandd` (4C, 8C2, 2C3), `plog`, `qplog`, `psrcd`, `qppackdl`, `qpswitchd` (8C2, 2C3) (`foldisa.c` `lat`) | 1 (not the 4 an integer op waits) | 3 (`pandd` on the 4C, `plog` on the 8C2 and 2C3) |
 | `fdivd` (ALC5) | — | 16 (14 + 2) |
 
 (`timeleft.c` `lat` rows: gap method, stores in ALC2 and ALC5,
@@ -581,6 +582,16 @@ with a `cmpesb,0`, a `cctopo,0` or another `smulx_fw,0` there. `muld,0`
 → `adds,1` is likewise 7 or 6. `adds_fw` and the other flag forms are
 integer-side and suffer no conflict [hw: `tools/isa-probes/pocchk4.c`
 `wb`; 4C, 8C2, 2C3; found by the proof-of-concept back end, I50].
+
+Packed integer results don't count as FP-side here, although an
+integer operation gets them 4 cycles after the producer, as late as an
+FP compare's. `pandd,0`, `plog_0x80,0` and `qplog_0x80,0` → `addd,1`
+take 4 cycles with an `addd,0` or `ldd,0` 2 cycles after the producer,
+as with nothing there; the control `muld,0` → `addd,1` takes 7 with
+either and 6 without [hw: `tools/isa-probes/foldisa.c` `wb`; 8C2, 2C3;
+`pandd` and `muld` also on the 4C; found by the proof-of-concept back
+end, I54]. `tools/isa-score` gives packed results no conflict, and
+`plog`/`qplog` the packed latencies.
 
 The same conflict delays an FP-side result going to an **FP consumer in
 the other cluster** (`fmuld,0` → `faddd,3`: 6 cycles, 7 with an
@@ -1575,7 +1586,7 @@ What v5 adds or changes:
 
   | Latency | Operations |
   |---|---|
-  | 1 | packed integer add/sub (also saturating), logic, shifts (`qpsll*`, `qpsrl*`, `qpsra*`, `qpsrc*`), compares (`qpcmp*`), min/max, averages, signs, horizontal adds (`qphadd*`, `qphsub*`), packs (`qpack*`), shuffles and permutes (`qpshufb`, `qppermb`, `qpmerge`, `qpswitch*`), `qpmsk2sgnb`, `qppackdl`, `plog`/`qplog`, `addcd`/`subcd` (with carry), `getfz*`, `psrc*`; `puttagqp` (`tools/isa-probes/tagx.c`, 8C2 and 2C3: 1 to `qpand`, 4 to `addd` reading its low half, as `qpaddd`) |
+  | 1 | packed integer add/sub (also saturating), logic, shifts (`qpsll*`, `qpsrl*`, `qpsra*`, `qpsrc*`), compares (`qpcmp*`), min/max, averages, signs, horizontal adds (`qphadd*`, `qphsub*`), packs (`qpack*`), shuffles and permutes (`qpshufb`, `qppermb`, `qpmerge`, `qpswitch*`), `qpmsk2sgnb`, `qppackdl`, `plog`/`qplog`, `psrc*` (packed results: 4 to an integer consumer, below); the scalar `addcd`/`subcd` (with carry) and `getfz*` (integer: 1 to any consumer in their cluster, below); `puttagqp` (`tools/isa-probes/tagx.c`, 8C2 and 2C3: 1 to `qpand`, 4 to `addd` reading its low half, as `qpaddd`) |
   | 2 | packed integer multiplies (`qpmul*`, `qpmadd*`, `qpsadbw`, `qpmpsadbh`, `pmullw`), packed FP compares (`qpfcmp*`), `qpfmax*`/`qpfmin*` |
   | 4 | packed FP add, subtract, multiply, horizontal and add-subtract forms, round to integral (`qpfdtoifd`, `qpfstoifs`), `qphminposuh`, `qpsgn2mskb` (to an integer register and back) |
   | 5 | packed conversions (`qpfdtoid`, `qpfstoid`, `qpfstofd`, `qpfstois`, `qpidtofd`, `qpistofd`, `qpistofs`, and the `tr` forms), chained into themselves; 4 to a consumer of their result's format (Formats) |
@@ -1584,6 +1595,30 @@ What v5 adds or changes:
 
   So 128-bit operations take the latency of their 64-bit counterparts,
   and FP min/max is 2, not 4, on v3 too (table above).
+- **Integer and packed results** [hw: `tools/isa-probes/foldisa.c`
+  `lat`, the gap method of `pocchk4.c`; 8C2 and 2C3 alike, the `pandd`
+  row also on the 4C (`foldisa-v3.s`); found by the proof-of-concept
+  back end, I54]. The chains above feed each operation into itself, so
+  their 1 doesn't say how soon other operations get the result
+  (producers in ALC0, 1, 3 or 4, consumers in either cluster; "—" not
+  measured):
+
+  | Producer | Integer op (`addd`, `cmpedb`, `getfzd`): same cluster; other | Load address, same cluster | Store data: same cluster; other | FP op (`faddd`) or `plog`, same cluster |
+  |---|---|---|---|---|
+  | `getfzd`, `addcd` (as `getfd`, `addd`) | 1; 2 | 1 | 1; 1 | 1 |
+  | `getfzs` | 1; 2 (a 64-bit reader under `dbl = 0`: 4, "Formats") | — | — | — |
+  | `addcd_c`, `subcd` | 1; 2 | — | — | — |
+  | `plog_*` | 4; 4 | 4 | 1; 3 | 1 (a `plog` in the other cluster: 4) |
+  | `qplog_*` (`addd` reading its low half) | 4; 4 | — | 1; — | 1 (`plog`) |
+  | `pandd` | 4; 4 | 4 (4C) | 1; 3 (4C) | 1 (`faddd` on the 4C, `plog` on the 8C2 and 2C3) |
+  | `psrcd`, `qppackdl`, `qpswitchd` | 4; — | — | 1; — | — |
+
+  So `getfz*` and `addcd`/`subcd` are integer operations, and `plog`,
+  `qplog` and the other packed operations measured are packed ones,
+  like v3's `pandd` ("Every v3 operation"). In integer code `plog`
+  saves operations but not time: an `addd` gets `(a & b) | c` from
+  `andd` + `ord` in 2 cycles and from one `plog_0xea` in 4. Packed
+  results suffer no write-back conflict ("Write-back conflicts").
 - **128-bit operations are fully pipelined** in every channel they are
   allowed (`v5tp_*` kernels: one per channel per cycle): packed integer
   add `qpaddd` in ALC0/3; `qpmullh`, `qpsadbw`, `addcd` in ALC1/4;

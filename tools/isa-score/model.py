@@ -142,6 +142,12 @@ def bap_to_mova(op):
 # channel PORT_DISTANCE cycles after it.
 PORT_DISTANCE = 2
 INT_SIDE = {"int", "cint", "getsp", "load", "ldqp", "aauld", "rr", "rrfp"}
+# FP-side classes whose results suffer no write-back conflict: packed
+# integer results (pandd on the 4C, 8C2 and 2C3, plog and qplog on the
+# 8C2 and 2C3 measured; the rest of the class inferred) reach an integer
+# operation in 4 cycles with or without an integer operation 2 cycles
+# after them in their channel (timing.md, "Write-back conflicts").
+NO_WB_CONFLICT = {"packed"}
 
 # timing.md, "Formats": under setwd dbl = 0 a 32-bit integer operation
 # writes only the low half of its register, and an operation that reads
@@ -311,8 +317,10 @@ def classify(name):
         return "int"      # 1 to an integer op (timing.md), not packed
     if n.startswith("ldaa"):
         return "aauld"
-    if re.match(r"(q?plog_|addcd|subcd)", n):
-        return "int"      # one cycle (v5, measured on the 8C2)
+    if re.match(r"(addcd|subcd)", n):
+        return "int"      # 1 to any consumer in its cluster (timing.md)
+    if re.match(r"q?plog_", n):
+        return "packed"   # 1 to packed, FP, store data; 4 to an integer op
     if n == "qpmpsadbh":
         return "pmul"
     if n.startswith("mova"):

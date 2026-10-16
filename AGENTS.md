@@ -312,7 +312,11 @@ tools/isa-probes/   operation semantics probe (semantics.c; gen_semantics.py
                     write-back conflicts as written; damlist.c,
                     gen_damlist.py: I45's list reversal, store-then-load
                     loops; pocchk6.c, gen_pocchk6.py: array prefetch
-                    against %lsr states, lcc's APB alignment),
+                    against %lsr states, lcc's APB alignment;
+                    foldisa.c, gen_foldisa.py: where v5's getfz, addcd
+                    and plog results go, packed results and write-back
+                    conflicts; foldisa_getfz.c, read with -S: the shapes
+                    lcc turns into getfz),
                     the APB leftovers (apbleft.c, gen_apbleft.py: narrow
                     and misaligned AAU accesses and their costs, monitor
                     counts of APB's slowdowns), every other monitor
@@ -668,7 +672,9 @@ python3 tools/isa-score/validate/validate.py --remote claude@ringo.lan \
   16 bytes a cycle (also v3); `%aaind` and `%aaincr` are 64-bit, `fmt`
   7 is SIGILL; all 195 v5 ALU operations have measured latencies (1, 2,
   4, 5, 6 or 8 by class, as their 64-bit counterparts) and are fully
-  pipelined; FP min/max is 2 cycles (also v3); a 64-bit FP-side result
+  pipelined (`getfz*` and `addcd` give integer results, `plog` and
+  `qplog` packed ones: 4 cycles to an integer consumer and no write-back
+  conflict, as v3's `pandd`); FP min/max is 2 cycles (also v3); a 64-bit FP-side result
   feeding a `qp` operation pays the crossing cost; L2 11, L3 about 32,
   memory about 180 cycles. isa-score models these
   and is within 2% on the 8C2's kernels and 1.00 on CoreMark

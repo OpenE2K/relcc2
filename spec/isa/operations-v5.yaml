@@ -51,6 +51,13 @@ header: |
     `pshufb` applies mask bits 4–6 (invert, bit-reverse, sign) that v3
     ignores (semantics.md, "Packed operations of v3"); `sdivd` every 2
     cycles no longer conflicts in the divider.
+  - **Integer or packed results**: `getfz*` and `addcd`/`subcd` are
+    integer operations (1 cycle to any consumer in their cluster, 2 to
+    an integer one in the other). `plog`, `qplog`, `psrcd`, `qppackdl`
+    and `qpswitchd` give packed results, as v3's `pandd` does: 1 cycle
+    to packed and FP operations and to store data in their cluster (3
+    from the other), 4 to integer operations and load addresses
+    (timing.md, "Elbrus-8C2").
   - **Unchanged**: the ABI, and every v3 latency, hazard and control
     delay (timing.md, "Elbrus-8C2") but two: `pfdivd` and `pfsqrttd`
     take 2 cycles more, and an FP operation's result reaches the single
@@ -76,6 +83,11 @@ header: |
     upper-case bytes, `qplog_0xf8` (a | (b & c)) ORs in 0x20 there.
   - **Multi-precision arithmetic** (`__mpn_add_n`, `__mpn_mul_1`,
     `strtod`): `addcd`/`addcd_c` and `subcd`/`subcd_c` chain the carry.
+  - **Scaled indexes**: `getfzd`/`getfzs` (1,192 times: libc's
+    `_des_crypt` 384, `__strncasecmp_nonascii` 98 and
+    `__strcasecmp_nonascii` 68, libcrypt's DES 500) for a field shifted
+    left by 1–7 bits, mostly an index scaled to its element size
+    (semantics.md, "Field extract").
   - **libm**: `fscaled`, `fscales`, `fxscalesx` implement `ldexp`,
     `scalbn` and friends.
 
@@ -130,12 +142,12 @@ groups:
 - title: Scalar operations
   rules:
   - ops: addcd subcd addcd_c subcd_c
-    does: "64-bit add or subtract with carry or borrow in from c bit 0: `addcd` gives the sum, `addcd_c` the carry out (0 or 1), `subcd` and `subcd_c` likewise (community qemu `tcg_gen_add2`). ALC1/4."
+    does: "64-bit add or subtract with carry or borrow in from c bit 0: `addcd` gives the sum, `addcd_c` the carry out (0 or 1), `subcd` and `subcd_c` likewise (community qemu `tcg_gen_add2`). ALC1/4. An integer result: 1 cycle to any consumer in its cluster, 2 to an integer operation in the other (timing.md, \"Elbrus-8C2\")."
     use: "Multi-word arithmetic: `__int128`, `addti3`/`subti3`, `uaddv`, bignums (lcc: `__mpn_*`)."
     see: semantics.md, "v5 operations"
   - ops: getfz{s,d}
     does: "`getf` (v5 sign rule), then clear the result's low BYTE bits (descriptor bits 13–15): a contiguous mask with up to 7 low zeros in one operation."
-    use: "`(x >> k) & m` and `x & m` for masks like 0xff0 (lcc: `des_crypt`, `strcasecmp_nonascii`)."
+    use: "`(x >> k) & m` and `x & m` for contiguous masks with 1–7 low zeros (0xff0, 0xfff0). lcc uses it mostly for a field shifted left by 1–7 bits afterwards (a scaled array index, a field moved up, a bit-field shifted left), not for a mask written with its zeros (lcc: `_des_crypt`, `strcasecmp_nonascii`, libcrypt's DES; Lua's `luaV_execute` 174). An integer result, as `getfd`: 1 cycle to anything in its cluster, 2 to an integer operation in the other (timing.md, \"Elbrus-8C2\")."
     see: semantics.md, "Field extract"
   - ops: fscale{s,d}
     does: "a × 2^b, b a signed 32-bit integer, rounded once with IEEE flags. v4+; ALC1/4."
@@ -155,8 +167,8 @@ groups:
     does: Rotate every 32-bit (`w`) or 64-bit (`d`) lane right by the count b.
     use: "`rotrv2si3`; lcc vectorizes `(x >> k) | (x << (32 − k))` with it."
   - match: 'plog_0x[0-9a-f]{2}'
-    does: "Any three-input bitwise function of a, b, c: result bit = bit ((a << 2) | (b << 1) | c) of the table in the name (`0x80` a & b & c, `0x96` a ^ b ^ c, `0xf8` a | (b & c), `0xca` a ? b : c, `0xe8` majority). 1 cycle."
-    use: "Any expression of three operands' bits in one operation (`ternlog`): selects, majority, a | (b & c)."
+    does: "Any three-input bitwise function of a, b, c: result bit = bit ((a << 2) | (b << 1) | c) of the table in the name (`0x80` a & b & c, `0x96` a ^ b ^ c, `0xf8` a | (b & c), `0xca` a ? b : c, `0xe8` majority). A packed result: 1 cycle to another `plog`, a packed or FP operation or store data in its cluster; 4 to an integer operation, a compare or a load address, and to a `plog` in the other cluster; 3 to store data in the other cluster (timing.md, \"Elbrus-8C2\")."
+    use: "Any expression of three operands' bits in one operation (`ternlog`) whose result goes to packed or FP operations, more `plog`s or memory: selects, majority, a | (b & c), copysign. In integer code it saves one or two operations but costs 4 cycles where two or three logic operations cost 2–3. lcc 1.29.16 keeps scalar majority, select and three-way xor as `andd`/`andnd`/`ord`/`xord`; its v5 libraries' 8 are `plog_0xea` (c | (a & b)) copysigns feeding `fmuld` in libgcc's `__divdc3`, and lcc 1.31.05 chains `plog_0xa8` and `plog_0xea` into the stores of a vectorized loop's 64-bit part (`tools/isa-probes/foldisa_getfz.c`)."
 
 - title: 128-bit integer operations
   intro: >
@@ -185,7 +197,7 @@ groups:
     does: 128-bit and, a & ~b, or, xor.
     use: "`and`, `ior`, `xor<mode>3` on 128-bit modes, `one_cmpl` as `qpxor` with all ones, `(and (not b) a)` as `qpandn a, b` (so `~a & b`, x86 `andnot (a, b)`, is `qpandn b, a`). lcc's v5 libraries: `qpor` 425 (string functions merging 16-byte blocks: `strlen`, `strcat`, `strncpy`, `memccpy`), `qpand` 45 (`strcasecmp`, libatomic's 16-byte routines); its vectorizer uses all four under `-faligned` (`qpor`, `qpxor` in byte loops at `-O3` too), and for GNU vector `a & ~b` and `~a` lcc 1.29 works on the 64-bit halves with `xornd`."
   - match: 'qplog_0x[0-9a-f]{2}'
-    does: "`plog` on 128 bits (the table in the name). lcc's `strcasecmp` folds case with `qplog_0xf8` = a | (b & c)."
+    does: "`plog` on 128 bits (the table in the name). lcc's `strcasecmp` folds case with `qplog_0xf8` = a | (b & c). Packed, as `plog`: 4 cycles to an `addd` reading its low half."
   - ops: qpsll{h,w,d} qpsrl{h,w,d} qpsra{h,w} qpsrc{w,d}
     does: "Every lane shifted (or rotated: `qpsrc`) by the 64-bit count b; counts ≥ the lane width give 0 (the sign for `qpsra*`). MCST's qemu takes `qpslld`/`qpsrld` counts modulo 64; the hardware doesn't."
     use: "`ashl`, `lshr`, `ashr<mode>3` with one count for all lanes in a 64-bit register (`V8HI`, `V4SI`; `V2DI` for the logical ones), `rotr` `qpsrcw`, `qpsrcd`. lcc's vectorizer emits them under `-faligned` (rotates included) for a constant or loop-invariant count, and `qpsllh` with a byte mask (`qpand`, `qplog`) for `V16QI`; `V2DI` arithmetic shifts (no `qpsrad` before v6) and per-lane counts (`vashl`) have no operation, and lcc keeps them scalar. Mask a count held in a vector register to the lane, as for the 64-bit shifts (doc/gcc-port-plan.md, D10). Its v5 libraries: 48 (`_ufc_setup_salt_r`)."

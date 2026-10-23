@@ -161,60 +161,62 @@ measured 0.54% of xz -6's cycles in `BUB_B_RF_SPILLFILL` on the 8C2
   inferred), and about once in 1,200 signals otherwise; on the 8C2 and
   2C3 every handler that runs while it is held does. The 128-bit high
   half is lost too: with `nfx = 1` it read 0 after a signal handler had
-  run while the function held it (3 of 3 runs on each machine), and 0,
-  stale data or, by chance, the right value after a call 1,000 levels
-  deep; with `nfx = 0` it survived both (hw:
-  `tools/isa-probes/isaleft.c` `qspill`, 8C2 and 2C3; which machine
-  gave the stale and the right values was not recorded, and the 8C2
-  gave 0 every time below). On the 8C2 every high half of an `nfx = 1`
+  run while the function held it (3 of 3 runs on each machine); after
+  a call 1,000 levels deep it read, on the 8C2, a copy of the
+  register's own low half once and 0 twice, and on the 2C3 0 in the
+  process's first deep call and the right value after, as its 16-bit
+  part does (the table); with `nfx = 0` it survived both (hw:
+  `tools/isa-probes/isaleft.c` `qspill`, 8C2 and 2C3, three runs each).
+  In `foldi55.c`'s runs on the 8C2 every high half of an `nfx = 1`
   window, written as 128 bits, as 64 or not at all, read 0 with tags 0
   after a 1000-deep call or a SIGSEGV handler. The 80-bit part in the
   table was lost to timer interrupts in holds without a deep call (4 of
-  4,000 on the 8C2); the 128-bit high half was lost to interrupts and
-  context switches only after a deep call had returned (the frames
-  below the function no longer in the register file; inferred): with a
-  process pinned to the same CPU waking every 50 µs in 2,983–2,999 of
-  3,000 holds of 0.4 ms, with timer interrupts alone in about 300 of
-  3,000, and across a blocking `nanosleep`. These left 0, tags 0, or now
-  and then (0–39 holds of 3,000 a case; 2 `nanosleep` runs of 3) a copy
-  of the register's own low half with its tags, where the deep call or
-  the handler alone always left 0, tags 0. With the caller's frames
+  4,000 on the 8C2, also time-sliced there); the 128-bit high half was
+  lost to interrupts and context switches only after a deep call had
+  returned (the frames below the function no longer in the register
+  file; inferred): with a process pinned to the same CPU waking every
+  50 µs in 2,983–2,999 of 3,000 holds of 0.4 ms, with timer interrupts
+  alone in about 300 of 3,000, and across a blocking `nanosleep`. These
+  left 0, tags 0, or now and then (0–39 holds of 3,000 a case; 2
+  `nanosleep` runs of 3) a copy of the register's own low half with its
+  tags, where the deep call or the handler alone left 0, tags 0 in these
+  runs (qspill's one copy on the 8C2 aside). With the caller's frames
   still resident no hold lost it (about 10,500 switches), nor did
   `getpid` or `sched_yield`; with `nfx = 0` nothing was lost [hw:
-  `tools/abi/probes/foldi55.c` `spill`, `sig`, `sys`, `ctx`; 8C2]. So any
-  extended value in a window register needs `nfx = 0` in the function
-  that owns the window, however briefly it is held (between a `movif`
-  and its `movfi`) and whether or not the function calls: a signal, and
-  now and then an interrupt, can come anywhere (the proof-of-concept
-  back end's A26). lcc clears it in every function that computes with
-  an 80-bit value (`movif`, `fdtofx`, `istofx`, `fx*` arithmetic,
-  conversions and compares), leaves included and also when the value
-  sits only in `%g16`/`%g17`. A function that only moves a `long double`
-  as its two 64-bit parts (arguments returned, stored or passed on, call
-  results returned, copies through memory) holds no extended value and
-  gets `nfx = 1` on its own, but from `-O1` on it may inherit `nfx = 0`
-  from the function before it in the file when that one had it [lcc
-  1.29.16 `-O3`, v3, v5.8c2, v6.2c3, and 1.31.05:
+  `tools/abi/probes/foldi55.c` `spill`, `sig`, `sys`, `ctx`; 8C2]. So
+  any extended value in a window register needs `nfx = 0` in the
+  function that owns the window, however briefly it is held (between a
+  `movif` and its `movfi`) and whether or not the function calls: a
+  signal, and now and then an interrupt, can come anywhere (the
+  proof-of-concept back end's A26). lcc clears it in every function that
+  computes with an 80-bit value (`movif`, `fdtofx`, `istofx`, `fx*`
+  arithmetic, conversions and compares), leaves included and also when
+  the value sits only in `%g16`/`%g17`. A function that only moves a
+  `long double` as its two 64-bit parts (arguments returned, stored or
+  passed on, call results returned, copies through memory) holds no
+  extended value and gets `nfx = 1` on its own, but from `-O1` on it may
+  inherit `nfx = 0` from the function before it in the file when that
+  one had it [lcc 1.29.16 `-O3`, v3, v5.8c2, v6.2c3, and 1.31.05:
   `tools/abi/probes/pocabi2_nfx.c`]. Which functions inherit it isn't
   about `long double`: one that only returns a constant or one loaded
-  value, stores an argument (`*p = x`) or passes a loaded value to a call
-  inherits `nfx = 0`, whatever its types, and passes it on to the next,
-  while one that computes (an `int` `x + 3`, the sum of two loads),
-  copies through memory (`*a = *b`, a `long double` too at `-O3`; at
-  `-O1` and `-O2` lcc copies one through `movif`/`movfi` and clears
-  `nfx` for that) or stores a constant (`*p = 0`) gets `nfx = 1` and
-  stops it [lcc 1.29.16 `-O1` to `-O3` and 1.31.05 `-O3`, v3, v5.8c2,
-  v6.2c3: `tools/abi/probes/pocabi1_nfx.c`, `pocabi2_nfx.c`]. The
-  functions that stop it build a value in `%g16` first, the ones that
-  inherit it use only their window registers (inferred from the
-  listings). Unipro's clang clears it in
-  exactly the functions that compute with an 80-bit value (unipro
-  20.1.8 `-O2 -march=elbrus-v3`, `pocabi2_nfx.c`). lcc's
-  v5 and v6 code also clears it in every function that uses a 128-bit
-  register, leaves included (16-byte atomics too: atomics.md, "16-byte
-  atomics"), with the same carry-over into the functions after it, and
-  across a call it keeps a 128-bit value in its stack frame, not in a
-  register (lcc 1.29.16 `-O3`, small vector-type functions).
+  value, stores an argument (`*p = x`) or passes a loaded value to a
+  call inherits `nfx = 0`, whatever its types, and passes it on to the
+  next, while one that computes (an `int` `x + 3`, the sum of two
+  loads), copies through memory (`*a = *b`, a `long double` too at
+  `-O3`; at `-O1` and `-O2` lcc copies one through `movif`/`movfi` and
+  clears `nfx` for that) or stores a constant (`*p = 0`) gets `nfx = 1`
+  and stops it [lcc 1.29.16 `-O1` to `-O3` and 1.31.05 `-O3`, v3,
+  v5.8c2, v6.2c3: `tools/abi/probes/pocabi1_nfx.c`, `pocabi2_nfx.c`].
+  The functions that stop it build a value in `%g16` first, the ones
+  that inherit it use only their window registers (inferred from the
+  listings). Unipro's clang clears it in exactly the functions that
+  compute with an 80-bit value (unipro 20.1.8 `-O2 -march=elbrus-v3`,
+  `pocabi2_nfx.c`). lcc's v5 and v6 code also clears it in every
+  function that uses a 128-bit register, leaves included (16-byte
+  atomics too: atomics.md, "16-byte atomics"), with the same carry-over
+  into the functions after it, and across a call it keeps a 128-bit
+  value in its stack frame, not in a register (lcc 1.29.16 `-O3`, small
+  vector-type functions).
 - **`dbl`** (v3+): with `dbl = 1`, 32-bit integer ALU operations
   zero-extend their result into the whole 64-bit register; with
   `dbl = 0`, they write only the low half and leave the upper half
@@ -755,15 +757,18 @@ qemu as v3 and v5.
   - a register in the pairs the caller hands over (the caller's `wsz` −
     `wbs`: lcc's 4-pair parameter area, or more in other code, "Window
     and rotating-base units") keeps both halves as the caller's window
-    holds them, so its high half is what an earlier callee left in its
-    own `%r0`–`%r7`: after a callee that left diagnostic high halves
-    there, the next callee's 64-bit-written registers kept them, and a
-    plain `stqp` of one was SIGILL `ILL_ILLOPN`, while one the call
-    gained stored [hw: `foldi55.c` `hand`; 8C2] (the low half likewise:
+    holds them, so its high half is what an earlier callee left in the
+    same registers (`%r0`–`%r7` for lcc's four pairs): after a callee
+    that left diagnostic high halves there, the next callee's
+    64-bit-written registers kept them, and a plain `stqp` of one was
+    SIGILL `ILL_ILLOPN`, while one the call gained stored [hw:
+    `foldi55.c` `hand`; 8C2] (the low half likewise:
     [calling-convention.md](calling-convention.md), "Unused parts of a
     slot");
   - with `nfx = 1` a deep call or a signal handler that spills the
-    window leaves 0, tags 0; an interrupt, a context switch or a
+    window leaves 0, tags 0 (on the 8C2 once in qspill's three deep
+    calls a copy of the low half; the 2C3 keeps it after the process's
+    first deep call); an interrupt, a context switch or a
     `nanosleep` after a deep call has returned leaves 0, tags 0, or now
     and then a copy of the register's own low half with its tags (under
     `nfx` above): a failed speculative pointer in the low half

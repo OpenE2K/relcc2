@@ -451,8 +451,8 @@ written up in `spec/abi/source-compat.md` and `spec/abi/atomics.md`:
   release store with an earlier store: stores in one instruction are
   unordered.
 - lcc treats `swapcontext` as returns-twice; the port should consider
-  it. The port must not store a register that may hold no value with a
-  plain store (D7).
+  it. The port must not read a register that may hold no value with a
+  plain operation, a store, copy or compare (D7).
 
 ---
 
@@ -1434,18 +1434,21 @@ functions, and the ABI is the same either way. How to get there:
   4C, 8C2 and 2C3; the empty value that registers a window gains hold
   does not trap). Spill and pass 32-bit values with `stw`, or extend
   them first; `std,sm` does not trap on any of the three.
-- **A register that may hold no value must not be stored
+- **A register that may hold no value must not be read
   non-speculatively.** A variable set on only some paths and then
   copied or kept across a call leaves its register unwritten on the
   other paths. When that register is one of the pairs the caller hands
-  over, it holds what an earlier callee left there, and a diagnostic
-  value stored with a plain `std` is SIGILL on hardware
-  (`tools/abi/probes/foldi56_undef.c` s, bison's `yylval`; 4C, 8C2;
-  `calling-convention.md`, "Unused parts of a slot"). Either
-  zero-initialise such locals (lcc 1.29 and later initialise some from
-  `-O1`, its default `-ftrivial-auto-var-init=uninitialized`;
-  `source-compat.md`, "Uninitialised variables"), or store possibly
-  undefined values with `,sm`. Which one is the owner's choice.
+  over, it holds what an earlier callee left there, and any
+  non-speculative 64-bit read of a diagnostic value is SIGILL on
+  hardware: a store with a plain `std`
+  (`tools/abi/probes/foldi56_undef.c` s, bison's `yylval`; 4C, 8C2), a
+  copy with a plain `addd` or `ord`, a compare or a merge
+  (`calling-convention.md`, "Unused parts of a slot", the table).
+  Either zero-initialise such locals (lcc 1.29 and later initialise
+  some from `-O1`, its default `-ftrivial-auto-var-init=uninitialized`;
+  `source-compat.md`, "Uninitialised variables"), or read possibly
+  undefined values only with the `,sm` forms (lcc's `addd,sm` copies,
+  `std,sm` stores). Which one is the owner's choice.
 
 The ABI still requires callers to **sign**-extend signed narrow
 arguments (emit `sxt`), and callees must not rely on the upper bits they
@@ -1968,9 +1971,9 @@ measured for the port directly:
   4. **`alignof` of large vectors.** lcc aligns a vector of N bytes to N
      for vectors up to 2^31 bytes (GCC aligns to N only up to 2^28,
      data-layout.md) and its `_Alignof`/`alignof` say N; with
-     `BIGGEST_ALIGNMENT` 128 GCC lays them out the same but
-     `min_align_of_type` (stor-layout.cc:2821-2837) answers 16 for 32
-     bytes and more. A `BIGGEST_ALIGNMENT` of 256 bytes, with
+     `BIGGEST_ALIGNMENT` 128 GCC lays them out the same up to 2^28 bytes
+     but `min_align_of_type` (stor-layout.cc:2821-2837) answers 16 for
+     32 bytes and more. A `BIGGEST_ALIGNMENT` of 256 bytes, with
      `ATTRIBUTE_ALIGNED_VALUE` kept at 128 bits (a bare `aligned` is 16
      in lcc; defaults.h:1150-1151 ties it to `BIGGEST_ALIGNMENT`), would
      match lcc's `alignof` up to 256-byte vectors only (larger ones
@@ -2009,11 +2012,11 @@ on the host):
   past every target hook (`spec/abi/kernel-build.md`, "`%L`, `%H` and
   16-byte operands", has the mechanism). Three routes, the owner's
   choice: give word-aligned 16-byte aggregates TImode in stor-layout.cc,
-  which the `check_stack` item below needs anyway and which fixes both;
-  let `expand_asm_stmt` move such operands through the integer mode of
-  their size; or patch the kernel's four asms (`asm/e2k_api.h:3894,
-  3932, 5819, 5971`) to `unsigned __int128`. The last two fix only the
-  asm.
+  which the `check_stack` item below needs anyway and which fixes the
+  asm too; let `expand_asm_stmt` move such operands through the integer
+  mode of their size; or patch the kernel's four asms
+  (`asm/e2k_api.h:3894, 3932, 5819, 5971`) to `unsigned __int128`. The
+  last two fix only the asm.
 - **lcc's pragmas** (`no_asm_inline`, `asm_length`, `loop count`,
   `unroll`, `ivdep`, `vector aligned`, `novector`, `no_dam`,
   `noprefetch`): register them, or `-Wall -Werror` stops on
@@ -2298,14 +2301,14 @@ propose them there, and the partial-inlining fix with them.
   gdb otherwise asks `e2k_skip_prologue`, which skips whole leading wide
   instructions with `getsp`, `setwd` or `setbn`, statements scheduled
   into them included; `step` into a function asks `e2k_skip_prologue` in
-  every unit and reads no line table, so `prologue_end` doesn't move it
-  either (below, "What DWARF can't fix"). GCC has the opcode
-  (`LI_set_prologue_end`) but never emits it (`dwarf2out.cc:3038-3039`,
-  `:29266-29271`). Because a function breakpoint in optimized GCC code
-  stops at the entry, before `setwd` and `getsp`, a frame base whose
-  location list starts after `getsp` (3.3) leaves the variables
-  described through it unavailable at that stop; register arguments
-  show.
+  every unit, and that function reads no line table, so `prologue_end`
+  doesn't move `step`'s stop either (below, "What DWARF can't fix"). GCC
+  has the opcode (`LI_set_prologue_end`) but never emits it
+  (`dwarf2out.cc:3038-3039`, `:29266-29271`). Because a function
+  breakpoint in optimized GCC code stops at the entry, before `setwd`
+  and `getsp`, a frame base whose location list starts after `getsp`
+  (3.3) leaves the variables described through it unavailable at that
+  stop; register arguments show.
 - **Entry values.** dwarf2out writes a call-site parameter's location
   from the caller's argument register (`dwarf2out.cc:24662-24665`),
   which is `%b[i]` (DWARF 64 + i). The callee's `DW_OP_entry_value`

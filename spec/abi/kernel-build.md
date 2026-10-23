@@ -626,9 +626,8 @@ later (`include/linux/compiler.h:77-84`); a plain `__builtin_expect`
 path stays inline [source; gcc]. So a port must expand 128-bit
 multiplies (`muld` and `umulhd`) and variable 128-bit shifts (shift
 pairs) itself at every level, or vmlinux is left with undefined symbols
-(the proof of concept met it: its P106).
-`clz`, `ctz`, `popcount`, `ffs`, `bswap` and `parity` are inline in
-both.
+(the proof of concept met it: its P106). `clz`, `ctz`, `popcount`,
+`ffs`, `bswap` and `parity` are inline in both.
 
 ## Erratum #123567 and `-ffix-lcc-bug123567` [lcc, source]
 
@@ -738,12 +737,12 @@ optimize ("O0")` for every compiler but clang
 -mdmodel=large`); with `-fPIC` it computes the GOT address only in
 functions that use it [lcc 1.29.16 v3, v5.8c2, v6.2c3:
 `tools/abi/probes/foldp107_gotbase.sh`]. So a port must create a PIC
-register only in PIC code (`-fpic`, `-fPIC`), since an
+register only in PIC or PIE code (`flag_pic`), since an
 `R_E2K_64_PC_LIT` against `_GLOBAL_OFFSET_TABLE_` fails a module's
-load, and in PIC code load the GOT address only in functions that use
-it. Where the target creates one, GCC asks it to set the register up in
-every function and keeps an unused load at `-O0`; from `-O1` it deletes
-one [gcc; plan D10].
+load, and in PIC code should load the GOT address only in functions
+that use it, as lcc does. Where the target creates one, GCC asks it to
+set the register up in every function and keeps an unused load at
+`-O0`; from `-O1` it deletes an unused one [gcc; plan D10].
 
 ### Stacks and frame sizes [source, gcc]
 

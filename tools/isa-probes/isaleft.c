@@ -30,7 +30,13 @@
        ovs      streaming from memory by ldovl (cycles; run under flock)
        ovtouch  which pages after a stream's end the AAU touches
        qspill   (v5+) a 128-bit window register across a deep call or a
-                signal handler, with nfx = 1 and 0
+                signal handler, with nfx = 1 and 0.  2026-10-12, three
+                runs each: with nfx = 1 the high half read 0 after a
+                handler on the 8C2 and 2C3; after a call 1000 deep the
+                8C2 gave a copy of the register's own low half once and
+                0 twice, the 2C3 0 in the process's first deep call and
+                the right value after; with nfx = 0 always right
+                (spec/abi/registers.md, "nfx")
    FILTER keeps the cases whose names contain it.  */
 
 #define _GNU_SOURCE

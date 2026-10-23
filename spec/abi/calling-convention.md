@@ -214,8 +214,10 @@ a slow mode or an exception mode (TB flags bits 0 and 4,
 `target/e2k/tcg/translate.c:935-948`). A non-speculative store takes the
 unchecked path in every mode but exception mode
 (`target/e2k/tcg/translate-mem.c:1450` for `st*`, `:1747` for `staa`),
-unless a lower channel of the instruction holds a store or a load that
-may fault (`:1436-1448`; other operations don't count, since
+unless a lower channel of the instruction holds a store, or a
+non-speculative load that qemu translates with checks (a fill-MAS
+load; an ordinary one takes its own unchecked path and doesn't count,
+`:1179-1185`) (`:1430-1448`; other operations don't count, since
 `dc->maybe_have_exc` is cleared once the instruction's prechecks are
 done, `translate-wi.c:488-499`). That path leaves for slow mode when the
 data has a nonzero tag (`translate-mem.c:264-271`), or when the address
@@ -237,24 +239,25 @@ Aggregates are not the only case. GCC-built code stores registers that
 hold no value: a variable set on only some paths and then copied or kept
 across a call. `foldi56_undef.c`'s `parse`, bison's copy of a `yylval`
 the lexer did not set, keeps it in a `%r2` written on one path only and
-stores it with a plain `std`. So ordinary GCC-built programs hang under
-MCST's qemu where the hardware stores them, unless an earlier callee
-left a diagnostic value there (above). The proof of concept's native
-`cc1` and glibc tests met it under qemu (its I56); they were not run on
-the machines. In the compat suite, every such aggregate passed from lcc
-`-O2` to Unipro `-O0` times out under qemu (54 `structs`, 2 `floats` and
-2 `layout` tests on v3, `tools/abi/compat/known.txt`); lcc `-O0` callers
-and Unipro `-O2` callees are not affected. `-e2k-opt no-rf-clean` in
-`run.py --runner` makes those tests pass, but it helps only code that
-never reads such a register non-speculatively: the registers `setwd`
-adds then keep whatever an earlier frame left there, diagnostic values
-included, which the machines never leave there (`tagempty.c` n–p), and
-the first plain read of a diagnostic one stops qemu [qemu:
-`foldi56_undef.c` u then stores a stale value, and q stops at the `std`
-of a gained register that an earlier callee left diagnostic, which the
-4C and 8C2 store emptied]. A register given an empty half explicitly
-hangs either way (`tagempty.c` g–i). qemu's `gettagd` of an emptied
-register returns 1, not the hardware's 5 (`tagempty.c` variants n–p).
+stores it with a plain `std`. So under MCST's qemu ordinary GCC-built
+programs hang at such stores, which the hardware performs unless an
+earlier callee left a diagnostic value in the register (above). The
+proof of concept's native `cc1` and glibc tests met it under qemu (its
+I56); they were not run on the machines. In the compat suite, every such
+aggregate passed from lcc `-O2` to Unipro `-O0` times out under qemu (54
+`structs`, 2 `floats` and 2 `layout` tests on v3,
+`tools/abi/compat/known.txt`); lcc `-O0` callers and Unipro `-O2`
+callees are not affected. `-e2k-opt no-rf-clean` in `run.py --runner`
+makes those tests pass, but it helps only code that never reads such a
+register non-speculatively: the registers `setwd` adds then keep
+whatever an earlier frame left there, diagnostic values included, which
+the machines never leave there (`tagempty.c` n–p), and the first plain
+read of a diagnostic one stops qemu [qemu: `foldi56_undef.c` u then
+stores a stale value, and q stops at the `std` of a gained register that
+an earlier callee left diagnostic, which the 4C and 8C2 store emptied].
+A register given an empty half explicitly hangs either way (`tagempty.c`
+g–i). qemu's `gettagd` of an emptied register returns 1, not the
+hardware's 5 (`tagempty.c` variants n–p).
 
 Which operations trap on such a register when its upper half is
 diagnostic (a speculative `ldd` from a bad address leaves the whole

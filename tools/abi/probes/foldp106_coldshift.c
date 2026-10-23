@@ -7,8 +7,9 @@
  * count in mul_u64_u32_shr and mul_u64_u64_shr
  * (include/linux/math64.h:157-171; kernel/sched/fair.c:345), and under
  * CONFIG_MCST its unlikely() is __builtin_expect_with_probability
- * (!!(x), 1, 0.0001) (include/linux/compiler.h:76-84), so every
- * unlikely() path is cold code to GCC.
+ * (!!(x), 1, 0.0001) (include/linux/compiler.h:77-84), so most
+ * unlikely() paths are cold code to GCC (not one inside a loop that runs
+ * often enough: a block is cold below 1/1000 of its function's entry).
  *
  * Compile only; read with -S and list the helpers each function calls:
  *

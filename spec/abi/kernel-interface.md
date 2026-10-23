@@ -1040,9 +1040,14 @@ a 96-pair interrupted window), and otherwise in about one signal in
 1,200. Page faults without a signal and system calls (a blocking
 `nanosleep` too) kept the 16-bit part; without any signal, 1 of 2,000
 and 4 of 4,000 holds of 2 million cycles still lost it on the 4C and
-8C2 (none of 3,000 on the 2C3). Extended values in `%g16` and `%g20`
-survived the SIGSEGV handlers, shallow and recursing (the frame's
-`gext` restores them), and with `nfx = 0` nothing was lost [hw:
+8C2 (none of 3,000 on the 2C3). The 128-bit high half on the 8C2 came
+through switches while the frames below the function stayed in the
+register file, but after a deep call had returned, context switches
+lost it in 2,983–2,999 of 3,000 holds, timer interrupts alone in about
+300, and a blocking `nanosleep` too [hw: `tools/abi/probes/foldi55.c`
+`ctx`, `sys`; 8C2]. Extended values in `%g16` and `%g20` survived the
+SIGSEGV handlers, shallow and recursing (the frame's `gext` restores
+them), and with `nfx = 0` nothing was lost [hw:
 `tools/abi/probes/pocabi2.c` `ext`; 4C, 8C2, 2C3;
 [registers.md](registers.md), `nfx`, has the counts]. So code that holds
 an extended value in a window register needs `nfx = 0`, as lcc's does.

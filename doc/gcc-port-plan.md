@@ -450,9 +450,9 @@ written up in `spec/abi/source-compat.md` and `spec/abi/atomics.md`:
   as a release, read with lcc's acquire, never failed). Never bundle a
   release store with an earlier store: stores in one instruction are
   unordered.
-- lcc treats `swapcontext` as returns-twice and zero-initialises
-  possibly uninitialised locals at `-O1`+ to avoid tag traps; the port
-  should consider both.
+- lcc treats `swapcontext` as returns-twice; the port should consider
+  it. The port must not store a register that may hold no value with a
+  plain store (D7).
 
 ---
 
@@ -932,22 +932,26 @@ Predicates are also preserved: the caller's come back whatever the
 callee writes, and the callee starts with a copy of the caller's,
 which it must not read before writing (spec/isa/predicates.md).
 
-**Register allocation order**: prefer low window registers so the window
-stays small (`REG_ALLOC_ORDER`; ia64.h:446 for the same idea).
-`LOCAL_REGNO` (the window registers) alone is not enough: IRA exempts
-such registers from the prologue save cost (`calculate_saved_nregs`,
-ira-color.cc:1818), but LRA's `find_hard_regno_for_1` (lra-assigns.cc,
-the `df_regs_ever_live_p` check) and regrename's `check_new_reg_p`
-(regrename.cc:352) treat a not yet used call-saved register as needing a
-save, so they prefer call-clobbered globals and the outgoing `%b[0..7]`:
-after unrolling, the proof of concept found a leaf daxpy's values in
-`%b[]` while `%r4`–`%r63` stayed unused, and values in `%b[]` block a
-pipelined loop. It exempts `LOCAL_REGNO` in both places and keeps
-regrename out of `%b[]` (`HARD_REGNO_RENAME_OK`) and, in a function that
-calls, inside the window allocation left (D2, P51); making `%b[0..7]`
-fixed instead broke vector results returned in `%b[0]` (pr123753,
-pr86363 at `-Os`). Under real pressure (a full window) allocation still
-uses `%b[]`.
+**Register allocation order** (`REG_ALLOC_ORDER`): the globals
+`%g16`–`%g31` first, for temporaries, since they don't grow the window
+and lcc's temporaries live there (registers.md, "Conventions"); then the
+low window registers, so the window stays small (ia64.h:446 for the same
+idea). At `-O0` and `-Og` the window registers go before the globals,
+for the debug information (D13, "`-O0` and `-Og`: window registers
+before the globals"). `LOCAL_REGNO` (the window registers) alone is not
+enough: IRA exempts such registers from the prologue save cost
+(`calculate_saved_nregs`, ira-color.cc:1818), but LRA's
+`find_hard_regno_for_1` (lra-assigns.cc, the `df_regs_ever_live_p`
+check) and regrename's `check_new_reg_p` (regrename.cc:352) treat a not
+yet used call-saved register as needing a save, so they prefer
+call-clobbered globals and the outgoing `%b[0..7]`: after unrolling, the
+proof of concept found a leaf daxpy's values in `%b[]` while
+`%r4`–`%r63` stayed unused, and values in `%b[]` block a pipelined loop.
+It exempts `LOCAL_REGNO` in both places and keeps regrename out of
+`%b[]` (`HARD_REGNO_RENAME_OK`) and, in a function that calls, inside
+the window allocation left (D2, P51); making `%b[0..7]` fixed instead
+broke vector results returned in `%b[0]` (pr123753, pr86363 at `-Os`).
+Under real pressure (a full window) allocation still uses `%b[]`.
 
 **Registers above `%r63`** (P59, P92): a window has up to 112 pairs,
 but `%r` names reach 64 registers and the rest only through `%b[]`
@@ -1429,9 +1433,19 @@ functions, and the ABI is the same either way. How to get there:
   (`calling-convention.md`, "Unused parts of a slot", confirmed on the
   4C, 8C2 and 2C3; the empty value that registers a window gains hold
   does not trap). Spill and pass 32-bit values with `stw`, or extend
-  them first; `std,sm` does not trap on any of the three. lcc also
-  zero-initialises locals that may be read uninitialised
-  (`source-compat.md`).
+  them first; `std,sm` does not trap on any of the three.
+- **A register that may hold no value must not be stored
+  non-speculatively.** A variable set on only some paths and then
+  copied or kept across a call leaves its register unwritten on the
+  other paths. When that register is one of the pairs the caller hands
+  over, it holds what an earlier callee left there, and a diagnostic
+  value stored with a plain `std` is SIGILL on hardware
+  (`tools/abi/probes/foldi56_undef.c` s, bison's `yylval`; 4C, 8C2;
+  `calling-convention.md`, "Unused parts of a slot"). Either
+  zero-initialise such locals (lcc 1.29 and later initialise some from
+  `-O1`, its default `-ftrivial-auto-var-init=uninitialized`;
+  `source-compat.md`, "Uninitialised variables"), or store possibly
+  undefined values with `,sm`. Which one is the owner's choice.
 
 The ABI still requires callers to **sign**-extend signed narrow
 arguments (emit `sxt`), and callees must not rely on the upper bits they
@@ -1643,34 +1657,37 @@ measured for the port directly:
   (`ADDR_DIFF_VEC`) and leaves adding the table address to the port's
   `tablejump` expander.
 - **Save and spill each value in its own mode.** On v5 and later a
-  register holds 128 bits, and the high half of one last written with
-  64 bits or less is whatever the register held before, possibly a
+  register holds 128 bits, and the high half of one last written with 64
+  bits or less is whatever the register held before, possibly a
   diagnostic value, so a plain `stqp` of it can be SIGILL `ILL_ILLOPN`
-  (`spec/abi/registers.md`, "Extended parts and `long double`"). GCC's
-  default `HARD_REGNO_CALLER_SAVE_MODE` is `choose_hard_reg_mode`, the
-  widest mode the register can hold (regs.h:194-196; tm.texi's
-  "smallest suitable mode" is wrong, as sparc.h:711-716 says), and LRA
-  saves every call-crossing value in that mode
-  (lra-constraints.cc:6903-6908). Define it as SPARC does, returning the
-  value's own `MODE` and the default only for `VOIDmode`, and keep
-  every other save, spill and reload of a value in the mode it was
-  written in, never the register's widest.
-- **The GOT address only where it is used.** With a pseudo PIC register
-  (`TARGET_USE_PSEUDO_PIC_REG`; expand creates one for every function,
-  cfgexpand.cc:2524-2525), IRA calls `TARGET_INIT_PIC_REG` for every
-  function (ira.cc:5752) and leaves the decision to the hook. From `-O1`
-  an unused load is deleted; at `-O0` it stays (GCC 16.2 for i386 at
-  `-m32 -O0 -fPIC` sets up the GOT in a function that uses none). In
-  non-PIC E2K code that leftover is an `R_E2K_64_PC_LIT` against
+  (measured on the 8C2 only; `spec/abi/registers.md`, "Extended parts
+  and `long double`"). GCC's default `HARD_REGNO_CALLER_SAVE_MODE` is
+  `choose_hard_reg_mode`, the widest mode the register can hold
+  (regs.h:194-196; tm.texi's "smallest suitable mode" is wrong, as
+  sparc.h:711-716 says), and LRA saves every call-crossing value in that
+  mode (lra-constraints.cc:6903-6908). Define it as SPARC does,
+  returning the value's own `MODE` and the default only for `VOIDmode`,
+  and keep every other save, spill and reload of a value in the mode it
+  was written in, never the register's widest.
+- **The GOT address only where it is used.** Return false from
+  `TARGET_USE_PSEUDO_PIC_REG` unless `flag_pic`, as i386 does
+  (i386.cc:1824-1832), so non-PIC code gets no PIC register at all.
+  When the hook says true, expand creates a pseudo PIC register for
+  every function (cfgexpand.cc:2524-2525), IRA calls
+  `TARGET_INIT_PIC_REG` for every function (ira.cc:5752) and leaves the
+  decision to that hook. From `-O1` an unused load is deleted; at `-O0`
+  it stays (GCC 16.2.1 for i386 at `-m32 -O0 -fPIC` sets up the GOT in a
+  function that uses none). A port whose hook said true in non-PIC code
+  would leave there an `R_E2K_64_PC_LIT` against
   `_GLOBAL_OFFSET_TABLE_`, which MCST's module loader rejects, and the
   kernel builds two modules at `-O0` (`spec/abi/kernel-build.md`,
-  "Modules"). Return from the hook unless the function used the
-  register. `crtl->uses_pic_offset_table` (emit-rtl.h:225-226) is the
-  flag for that, but the middle end never sets it: set it wherever the
-  port emits a GOT-based address, as ARM does (arm.cc:8091-8125, tested
-  at :8399). lcc computes the address only in functions that use it, at
-  `-O0` too, and never in non-PIC code
-  (`tools/abi/probes/foldp107_gotbase.sh`).
+  "Modules"). In PIC code, return from `TARGET_INIT_PIC_REG` unless the
+  function used the register. `crtl->uses_pic_offset_table`
+  (emit-rtl.h:225-226) is the flag for that, but the middle end never
+  sets it: set it wherever the port emits a GOT-based address, as ARM
+  does (arm.cc:8091-8125, tested at :8399). lcc computes the address
+  only in functions that use it, at `-O0` too, and never in non-PIC
+  code (`tools/abi/probes/foldp107_gotbase.sh`).
 - **Packed shifts read the whole 64-bit count** (a count of the lane
   width or more gives 0 or the sign, semantics.md), but under
   `SHIFT_COUNT_TRUNCATED` GCC's `expand_shift_1` hands a shift the wider
@@ -1949,16 +1966,18 @@ measured for the port directly:
      `dlopen`ed libraries). The owner's call. The compat suite doesn't
      test it yet; `tools/abi/probes/memorycxx_abi_x.cc` shows it.
   4. **`alignof` of large vectors.** lcc aligns a vector of N bytes to N
-     up to 256 and its `_Alignof`/`alignof` say N; with `BIGGEST_ALIGNMENT`
-     128 GCC lays them out the same but `min_align_of_type`
-     (stor-layout.cc:2821-2837) answers 16 for 32 bytes and more.
-     Matching lcc needs a `BIGGEST_ALIGNMENT` of 256 bytes with
+     for vectors up to 2^31 bytes (GCC aligns to N only up to 2^28,
+     data-layout.md) and its `_Alignof`/`alignof` say N; with
+     `BIGGEST_ALIGNMENT` 128 GCC lays them out the same but
+     `min_align_of_type` (stor-layout.cc:2821-2837) answers 16 for 32
+     bytes and more. A `BIGGEST_ALIGNMENT` of 256 bytes, with
      `ATTRIBUTE_ALIGNED_VALUE` kept at 128 bits (a bare `aligned` is 16
-     in lcc; defaults.h:1150-1151 ties it to `BIGGEST_ALIGNMENT`), but
-     `BIGGEST_ALIGNMENT` also sets the alignment of every
-     `__builtin_alloca` (builtins.cc:5790-5792) and the predefined
-     `__BIGGEST_ALIGNMENT__` (cppbuiltin.cc:164), which lcc doesn't
-     define. Weigh it before M8.
+     in lcc; defaults.h:1150-1151 ties it to `BIGGEST_ALIGNMENT`), would
+     match lcc's `alignof` up to 256-byte vectors only (larger ones
+     would answer 256), and `BIGGEST_ALIGNMENT` also sets the alignment
+     of every `__builtin_alloca` (builtins.cc:5790-5792) and the
+     predefined `__BIGGEST_ALIGNMENT__` (cppbuiltin.cc:164), which lcc
+     doesn't define. Weigh it before M8.
 
 ### D11. Building MCST's Linux kernel
 
@@ -1985,35 +2004,25 @@ on the host):
 - **`%L` and `%H`** on 16-byte `r` operands, and 16-byte structs
   (`e2k_qreg_t`) in register pairs as `r` and `"=&r"` operands
   (`spec/abi/source-compat.md`, "Operand modifiers"). The second is a
-  middle-end matter, not a target hook: under `STRICT_ALIGNMENT` a
-  16-byte struct aligned to 8 is BLKmode (stor-layout.cc:1943-1953),
-  `expand_asm_stmt` gives a BLKmode register-only output a stack slot
-  without a size (cfgexpand.cc:3716-3730), and the vregs pass reports
-  it as "impossible constraint in 'asm'" (function.cc:1857-1860), after
-  `TARGET_MD_ASM_ADJUST` (cfgexpand.cc:3830), which can't size the
-  slot. Either let `expand_asm_stmt` move such operands through the
-  integer mode of their size (`copy_blkmode_to_reg`, and
-  `copy_blkmode_from_reg`, static in expr.cc), or patch the kernel's four
-  asms to `unsigned __int128` (`spec/abi/kernel-build.md`, "`%L`, `%H`
-  and 16-byte operands").
+  middle-end matter, not a target hook: under `STRICT_ALIGNMENT` such a
+  struct is BLKmode, and GCC reports "impossible constraint in 'asm'"
+  past every target hook (`spec/abi/kernel-build.md`, "`%L`, `%H` and
+  16-byte operands", has the mechanism). Three routes, the owner's
+  choice: give word-aligned 16-byte aggregates TImode in stor-layout.cc,
+  which the `check_stack` item below needs anyway and which fixes both;
+  let `expand_asm_stmt` move such operands through the integer mode of
+  their size; or patch the kernel's four asms (`asm/e2k_api.h:3894,
+  3932, 5819, 5971`) to `unsigned __int128`. The last two fix only the
+  asm.
 - **lcc's pragmas** (`no_asm_inline`, `asm_length`, `loop count`,
   `unroll`, `ivdep`, `vector aligned`, `novector`, `no_dam`,
   `noprefetch`): register them, or `-Wall -Werror` stops on
   `-Wunknown-pragmas`. Map `unroll (N)`, `ivdep` and `novector` to
-  GCC's own as deferred pragmas with GCC's ids
-  (`cpp_register_deferred_pragma` with `PRAGMA_UNROLL`, `PRAGMA_IVDEP`,
-  `PRAGMA_NOVECTOR`, as c-family/c-pragma.cc:1857-1867 registers `GCC
-  unroll` and the others), and register every pragma the port ignores
-  in the preprocessor (`cpp_register_pragma`: a handler that leaves no
-  token, as Darwin's `#pragma mark`, config/darwin.h:1199-1203), not
-  with `c_register_pragma`. GCC's C and C++ parsers accept only their
-  own loop pragmas between a loop pragma and its loop
-  (c/c-parser.cc:16291-16354, cp/parser.cc:57772-57850), so a deferred
-  `loop count` after a mapped `unroll (N)` is "for, while or do
-  statement expected"; glibc's E2K string functions have 52 such runs
-  and the kernel's `arch/e2k` 10 (`spec/abi/source-compat.md`,
-  "Pragmas"). lcc's bare `unroll` (unroll fully) has no GCC
-  counterpart; no E2K code uses it.
+  GCC's own loop pragmas, and register every pragma the port ignores in
+  the preprocessor, not with `c_register_pragma`, or the runs glibc and
+  the kernel write (`unroll (N)` or `ivdep`, then `loop count (N)`)
+  stop GCC's parser (`spec/abi/source-compat.md`, "Pragmas", has the
+  mechanism and the counts).
 - **Asm operands**: `TRAP_HANDLER_DONE` has 39 and lcc allows 50. GCC's
   limit, `MAX_RECOG_OPERANDS`, is the largest operand count of any md
   pattern (at least 29) plus 1 (genconfig.cc:285, 320), 30 for a port
@@ -2033,16 +2042,17 @@ on the host):
   kernel's users and their contract"): the kernel's 16-byte register
   images, which `STRICT_ALIGNMENT` makes BLKmode (give word-aligned
   16-byte aggregates TImode without raising their alignment, a
-  stor-layout.cc change, since no hook does it); zeros stored into an
-  aggregate held in registers (`store_field` builds them in a stack
-  temporary, an expr.cc matter); and, in these functions only, no caller
-  saves (`flag_caller_saves` off per function) and no pseudo left in
-  NO_REGS for its `REG_EQUIV` (`TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS`).
+  stor-layout.cc change, since no hook does it; that also removes the
+  asm error of the `%L` item above); zeros stored into an aggregate held
+  in registers (`store_field` builds them in a stack temporary, an
+  expr.cc matter); and, in these functions only, no caller saves
+  (`flag_caller_saves` off per function) and no pseudo left in NO_REGS
+  for its `REG_EQUIV` (`TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS`).
 - **128-bit multiplies and shifts inline at every level**: the kernel
   links no libgcc; lcc uses `muld` and `umulhd`. GCC inlines a
   double-word multiply once `umulditi3`/`mulditi3` exist, but a
   double-word shift by a variable count only in code it optimises for
-  speed, so `-Os` and cold code (every `unlikely()` path in MCST's
+  speed, so `-Os` and cold code (most `unlikely()` paths in MCST's
   kernel) call `__ashlti3`/`__lshrti3`/`__ashrti3` unless the port's
   `ashlti3`/`lshrti3`/`ashrti3` expand them
   (`spec/abi/kernel-build.md`, "128-bit arithmetic and no libgcc").
@@ -2099,9 +2109,9 @@ cancellation"; `tools/abi/probes/glibcbuild_*`):
   `noprefetch`, `asm_inline`, `unroll`, `no_asm_inline`), and glibc
   builds with `-Wall -Werror` by default, so register them as for the
   kernel (D11: the ignored ones in the preprocessor), or configure with
-  `--disable-werror`. Only
-  `noprefetch` matters once the port uses array prefetch (M7): lcc puts
-  APB into glibc's `strlen` loop on v5 and v6 without it.
+  `--disable-werror`. Only `noprefetch` matters once the port uses
+  array prefetch (M7): lcc puts APB into glibc's `strlen` loop on v5
+  and v6 without it.
 - **`__cpu_init` in libgcc**, relocation-free and safe to run twice
   (3.3).
 - **Cancellation**: glibc compiles `syslog.c`, `getpass.c`,
@@ -2141,13 +2151,15 @@ same tests on x86-64 (GCC 16, gdb 18; not rerun here) passed 3,220 of
 3,507 checks; why x86-64 counts more checks than E2K's 3,042 was not
 recorded.
 
-Four of the items need changes to dwarf2out, outside `config/e2k`, which
-have no target hook today: the register-number checks, call-site
-parameters named by the callee's register, dropping discriminators and
-writing `prologue_end`. The proof of concept added target macros for
-the last three (`DWARF_CALL_SITE_INCOMING_REGNO`,
-`DWARF2_LINE_DISCRIMINATORS`, `DWARF2_PROLOGUE_END_STMT`); a port that
-wants them upstream has to propose them there.
+Five of the items need changes outside `config/e2k` that no target
+hook covers today: four in dwarf2out (the register-number checks,
+call-site parameters named by the callee's register, dropping
+discriminators and writing `prologue_end`) and the partial-inlining fix
+in tree-inline.cc and tree-ssa-live.cc. The proof of concept added
+target macros for the last three dwarf2out ones
+(`DWARF_CALL_SITE_INCOMING_REGNO`, `DWARF2_LINE_DISCRIMINATORS`,
+`DWARF2_PROLOGUE_END_STMT`); a port that wants them upstream has to
+propose them there, and the partial-inlining fix with them.
 
 - **Register numbers.** Map every register without a DWARF number
   (`%g0`–`%g31`, the predicates, the CTPRs, `%b[64..127]`) to
@@ -2242,8 +2254,9 @@ wants them upstream has to propose them there.
   PR 91663 ("split function can be re-inlined, leaving bad stack
   trace", 2019); upstream turned partial inlining off only for Go
   (go/go-lang.cc:323-326). Whether it shows depends on the inlining
-  limits: x86-64's `max-inline-insns-auto` is 15 (params.opt:637-638),
-  and a port with higher limits meets it in real programs (the proof of
+  limits: GCC's generic `max-inline-insns-auto` is 15 at `-O2` and 30 at
+  `-O3` (params.opt:637-638, opts.cc:717), which x86-64 keeps, and a
+  port with higher limits meets it in real programs (the proof of
   concept, at 100: coreutils' `rm`) [host GCC 16.2.1 and gdb 18.1 with
   the limit at 100, and the proof of concept on the 4C without its fix:
   F inlined into itself, 5 breakpoint locations, 3 stops for 2 calls;
@@ -2271,20 +2284,22 @@ wants them upstream has to propose them there.
   defaults: 4 locations, 4 stops for 2 calls]; the fix doesn't cover
   that.
 - **Line-table flags.** Write no discriminators, as lcc doesn't: gdb
-  drops a statement's `is_stmt` row when an operation scheduled ahead
-  of it gave the same line a row with one. GCC's own `.debug_line`
-  writer emits any non-zero discriminator (`dwarf2out.cc:29396-29397`)
-  and drops them only under `-gstrict-dwarf` before DWARF 4
+  drops a statement's `is_stmt` row when an operation scheduled ahead of
+  it gave the same line a row with one. GCC's own `.debug_line` writer
+  emits any non-zero discriminator (`dwarf2out.cc:29396-29397`) and
+  drops them only under `-gstrict-dwarf` before DWARF 4
   (`:29256-29259`); `SUPPORTS_DISCRIMINATOR` guards only the `.loc` path
   (`:29319`). `DW_LNS_set_prologue_end` matters less: gdb ignores it in
   a unit with location lists from a GCC producer, which every optimized
-  GCC unit is, and goes to the function's entry
-  (stack-and-unwinding.md, "How gdb places breakpoints"), so marking
-  each function's first statement with it (the proof of concept does)
-  changed no check. It would matter only in units without location
-  lists, where gdb otherwise asks `e2k_skip_prologue`, which skips
-  whole leading wide instructions with `getsp`, `setwd` or `setbn`,
-  statements scheduled into them included. GCC has the opcode
+  GCC unit is, and goes to the function's entry (stack-and-unwinding.md,
+  "How gdb places breakpoints"), so marking each function's first
+  statement with it (the proof of concept does) changed no check. For
+  `break` it would matter only in units without location lists, where
+  gdb otherwise asks `e2k_skip_prologue`, which skips whole leading wide
+  instructions with `getsp`, `setwd` or `setbn`, statements scheduled
+  into them included; `step` into a function asks `e2k_skip_prologue` in
+  every unit and reads no line table, so `prologue_end` doesn't move it
+  either (below, "What DWARF can't fix"). GCC has the opcode
   (`LI_set_prologue_end`) but never emits it (`dwarf2out.cc:3038-3039`,
   `:29266-29271`). Because a function breakpoint in optimized GCC code
   stops at the entry, before `setwd` and `getsp`, a frame base whose
@@ -2308,34 +2323,33 @@ wants them upstream has to propose them there.
   `TARGET_DELEGITIMIZE_ADDRESS` look through `disp`'s unspec so that
   indirect calls get a `DW_AT_call_target`. gdb then shows
   `n=n@entry=8`.
-- **Variables var-tracking doesn't track.** A local aligned beyond
-  what the frame keeps lives at an address expand computes once into a
-  base register (`get_dynamic_stack_base`, explow.cc:1700-1718, from
+- **Variables var-tracking doesn't track.** A local aligned beyond what
+  the frame keeps lives at an address expand computes once into a base
+  register (`get_dynamic_stack_base`, explow.cc:1700-1718, from
   cfgexpand.cc:1608-1626), and its `DECL_RTL` is a MEM through that
   register. var-tracking doesn't track it, so dwarf2out describes it by
   `DECL_RTL` over the whole function. The register holds the base only
   from its last set before the variable's first access to its next set
-  after the last access: regrename moves it without updating
-  `DECL_RTL` (`regrename.cc` never touches it), and allocation reuses
-  it after the last access (in guality pr36728-1.c, `return y` loads y
-  into the same `%r0`, and gdb at the closing brace read y at address
-  2). After var-tracking (`-O1` and `-Og`), give such a variable
-  location notes instead: the MEM through the register the variable's
-  accesses use, when they all agree, from that register's last set
-  before the first access up to and including the wide instruction of
-  its next set after the last one, when nothing sets the register
-  between the accesses and every jump into the range comes from inside
-  it. Otherwise keep `DECL_RTL` only if its register is set once in the
-  function, and else give no location rather than a wrong one [hw:
-  proof-of-concept GCC, `-Og`, 4C: y = 2 at pr36728-1.c's lines 16,
-  18 and 19,
+  after the last access: regrename moves it without updating `DECL_RTL`
+  (`regrename.cc` never touches it), and allocation reuses it after the
+  last access (in guality pr36728-1.c, `return y` loads y into the same
+  `%r0`, and gdb at the closing brace read y at address 2). After
+  var-tracking (`-Og`, and `-O1` up), give such a variable location
+  notes instead: the MEM through the register the variable's accesses
+  use, when they all agree, from that register's last set before the
+  first access up to and including the wide instruction of its next set
+  after the last one, when nothing sets the register between the
+  accesses and every jump into the range comes from inside it. Otherwise
+  keep `DECL_RTL` only if its register is set once in the function, and
+  else give no location rather than a wrong one [hw: proof-of-concept
+  GCC, `-Og`, 4C: y = 2 at pr36728-1.c's lines 16, 18 and 19,
   `<optimized out>` after the load]. At `-O0` var-tracking doesn't run
   (opts.cc:619), and dwarf2out has only `DECL_RTL`: the location is
   right from the base's computation in the function's first line to the
   last access, and wrong outside it [hw: the same compiler, `-O0`:
   `break *foo` read y at address 0x1, the first argument, and the
-  closing brace at 0x2]. Covering that needs either a pass of the
-  port's own that writes the notes at `-O0` (final hands every
+  closing brace at 0x2]. Covering that needs either a pass of the port's
+  own that writes the notes at `-O0` (final hands every
   `NOTE_INSN_VAR_LOCATION` to the debug hook, final.cc:2355-2361), or
   the base kept live to the function's end at `-O0`; neither was tried.
 - **`%b[]` across `setbn` and `abn`.** These rename every `%b`
@@ -2402,9 +2416,9 @@ wants them upstream has to propose them there.
   - Values in `%g16`–`%g31` have no location, because those registers
     have no DWARF numbers. Of the 242 checks that failed on E2K but
     passed on x86-64, 115 passed with `-ffixed-g16` … `-ffixed-g31`, the
-    largest single cause. From `-O1` up `-g` must not change code to
-    avoid this; at `-O0` and `-Og` the allocation order avoids it for
-    every build (above).
+    largest single cause. `-g` never changes code; at `-O0` and `-Og`
+    the allocation order, the same with or without `-g`, avoids it
+    (above).
   - A parameter whose register the callee reuses (the result goes to
     `%r0`, the first argument's register) survives only as an entry
     value. That needs the call's target, so an indirect call through a
@@ -2413,6 +2427,12 @@ wants them upstream has to propose them there.
     f31ddad8ac8).
   - A breakpoint on a predicated statement stops whatever the
     predicate.
+  - From `-O1`, `step` into a function stops after the body operations
+    packed into the wide instruction with `setwd`: gdb skips that
+    instruction with `e2k_skip_prologue` whatever the line table says,
+    and goes on to a row's end (stack-and-unwinding.md, "How gdb places
+    breakpoints"). `-Og` and `-O0`, which keep `setwd` and `getsp` in
+    instructions without body operations, stop at the first statement.
   - Where a line's first wide instruction also ends the previous line,
     the stop comes either before the previous line is done or after
     some of this line's operations ran (gdb ignores `op_index` rows).

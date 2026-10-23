@@ -6,11 +6,14 @@
 # forms that work, links them with lcc into a PIE and a plain executable
 # and checks each word against the linked _GLOBAL_OFFSET_TABLE_ and
 # loc; then assembles each failing form (gotdata.s CASE 1-8) and prints
-# gas's first two messages.  Nothing is run.
+# gas's first two messages.  Last, it compiles a small C file with lcc
+# -fPIC -g at -O0, -O2 and -O3 and counts how lcc's data and debug
+# sections name addresses.  Nothing is run.
 #
 # Usage: tools/abi/probes/gotdata.sh     (output in toolchains/gotdata/)
 #        B=<binutils bin directory> to use another gas (default: the
 #        submodule's, toolchains/binutils/bin; setup/build-binutils.sh)
+#        LCCS="<lcc> ..." for the last step (default: lcc 1.29.16 e2k-v3)
 #
 # MCST binutils b4bebd940a3 (gas 2.41.0-29.023) and lcc 1.29.16's
 # (2.41-29.018), 2026-10-24, the same:
@@ -25,6 +28,12 @@
 #     and "Internal error in S_SET_SEGMENT"; CASE 4: the loop error and
 #     "can't resolve glob - L0"; CASE 8: "invalid @GOT value size 8,
 #     should be 4".
+# lcc 1.29.16 (e2k-v3, e2k-v5.8c2, e2k-v6.2c3) and 1.31.05 (e2k-v3),
+# 2026-10-24, the same at -O0, -O2 and -O3: no _GLOBAL_OFFSET_TABLE_
+# outside .text; .debug_info gives a static's address as ".uadword
+# counter" (after DW_OP_addr), .data's initialisers ".dword counter";
+# at -O0 the switch's jump table in .rodata holds ".dword .LSC.N@GOTOFF"
+# (9 entries), from -O2 there is none.
 
 root=$(cd "$(dirname "$0")/../../.." && pwd)
 out=$root/toolchains/gotdata
@@ -108,4 +117,40 @@ for c in 1 2 3 4 5 6 7 8; do
 		-o fail.o 2>&1 | grep -v 'Assembler messages' | head -2 |
 		sed "s|^.*gotdata\.s|  gotdata.s|; s| at /.*/gas/| at gas/|"
 	rm -f fail.o
+done
+
+echo "== lcc -fPIC -g: addresses in data and debug sections"
+cat > gd.c <<'EOF'
+static int counter;
+int glob;
+static int *pc = &counter;
+int *pg = &glob;
+static int (*fp) (void);
+int bump (void) { return ++counter + *pc + *pg; }
+int sw (int x)
+{
+  switch (x)
+    {
+    case 0: return 11; case 1: return 22; case 2: return 37;
+    case 3: return 41; case 4: return 53; case 5: return 67;
+    case 6: return 71; case 7: return 89; case 8: return 97;
+    }
+  return fp ? fp () : 0;
+}
+EOF
+for L in ${LCCS:-$lcc}; do
+	for o in -O0 -O2 -O3; do
+		"$L" $o -fPIC -g -S gd.c -o gd.s || exit 1
+		printf '%s %s:\n ' "$L" $o
+		awk '/^\t\.section/ { s = $2; next }
+		/^\t\.text/ { s = ".text" } /^\t\.data$/ { s = ".data" }
+		s != ".text" && /_GLOBAL_OFFSET_TABLE_/ { g++ }
+		s == ".debug_info" && /\.uadword\tcounter$/ { u++ }
+		s == ".data" && /\.dword\tcounter$/ { d++ }
+		s != ".text" && /@GOTOFF/ { go++ }
+		END { printf "GOT outside .text %d,", g
+		      printf " .debug_info .uadword counter %d,", u
+		      printf " .data .dword counter %d,", d
+		      printf " @GOTOFF outside .text %d\n", go }' gd.s
+	done
 done

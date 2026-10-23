@@ -268,14 +268,19 @@ tools/abi/probes, by how they are used:
   calling-convention probe, read with `-S`.
 - **Read with `-S`** (or `-c` and nm): `atomics.c`, `asmops.c`,
   `stackprot.c`, `sanitize.c`, `ctxtls.c`, `pocplan.c`,
-  `memorycxx_abi.cc`, `pocabi*_{atom16,ord,nfx}.c`.
-- **Run on hardware**: the other `.c`/`.cc` files (many with a `.s`),
-  and `dso/`, `elfops/`, `mode32/` and `protected/` through their
-  `run.sh`.
+  `memorycxx_abi.cc`, `pocabi*_{atom16,ord,nfx}.c`, `folda33_cpuis.c`,
+  `folda35_vec.c`, `folda36_parmalign.c`, `foldp100_blkasm.c`,
+  `foldp102_inline_cs.c`, `foldp104_regimage.c`, `foldp106_coldshift.c`
+  (`foldp105_asmaddr.c` through its `.sh`).
+- **Run on hardware**: the other `.c`/`.cc` files (many with a `.s`;
+  `foldp98_split.c` also with the host's GCC and gdb), and `dso/`,
+  `elfops/`, `mode32/` and `protected/` through their `run.sh`.
 - **Link or assemble on the host**: `execstack.sh`, `prefrel.sh`,
-  `debuginfo_loc.sh`, `folddebug_reloc.s`.
+  `debuginfo_loc.sh`, `folddebug_reloc.s`, `gotdata.sh`,
+  `foldp105_asmaddr.sh`, `foldp107_gotbase.sh`.
 - **Ask lcc, compile only**: `asmconv.py`, `prefetch.py`,
-  `kernelbuild.py`, `glibcbuild_lcc.py`; `find_builtins.py`,
+  `kernelbuild.py`, `glibcbuild_lcc.py`, `foldp101_pragma_runs.py`,
+  `foldp103_nosemispec.py`; `find_builtins.py`,
   `gen_builtins.py` and `gen_builtins_misc.py` write
   `spec/abi/lcc-builtins-*.yaml`.
 
@@ -537,7 +542,9 @@ Headline facts, with where the details are:
   or `%g16`+. `setwd dbl` affects only 32-bit integer ALU results. A
   function holding 80-bit or v5+ 128-bit values in registers needs
   `nfx = 0`, or the extended part is lost when the window spills (on the
-  8C2 and 2C3 at every signal handler).
+  8C2 and 2C3 at every signal handler; on the 8C2 a 128-bit high half
+  also at context switches and interrupts after a deep call has
+  returned).
 - **Floating point** (registers.md): `long double` is x87 extended in
   one register (mantissa + 16-bit extended part); 80-bit operations use
   `%fpcr`/`%fpsr`, not `%pfpfr`. The kernel does not save or restore the
@@ -553,11 +560,12 @@ Headline facts, with where the details are:
   version or CPU, `EF_E2K_INCOMPAT` marks code that isn't forward
   compatible; 64-bit literals hold swapped halves, PC-relative fields
   count from the bundle start; no GOT register (`rrd %ip` + a literal in
-  each function); the PLT clobbers `%dr8`+ and `%ctpr1`; TLS variant I,
-  GD/IE/LE only, no relaxation. Only the `e2k-v3` sysroot links
-  forward-compatible programs: ld intersects its inputs' CPUs and every
-  CPU tree's sysroot is marked for its CPU, while MCST's qemu ignores
-  `e_flags` ("Mixing targets in one program"). MCST ld's bugs are there.
+  each function that uses it); the PLT clobbers `%dr8`+ and `%ctpr1`;
+  TLS variant I, GD/IE/LE only, no relaxation. Only the `e2k-v3` sysroot
+  links forward-compatible programs: ld intersects its inputs' CPUs and
+  every CPU tree's sysroot is marked for its CPU, while MCST's qemu
+  ignores `e_flags` ("Mixing targets in one program"). MCST ld's bugs
+  are there.
 - **Atomics** (atomics.md): a read-modify-write is a lock-wait load (MAS
   0x7, ALC0) and a wait-unlock store (MAS 0x2) with `rbranch`; any load,
   store or system call between them loses the lock, and a lock left open
@@ -609,12 +617,11 @@ python3 tools/abi/compat/run.py toolchains/compat/gen \
 
 `known.txt` lists the known differences (all Unipro's); any other
 failure fails the run. A test that times out only under qemu may be qemu
-hanging on a store of a register with an empty tagged half, which
-hardware stores (calling-convention.md, "Unused parts of a slot"). The
-PoC GCC at `-march=elbrus-v3`/`v5`/`v6` passed every pair with lcc's
-v3, v5.8c2 and v6.2c3 code on the three machines (2026-10-13). Builtins
-have their own acceptance test, `tools/abi/builtins/run.py --cc gcc=...`:
-it compares every builtin with lcc on hardware and lists missing ones.
+hanging (Gotchas, "Hangs"). The PoC GCC at `-march=elbrus-v3`/`v5`/`v6`
+passed every pair with lcc's v3, v5.8c2 and v6.2c3 code on the three
+machines (2026-10-13). Builtins have their own acceptance test,
+`tools/abi/builtins/run.py --cc gcc=...`: it compares every builtin with
+lcc on hardware and lists missing ones.
 
 ### GCC port planning (doc/gcc-port-plan.md)
 
@@ -687,8 +694,9 @@ and `tools/dejagnu/README.md`, "Known limits".
 
 - **No hardware exceptions (MCST's qemu).** A memory fault, division by
   zero, `ct` through an empty CTPR, too small a `setwd` or a diagnostic
-  operand stops it ("exception handling is unimplemented - aborting").
-  The community qemu gives SIGSEGV, but no signal for division by zero.
+  operand stops it ("exception handling is unimplemented - aborting");
+  a store past the 1 GiB guest area hangs instead (below). The
+  community qemu gives SIGSEGV, but no signal for division by zero.
 - **Too lenient (MCST's qemu): broken code passes.** It keeps an
   atomic's lock across loads and stores before the unlock store
   (hardware livelocks; atomics.md), gives `%b[]` `setbn`'s new base in
@@ -699,10 +707,11 @@ and `tools/dejagnu/README.md`, "Known limits".
 - **Hangs (MCST's qemu).** A plain store of a register with an empty
   tagged half repeats its wide instruction for ever, as does a store
   past qemu's 1 GiB guest area. That empty half is what `setwd` leaves
-  in the registers it adds, and what GCC-built code stores wherever a
-  variable is set on only some paths, so a GCC-built program that hangs
-  only under qemu needs a hardware run before it counts as a bug
-  (calling-convention.md, "Unused parts of a slot").
+  in the registers it adds, and what GCC-built code stores when a
+  variable set on only some paths is copied or kept across a call, so a
+  GCC-built program that hangs only under qemu needs a hardware run
+  before it counts as a bug (calling-convention.md, "Unused parts of a
+  slot").
 - **Array prefetch.** MCST's qemu restarts every area when a signal
   handler returns (lcc `-O2`+ loops then compute wrong results) and
   models none of APB's limits (apb.md).

@@ -200,7 +200,7 @@ on x86-64 refuses `asm ("argp")` and `asm ("frame")` and accepts `asm
 entry stack pointer ([gcc-port-plan.md](../../doc/gcc-port-plan.md),
 D12). Unipro's clang rejects all four names [unipro].
 
-### Other constraints (lcc)
+### Other constraints (lcc, source, binutils, gcc)
 
 lcc 1.29.16 (`e2k-v3`, `e2k-v5.8c2`, `e2k-v6.2c3`) and 1.31.05 (`e2k-v3`)
 accept the same letters and print operands the same way
@@ -230,22 +230,23 @@ An `m` operand may follow an operation's channel digit with no space:
 MCST's kernel writes `"{st"#mem_size_letter ","
 mem_model##_ATOMIC_CHANNEL "%[addr], %[tmp], mas=" …`
 (`arch/e2k/include/asm/e2k_api.h:4880-4881`, and `:6096-6097`; the
-channel is `"5"` when `CONFIG_CPU_ISET_MIN` ≥ 5, else `"2"`,
-`:4653-4661`), and `asm/sclkr.h:82-83` applies it to the global
-`prev_sclkr` [source]. gas reads every digit after the comma as the
-channel, so the operand must not print starting with a digit. An
-address without a register base does start with one, the short literal
-base `0x0`, followed by the symbol as a 64-bit literal (which can't be
-the base): `{std,50x0, prev_sclkr, %g27}` is "invalid ALC50 specified"
-(channel 2: "invalid ALC20"; `{ldd,00x0, …}`: "Invalid argument in
-position of SRC1"), while the same after a space or a tab assembles,
-with `R_E2K_64_ABS_LIT` [binutils: MCST gas 2.41]. lcc's register base
-never meets this (`{std,5%g16, 0x0, %r0}` at `-O2`, `%r3` at `-O0`)
-[lcc 1.29.16 v3, v5.8c2, v6.2c3; 1.31.05 v3:
+channel is `"5"` for the acquire and relaxed forms when
+`CONFIG_CPU_ISET_MIN` ≥ 5, and `"2"` otherwise and for the release and
+strong forms, `:4653-4661`), and `asm/sclkr.h:82-83` applies the relaxed
+form to the global `prev_sclkr` [source]. gas reads every digit after
+the comma as the channel, so the operand must not print starting with a
+digit. An address without a register base does start with one, the short
+literal base `0x0`, followed by the symbol as a 64-bit literal (which
+can't be the base): `{std,50x0, prev_sclkr, %g27}` is "invalid ALC50
+specified" (channel 2: "invalid ALC20"; `{ldd,00x0, …}`: "Invalid
+argument in position of SRC1"), while the same after a space or a tab
+assembles, with `R_E2K_64_ABS_LIT` [binutils: MCST gas 2.41]. lcc's
+register base never meets this (`{std,5%g16, 0x0, %r0}` at `-O2`, `%r3`
+at `-O0`) [lcc 1.29.16 v3, v5.8c2, v6.2c3; 1.31.05 v3:
 `tools/abi/probes/foldp105_asmaddr.sh`]. A compiler that prints a
-literal address for an `m` operand must put a space before it inside
-asm statements (GCC marks them with `this_is_asm_operands`,
-`gcc/final.cc:2632`), or use a register base as lcc does.
+literal address for an `m` operand must put a space before it inside asm
+statements (GCC marks them with `this_is_asm_operands`,
+`gcc/final.cc:2632` [source]), or use a register base as lcc does.
 
 Constraints in use: glibc's E2K sysdeps use `r` (137), `=r` (111), `+r`
 (58), `ri` (21), `=&r` (2), `i` (1) and `g` (1, protected-mode malloc);

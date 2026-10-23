@@ -160,20 +160,25 @@ measured 0.54% of xz -6's cycles in `BUB_B_RF_SPILLFILL` on the 8C2
   the register file (a handler that recurses, a big interrupted window;
   inferred), and about once in 1,200 signals otherwise; on the 8C2 and
   2C3 every handler that runs while it is held does. The 128-bit high
-  half behaves the same: with `nfx = 1` it read 0 after a signal
-  handler had run while the function held it (3 of 3 runs on each
-  machine), and 0, stale data or, by chance, the right value after a
-  call deep enough to spill the window; with `nfx = 0` it survived both
-  (hw: `tools/isa-probes/isaleft.c` `qspill`, 8C2 and 2C3). On the 8C2
-  every high half of an `nfx = 1` window, written as 128 bits, as 64 or
-  not at all, read 0 with tags 0 after a 1000-deep call or a SIGSEGV
-  handler. Interrupts and context switches lost it only after a deep
-  call had returned (the frames below the function no longer in the
-  register file; inferred): with a process pinned to the same CPU
-  waking every 50 µs in 2,983–2,999 of 3,000 holds of 0.4 ms, with timer
-  interrupts alone in about 300 of 3,000, and across a blocking
-  `nanosleep`. It became 0, tags 0, or in 0–39 holds of 3,000 a copy of
-  the register's own low half with its tags. With the caller's frames
+  half is lost too: with `nfx = 1` it read 0 after a signal handler had
+  run while the function held it (3 of 3 runs on each machine), and 0,
+  stale data or, by chance, the right value after a call 1,000 levels
+  deep; with `nfx = 0` it survived both (hw:
+  `tools/isa-probes/isaleft.c` `qspill`, 8C2 and 2C3; which machine
+  gave the stale and the right values was not recorded, and the 8C2
+  gave 0 every time below). On the 8C2 every high half of an `nfx = 1`
+  window, written as 128 bits, as 64 or not at all, read 0 with tags 0
+  after a 1000-deep call or a SIGSEGV handler. The 80-bit part in the
+  table was lost to timer interrupts in holds without a deep call (4 of
+  4,000 on the 8C2); the 128-bit high half was lost to interrupts and
+  context switches only after a deep call had returned (the frames
+  below the function no longer in the register file; inferred): with a
+  process pinned to the same CPU waking every 50 µs in 2,983–2,999 of
+  3,000 holds of 0.4 ms, with timer interrupts alone in about 300 of
+  3,000, and across a blocking `nanosleep`. These left 0, tags 0, or now
+  and then (0–39 holds of 3,000 a case; 2 `nanosleep` runs of 3) a copy
+  of the register's own low half with its tags, where the deep call or
+  the handler alone always left 0, tags 0. With the caller's frames
   still resident no hold lost it (about 10,500 switches), nor did
   `getpid` or `sched_yield`; with `nfx = 0` nothing was lost [hw:
   `tools/abi/probes/foldi55.c` `spill`, `sig`, `sys`, `ctx`; 8C2]. So any
@@ -744,20 +749,24 @@ qemu as v3 and v5.
   were depends on the register's history, so the high half of a value
   written with 64 bits or less is undefined and can be diagnostic:
   - a register the window gains (a `setwd` that grows it, a callee's
-    pairs beyond its caller's window) reads empty in both halves (0,
-    tags 1/1), and its high half stays empty after a 64-bit write [hw:
-    `foldi55.c` `wr`, `gain`; 8C2];
-  - a register in the pairs the caller hands over (the parameter area,
-    and any pairs up to the caller's `wsz`) keeps both halves as the
-    caller's window holds them, so its high half is what an earlier
-    callee left in its own `%r0`–`%r7`: after a callee that left
-    diagnostic high halves there, the next callee's 64-bit-written
-    registers kept them, and a plain `stqp` of one was SIGILL
-    `ILL_ILLOPN`, while one the call gained stored [hw: `foldi55.c`
-    `hand`; 8C2];
-  - with `nfx = 1` a spill and fill of the window leaves 0, tags 0, or
-    now and then a copy of the register's own low half with its tags
-    (under `nfx` above): a failed speculative pointer in the low half
+    pairs beyond those its caller hands over) reads empty in both halves
+    (0 with tag 5, tag 1 on both words), and its high half stays empty
+    after a 64-bit write [hw: `foldi55.c` `wr`, `gain`; 8C2];
+  - a register in the pairs the caller hands over (the caller's `wsz` −
+    `wbs`: lcc's 4-pair parameter area, or more in other code, "Window
+    and rotating-base units") keeps both halves as the caller's window
+    holds them, so its high half is what an earlier callee left in its
+    own `%r0`–`%r7`: after a callee that left diagnostic high halves
+    there, the next callee's 64-bit-written registers kept them, and a
+    plain `stqp` of one was SIGILL `ILL_ILLOPN`, while one the call
+    gained stored [hw: `foldi55.c` `hand`; 8C2] (the low half likewise:
+    [calling-convention.md](calling-convention.md), "Unused parts of a
+    slot");
+  - with `nfx = 1` a deep call or a signal handler that spills the
+    window leaves 0, tags 0; an interrupt, a context switch or a
+    `nanosleep` after a deep call has returned leaves 0, tags 0, or now
+    and then a copy of the register's own low half with its tags (under
+    `nfx` above): a failed speculative pointer in the low half
     (`4afafafa4afafaf8`, a failed `ldd,sm` masked by `andd,sm`) becomes
     a diagnostic high half and stays there when the real pointer is
     later written with 64 bits [hw: `foldi55.c` `ctx`, 2–3 of 750 holds
@@ -768,12 +777,8 @@ qemu as v3 and v5.
   of its low half stores, and `stqp,sm` stores both halves with their
   tags. So keep, save and spill a value at the width it was written:
   `std`/`ldd` for one written with 64 bits or less, `stqp` only for a
-  value written whole as 128 bits. The proof-of-concept back end,
-  saving a 64-bit pointer with `stqp` (its caller saves in the
-  register's widest mode), died this way with these values (its I55:
-  187 of 5,000 runs of pcre2's test 14 on the 8C2 under forced context
-  switches, 0 of 5,000 with `std`/`ldd`; its counts not rechecked). Not
-  measured on the 2C3.
+  value written whole as 128 bits (the proof of concept met it: its
+  I55). Not measured on the 2C3.
 - The arithmetic is x87 extended precision exactly: 64-bit mantissa,
   round to nearest even, denormals down to 2^-16445, overflow to
   infinity; `sqrtl(2)` is correctly rounded. Unnormals and pseudo-NaNs

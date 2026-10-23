@@ -5,9 +5,11 @@
  * (spec/abi/source-compat.md, "Other constraints").  MCST's kernel does
  * that in NATIVE_ATOMIC_FETCH_XCHG_UNLESS_INC
  * ("{st"#mem_size_letter "," mem_model##_ATOMIC_CHANNEL "%[addr], ...",
- * arch/e2k/include/asm/e2k_api.h:4880-4881; the channel is "5" with
- * CONFIG_CPU_ISET_MIN >= 5, else "2"), which asm/sclkr.h:82-83 applies
- * to the global prev_sclkr (arch/e2k/kernel/sclkr.c,
+ * arch/e2k/include/asm/e2k_api.h:4880-4881; the channel is "5" for
+ * ACQUIRE_MB and RELAXED_MB with CONFIG_CPU_ISET_MIN >= 5, else "2", and
+ * always "2" for RELEASE_MB and STRONG_MB, e2k_api.h:4653-4661), which
+ * asm/sclkr.h:82-83 applies with RELAXED_MB to the global prev_sclkr
+ * (arch/e2k/kernel/sclkr.c,
  * arch/e2k/fast_syscalls/sclkr.c), and in USER_ATOMIC_FETCH_OP
  * (e2k_api.h:6096-6097, a user pointer).  gas reads every digit after
  * the comma as the channel, so the text after it must not start with a

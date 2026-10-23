@@ -4,7 +4,7 @@
  * a register may hold when the aggregate has BLKmode (spec/abi/
  * kernel-build.md, "What a GCC build meets first", "impossible
  * constraint").  MCST's kernel has four asms with an `e2k_qreg_t`
- * (`struct { u64 lo, hi; }`, asm/base_regs_types.h:38-41) "=&r" output
+ * (`struct { u64 lo, hi; }`, asm/base_regs_types.h:40-43) "=&r" output
  * printed with %L and %H (asm/e2k_api.h:3894, 3932, 5819, 5971); lcc gives
  * it a register pair (also tools/abi/probes/kernelbuild.py, section
  * `modifiers`).  On a STRICT_ALIGNMENT target GCC gives a 16-byte struct

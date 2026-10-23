@@ -40,7 +40,7 @@
  * the zero for the bytes write_gd leaves out (DSE trims the
  * gimplifier's "g = {}" to "MEM <char[6]> [&g + 6B] = {}") in a stack
  * temporary even when g is in registers (gcc/expr.cc:8372, 9573; host
- * GCC 16.2 x86-64 -O2 -Wno-attributes: "movl $0, -24(%rsp)",
+ * GCC 16.2.1 x86-64 -O2 -Wno-attributes: "movl $0, -24(%rsp)",
  * "movw %ax, -20(%rsp)", "movq -24(%rsp), %rax").  The proof-of-concept
  * back end before it kept such unions in TImode (v0.5-17) refused
  * save_psp and write_gd at -O2.  A GCC port:

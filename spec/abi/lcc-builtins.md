@@ -195,9 +195,10 @@ for `__cpu_info`. The builtins:
 - `__builtin_cpu_is ("name")` takes a string literal (a variable is
   rejected) and compares one word of the hidden `__cpu_info`: `+0` the
   ISA version (`"elbrus-v1"` … `"elbrus-v7"`), `+4` lcc's CPU code (the
-  CPU names; `"elbrus-s"` and `"elbrus-2cm"` are still accepted though
-  1.31's manual no longer lists them); an unknown name is rejected. It
-  returns 0 or 1.
+  CPU names, `"elbrus"` for the v1 CPU among them: see source-compat.md's
+  table; `"elbrus-s"` and `"elbrus-2cm"` are still accepted though 1.31's
+  manual no longer lists them); an unknown name is rejected. It returns
+  0 or 1.
 - `__builtin_e2k_get_cpu_iset ()` (the manual: `__builtin_e2k_cpu_iset`)
   returns `__cpu_info`'s ISA word (0 for an unknown CPU).
 - `__builtin_cpu_init ()`, `__builtin_cpu_name ()`, `__builtin_cpu_arch

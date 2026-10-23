@@ -332,7 +332,7 @@ DTP0 = start of the module's TLS segment.
 | 69 | `R_E2K_64_GOTOFF` | 64 | S + A − GOT | data |
 | 256 | `R_E2K_64_GOTOFF_LIT` | 64 literal | S + A − GOT | address of a local symbol in PIC code |
 | 109 | `R_E2K_GOTOFF` | 32 | S + A − GOT (signed) | 32-bit GOT offsets |
-| 108 | `R_E2K_GOT` | 32 literal | G − GOT | load of a GOT entry |
+| 108 | `R_E2K_GOT` | 32 literal; 32 in data (`.word sym@GOT`) | G − GOT | load of a GOT entry |
 | 114 | `R_E2K_GOTPLT` | 32 literal | as `R_E2K_GOT`, or the `.got.plt` slot | `@GOTPLT` |
 | 110 | `R_E2K_DISP` | CS0 `disp`, 28 bits | (S + A − P) >> 3; to the PLT entry if the symbol has one | `disp %ctprN, sym` |
 | 111 | `R_E2K_PREF` | CS0 `pref`, bits 4–27 | (((S + A) & ~0x7f) − (B & ~0x7f)) >> 7: 128-byte blocks | `pref %iprN, sym` (below) |
@@ -397,15 +397,15 @@ operand of a compare: `cmpedb,0 [ sym@ISLOCAL ], 0x1, %pred0`),
 `pref %iprN, sym` `R_E2K_PREF`.
 
 Data directives take fewer operators (binutils: `e2k_cons_fix_new`,
-`tc-e2k.c:11227-11397`): `@GOTOFF` (`.word` → `R_E2K_GOTOFF`, `.dword`
-→ `R_E2K_64_GOTOFF`), `@GOT` (`.word` only, `R_E2K_GOT`), `@SIZE`,
+`tc-e2k.c:11227-11397`): `@GOTOFF` (`.word` → `R_E2K_GOTOFF`, `.dword` →
+`R_E2K_64_GOTOFF`), `@GOT` (`.word` only, `R_E2K_GOT`), `@SIZE`,
 `@TLS_DTPREL`, `@DYNOPT` and `@ABS` (plain `R_E2K_32_ABS` /
-`R_E2K_64_ABS`); `@PLT`, `@GOTPLT`, `@TLS_IE`, `@TLS_GDMOD`,
+`R_E2K_64_ABS`); `@PLT`, `@GOTPLT`, `@TLS_LE`, `@TLS_IE`, `@TLS_GDMOD`,
 `@TLS_GDREL` and `@ISLOCAL` are "unsupported value type". A bare
 `_GLOBAL_OFFSET_TABLE_` is PC-relative in data too (`e2k_parse_name`,
 `tc-e2k.c:11206-11218`), but data has no relocation for that (nor for
-`@PCREL` or `@ISLOCAL32`): `.dword _GLOBAL_OFFSET_TABLE_` (in `.data`
-or a debug section), `.word _GLOBAL_OFFSET_TABLE_`, `.dword
+`@PCREL` or `@ISLOCAL32`): `.dword _GLOBAL_OFFSET_TABLE_` (in `.data` or
+a debug section), `.word _GLOBAL_OFFSET_TABLE_`, `.dword
 _GLOBAL_OFFSET_TABLE_ - .` and `.dword sym@PCREL` stop gas with "symbol
 definition loop encountered at `L0'" and an internal error in
 `S_SET_SEGMENT`, and `.dword sym - _GLOBAL_OFFSET_TABLE_` with "can't
@@ -415,8 +415,10 @@ link-time GOT address into `.debug_info` and makes an
 `R_E2K_64_RELATIVE` in `.data`), `sym − GOT` as `sym@GOTOFF`, and a
 PC-relative GOT as `_GLOBAL_OFFSET_TABLE_@ABS - .` (`R_E2K_64_PC`).
 lcc never names the GOT in data: its debug information gives a static's
-address as `.dword sym` (binutils b4bebd940a3's and lcc 1.29.16's gas
-and ld: `tools/abi/probes/gotdata.sh`; lcc `-fPIC -g`).
+address as `.uadword sym`, its initialisers `.dword sym`, and its `-O0`
+PIC jump tables `.dword label@GOTOFF` (binutils b4bebd940a3's and lcc
+1.29.16's gas and ld: `tools/abi/probes/gotdata.sh`; lcc 1.29.16 v3,
+v5.8c2, v6.2c3 and 1.31.05 v3, `-fPIC -g` at `-O0`, `-O2`, `-O3`).
 
 ## Code sequences (lcc; Unipro the same unless noted)
 

@@ -18,14 +18,15 @@ sources (`toolchains/gcc`, paths `gcc/...`); **[lcc-doc]** lcc's manual
 output, compile only: lcc 1.29.16 for `e2k-v3`, `e2k-v5.8c2` and
 `e2k-v6.2c3` (the erratum option also `e2k-v3.4c`, `e2k-v4.8c`,
 `e2k-v4.1c+` and `e2k-v6.16c`) and 1.31.05 for `e2k-v3`, `e2k-v5.8c2`
-and `e2k-v6.2c3`, which agree unless a version is named; **[gcc]** GCC's own
-target-independent behaviour (front end, middle end, generic options),
-observed with the proof-of-concept back end (`toolchains/gcc-claude`,
-2026-10-16), compile only. What that back end itself lacks is not
-recorded here; the requirements below say what any port needs. Kernel paths: `asm/` is
-`arch/e2k/include/asm/`; other paths are under `arch/e2k/` unless they
-start with `include/`, `scripts/`, `kernel/sched/`, `kernel/trace/` or
-`mm/slub`, or say "top".
+and `e2k-v6.2c3`, which agree unless a version is named; **[gcc]**
+GCC's own target-independent behaviour (front end, middle end, generic
+options), observed with the proof-of-concept back end
+(`toolchains/gcc-claude`) or with GCC on another target (the host's GCC
+16.2.1 for x86-64 and i386), compile only. What that back end itself
+lacks is not recorded here; the requirements below say what any port
+needs. Kernel paths: `asm/` is `arch/e2k/include/asm/`; other paths are
+under `arch/e2k/` unless they start with `include/`, `scripts/`,
+`kernel/sched/`, `kernel/trace/` or `mm/slub`, or say "top".
 
 Probe: `tools/abi/probes/kernelbuild.py` (sections `options`, `gregs`,
 `gvars`, `gregapi`, `barrier`, `attrs`, `attrs2`, `open`, `modifiers`,
@@ -212,7 +213,7 @@ other difference). lcc 1.29.16's `ecc64` crashes (SIGSEGV) on a
 `check_mem` function that accesses memory at `-O0` with the kernel's
 options; 1.31.05 reports the error.
 
-### The kernel's users and their contract [source]
+### The kernel's users and their contract [source, lcc, gcc, unipro]
 
 About 90 functions carry `__interrupt`: the fast system calls
 (`fast_syscalls/*.c`, `asm/fast_syscalls.h:369, 470`), which entry 6
@@ -279,8 +280,7 @@ shapes these functions take with no `getsp` [lcc 1.29.16 v3, v5.8c2,
 v6.2c3 at `-O2`, `-O3`, `-O3 -fkernel`; 1.31.05 v3:
 `tools/abi/probes/foldp104_regimage.c`; at `-O0` lcc refuses three of
 them]. GCC's defaults put four things on the data stack [gcc: GCC's
-source; GCC 16.2 for x86-64; the proof-of-concept back end refused the
-eight for them]:
+source; GCC 16.2.1 for x86-64]:
 
 - **The unions.** Under `STRICT_ALIGNMENT` a record or union aligned
   below its integer mode gets BLKmode (`gcc/stor-layout.cc:1943-1953`),
@@ -290,7 +290,10 @@ eight for them]:
   TImode's alignment would change `__int128`'s; `STRICT_ALIGNMENT` 0
   would allow misaligned accesses that lcc's `-fkernel` rules out
   (`-mstrict-align`) (inferred). x86-64, without `STRICT_ALIGNMENT`,
-  keeps such a union in TImode at alignment 8 (`:1969-1983`).
+  keeps such a union in TImode at alignment 8 (`:1969-1983`). Giving
+  word-aligned 16-byte aggregates TImode without raising their
+  alignment is a `stor-layout.cc` change (no hook decides it), and it
+  would also remove the asm error of "`%L`, `%H` and 16-byte operands".
 - **A zero built in a stack temporary.** The gimplifier clears a
   compound literal that leaves bytes out as a whole (`u = {}`,
   `gcc/gimplify.cc:6447-6458`), and DSE trims the clear to the bytes the
@@ -298,7 +301,7 @@ eight for them]:
   `gcc/tree-ssa-dse.cc:574-618`). Storing that into an object held in
   registers, `store_field` (`gcc/expr.cc:8290-8294, 8372`) has
   `expand_constructor` build the zero in a stack temporary (`:9573`) and
-  reads it back (`:8462`). GCC 16.2 does this on x86-64 at `-O2` for
+  reads it back (`:8462`). GCC 16.2.1 does this on x86-64 at `-O2` for
   the probe's `write_gd`.
 - **Caller saves.** With `-fcaller-saves` (from `-O2`,
   `gcc/opts.cc:640`), IRA may give a value live across a call a
@@ -309,7 +312,7 @@ eight for them]:
   register would keep it for free. The flag can be set per function.
 - **Pseudos without a class.** IRA gives a pseudo whose `REG_EQUIV`
   equivalence saves more than it costs class NO_REGS
-  (`gcc/ira-costs.cc:2187-2206, 2239-2241`) and expects LRA to substitute
+  (`gcc/ira-costs.cc:2187-2206, 2246-2248`) and expects LRA to substitute
   the equivalence. Where LRA cancels it
   (`gcc/lra-constraints.cc:6031-6091`), the pseudo gets a stack slot.
   `TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS` (`gcc/ira-costs.cc:2287-2289`)
@@ -385,7 +388,7 @@ takes two with the same template, constraints and inputs as equal
 (`gcc/cse.cc:2743-2760`). A GCC-built kernel needs these reads
 volatile.
 
-### `%L`, `%H` and 16-byte operands [lcc]
+### `%L`, `%H` and 16-byte operands [lcc, source, gcc]
 
 | Operand | `%0` | `%L0` | `%H0` |
 |---|---|---|---|
@@ -395,7 +398,7 @@ volatile.
 The kernel uses `%L` 27 times on 23 lines, all in `asm/e2k_api.h` and
 beside `%H`, for tagged 16-byte loads and stores, AAU clearing and
 128-bit compare-and-swap, with `e2k_qreg_t` (`struct { u64 lo, hi; }`,
-`asm/base_regs_types.h:39-43`), `__uint128_t` and union operands,
+`asm/base_regs_types.h:40-43`), `__uint128_t` and union operands,
 inputs and `"=&r"` outputs (`e2k_api.h:2338, 3895-3938, 5048-5055,
 5821-5855, 5971-5983, 6119-6353`). lcc 1.29.16 and 1.31.05 print the
 same. A port needs both modifiers on 16-byte operands, and must take
@@ -417,10 +420,14 @@ constraint in 'asm'" (`gcc/function.cc:1857-1860`, through
 runs in between (`gcc/cfgexpand.cc:3830`) but can't size the slot.
 Either `expand_asm_stmt` moves such operands through the integer mode
 of their size (`copy_blkmode_to_reg`, and `copy_blkmode_from_reg`,
-static in `expr.cc`), or the kernel's four asms take `unsigned
-__int128`, as its neighbouring macros already do
-(`asm/e2k_api.h:5036, 9144`) [gcc: GCC 16.2.1 on x86-64 gives the error
-for a 3-byte struct; `foldp100_blkasm.c`].
+static in `expr.cc`), or the kernel's four asms with an `e2k_qreg_t`
+output (`asm/e2k_api.h:3894, 3932, 5819, 5971`) take `unsigned
+__int128`, as its neighbouring macros already do (`asm/e2k_api.h:5036,
+9144`) [gcc: GCC 16.2.1 on x86-64 gives the error for a 3-byte struct;
+`foldp100_blkasm.c`]. Both fix only the asm. Giving word-aligned
+16-byte aggregates TImode in `stor-layout.cc`, which the `check_stack`
+functions need anyway ("The kernel's users and their contract", "The
+unions"), fixes the asm too. Which route is the port's choice.
 
 ### Operand count [lcc, gcc, source]
 
@@ -447,12 +454,12 @@ accepts the asm pragmas under `-Wall -Werror`; GCC reports "ignoring
 (part of `-Wall`), an error with the kernel's `-Werror`. A compiler must
 accept and ignore (or use) them, and a GCC port must register the
 ignored ones in the preprocessor, or a run such as `ivdep` then `loop
-count (N)` stops GCC's loop-pragma parsing ([source-compat.md](source-compat.md),
-"Pragmas").
+count (N)` stops GCC's loop-pragma parsing
+([source-compat.md](source-compat.md), "Pragmas").
 
 ## Code generation in kernel mode
 
-### Speculative loads [source, lcc]
+### Speculative loads [source, lcc, gcc]
 
 The kernel distinguishes three kinds of code [source]: ordinary kernel
 code, where semi-speculative loads (`ld,sm`, mod 0) are allowed only
@@ -597,8 +604,8 @@ The kernel links no libgcc and `arch/e2k/lib` provides no 128-bit
 helpers, but it selects `ARCH_SUPPORTS_INT128` (`Kconfig:70`), so
 `mul_u64_u32_shr`/`mul_u64_u64_shr` multiply `unsigned __int128` and
 shift the product by a variable count (`include/linux/math64.h:157-171`;
-`kernel/sched/fair.c:345`). lcc compiles 128-bit multiplies and shifts
-inline (`muld` and `umulhd`) at `-O1`, `-O2`, `-O3` and `-Os`, in cold
+`kernel/sched/fair.c:345`). lcc compiles 128-bit multiplies (`muld` and
+`umulhd`) and shifts inline at `-O1`, `-O2`, `-O3` and `-Os`, in cold
 code too, and calls helpers only for 128-bit division (`__udivti3`,
 `__umodti3`), which the kernel doesn't use. At `-O0` it calls
 `__ashlti3`/`__lshrti3`/`__ashrti3` for every 128-bit shift, constant
@@ -611,14 +618,15 @@ multiply from `umulditi3`/`mulditi3` at every level
 `-Os` and, from `-O1`, in a `cold` function or in a block that runs
 below 1/1000 of its function's entry (`gcc/predict.cc:154-186,
 352-366`), and there GCC calls the three helpers [gcc]. MCST's kernel
-makes every `unlikely()` path such a block: with `CONFIG_MCST`, which
+makes most `unlikely()` paths such a block (one inside a loop that runs
+often enough stays above the 1/1000): with `CONFIG_MCST`, which
 `E2K` selects (`arch/e2k/Kconfig:190`), `unlikely(x)` is
 `__builtin_expect_with_probability (!!(x), 1, 0.0001)` for GCC 9 and
 later (`include/linux/compiler.h:77-84`); a plain `__builtin_expect`
 path stays inline [source; gcc]. So a port must expand 128-bit
 multiplies (`muld` and `umulhd`) and variable 128-bit shifts (shift
 pairs) itself at every level, or vmlinux is left with undefined symbols
-(the proof of concept's `kernel/sched/fair.o` called `__lshrti3`).
+(the proof of concept met it: its P106).
 `clz`, `ctz`, `popcount`, `ffs`, `bswap` and `parity` are inline in
 both.
 
@@ -705,7 +713,7 @@ with `HS.s` 1, `HS.c` bit 1 and `SS.ct` 1, none in a
 `no_instrument_function` (`notrace`) function [lcc, `pg`]. 1.31.05
 prepares `_mcount` with `ipd 0`, 1.29.16 with `ipd 2`.
 
-### Modules [source, lcc]
+### Modules [source, lcc, gcc]
 
 The module loader takes only `R_E2K_32_ABS`, `R_E2K_64_ABS`,
 `R_E2K_64_ABS_LIT`, `R_E2K_64_CALL`, `R_E2K_DISP` and `R_E2K_32_PC`
@@ -729,10 +737,13 @@ optimize ("O0")` for every compiler but clang
 `_GLOBAL_OFFSET_TABLE_` reference at `-O0` either (also with `-fkernel
 -mdmodel=large`); with `-fPIC` it computes the GOT address only in
 functions that use it [lcc 1.29.16 v3, v5.8c2, v6.2c3:
-`tools/abi/probes/foldp107_gotbase.sh`]. A GCC that computes it in
-every function leaves an `R_E2K_64_PC_LIT` against
-`_GLOBAL_OFFSET_TABLE_` in such code at `-O0` (later levels delete the
-unused load), and the module fails to load [gcc; plan D10].
+`tools/abi/probes/foldp107_gotbase.sh`]. So a port must create a PIC
+register only in PIC code (`-fpic`, `-fPIC`), since an
+`R_E2K_64_PC_LIT` against `_GLOBAL_OFFSET_TABLE_` fails a module's
+load, and in PIC code load the GOT address only in functions that use
+it. Where the target creates one, GCC asks it to set the register up in
+every function and keeps an unused load at `-O0`; from `-O1` it deletes
+one [gcc; plan D10].
 
 ### Stacks and frame sizes [source, gcc]
 
@@ -751,7 +762,7 @@ in 159, both without `-pg`), in `mm/slub.o` 1,102 against 1,240, in
 ## What a GCC build meets first [gcc, source]
 
 A `defconfig` kernel built on the host with the proof-of-concept
-compiler, `FUNCTION_TRACER` off, stops on:
+compiler of 2026-10-16, `FUNCTION_TRACER` off, stops on:
 
 | Error | Where | Cause |
 |---|---|---|
@@ -806,7 +817,8 @@ errors are fixed.
   124206/135900 and whether `rbranch ? %dt_alN` at entry or exit
   triggers it): they are privileged and come from the sources only.
 - Whether a GCC `ttable_tmp.o` and `ttable.o` get equal windows: the
-  proof-of-concept back end can't compile `ttable.c` yet (39 operands).
+  proof-of-concept back end of 2026-10-16 couldn't compile `ttable.c`
+  (39 operands).
 - GCC and the v5+ per-CPU atomics cast to `void` (inferred, not
   probed); recordmcount.pl itself on a whole build (the probe applies
   its rules).

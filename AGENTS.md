@@ -650,9 +650,9 @@ control speculation (sections 7.6, 7.7).
 ## Next steps (proposed, owner to choose)
 
 0. `docs/spec-poc-findings.md` (the PoC agent's file, untracked): every
-   entry through I54, A31 and P94 is folded into `spec/` and `doc/` and
-   removed from it (I53, I54, A30, A31 and P92–P94 on 2026-10-16); none
-   is open; new ones continue as I55, A32, P95.
+   entry through I56, A36 and P107 is folded into `spec/` and `doc/` and
+   removed from it (I55, I56, A32–A36 and P95–P107 on 2026-10-24); none
+   is open; new ones continue as I57, A37, P108.
 1. Extend the compat suite (see Current state). It runs on the 4C with
    `run.py --target v3 --remote ...`; all pairs match qemu except the
    tag-trap tests, which pass on the 4C and on the 8C2 (v5, `--target

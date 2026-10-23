@@ -66,7 +66,7 @@ option in it, and nothing reports it.
 | `-fexclude-ctpr2 -fno-semi-spec-ld`, and `-fno-dam` if `CONFIG_MIGHT_HAVE_CPU_HWBUG_L1I_RBRANCH_CALLS` (`CPU_ISET_MIN` ≤ 6); `-fglobal-regs` and `-fsemi-spec-ld` removed | `kernel/Makefile:57-82`: `ttable.o`, `ttable_tmp.o` (trap entry and exit) | no `%ctpr2` ("needed when building the Linux kernel" [lcc-doc]); no DAM | rejected |
 | `-fno-global-regs` | `kernel/cpu/Makefile:14-16` (`iset_v3.o`, `iset_v5.o`: they save and restore `%g16`–`%g31`), `p2v/Makefile:30` (`boot_head.o`), `kvm/Makefile:47, 57-58`, `kernel/libeprof/Makefile:5` | no global temporaries | rejected |
 | `-fno-semi-spec-ld -fno-spec-ld -fno-jump-tables -ftrivial-auto-var-init=uninitialized` | `p2v/Makefile:11-13`, `kernel/Makefile:139-142` (kexec), `boot/Makefile:10-11`, `kvm/guest/Makefile:56-57`: code that runs at physical addresses | no speculative loads at all; no jump tables (but see below) | `-fno-jump-tables` and `-ftrivial-auto-var-init` accepted, the rest rejected |
-| `__no_semispec` | `asm/compiler.h:212-222` on every `.uaccess_functions` function (`asm/uaccess.h:397-411`) | lcc ≥ 1.31.05: `optimize("-fno-semi-spec-ld")`, `optimize("-fno-loop-apb")`; older lcc `optimize("O1")`; clang `optnone` | **not defined**: `uaccess.h:411` fails to parse ("expected ';' before 'long'") |
+| `__no_semispec` | `asm/compiler.h:212-222` on every `.uaccess_functions` function (`asm/uaccess.h:397-411`: a `noinline` wrapper around an `always_inline` body) | lcc ≥ 1.31.05: `optimize("-fno-semi-spec-ld")`, `optimize("-fno-loop-apb")`: no semi-speculative load (fully speculative ones with recovery instead) and no APB; 1.29.16 ignores both silently, hence `optimize("O1")` for older lcc: no speculative load at all. Both reach the inlined body [lcc: `tools/abi/probes/foldp103_nosemispec.py`]. clang `optnone` | **not defined**: `uaccess.h:411` fails to parse ("expected ';' before 'long'"); what a port needs is under "Speculative loads" |
 | `-pg` | top `Makefile:789` (`CONFIG_FUNCTION_TRACER`) | below, "ftrace" | passes the empty-file test, but the proof-of-concept back end then says "sorry, unimplemented" for any function |
 | `-Wframe-larger-than=6144` | `kernel/Makefile:6-8` (`CONFIG_VIRTUALIZATION`; 4096 or 8192 in the KVM code) | accepted | accepted; top `Makefile:879-883` passes `CONFIG_FRAME_WARN` (0 in `defconfig`) to every compiler but lcc |
 
@@ -242,6 +242,79 @@ attribute '__interrupt__' ignored", "'__check_stack__' ignored") and
 gives both functions a `getsp` [unipro: `clang --target=e2k-linux
 -march=elbrus-v3 -O2 -S`].
 
+lcc inlines the `always_inline` ones from `-O1` on (at `-O0` it inlines
+nothing, `always_inline` included), into ordinary and `check_stack`
+callers alike, and checks the attribute on each function's own code: a
+`check_stack` helper that needs the data stack compiles when inlined
+into an ordinary function, which then gets the `getsp`, and is the error
+when compiled out of line or inlined into a `check_stack` function
+[lcc: `tools/abi/probes/foldp102_inline_cs.c`]. GCC inlines a function
+carrying an attribute of the target's table only if
+`TARGET_FUNCTION_ATTRIBUTE_INLINABLE_P` allows it. The default
+(`hook_bool_const_tree_false`) never does, and for these `always_inline`
+helpers that is "inlining failed in call to 'always_inline' …: function
+not inlinable" in every file that reads `%upsr`
+(`gcc/tree-inline.cc:4189-4207, 4241, 4929`; `gcc/target.def:2359-2369`)
+[source]. So a port's hook must answer true for this attribute.
+
+What lcc keeps in registers there, a port must too [source, lcc, gcc].
+The kernel's register images (`e2k_cud_t`, `e2k_gd_t`, `e2k_psp_t`,
+`e2k_pcsp_t`, `e2k_usd_t`, `e2k_cr0_t`, `e2k_cr1_t`,
+`asm/cpu_regs_types.h:81-650`) are 16-byte unions of bit-field structs
+over the anonymous `e2k_qreg_t { u64 lo, hi; }`
+(`asm/base_regs_types.h:40-43`; `-fms-extensions`), aligned to 8. Eight
+`__interrupt` functions hold them, or other values, in registers across
+calls: `e2k_setjmp` (`kernel/setjmp.c:10-12`), `fast_sys_set_return`
+(`fast_syscalls/fast_set_return.c:11-15`, through
+`asm/fast_syscalls.h:415`), `fast_sys_getcontext`
+(`asm/fast_syscalls.h:369-371`, `static __always_inline` but compiled on
+its own because `fast_syscalls/fast_syscalls.c:65` takes its address),
+`protected_fast_sys_getcontext` (`fast_syscalls/protected.c:225-227`),
+`kernel_data_stack_overflow` (`kernel/ttable.c:275`, through `:205`),
+`relocate_kernel` (`kernel/relocate_kernel.c:51-52`, with `new_gd_v6`'s
+compound literal, `asm/cpu_regs.h:130-133`), and, without 16-byte
+images, `fast_syscall_read_sclkr` (`fast_syscalls/sclkr.c:15-21`) and
+`dump_vprintk` (`arch/l/kernel/console.c:255`). lcc compiles the four
+shapes these functions take with no `getsp` [lcc 1.29.16 v3, v5.8c2,
+v6.2c3 at `-O2`, `-O3`, `-O3 -fkernel`; 1.31.05 v3:
+`tools/abi/probes/foldp104_regimage.c`; at `-O0` lcc refuses three of
+them]. GCC's defaults put four things on the data stack [gcc: GCC's
+source; GCC 16.2 for x86-64; the proof-of-concept back end refused the
+eight for them]:
+
+- **The unions.** Under `STRICT_ALIGNMENT` a record or union aligned
+  below its integer mode gets BLKmode (`gcc/stor-layout.cc:1943-1953`),
+  and TImode is aligned like `__int128`, to 16
+  ([data-layout.md](data-layout.md)). A BLKmode local lives in memory,
+  and SRA leaves one that is also copied whole (`jb->psp = p`). Lowering
+  TImode's alignment would change `__int128`'s; `STRICT_ALIGNMENT` 0
+  would allow misaligned accesses that lcc's `-fkernel` rules out
+  (`-mstrict-align`) (inferred). x86-64, without `STRICT_ALIGNMENT`,
+  keeps such a union in TImode at alignment 8 (`:1969-1983`).
+- **A zero built in a stack temporary.** The gimplifier clears a
+  compound literal that leaves bytes out as a whole (`u = {}`,
+  `gcc/gimplify.cc:6447-6458`), and DSE trims the clear to the bytes the
+  fields leave out (`MEM <char[6]> [&u + 6B] = {}`,
+  `gcc/tree-ssa-dse.cc:574-618`). Storing that into an object held in
+  registers, `store_field` (`gcc/expr.cc:8290-8294, 8372`) has
+  `expand_constructor` build the zero in a stack temporary (`:9573`) and
+  reads it back (`:8462`). GCC 16.2 does this on x86-64 at `-O2` for
+  the probe's `write_gd`.
+- **Caller saves.** With `-fcaller-saves` (from `-O2`,
+  `gcc/opts.cc:640`), IRA may give a value live across a call a
+  call-clobbered register (`gcc/ira-conflicts.cc:919-925`; cost
+  `gcc/ira-int.h:1702-1712` against `gcc/ira-color.cc:2257-2293`). LRA
+  then saves it in a stack slot around the call
+  (`gcc/lra-constraints.cc:6692-6709, 6903-6908`), where a window
+  register would keep it for free. The flag can be set per function.
+- **Pseudos without a class.** IRA gives a pseudo whose `REG_EQUIV`
+  equivalence saves more than it costs class NO_REGS
+  (`gcc/ira-costs.cc:2187-2206, 2239-2241`) and expects LRA to substitute
+  the equivalence. Where LRA cancels it
+  (`gcc/lra-constraints.cc:6031-6091`), the pseudo gets a stack slot.
+  `TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS` (`gcc/ira-costs.cc:2287-2289`)
+  can keep the class.
+
 ## Inline assembly the kernel relies on
 
 ### Non-volatile asm with an unused output [lcc, gcc, source]
@@ -328,7 +401,26 @@ inputs and `"=&r"` outputs (`e2k_api.h:2338, 3895-3938, 5048-5055,
 same. A port needs both modifiers on 16-byte operands, and must take
 a 16-byte struct in a register pair for `r` inputs and `"=&r"` outputs,
 as lcc does; `%L` and `%H` on an 8-byte operand or a constant are
-errors in lcc and should be in a port too.
+errors in lcc and should be in a port too. lcc takes any aggregate of
+1–16 bytes for `r`: 3- and 7-byte structs in one register, 12- and
+16-byte ones in a pair [lcc 1.29.16 and 1.31.05 v3:
+`tools/abi/probes/foldp100_blkasm.c`]. In GCC the struct case is a
+middle-end matter, not a target hook [source; gcc]: under
+`STRICT_ALIGNMENT` a 16-byte struct aligned to 8 is BLKmode
+(`gcc/stor-layout.cc:1943-1953`; TImode wants 16, and lowering that
+would make `__int128` 8-aligned), `expand_asm_stmt` gives a BLKmode
+register-only output a stack slot without a size
+(`gcc/cfgexpand.cc:3716-3730`) and warns about such an input
+(`:3794-3795`), and the vregs pass then reports either as "impossible
+constraint in 'asm'" (`gcc/function.cc:1857-1860`, through
+`asm_operand_ok`, `gcc/recog.cc:2376-2382`). `TARGET_MD_ASM_ADJUST`
+runs in between (`gcc/cfgexpand.cc:3830`) but can't size the slot.
+Either `expand_asm_stmt` moves such operands through the integer mode
+of their size (`copy_blkmode_to_reg`, and `copy_blkmode_from_reg`,
+static in `expr.cc`), or the kernel's four asms take `unsigned
+__int128`, as its neighbouring macros already do
+(`asm/e2k_api.h:5036, 9144`) [gcc: GCC 16.2.1 on x86-64 gives the error
+for a 3-byte struct; `foldp100_blkasm.c`].
 
 ### Operand count [lcc, gcc, source]
 
@@ -353,7 +445,10 @@ asms (`__no_asm_inline` is both, `asm/compiler.h:43-101`; it never uses
 accepts the asm pragmas under `-Wall -Werror`; GCC reports "ignoring
 '#pragma asm_length'" and the loop pragmas under `-Wunknown-pragmas`
 (part of `-Wall`), an error with the kernel's `-Werror`. A compiler must
-accept and ignore (or use) them.
+accept and ignore (or use) them, and a GCC port must register the
+ignored ones in the preprocessor, or a run such as `ivdep` then `loop
+count (N)` stops GCC's loop-pragma parsing ([source-compat.md](source-compat.md),
+"Pragmas").
 
 ## Code generation in kernel mode
 
@@ -390,9 +485,24 @@ An explicit `-fno-semi-spec-ld` after `-fkernel` also cancels the
 `-glob`/`-stack`/`-greg` exceptions `-fkernel` implies
 ([source-compat.md](source-compat.md), "Speculation switches"). Fully
 speculative loads with recovery stay on unless `-fno-spec-ld` is given.
-A kernel compiler needs, per file: semi-speculative loads on or off,
-fully speculative loads on or off, and both per function
-(`__no_semispec`).
+A kernel compiler needs, per file, semi-speculative loads on or off and
+fully speculative loads on or off. Per function (`__no_semispec`) it
+needs semi-speculative loads and APB off, reaching the inlined
+`always_inline` body as lcc's does; fully speculative loads may stay, as
+lcc 1.31.05 keeps them [lcc: `tools/abi/probes/foldp103_nosemispec.py`,
+the kernel's options, 1.29.16 and 1.31.05, v3, v5.8c2, v6.2c3]. GCC's
+`optimize` attribute takes only `-O` and `-f` options flagged
+`Optimization` ("bad option to attribute 'optimize'",
+`gcc/c-family/c-common.cc:6248-6263, 6299-6318`) [source; gcc: GCC
+16.2.1 on x86-64]. So a `-m` switch needs the `target` attribute, with a
+`TARGET_CAN_INLINE_P` that lets the body without it in: the default
+refuses, which for `always_inline` is "target specific option mismatch"
+(`gcc/targhooks.cc:1908-1923`, `gcc/ipa-inline.cc:435-440`). A port that
+names its switches as `-f` options flagged `Optimization` (lcc's
+`-fsemi-spec-ld`, `-floop-apb`) would take lcc 1.31.05's spelling
+unchanged (inferred from `parse_optimize_options`; not tried).
+`optimize("O1")` serves only if the port's `-O1` never speculates (lcc's
+doesn't).
 
 ### Array prefetch, `%ctpr2`, DAM [lcc, source]
 
@@ -485,16 +595,32 @@ pass it.
 
 The kernel links no libgcc and `arch/e2k/lib` provides no 128-bit
 helpers, but it selects `ARCH_SUPPORTS_INT128` (`Kconfig:70`), so
-`mul_u64_u32_shr`/`mul_u64_u64_shr` multiply `unsigned __int128`
-(`include/linux/math64.h:157-174`). lcc compiles 128-bit multiplies and
-shifts inline (`muld` and `umulhd`) at `-O2`, `-O3` and `-Os`, and calls
-helpers only for 128-bit division (`__udivti3`, `__umodti3`), which the
-kernel doesn't use. GCC calls `__multi3`, and at `-Os` also
-`__ashlti3`/`__lshrti3`/`__ashrti3`, for a 128-bit multiply or shift its
-back end doesn't expand inline [gcc], which would leave vmlinux with
-undefined symbols (inferred): a port must expand them inline (`muld`
-and `umulhd`, shift pairs). `clz`, `ctz`,
-`popcount`, `ffs`, `bswap` and `parity` are inline in both.
+`mul_u64_u32_shr`/`mul_u64_u64_shr` multiply `unsigned __int128` and
+shift the product by a variable count (`include/linux/math64.h:157-171`;
+`kernel/sched/fair.c:345`). lcc compiles 128-bit multiplies and shifts
+inline (`muld` and `umulhd`) at `-O1`, `-O2`, `-O3` and `-Os`, in cold
+code too, and calls helpers only for 128-bit division (`__udivti3`,
+`__umodti3`), which the kernel doesn't use. At `-O0` it calls
+`__ashlti3`/`__lshrti3`/`__ashrti3` for every 128-bit shift, constant
+counts included (never `__multi3`); neither of the kernel's `-O0` files
+("Modules") uses `__int128` [lcc 1.29.16 v3, v5.8c2, v6.2c3, 1.31.05
+v3: `tools/abi/probes/foldp106_coldshift.c`]. GCC builds a double-word
+multiply from `umulditi3`/`mulditi3` at every level
+(`gcc/optabs.cc:2143-2188`), but a shift by a variable count only where
+`optimize_insn_for_speed_p ()` holds (`:1821-1830`). That is false at
+`-Os` and, from `-O1`, in a `cold` function or in a block that runs
+below 1/1000 of its function's entry (`gcc/predict.cc:154-186,
+352-366`), and there GCC calls the three helpers [gcc]. MCST's kernel
+makes every `unlikely()` path such a block: with `CONFIG_MCST`, which
+`E2K` selects (`arch/e2k/Kconfig:190`), `unlikely(x)` is
+`__builtin_expect_with_probability (!!(x), 1, 0.0001)` for GCC 9 and
+later (`include/linux/compiler.h:77-84`); a plain `__builtin_expect`
+path stays inline [source; gcc]. So a port must expand 128-bit
+multiplies (`muld` and `umulhd`) and variable 128-bit shifts (shift
+pairs) itself at every level, or vmlinux is left with undefined symbols
+(the proof of concept's `kernel/sched/fair.o` called `__lshrti3`).
+`clz`, `ctz`, `popcount`, `ffs`, `bswap` and `parity` are inline in
+both.
 
 ## Erratum #123567 and `-ffix-lcc-bug123567` [lcc, source]
 
@@ -593,6 +719,21 @@ code does, whatever `-mdmodel` (`medium`, `large`, `huge`, with
 `-fkernel`: `R_E2K_64_ABS_LIT` in code, `R_E2K_64_ABS` in data,
 `R_E2K_DISP` for calls); so does GCC's [gcc].
 
+That holds at `-O0` too, and the kernel builds two modules there:
+`crypto/jitterentropy.c` (`CFLAGS_jitterentropy.o = -O0`,
+`crypto/Makefile:171`; the file stops with `#error` under
+`__OPTIMIZE__`, `:53-55`) and smifb's software i2c, under `#pragma GCC
+optimize ("O0")` for every compiler but clang
+(`drivers/mcst/smi/ddk750/ddk750_swi2c.c:200-203`,
+`ddk768/ddk768_swi2c.c:275-278`) [source]. lcc's non-PIC code has no
+`_GLOBAL_OFFSET_TABLE_` reference at `-O0` either (also with `-fkernel
+-mdmodel=large`); with `-fPIC` it computes the GOT address only in
+functions that use it [lcc 1.29.16 v3, v5.8c2, v6.2c3:
+`tools/abi/probes/foldp107_gotbase.sh`]. A GCC that computes it in
+every function leaves an `R_E2K_64_PC_LIT` against
+`_GLOBAL_OFFSET_TABLE_` in such code at `-O0` (later levels delete the
+unused load), and the module fails to load [gcc; plan D10].
+
 ### Stacks and frame sizes [source, gcc]
 
 Kernel stacks per thread (`asm/stacks.h:136-147`): data stack 5 pages
@@ -622,7 +763,23 @@ compiler, `FUNCTION_TRACER` off, stops on:
 | implicit declaration of `__builtin_e2k_pshufb`, `popcnts`, `lzcnts`, `scls`, ... (an error by default since GCC 14) | `asm/string.h`, `bitops.h`, `checksum.h` | lcc builtins: 31 distinct ones in `arch/e2k`, all in [lcc-builtins.md](lcc-builtins.md) |
 | `expected ';' before 'long'` | `asm/uaccess.h:411` | `__no_semispec` undefined for GCC |
 | `more than 30 operands in 'asm'` | `ttable.c` through `TRAP_HANDLER_DONE` | 39 operands |
-| `impossible constraint in 'asm'` | `asm/e2k_api.h:5819` and `:5971` (`process.c`, `start_thread` and others) | a 16-byte struct with `"=&r"` |
+| `impossible constraint in 'asm'` | `asm/e2k_api.h:3894`, `:3932`, `:5819`, `:5971` (`process.c`, `start_thread` and others) | `e2k_qreg_t` (a 16-byte struct aligned to 8) as a `"=&r"` output: BLKmode on a `STRICT_ALIGNMENT` target, which GCC reports after expansion, past every target hook ("`%L`, `%H` and 16-byte operands") |
+
+Configurations for v5 and later (`config-mcst-e8c2`, `-e2c3`, …;
+`defconfig` is v3) also compile `asm/xor.h`'s `xor2_128x16_m12`,
+`xor3_128x16_m10`, `xor4_128x16_m8` and `xor5_128x16_m6` (`#if __iset__
+>= 5`, `:606-1620`) in `crypto/xor.c` (`XOR_BLOCKS`, a module in every
+`config-mcst-*`), which put `__aligned(64)` on their pointer parameters
+(`asm/xor.h:688-689, 744-746, 911-914, 1189-1193`). GCC refuses that:
+"alignment may not be specified for 'p1_arg'" (`aligned` is for
+variables, functions and fields, `gcc/c-family/c-attribs.cc:2321`)
+[gcc]. lcc ignores it on a parameter, with no diagnostic under `-Wall
+-Wextra`: `__alignof__` says 8, an address-taken slot is not realigned,
+and `crypto/xor.c` built with the kernel's own lcc command compiles to
+the same code without the attributes, so dropping them changes nothing
+[lcc 1.29.16 v3, v5.8c2, 1.31.05 v3:
+`tools/abi/probes/folda36_parmalign.c`, and `crypto/xor.c`]. Clang
+honours it [unipro].
 
 With `FUNCTION_TRACER` on, every file also stops with "sorry,
 unimplemented: profiling" (that back end has no `-pg`; the probe's

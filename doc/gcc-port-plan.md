@@ -717,7 +717,8 @@ produce slow code: correctness first, then the VLIW work.
   each operand, two `sdivs` (`sdivd` for `long`) in 12 instructions
   [lcc 1.29.16 `-O3`, v3–v6; 1.31.05 for v6 and v7 alike].
 - PIC/PIE and TLS exactly as `spec/abi/elf.md` (GOT base via `rrd %ip` +
-  `_GLOBAL_OFFSET_TABLE_` literal in the same wide instruction). In PIC
+  `_GLOBAL_OFFSET_TABLE_` literal in the same wide instruction, computed
+  only in functions that use it, at `-O0` too: D10). In PIC
   code reach ifunc symbols through `@GOT`: MCST ld cannot link a
   `@GOTOFF` reference to an ifunc (`elf.md`, "Rarely used operators").
 - `libgcc` builds; `gcc.c-torture/execute` and `gcc.dg` pass with a
@@ -1641,6 +1642,22 @@ measured for the port directly:
 - **PIC jump tables:** GCC emits them as offsets from the table
   (`ADDR_DIFF_VEC`) and leaves adding the table address to the port's
   `tablejump` expander.
+- **The GOT address only where it is used.** With a pseudo PIC register
+  (`TARGET_USE_PSEUDO_PIC_REG`; expand creates one for every function,
+  cfgexpand.cc:2524-2525), IRA calls `TARGET_INIT_PIC_REG` for every
+  function (ira.cc:5752) and leaves the decision to the hook. From `-O1`
+  an unused load is deleted; at `-O0` it stays (GCC 16.2 for i386 at
+  `-m32 -O0 -fPIC` sets up the GOT in a function that uses none). In
+  non-PIC E2K code that leftover is an `R_E2K_64_PC_LIT` against
+  `_GLOBAL_OFFSET_TABLE_`, which MCST's module loader rejects, and the
+  kernel builds two modules at `-O0` (`spec/abi/kernel-build.md`,
+  "Modules"). Return from the hook unless the function used the
+  register. `crtl->uses_pic_offset_table` (emit-rtl.h:225-226) is the
+  flag for that, but the middle end never sets it: set it wherever the
+  port emits a GOT-based address, as ARM does (arm.cc:8091-8125, tested
+  at :8399). lcc computes the address only in functions that use it, at
+  `-O0` too, and never in non-PIC code
+  (`tools/abi/probes/foldp107_gotbase.sh`).
 - **Packed shifts read the whole 64-bit count** (a count of the lane
   width or more gives 0 or the sign, semantics.md), but under
   `SHIFT_COUNT_TRUNCATED` GCC's `expand_shift_1` hands a shift the wider
@@ -1942,7 +1959,11 @@ on the host):
   a GCC everything goes: the `-fkernel -gline …` group (GCC rejects
   `-gline`), `-fglobal-regs -ffixed-g16` … `-ffixed-g25`,
   `-fexclude-ctpr2`, `-fno-dam`, `-fno-semi-spec-ld`, `-fno-spec-ld`,
-  `-fno-loop-apb`. The fixed globals matter most: the kernel reserves
+  `-fno-loop-apb`. `__no_semispec` needs per-function control of
+  semi-speculation and APB that reaches inlined bodies (the `target`
+  attribute with a `TARGET_CAN_INLINE_P` that lets them in, or `-f`
+  options flagged `Optimization`; `spec/abi/kernel-build.md`,
+  "Speculative loads"). The fixed globals matter most: the kernel reserves
   `%g16`–`%g25` for its state (and needs `%g16`–`%g31` untouched where
   lcc gets `-fno-global-regs`). Accept lcc's spellings where the port has
   the feature, or expect a kernel Makefile change; either way, a
@@ -1950,23 +1971,68 @@ on the host):
   a thunk's scratch) must honour `-ffixed-gN`.
 - **`%L` and `%H`** on 16-byte `r` operands, and 16-byte structs
   (`e2k_qreg_t`) in register pairs as `r` and `"=&r"` operands
-  (`spec/abi/source-compat.md`, "Operand modifiers").
+  (`spec/abi/source-compat.md`, "Operand modifiers"). The second is a
+  middle-end matter, not a target hook: under `STRICT_ALIGNMENT` a
+  16-byte struct aligned to 8 is BLKmode (stor-layout.cc:1943-1953),
+  `expand_asm_stmt` gives a BLKmode register-only output a stack slot
+  without a size (cfgexpand.cc:3716-3730), and the vregs pass reports
+  it as "impossible constraint in 'asm'" (function.cc:1857-1860), after
+  `TARGET_MD_ASM_ADJUST` (cfgexpand.cc:3830), which can't size the
+  slot. Either let `expand_asm_stmt` move such operands through the
+  integer mode of their size (`copy_blkmode_to_reg`, and
+  `copy_blkmode_from_reg`, static in expr.cc), or patch the kernel's four
+  asms to `unsigned __int128` (`spec/abi/kernel-build.md`, "`%L`, `%H`
+  and 16-byte operands").
 - **lcc's pragmas** (`no_asm_inline`, `asm_length`, `loop count`,
   `unroll`, `ivdep`, `vector aligned`, `novector`, `no_dam`,
-  `noprefetch`): register them, as no-ops at first, or `-Wall -Werror`
-  stops on `-Wunknown-pragmas`.
+  `noprefetch`): register them, or `-Wall -Werror` stops on
+  `-Wunknown-pragmas`. Map `unroll (N)`, `ivdep` and `novector` to
+  GCC's own as deferred pragmas with GCC's ids
+  (`cpp_register_deferred_pragma` with `PRAGMA_UNROLL`, `PRAGMA_IVDEP`,
+  `PRAGMA_NOVECTOR`, as c-family/c-pragma.cc:1857-1867 registers `GCC
+  unroll` and the others), and register every pragma the port ignores
+  in the preprocessor (`cpp_register_pragma`: a handler that leaves no
+  token, as Darwin's `#pragma mark`, config/darwin.h:1199-1203), not
+  with `c_register_pragma`. GCC's C and C++ parsers accept only their
+  own loop pragmas between a loop pragma and its loop
+  (c/c-parser.cc:16291-16354, cp/parser.cc:57772-57850), so a deferred
+  `loop count` after a mapped `unroll (N)` is "for, while or do
+  statement expected"; glibc's E2K string functions have 52 such runs
+  and the kernel's `arch/e2k` 10 (`spec/abi/source-compat.md`,
+  "Pragmas"). lcc's bare `unroll` (unroll fully) has no GCC
+  counterpart; no E2K code uses it.
 - **Asm operands**: `TRAP_HANDLER_DONE` has 39 and lcc allows 50. GCC's
   limit, `MAX_RECOG_OPERANDS`, is the largest operand count of any md
   pattern (at least 29) plus 1 (genconfig.cc:285, 320), 30 for a port
-  without a bigger pattern.
+  without a bigger pattern. And an `m` operand must not print starting
+  with a digit: MCST's atomics put it right after the channel digit
+  (`spec/abi/source-compat.md`, "Other constraints").
 - **A `check_stack` attribute** (the kernel spells it `__interrupt__`
   for other compilers; about 90 functions, fast system calls among
   them): an error, never a frame, whenever the function would need the
   data stack, and calls with up to 8 arguments made without reserving
-  the argument area.
-- **128-bit multiplies and shifts inline**: the kernel links no libgcc;
-  lcc uses `muld` and `umulhd`, while the proof of concept calls
-  `__multi3` (and the TImode shift helpers at `-Os`).
+  the argument area. Let functions carrying it inline
+  (`TARGET_FUNCTION_ATTRIBUTE_INLINABLE_P`, whose default refuses every
+  machine attribute): the kernel declares `always_inline` helpers with
+  it (`native_read_UPSR_reg`), and lcc inlines them and checks the
+  attribute on the code each function ends up with. Then keep in
+  registers what lcc keeps there (`spec/abi/kernel-build.md`, "The
+  kernel's users and their contract"): the kernel's 16-byte register
+  images, which `STRICT_ALIGNMENT` makes BLKmode (give word-aligned
+  16-byte aggregates TImode without raising their alignment, a
+  stor-layout.cc change, since no hook does it); zeros stored into an
+  aggregate held in registers (`store_field` builds them in a stack
+  temporary, an expr.cc matter); and, in these functions only, no caller
+  saves (`flag_caller_saves` off per function) and no pseudo left in
+  NO_REGS for its `REG_EQUIV` (`TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS`).
+- **128-bit multiplies and shifts inline at every level**: the kernel
+  links no libgcc; lcc uses `muld` and `umulhd`. GCC inlines a
+  double-word multiply once `umulditi3`/`mulditi3` exist, but a
+  double-word shift by a variable count only in code it optimises for
+  speed, so `-Os` and cold code (every `unlikely()` path in MCST's
+  kernel) call `__ashlti3`/`__lshrti3`/`__ashrti3` unless the port's
+  `ashlti3`/`lshrti3`/`ashrti3` expand them
+  (`spec/abi/kernel-build.md`, "128-bit arithmetic and no libgcc").
 - **`-pg` in lcc's shape** (`spec/abi/kernel-interface.md`,
   "Profiling"), which `recordmcount.pl` and the ftrace patcher read
   back: `disp %ctprN, _mcount`, then the `call` in a wide instruction
@@ -1998,16 +2064,29 @@ cancellation"; `tools/abi/probes/glibcbuild_*`):
   accepts it (a no-op; the kernel's `recordmcount.pl` passes it too,
   D11). No other lcc option reaches a non-lcc build.
 - **`register long *fp asm ("FP")`**: glibc's `_start` and ld.so's
-  `_start2` read `argc` and `argv` through it. lcc binds `"FP"` to the
-  stack pointer at function entry (the same value as its
-  `__builtin_frame_address (0)`); give the port that name, or patch the
-  two places to `__builtin_frame_address (0)` with the same meaning.
-  Nothing else in 2.35 binds a non-register name (`memusage.h`'s
-  `"%SP"`/`"%r9"` is dead code).
+  `_start2` read `argc` and `argv` through it, directly rather than as
+  an asm operand (GCC documents only the latter use,
+  doc/extend.texi:13369-13371). lcc binds `"FP"` to the stack pointer
+  at function entry (the same value as its `__builtin_frame_address
+  (0)`). In GCC that value is the argument pointer, which a register
+  variable can't name: `make_decl_rtl` refuses the frame, argument and
+  return-address pointers when they are eliminable, "an internal GCC
+  implementation detail" (varasm.cc:1569-1578), and allows the hard
+  frame pointer. So give `"FP"` (and `"%FP"`) to the hard frame
+  pointer, make `TARGET_FRAME_POINTER_REQUIRED` true in a function whose
+  code reads it, and have the prologue set it to the entry stack
+  pointer. Or patch the two places to `__builtin_frame_address (0)`,
+  which in GCC is the hard frame pointer and forces one
+  (builtins.cc:816-839, ira.cc:2475-2486). Either way the hard frame
+  pointer must hold the entry stack pointer; nptl's
+  `CURRENT_STACK_FRAME` uses the same builtin. `"SP"` can be the
+  stack-pointer register. Nothing else in 2.35 binds a non-register
+  name (`memusage.h`'s `"%SP"`/`"%r9"` is dead code).
 - **lcc's pragmas**: 544 lines in 113 E2K files (`loop count`,
   `noprefetch`, `asm_inline`, `unroll`, `no_asm_inline`), and glibc
-  builds with `-Wall -Werror` by default, so register them as no-ops,
-  as for the kernel (D11), or configure with `--disable-werror`. Only
+  builds with `-Wall -Werror` by default, so register them as for the
+  kernel (D11: the ignored ones in the preprocessor), or configure with
+  `--disable-werror`. Only
   `noprefetch` matters once the port uses array prefetch (M7): lcc puts
   APB into glibc's `strlen` loop on v5 and v6 without it.
 - **`__cpu_init` in libgcc**, relocation-free and safe to run twice

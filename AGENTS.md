@@ -696,6 +696,13 @@ and `tools/dejagnu/README.md`, "Known limits".
   a predicated `movtd` into a CTPR conditionally (gas accepts it;
   hardware traps under any predicate; predicates.md, "RLP"). Run
   atomics and hand-written prologues on hardware.
+- **Hangs (MCST's qemu).** A plain store of a register with an empty
+  tagged half repeats its wide instruction for ever, as does a store
+  past qemu's 1 GiB guest area. That empty half is what `setwd` leaves
+  in the registers it adds, and what GCC-built code stores wherever a
+  variable is set on only some paths, so a GCC-built program that hangs
+  only under qemu needs a hardware run before it counts as a bug
+  (calling-convention.md, "Unused parts of a slot").
 - **Array prefetch.** MCST's qemu restarts every area when a signal
   handler returns (lcc `-O2`+ loops then compute wrong results) and
   models none of APB's limits (apb.md).

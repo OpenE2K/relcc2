@@ -1001,6 +1001,31 @@ glibc's and the kernel's among them, can be stepped only by instruction
   proof-of-concept GCC at `-O2 -g`, 4C: `break dot` at `dot`'s first
   instruction, which holds `setwd`, although the line table marks
   `prologue_end` at the next one].
+- `step` into a function ignores both of those rules. Whatever the
+  unit, gdb asks `e2k_skip_prologue` (`handle_step_into_function`,
+  `infrun.c:8643-8664`, through `gdbarch_skip_prologue_noexcept`,
+  `arch-utils.c:1054-1066`; only an assembly unit is left alone,
+  `:8650`). That function reads no line table, so neither a trusted
+  unit nor `prologue_end` moves the stop. If its address is inside a
+  row, `step` goes on to the row's end, the next row's start, while that
+  is still in the function (`:8654-8664`). An optimizing compiler packs
+  the body's first operations into the wide instruction with `setwd`:
+  `break` then stops at the entry, before them, and `step` after them,
+  in the second instruction, and gdb prints "0x… in" when no `is_stmt`
+  row starts there (`frame_show_address`, `stack.c:329`). A line table
+  can move `step`'s stop only later, to a row's end, never back into
+  the skipped instructions; keeping `setwd`, `setbn` and `getsp` in
+  instructions without body operations makes `step` stop at the
+  function's first statement. In a unit gdb doesn't trust and without
+  `prologue_end` (lcc's), `break` takes the same path and the two agree
+  [hw: `tools/abi/probes/folda32_step.sh`, 4C, ALT's gdb 15.2-alt1.2:
+  the proof-of-concept GCC's `work` at `-O1` and `-O2`, whose first
+  instruction holds `setwd`, line 26's store and line 27's shift,
+  `break` at the entry (line 26) and `step` at the second instruction
+  (line 28), after lines 26 and 27 ran, although the line table marks
+  `prologue_end` at the entry; at `-Og` (which keeps `setwd` alone)
+  `break` at the entry (line 25) and `step` at line 26; at `-O0`, and
+  with lcc `-O0`, both at line 26].
 - gdb plants a breakpoint by writing `setsft` over the first 8 bytes of
   the wide instruction (`e2k-tdep.c:506-540`), which traps whatever its
   operations' predicates are. A breakpoint on an if-converted

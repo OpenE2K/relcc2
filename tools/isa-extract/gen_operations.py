@@ -139,6 +139,7 @@ PROBES = {
     "callsstack_clash.s": ("abi/callsstack_clash.s", "4C, 8C2, 2C3"),
     "debuginfo.s": ("abi/debuginfo.s", "4C, 8C2, 2C3"),
     "glibcbuild_entry.s": ("abi/glibcbuild_entry.s", "4C, 8C2, 2C3"),
+    "foldi56_undef.s": ("abi/foldi56_undef.c", "4C, 8C2"),
 }
 ABI_PROBES = "tools/abi/probes"
 

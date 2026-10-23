@@ -267,6 +267,20 @@ change, gave the same 102 PASS, 27 FAIL and 23 UNSUPPORTED.
   time limit's SIGTERM). [qemu, hw: `smoke/segv.c`, `smoke/divzero.c`.]
   The community qemu does deliver SIGSEGV but returns from a division by
   zero with no signal; use MCST's (AGENTS.md: the reference).
+- **MCST's qemu hangs on stores of registers that hold nothing.**
+  GCC-built code stores registers it never wrote (a variable set on
+  only some paths, copied or kept across a call), and qemu fills the
+  registers `setwd` adds with an empty value (0, tag 5). A plain store
+  of such a register, or of any register with an empty tagged half,
+  repeats its wide instruction for ever (`spec/abi/calling-convention.md`,
+  "Unused parts of a slot") [qemu: `tools/abi/probes/foldi56_undef.c`].
+  The time limit's SIGTERM ends it ("WARNING: program timed out."). A
+  GCC-built test that times out only under MCST's qemu is probably
+  this: run it on hardware before counting it as a bug. `-e2k-opt
+  no-rf-clean` is no way around it: the added registers then keep stale
+  values, diagnostic ones included, and a read of one stops qemu
+  ("exception handling is unimplemented"). A store past qemu's 1 GiB
+  guest area also hangs, where hardware gives SIGSEGV.
 - The other differences between qemu and the hardware (AGENTS.md,
   "Gotchas") apply to test results too: qemu restarts array prefetch
   after a signal handler, can't check speculation, applies `%pfpfr` to

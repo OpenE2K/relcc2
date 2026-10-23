@@ -59,8 +59,19 @@ is not supported ("unknown built-in function").
 
 | Offset | Holds | `__builtin_cpu_is` names |
 |---|---|---|
-| +0 | ISA version | `elbrus-v2` … `elbrus-v7`: 2 … 7 (deprecated forms) |
-| +4 | lcc's CPU code | `elbrus-s` 2, `elbrus-2c+` 3, `elbrus-4c` 4, `elbrus-2cm` 5, `elbrus-8c` 6, `elbrus-1c+` 7, `elbrus-8c2` 8, `elbrus-12c` 9, `elbrus-16c` 10, `elbrus-2c3` 11, `elbrus-48c` 12, `elbrus-8v7` 13 |
+| +0 | ISA version | `elbrus-v1` … `elbrus-v7`: 1 … 7 (deprecated forms) |
+| +4 | lcc's CPU code | `elbrus` 1 (the v1 CPU), `elbrus-s` 2, `elbrus-2c+` 3, `elbrus-4c` 4, `elbrus-2cm` 5, `elbrus-8c` 6, `elbrus-1c+` 7, `elbrus-8c2` 8, `elbrus-12c` 9, `elbrus-16c` 10, `elbrus-2c3` 11, `elbrus-48c` 12, `elbrus-8v7` 13 |
+
+Any other name is an error, `unknown argument "NAME" for
+"__builtin_cpu_is"` (`elbrus-2c`, `elbrus-3m1`, `elbrus-1c`,
+`elbrus-v8`; the names are case-sensitive) [lcc: 1.29.16 and 1.31.05;
+`tools/abi/probes/folda33_cpuis.c`]. MCST's glibc (`ldsodefs.h:96-100`,
+`:175-181`, `:261-264`) and gdb (`e2k-linux-nat.c:236-240`) also ask
+for `"elbrus-maket32c"` (gas `-mcpu=elbrus-maket32c`: v7, ELF machine
+26), but only under `__MCST_SUPPORT_ELBRUS_MAKET32C__`. Neither lcc
+predefines it, and both reject the name even with it defined [lcc;
+source: glibc, binutils], so those builds leave it out and a GCC port
+need not know the name.
 
 These codes are not `%idr`'s model numbers
 ([semantics.md](../isa/semantics.md), "Other facts"). `__cpu_info` and

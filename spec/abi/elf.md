@@ -396,6 +396,28 @@ operand of a compare: `cmpedb,0 [ sym@ISLOCAL ], 0x1, %pred0`),
 `_GLOBAL_OFFSET_TABLE_@ABS`. `disp %ctprN, sym` gives `R_E2K_DISP`,
 `pref %iprN, sym` `R_E2K_PREF`.
 
+Data directives take fewer operators (binutils: `e2k_cons_fix_new`,
+`tc-e2k.c:11227-11397`): `@GOTOFF` (`.word` → `R_E2K_GOTOFF`, `.dword`
+→ `R_E2K_64_GOTOFF`), `@GOT` (`.word` only, `R_E2K_GOT`), `@SIZE`,
+`@TLS_DTPREL`, `@DYNOPT` and `@ABS` (plain `R_E2K_32_ABS` /
+`R_E2K_64_ABS`); `@PLT`, `@GOTPLT`, `@TLS_IE`, `@TLS_GDMOD`,
+`@TLS_GDREL` and `@ISLOCAL` are "unsupported value type". A bare
+`_GLOBAL_OFFSET_TABLE_` is PC-relative in data too (`e2k_parse_name`,
+`tc-e2k.c:11206-11218`), but data has no relocation for that (nor for
+`@PCREL` or `@ISLOCAL32`): `.dword _GLOBAL_OFFSET_TABLE_` (in `.data`
+or a debug section), `.word _GLOBAL_OFFSET_TABLE_`, `.dword
+_GLOBAL_OFFSET_TABLE_ - .` and `.dword sym@PCREL` stop gas with "symbol
+definition loop encountered at `L0'" and an internal error in
+`S_SET_SEGMENT`, and `.dword sym - _GLOBAL_OFFSET_TABLE_` with "can't
+resolve sym - L0". So in data, write the GOT as
+`_GLOBAL_OFFSET_TABLE_@ABS` (`R_E2K_64_ABS`: in a PIE, ld writes the
+link-time GOT address into `.debug_info` and makes an
+`R_E2K_64_RELATIVE` in `.data`), `sym − GOT` as `sym@GOTOFF`, and a
+PC-relative GOT as `_GLOBAL_OFFSET_TABLE_@ABS - .` (`R_E2K_64_PC`).
+lcc never names the GOT in data: its debug information gives a static's
+address as `.dword sym` (binutils b4bebd940a3's and lcc 1.29.16's gas
+and ld: `tools/abi/probes/gotdata.sh`; lcc `-fPIC -g`).
+
 ## Code sequences (lcc; Unipro the same unless noted)
 
 No register is reserved for the GOT address: each function that needs it

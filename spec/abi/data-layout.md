@@ -22,7 +22,7 @@ Little-endian. Checked by `tools/abi/probes/layout.c` (lcc, unipro).
 | `size_t` | 8 | 8 | | unsigned long |
 | `wchar_t` | 4 | 4 | | signed int |
 | `max_align_t` | 32 | 16 | | |
-| GNU vectors, `__attribute__ ((vector_size (N)))` | N | N (2 to 256 bytes; `_Alignof` says N too) | | |
+| GNU vectors, `__attribute__ ((vector_size (N)))` | N | N (any N up to 2^31 bytes; `_Alignof` says N too) | | |
 | C++ pointer to data member | 8 | 8 | | the offset; null is −1 |
 | C++ pointer to member function | 16 | 8 | | Itanium's `{ptr, adj}` ([calling-convention.md](calling-convention.md), "C++ ABI beyond calls") |
 
@@ -41,7 +41,15 @@ bytes is aligned to N, also beyond 16 (`struct { char c; v32 v; }` puts
 and for a structure holding one, because `min_align_of_type` caps the
 answer at `BIGGEST_ALIGNMENT` (`stor-layout.cc:2821-2837`) [source:
 GCC; gcc]; its `__alignof__` says N. Unipro's clang answers N
-[unipro].
+[unipro]. lcc accepts any power-of-two number of elements up to N = 2^31
+bytes (1 for a `char` vector) and aligns every such vector to N, as a
+member and as an object; 2^32 bytes is "vector size is too large"
+[lcc: 1.29.16 and 1.31.05, v3 and v5.8c2;
+`tools/abi/probes/folda35_vec.c`]. GCC aligns vectors to N only up to
+ELF's `MAX_OFILE_ALIGNMENT`, 2^28 bytes (`default_vector_alignment`,
+`targhooks.cc:1540-1549`), and refuses 2^31 − 1 components or more
+(`c-attribs.cc:4375`), so the two differ only for vectors of 2^29 bytes
+and more [source: GCC; gcc].
 
 ## Aggregates (guide 9.2.4)
 

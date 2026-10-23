@@ -164,7 +164,19 @@ measured 0.54% of xz -6's cycles in `BUB_B_RF_SPILLFILL` on the 8C2
   handler had run while the function held it (3 of 3 runs on each
   machine), and 0, stale data or, by chance, the right value after a
   call deep enough to spill the window; with `nfx = 0` it survived both
-  (hw: `tools/isa-probes/isaleft.c` `qspill`, 8C2 and 2C3). So any
+  (hw: `tools/isa-probes/isaleft.c` `qspill`, 8C2 and 2C3). On the 8C2
+  every high half of an `nfx = 1` window, written as 128 bits, as 64 or
+  not at all, read 0 with tags 0 after a 1000-deep call or a SIGSEGV
+  handler. Interrupts and context switches lost it only after a deep
+  call had returned (the frames below the function no longer in the
+  register file; inferred): with a process pinned to the same CPU
+  waking every 50 µs in 2,983–2,999 of 3,000 holds of 0.4 ms, with timer
+  interrupts alone in about 300 of 3,000, and across a blocking
+  `nanosleep`. It became 0, tags 0, or in 0–39 holds of 3,000 a copy of
+  the register's own low half with its tags. With the caller's frames
+  still resident no hold lost it (about 10,500 switches), nor did
+  `getpid` or `sched_yield`; with `nfx = 0` nothing was lost [hw:
+  `tools/abi/probes/foldi55.c` `spill`, `sig`, `sys`, `ctx`; 8C2]. So any
   extended value in a window register needs `nfx = 0` in the function
   that owns the window, however briefly it is held (between a `movif`
   and its `movfi`) and whether or not the function calls: a signal, and
@@ -725,6 +737,43 @@ qemu as v3 and v5.
   under `dbl = 0`, `ldd`), except that on the 4C a `faddd` result
   clears it to 0, where the 8C2 and 2C3 keep it [hw: `pocabi2.c`];
   nothing should rely on either.
+- **The high half of a v5+ register after a narrower write.** A write
+  of 64 bits or less (`addd`, `adds` under either `dbl`, `ldd`, `ldw`,
+  `faddd`, `sxt`, a failed `ldd,sm`) leaves the high half and its tags
+  as they were [hw: `tools/abi/probes/foldi55.c` `wr`; 8C2]. What they
+  were depends on the register's history, so the high half of a value
+  written with 64 bits or less is undefined and can be diagnostic:
+  - a register the window gains (a `setwd` that grows it, a callee's
+    pairs beyond its caller's window) reads empty in both halves (0,
+    tags 1/1), and its high half stays empty after a 64-bit write [hw:
+    `foldi55.c` `wr`, `gain`; 8C2];
+  - a register in the pairs the caller hands over (the parameter area,
+    and any pairs up to the caller's `wsz`) keeps both halves as the
+    caller's window holds them, so its high half is what an earlier
+    callee left in its own `%r0`–`%r7`: after a callee that left
+    diagnostic high halves there, the next callee's 64-bit-written
+    registers kept them, and a plain `stqp` of one was SIGILL
+    `ILL_ILLOPN`, while one the call gained stored [hw: `foldi55.c`
+    `hand`; 8C2];
+  - with `nfx = 1` a spill and fill of the window leaves 0, tags 0, or
+    now and then a copy of the register's own low half with its tags
+    (under `nfx` above): a failed speculative pointer in the low half
+    (`4afafafa4afafaf8`, a failed `ldd,sm` masked by `andd,sm`) becomes
+    a diagnostic high half and stays there when the real pointer is
+    later written with 64 bits [hw: `foldi55.c` `ctx`, 2–3 of 750 holds
+    a case; 8C2].
+
+  A plain `stqp` of a register whose high half is diagnostic is SIGILL
+  `ILL_ILLOPN` at the store, whatever the low half holds; a plain `std`
+  of its low half stores, and `stqp,sm` stores both halves with their
+  tags. So keep, save and spill a value at the width it was written:
+  `std`/`ldd` for one written with 64 bits or less, `stqp` only for a
+  value written whole as 128 bits. The proof-of-concept back end,
+  saving a 64-bit pointer with `stqp` (its caller saves in the
+  register's widest mode), died this way with these values (its I55:
+  187 of 5,000 runs of pcre2's test 14 on the 8C2 under forced context
+  switches, 0 of 5,000 with `std`/`ldd`; its counts not rechecked). Not
+  measured on the 2C3.
 - The arithmetic is x87 extended precision exactly: 64-bit mantissa,
   round to nearest even, denormals down to 2^-16445, overflow to
   infinity; `sqrtl(2)` is correctly rounded. Unnormals and pseudo-NaNs

@@ -1642,6 +1642,19 @@ measured for the port directly:
 - **PIC jump tables:** GCC emits them as offsets from the table
   (`ADDR_DIFF_VEC`) and leaves adding the table address to the port's
   `tablejump` expander.
+- **Save and spill each value in its own mode.** On v5 and later a
+  register holds 128 bits, and the high half of one last written with
+  64 bits or less is whatever the register held before, possibly a
+  diagnostic value, so a plain `stqp` of it can be SIGILL `ILL_ILLOPN`
+  (`spec/abi/registers.md`, "Extended parts and `long double`"). GCC's
+  default `HARD_REGNO_CALLER_SAVE_MODE` is `choose_hard_reg_mode`, the
+  widest mode the register can hold (regs.h:194-196; tm.texi's
+  "smallest suitable mode" is wrong, as sparc.h:711-716 says), and LRA
+  saves every call-crossing value in that mode
+  (lra-constraints.cc:6903-6908). Define it as SPARC does, returning the
+  value's own `MODE` and the default only for `VOIDmode`, and keep
+  every other save, spill and reload of a value in the mode it was
+  written in, never the register's widest.
 - **The GOT address only where it is used.** With a pseudo PIC register
   (`TARGET_USE_PSEUDO_PIC_REG`; expand creates one for every function,
   cfgexpand.cc:2524-2525), IRA calls `TARGET_INIT_PIC_REG` for every

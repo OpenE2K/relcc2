@@ -2214,6 +2214,49 @@ wants them upstream has to propose them there.
   inside the statement's block, holding an artificial `DW_TAG_label` at
   the copy's address. In the proof of concept, which unrolls at `-O2`, a
   4-way unrolled loop's line then had 18 locations instead of 1.
+- **Partial inlining.** From `-O2` (opts.cc:662), ipa-split moves a
+  function's tail into a clone `F.part.N` whose DIE names F
+  (`DECL_ABSTRACT_ORIGIN`, tree-inline.cc:6383), called from F by a call
+  without a location (ipa-split.cc:1509-1512). When the inliner puts
+  the part back, into F or into an inlined copy of F,
+  `expand_call_inline` gives its body an inlined-call block whose call
+  location defaults to the callee's declaration
+  (tree-inline.cc:5043-5059) and starts it with an inline-entry marker
+  on that line (:5114-5121), which final writes as an `is_stmt` row
+  (final.cc:2376-2385). DWARF then has F inlined into F at F's own
+  first line: `break F` and a breakpoint on that line get both entries,
+  gdb stops twice per call, and backtraces show F inside F. This is GCC
+  PR 91663 ("split function can be re-inlined, leaving bad stack
+  trace", 2019); upstream turned partial inlining off only for Go
+  (go/go-lang.cc:323-326). Whether it shows depends on the inlining
+  limits: x86-64's `max-inline-insns-auto` is 15 (params.opt:637-638),
+  and a port with higher limits meets it in real programs (the proof of
+  concept, at 100: coreutils' `rm`) [host GCC 16.2.1 and gdb 18.1 with
+  the limit at 100, and the proof of concept on the 4C without its fix:
+  F inlined into itself, 5 breakpoint locations, 3 stops for 2 calls;
+  `tools/abi/probes/foldp98_split.c`]. The fix is debug-only: in
+  `expand_call_inline`, when the callee is a split part
+  (`cgraph_node::split_part`, ipa-split.cc:1382) and the call has no
+  location, give the body a plain lexical block, with no abstract origin
+  and no inline-entry marker [proof of concept: the same code; 3
+  locations and one stop per call on the 4C]. It needs a companion
+  change in tree-ssa-live.cc. Inlining gives every operand expression
+  without a block the inlined body's block (tree-inline.cc:1190-1203),
+  and one such expression is the name operand of a `.DEFERRED_INIT`
+  (gimplify.cc:1921-1933), made under `-ftrivial-auto-var-init`, which
+  MCST's kernel uses (`spec/abi/kernel-build.md`). An inlined
+  function's outer block survives pruning whenever anything inside it
+  does (tree-ssa-live.cc:582-583), but a plain block without variables
+  is spliced out (:522-543, :584-590), and `remove_unused_locals`
+  neither marks a `.DEFERRED_INIT`'s operand blocks (:844-848, :925-943)
+  nor clears them (`clear_unused_block_pointer` looks only at debug
+  statements and clobbers, :648-649). So the operand names a block that
+  is gone: "location references block not in block tree" (the proof of
+  concept: MCST's `fs/locks.c`). Clear those blocks as a clobber's are.
+  A part left out of line still names F, so `break F` also stops in it
+  and backtraces show F calling F, on x86-64 too [host, GCC 16.2.1
+  defaults: 4 locations, 4 stops for 2 calls]; the fix doesn't cover
+  that.
 - **Line-table flags.** Write no discriminators, as lcc doesn't: gdb
   drops a statement's `is_stmt` row when an operation scheduled ahead
   of it gave the same line a row with one. GCC's own `.debug_line`
@@ -2252,15 +2295,36 @@ wants them upstream has to propose them there.
   `TARGET_DELEGITIMIZE_ADDRESS` look through `disp`'s unspec so that
   indirect calls get a `DW_AT_call_target`. gdb then shows
   `n=n@entry=8`.
-- **Variables var-tracking doesn't track.** dwarf2out describes such a
-  variable by its `DECL_RTL`, which regrename doesn't update
-  (`regrename.cc` never touches it). In the proof of concept regrename
-  moved the pointer register of an over-aligned local beside an
-  `alloca`, and gdb read a stale `%r0` (guality pr36728). Its fix:
-  before var-tracking, point such a `DECL_RTL` at the register the
-  variable's own accesses use, when they all agree. It showed only with
-  `-ffixed-g16` … `-ffixed-g31`; otherwise the pointer sat in a global
-  register, which has no DWARF number (below).
+- **Variables var-tracking doesn't track.** A local aligned beyond
+  what the frame keeps lives at an address expand computes once into a
+  base register (`get_dynamic_stack_base`, explow.cc:1700-1718, from
+  cfgexpand.cc:1608-1626), and its `DECL_RTL` is a MEM through that
+  register. var-tracking doesn't track it, so dwarf2out describes it by
+  `DECL_RTL` over the whole function. The register holds the base only
+  from its last set before the variable's first access to its next set
+  after the last access: regrename moves it without updating
+  `DECL_RTL` (`regrename.cc` never touches it), and allocation reuses
+  it after the last access (in guality pr36728-1.c, `return y` loads y
+  into the same `%r0`, and gdb at the closing brace read y at address
+  2). After var-tracking (`-O1` and `-Og`), give such a variable
+  location notes instead: the MEM through the register the variable's
+  accesses use, when they all agree, from that register's last set
+  before the first access up to and including the wide instruction of
+  its next set after the last one, when nothing sets the register
+  between the accesses and every jump into the range comes from inside
+  it. Otherwise keep `DECL_RTL` only if its register is set once in the
+  function, and else give no location rather than a wrong one [hw:
+  proof-of-concept GCC, `-Og`, 4C: y = 2 at pr36728-1.c's lines 16,
+  18 and 19,
+  `<optimized out>` after the load]. At `-O0` var-tracking doesn't run
+  (opts.cc:619), and dwarf2out has only `DECL_RTL`: the location is
+  right from the base's computation in the function's first line to the
+  last access, and wrong outside it [hw: the same compiler, `-O0`:
+  `break *foo` read y at address 0x1, the first argument, and the
+  closing brace at 0x2]. Covering that needs either a pass of the
+  port's own that writes the notes at `-O0` (final hands every
+  `NOTE_INSN_VAR_LOCATION` to the debug hook, final.cc:2355-2361), or
+  the base kept live to the function's end at `-O0`; neither was tried.
 - **`%b[]` across `setbn` and `abn`.** These rename every `%b`
   register, and no RTL pattern says so (3.3). The proof of concept puts
   a clobber of every `%b[N]` after each `setbn` and where each kernel's
@@ -2271,12 +2335,49 @@ wants them upstream has to propose them there.
   the loop sets has a single value there. Turn the kernel's debug binds
   into resets (deleting them let a variable keep its value from before
   the loop: "best = -1" after a search). Keep its statement markers, or
-  the loop's lines have no row. Put the last binds that hold after the
+  the loop's lines have no row, and put the marker of the body's first
+  statement last. All of them sit at the kernel's start, and gdb names
+  an address by its last `is_stmt` row (`spec/abi/stack-and-unwinding.md`,
+  "How gdb places breakpoints"), so the kernel then shows as the body's
+  first line, not as the loop header: `next` from before the loop stops
+  once in the kernel, and the next `next` runs the remaining iterations
+  [hw: proof-of-concept GCC `-O1`, 4C:
+  `tools/abi/probes/foldp97_kernel.c`, the for line, the body's first
+  line, then after the loop]. With the header's marker last, the kernel
+  shows as the header, and `next` from the header runs the whole loop.
+  On x86-64, which doesn't pipeline, `next` stops at the header and
+  each body line in every iteration. Put the last binds that hold after the
   exit copies on the exit edge. Where an iteration's value is still in
   its ring register at the kernel's start (its instance named by the
   frame formula, landed and not past its last use), bind it there;
   successive stops then show consecutive iterations (x = 30, 33, 36, 39
   on the 4C).
+- **`-O0` and `-Og`: window registers before the globals.** A value in
+  `%g16`–`%g31` has no location (below), so at the two levels where
+  debugging comes first, allocate the window registers before the
+  globals and keep `REG_ALLOC_ORDER`'s order otherwise
+  (`ADJUST_REG_ALLOC_ORDER`, run by `setup_alloc_regs`,
+  ira.cc:517-519). At `-O0` IRA's `fast_allocation` takes the first free
+  register of the class in that order, or the cheapest with ties to the
+  earlier (ira-color.cc:5371-5398; the class order is `reg_alloc_order`,
+  ira.cc:482-498); with the globals first, even an `-O0` pointer to an
+  over-aligned local sat in `%g16`, and the local had no location
+  (guality pr36728.c). Nothing else is needed: `assign_hard_reg`
+  charges a prologue save only for registers `calculate_saved_nregs`
+  counts (ira-color.cc:2258-2289, through `TARGET_CALLEE_SAVE_COST`),
+  and that function skips `LOCAL_REGNO` registers (:1818), which the
+  window registers are (D1), so neither `HONOR_REG_ALLOC_ORDER` nor a
+  callee-save cost hook changes anything [proof of concept, which sets
+  `HONOR_REG_ALLOC_ORDER` there: forcing it off left the `-Og` assembly
+  of 1,701 files unchanged; with the order unchanged, Lua, CoreMark and
+  SQLite had 370,070 operands in `%g16`–`%g31` at `-O0` and 88,301 at
+  `-Og`, reordered none]. `ira_init` runs the macro once per target
+  initialization (toplev.cc:1821, reginfo.cc:524), so it follows the
+  command line's level, not an `optimize` attribute. Keep any renaming
+  the port adds out of `%g16`–`%g31` at these levels too (GCC's own
+  regrename runs only with `-funroll-loops`, common.opt:2836); the
+  window grows instead. Other levels keep `REG_ALLOC_ORDER` as it is,
+  and `-g` changes no code.
 - **`-Og`.** lcc's `-Og` is `-O0`. At `-Og` the proof of concept keeps
   each source line's operations in wide instructions of their own, in
   line order, and doesn't modulo-schedule. It does this with a
@@ -2288,7 +2389,9 @@ wants them upstream has to propose them there.
   - Values in `%g16`–`%g31` have no location, because those registers
     have no DWARF numbers. Of the 242 checks that failed on E2K but
     passed on x86-64, 115 passed with `-ffixed-g16` … `-ffixed-g31`, the
-    largest single cause. `-g` must not change code to avoid this.
+    largest single cause. From `-O1` up `-g` must not change code to
+    avoid this; at `-O0` and `-Og` the allocation order avoids it for
+    every build (above).
   - A parameter whose register the callee reuses (the result goes to
     `%r0`, the first argument's register) survives only as an entry
     value. That needs the call's target, so an indirect call through a

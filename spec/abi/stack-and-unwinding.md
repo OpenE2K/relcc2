@@ -955,6 +955,18 @@ glibc's and the kernel's among them, can be stepped only by instruction
   (unrolling, tail duplication, loop versioning) only the copy at the
   lowest address gets the breakpoint, whether or not it runs. This is
   gdb's rule on every target.
+- gdb names an address by the last row at it or, when that row isn't
+  `is_stmt`, by the last `is_stmt` row at the same address
+  (`find_pc_sect_line`, `symtab.c:3236-3247`, `:3272-3281`; rows at one
+  address keep their order, `buildsym.c:888-894`). That is the line a
+  stop, `bt` and `frame` show. The range from that row to the next row
+  is what `next` and `step` step through: they keep going while the pc
+  is inside it (`infrun.c:7699-7726`), stop where an `is_stmt` row of
+  another line starts (`:8206-8246`), and step on through a row that
+  isn't `is_stmt` (`:8247-8257`). So a loop whose code lies in one
+  line's range runs to its end under one `next` [hw: proof-of-concept
+  GCC `-O1`, a modulo-scheduled kernel whose markers share its start,
+  4C, ALT's gdb 15.2-alt1.2: `tools/abi/probes/foldp97_kernel.c`].
 - A `DW_TAG_lexical_block` becomes a gdb block only if it has an
   address range and holds a symbol or a using directive
   (`dwarf2/read.c:10122-10194`); one without a range has its children

@@ -134,8 +134,9 @@ differ from v6 (measured: timing.md, "Elbrus-2C3 (v6)").
   `--cpu 0` (no core 2).
 - Timing runs on any of the machines go under their shared lock:
   `flock -w 3600 /tmp/relcc2-claude-timing.lock <command>` on the
-  Elbrus machine. Native GCC builds (`tools/gcc-native`) take no lock,
-  so time nothing else on a machine while one runs.
+  Elbrus machine. Native GCC builds (`tools/gcc-native`) and replays
+  (`tools/gcc-replay`) take no lock, so time nothing else on a machine
+  while one runs.
 - Nearly every Elbrus system ships MCST's lcc as the default compiler (OS
   Elbrus and ALT Linux), so tests may assume lcc on the target.
 - The port targets 64-bit unprotected mode only. 32-bit (`-mptr32`) and
@@ -198,6 +199,9 @@ tools/abi/compat/   ABI compatibility suite, the port's acceptance test:
 tools/abi/builtins/ lcc-compatible builtins test; spec/abi/lcc-builtins.md
 tools/gcc-native/   native builds and bootstraps of the PoC on the 8C2
                (draft); README.md
+tools/gcc-replay/   the PoC checked on GCC itself: the native GCC its cross
+               builds replays that build's compiles on the machines;
+               README.md
 tools/dejagnu/      DejaGnu boards for GCC's testsuite (qemu, 4C, 8C2, 2C3,
                any SSH host) and run-gcc-tests.sh; README.md
 OpenE2K/       submodules (see Sources)
@@ -623,6 +627,16 @@ machines (2026-10-13). Builtins have their own acceptance test,
 `tools/abi/builtins/run.py --cc gcc=...`: it compares every builtin with
 lcc on hardware and lists missing ones.
 
+**GCC compiled by the PoC** (`tools/gcc-replay`, README.md). The PoC's
+x86 cross, which x86 GCC compiled, builds a native GCC and keeps every
+compile it makes. The native GCC then replays them on the machine whose
+code it is (v3 on the 4C, 8C2-tuned on the 8C2) and must match the
+cross's assembly byte for byte. Only x86 GCC and the PoC are in the
+evidence: no lcc, no emulator, no GCC built on the machines. It found
+P108 (C++'s unspecified argument order made GCC's output depend on its
+builder), P109 and P110. At PoC `0.5+37` all 2,578 compiles matched on
+both machines (2026-10-24).
+
 ### GCC port planning (doc/gcc-port-plan.md)
 
 A plan for the owner, written for someone new to GCC: backend anatomy,
@@ -658,8 +672,9 @@ control speculation (sections 7.6, 7.7).
 
 0. `docs/spec-poc-findings.md` (the PoC agent's file, untracked): every
    entry through I56, A36 and P107 is folded into `spec/` and `doc/` and
-   removed from it (I55, I56, A32–A36 and P95–P107 on 2026-10-24); none
-   is open; new ones continue as I57, A37, P108.
+   removed from it (I55, I56, A32–A36 and P95–P107 on 2026-10-24).
+   Open: A37 and P108–P110 (from `tools/gcc-replay`, 2026-10-24); new
+   ones continue as I57, A38, P111.
 1. Extend the compat suite (see Current state). It runs on the 4C with
    `run.py --target v3 --remote ...`; all pairs match qemu except the
    tag-trap tests, which pass on the 4C and on the 8C2 (v5, `--target

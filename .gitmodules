@@ -22,3 +22,7 @@
 	path = OpenE2K/qemu-e2k-mcst
 	url = https://git.openelbrus.ru/mcst/qemu.git
 	branch = mcst
+[submodule "OpenE2K/libffi"]
+	path = OpenE2K/libffi
+	url = https://github.com/OpenE2K/libffi
+	branch = mcst

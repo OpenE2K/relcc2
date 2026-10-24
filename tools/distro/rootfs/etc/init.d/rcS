@@ -1,0 +1,17 @@
+#!/bin/sh
+# relcc2 tools/distro: what busybox init runs first.
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev 2>/dev/null
+mkdir -p /dev/pts /dev/shm
+mount -t devpts devpts /dev/pts
+mount -t tmpfs tmpfs /dev/shm
+mount -t tmpfs tmpfs /run
+hostname -F /etc/hostname
+ip link set lo up
+. /etc/network.conf
+ip link set "$IFACE" up
+ip addr add "$ADDR" dev "$IFACE"
+ip route add default via "$GW"
+dropbear -R -p 22
+echo "relcc2 distro: Linux $(uname -r) up, $IFACE $ADDR" > /dev/console

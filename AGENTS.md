@@ -202,6 +202,8 @@ tools/gcc-native/   native builds and bootstraps of the PoC on the 8C2
 tools/gcc-replay/   the PoC checked on GCC itself: the native GCC its cross
                builds replays that build's compiles on the machines;
                README.md
+tools/quadmath/     the PoC's libquadmath on the machines, call by call,
+               against x86's build of the same source and lcc's; README.md
 tools/dejagnu/      DejaGnu boards for GCC's testsuite (qemu, 4C, 8C2, 2C3,
                any SSH host) and run-gcc-tests.sh; README.md
 OpenE2K/       submodules (see Sources)

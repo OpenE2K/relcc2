@@ -1,0 +1,37 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# gcc-replay (README.md): stands in for the cross's
+# e2k-linux-gnu-{gcc,g++,c++} (symlinks to this file) while record.sh
+# builds the native compiler.  It runs the real driver ($DN_REAL/NAME) as
+# asked.  For a single compilation (-c, one source, -o X.o) it adds
+# -save-temps=obj, which keeps the preprocessed source (X.i, X.ii) and the
+# assembly (X.s) beside X.o, and writes X.cc1: the directory and the
+# compiler proper's command line as -### prints it.  replay.py runs that
+# command with the native cc1/cc1plus on the machine and compares the
+# assembly with X.s.
+self=$(basename "$0")
+real=$DN_REAL/$self
+args=() compile= skip= out= nsrc=0 prev=
+for a in "$@"; do
+	case $prev in
+	-o) out=$a ;;
+	esac
+	prev=$a
+	case $a in
+	-pipe) continue ;;		# -save-temps would warn about it
+	-c) compile=1 ;;
+	-E|-S|-save-temps*|-x|-) skip=1 ;;
+	-*) ;;
+	*.c|*.cc|*.cpp|*.cxx|*.C|*.c++) nsrc=$((nsrc + 1)) ;;
+	esac
+	args+=("$a")
+done
+if [ -z "$compile" ] || [ -n "$skip" ] || [ "$nsrc" != 1 ] || [[ $out != *.o ]]; then
+	exec "$real" "$@"
+fi
+"$real" "${args[@]}" -save-temps=obj || exit
+cmd=$("$real" -### "${args[@]}" -save-temps=obj 2>&1 | grep -E -- ' "?-fpreprocessed"? ')
+if [ -n "$cmd" ]; then
+	printf '%s\n%s\n' "$PWD" "$cmd" > "${out%.o}.cc1"
+fi
+exit 0

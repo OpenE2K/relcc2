@@ -28,8 +28,8 @@
 #   gdb       OpenE2K/gdb, hosted on E2K
 #   gcc       the PoC as the system's compiler (a canadian cross, as
 #             tools/gcc-replay/record.sh builds it)
-#   kernel    toolchains/poc06/linux-src, config-mcst-e8c2: image.boot
-#             and the modules
+#   kernel    toolchains/poc06/linux-src, config-mcst-e8c2: zImage (what
+#             the kernel's make install puts in /boot) and the modules
 #   rootfs    tools/distro/rootfs and relcc2's public key for root
 #   initrd    initrd.img: busybox, glibc and dropbear only
 #   check     no file names /opt/mcst or has lcc's mark (rootfs looks
@@ -217,9 +217,13 @@ s_kernel() {
 	mkdir -p "$B/kernel"
 	cp "$R/toolchains/poc06/linux-src/config-mcst-e8c2" "$B/kernel/.config"
 	$K olddefconfig
-	$K -j"$jobs" image modules
+	# zImage, not the uncompressed image.boot: the kernel's make install
+	# and OS Elbrus boot the compressed image (its decompressor puts the
+	# kernel in free, 4 MiB-aligned memory); the raw one hung after the
+	# firmware's "Starting kernel..." on the first boot.
+	$K -j"$jobs" zImage modules
 	$K INSTALL_MOD_PATH="$ROOT" INSTALL_MOD_STRIP=1 modules_install
-	cp "$B/kernel/image.boot" "$out/image.boot"
+	cp "$B/kernel/zImage" "$out/zImage"
 }
 
 s_rootfs() {

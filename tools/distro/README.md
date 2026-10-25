@@ -27,7 +27,7 @@ cp -a toolchains/poc06/glibc-gcc-8c2 $S
 cp -a toolchains/poc06/linux-headers/include/. $S/usr/include/
 toolchains/poc-cross/cross-cpu.sh 8c2 --sysroot $S --rev REV -j $(nproc)
 
-# the system: OUT/root, OUT/image.boot, OUT/initrd.img, OUT/distro.img
+# the system: OUT/root, OUT/zImage, OUT/initrd.img, OUT/distro.img
 tools/distro/build.sh toolchains/poc-cross/cross-V-8c2-own/gcc-e2k-V-8c2
 ```
 
@@ -50,7 +50,7 @@ is `GCC: (relcc2 PoC 0.5+43 efd6f1c4975)`. Not booted yet.
 
 | Part | What |
 |---|---|
-| partition 1, ext2 | `boot.conf`, `image.boot`, `initrd.img`: what the firmware reads, laid out as on the 8C2's own `/boot` |
+| partition 1, ext2 | `boot.conf`, `zImage`, `initrd.img`: what the firmware reads, laid out as on the 8C2's own `/boot` |
 | partition 2, ext4 | the whole system (`OUT/root`): the compilers, gdb, headers, the kernel's modules |
 | `initrd.img` | busybox, glibc's shared libraries and dropbear: the system comes up from memory and takes SSH before anything is mounted |
 

@@ -197,9 +197,11 @@ push)
         | ssh_ "cat > $rdir/src-$name/.relcc2-source"
     if [ -n "$prereqs" ]; then
         pre=$root/toolchains/gcc-native/prereqs
-        if [ ! -d "$pre" ]; then
+        # The script runs only from the top of a GCC tree; a download
+        # that stopped half way leaves no gmp link and is done again.
+        if [ ! -e "$pre/gmp" ]; then
             mkdir -p "$pre"
-            "$src/contrib/download_prerequisites" --directory="$pre"
+            (cd "$src" && contrib/download_prerequisites --directory="$pre")
         fi
         # The unpacked packages and the gmp, mpfr, mpc and isl links to them.
         tar -C "$pre" -c --exclude='*.tar.*' . \

@@ -161,7 +161,8 @@ s_gmp() {
 }
 
 s_expat() {
-	conf "$R/toolchains/claude-e2k/real/src/expat-2.8.5" "$B/expat" \
+	local src; src=$(unpack "$DL/expat-2.8.5.tar.xz")
+	conf "$src" "$B/expat" \
 		--without-docbook --without-examples --without-tests
 	mk "$B/expat"; mk "$B/expat" DESTDIR="$ROOT" install
 	mk "$B/expat" DESTDIR="$DEPS" install

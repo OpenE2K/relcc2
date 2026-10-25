@@ -297,7 +297,7 @@ s_check() {
 			sed -n 's/^ *\[ *[0-9a-f]*\] *//p'
 	done | sort | uniq -c | sort -rn > "$B/comments"
 	cat "$B/comments"
-	if grep -v -E 'GCC: \((relcc2 PoC|GNU)\) ' "$B/comments"; then
+	if grep -v -E 'GCC: \((relcc2 PoC[^)]*|GNU)\) ' "$B/comments"; then
 		echo "^ not the PoC's"; bad=1
 	fi
 	return $bad

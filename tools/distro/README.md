@@ -63,7 +63,17 @@ through SSH on it. The build
 with both (PoC `0.5+46`, `--kernel linux-src-hyb`, no graphics drivers but
 the AST2500): a root tree of 1.0 GB (7,093 files, 952 kernel modules);
 the audit finds 4,124 ELF files from `0.5+46` and 382 from `0.5+43` (the
-glibc), nothing from lcc. Not booted yet.
+glibc), nothing from lcc. It was not booted.
+
+glibc's testsuite on the 8C2 then found two PoC bugs: callers trusted
+the callee to extend a narrow result, which MCST's `clone.S` doesn't
+(findings A44), and the unwinder's frame state was sized for every hard
+register, so a cancellation overflowed a signal handler's alternate
+stack (P116). The build with both fixed (PoC `0.5+52`, 2026-10-26),
+its glibc rebuilt by it: the same 7,093 files, 952 modules and 1,341 ELF
+files, and every `.comment` string the audit counts (4,439, archive
+members included) is `0.5+52`'s; 67 programs had carried both
+compilers' strings before. Not booted yet.
 
 ## The image
 

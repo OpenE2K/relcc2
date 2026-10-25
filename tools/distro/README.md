@@ -44,7 +44,26 @@ compressed (23 MB), `image.boot` of 67 MB and `distro.img` of 2.5 GB.
 The `check` step's audit: no file names `/opt/mcst`, none carries lcc's
 mark (`elbrus_optimizing_compiler_v...`, a weak symbol lcc puts in every
 object; it writes no `.comment`), and all 5,967 ELF files' `.comment`
-is `GCC: (relcc2 PoC 0.5+43 efd6f1c4975)`. Not booted yet.
+is `GCC: (relcc2 PoC 0.5+43 efd6f1c4975)`.
+
+Its first boots (2026-10-25) found two places where MCST's code relies on
+lcc's C:
+
+- **The kernel hung in idle**, with one CPU or eight. GCC gives a 33–63-bit
+  `u64` bit-field a type of its own width, so `get_cr0_ip()`'s `cr0.Ip
+  << 3` wrapped at 45 bits and `is_from_C1_wait_trap()` never matched; lcc
+  computes it in `u64` (findings A42). The kernel tree casts it first.
+- **Busybox ash ran no command.** MCST glibc's `strcspn`, `strpbrk` and
+  `strspn` shift by a byte value (`1LL << c`), undefined from 64 up; lcc
+  emits the hardware's shift, which takes the count modulo 64, and GCC
+  dropped every byte from 0x40 (A43). The glibc tree masks the count.
+
+A debug kernel with the first fix booted, and the second was found
+through SSH on it. The build
+with both (PoC `0.5+46`, `--kernel linux-src-hyb`, no graphics drivers but
+the AST2500): a root tree of 1.0 GB (7,093 files, 952 kernel modules);
+the audit finds 4,124 ELF files from `0.5+46` and 382 from `0.5+43` (the
+glibc), nothing from lcc. Not booted yet.
 
 ## The image
 

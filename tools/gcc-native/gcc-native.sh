@@ -12,6 +12,9 @@
 # Options (before the command):
 #   --remote USER@HOST  the machine (default claude@geofront.lan, the 8C2)
 #   --ssh-port N        its SSH port
+#   --host-key-alias NAME
+#                       the name its host key is known by, when --remote
+#                       gives an address (a .lan name that doesn't resolve)
 #   --remote-dir DIR    work directory there, relative to $HOME
 #                       (default relcc2/gcc-native)
 #   --src DIR           GCC git checkout (default toolchains/gcc-claude-native)
@@ -113,6 +116,7 @@ while [ $# -gt 0 ]; do
     case $1 in
     --remote) remote=$2; shift 2 ;;
     --ssh-port) port=$2; shift 2 ;;
+    --host-key-alias) alias=$2; shift 2 ;;
     --remote-dir) rdir=$2; shift 2 ;;
     --src) src=$(cd "$2" && pwd); shift 2 ;;
     --rev) rev=$2; shift 2 ;;
@@ -129,7 +133,7 @@ cmd=$1
 shift
 
 # relcc2's key only (AGENTS.md, "Connect only with relcc2's key").
-ssh_() { "$root/tools/setup/e2k-ssh" ${port:+-p "$port"} "$remote" "$@"; }
+ssh_() { "$root/tools/setup/e2k-ssh" ${port:+-p "$port"} ${alias:+-o "HostKeyAlias=$alias"} "$remote" "$@"; }
 
 # Quote arguments for the remote shell.
 q() { printf '%q ' "$@"; }
@@ -161,7 +165,7 @@ remote_bg() {
     if [ -n "${hold-}" ]; then
         echo "running, ssh held: $log"
         "$root/tools/setup/e2k-ssh" -o ServerAliveInterval=60 -o ServerAliveCountMax=10 \
-            ${port:+-p "$port"} "$remote" \
+            ${port:+-p "$port"} ${alias:+-o "HostKeyAlias=$alias"} "$remote" \
             "cd $rdir && mkdir -p $(dirname "$log") && ${SRCNAME:+SRCNAME=$(q "$SRCNAME")} bash remote.sh $(q "$@") > $log 2>&1 < /dev/null; echo exit \$?: $log"
         return
     fi
@@ -300,7 +304,7 @@ pack)
     out=$(remote_sh pack "$name" "$version" "$commit" "$os") || die "pack failed"
     echo "$out"
     f=$(echo "$out" | awk '{print $NF}' | tail -1)
-    "$root/tools/setup/e2k-scp" ${port:+-P "$port"} "$remote:$f" "$root/toolchains/gcc-native/"
+    "$root/tools/setup/e2k-scp" ${port:+-P "$port"} ${alias:+-o "HostKeyAlias=$alias"} "$remote:$f" "$root/toolchains/gcc-native/"
     echo "copied to toolchains/gcc-native/$(basename "$f")"
     ;;
 compare)

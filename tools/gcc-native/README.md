@@ -199,9 +199,11 @@ $G triage REF                    # NAME's test failures, also with REF?
 ```
 
 Global options go before the command: `--remote USER@HOST`,
-`--ssh-port N`, `--remote-dir DIR` (default `relcc2/gcc-native`),
-`--src DIR`, `--rev REV`, `--name NAME` (default: the commit's short
-hash), and `-j N` (default 4).
+`--ssh-port N`, `--host-key-alias NAME` (with an address as `--remote`,
+the name its host key is known by, for when `.lan` names don't
+resolve), `--remote-dir DIR` (default `relcc2/gcc-native`), `--src DIR`,
+`--rev REV`, `--name NAME` (default: the commit's short hash), and
+`-j N` (default 4).
 
 Options for `bootstrap`, `lccbuild` and `selfbuild`:
 - `--checking LIST`: default `yes`. Use `release` for builds you time.

@@ -216,6 +216,13 @@ s_kernel() {
 	local K="make -C $R/toolchains/poc06/linux-src O=$B/kernel ARCH=e2k CROSS_COMPILE=$T- CC=$X/bin/$T-gcc"
 	mkdir -p "$B/kernel"
 	cp "$R/toolchains/poc06/linux-src/config-mcst-e8c2" "$B/kernel/.config"
+	# No graphics drivers but the 8C2's onboard AST2500 (DRM_AST):
+	# amdgpu, radeon and nouveau alone are 38 MB of the 189 MB of
+	# modules and most of their build time.
+	"$R/toolchains/poc06/linux-src/scripts/config" --file "$B/kernel/.config" \
+		-d DRM_AMDGPU -d DRM_RADEON -d DRM_NOUVEAU -d FB_RADEON \
+		-d DRM_QXL -d DRM_VIRTIO_GPU -d DRM_BOCHS -d DRM_UDL \
+		-d DRM_SMI -d FB_MGA3D
 	$K olddefconfig
 	# zImage, not the uncompressed image.boot: the kernel's make install
 	# and OS Elbrus boot the compressed image (its decompressor puts the

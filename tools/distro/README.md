@@ -58,8 +58,8 @@ is `GCC: (relcc2 PoC 0.5+43 efd6f1c4975)`. Not booted yet.
 first partition, `image=`, `initrd=`, `cmdline=`) boots the initramfs
 with `console=tty0 console=ttyS1,115200n8 rdinit=/sbin/init`. busybox
 init (`rootfs/etc/inittab`) puts a root shell on both consoles, brings
-up `eth1` at the 8C2's own address (`rootfs/etc/network.conf`) and
-starts dropbear, which takes relcc2's key for root.
+up the first Ethernet port with a cable at the 8C2's own address
+(`rootfs/etc/network.conf`) and starts dropbear, which takes relcc2's key for root.
 
 ## Booting
 

@@ -10,6 +10,21 @@ mount -t tmpfs tmpfs /run
 hostname -F /etc/hostname
 ip link set lo up
 . /etc/network.conf
+# IFACE=auto: the first Ethernet port with a cable (which one has it has
+# changed between boots), waiting up to 10 s for the link.
+if [ "$IFACE" = auto ]; then
+	IFACE=
+	for i in /sys/class/net/eth*; do ip link set "${i##*/}" up; done
+	n=0
+	while [ -z "$IFACE" ] && [ $n -lt 10 ]; do
+		for i in /sys/class/net/eth*; do
+			[ "$(cat "$i/carrier" 2>/dev/null)" = 1 ] && { IFACE=${i##*/}; break; }
+		done
+		[ -n "$IFACE" ] || sleep 1
+		n=$((n + 1))
+	done
+	IFACE=${IFACE:-eth0}
+fi
 ip link set "$IFACE" up
 ip addr add "$ADDR" dev "$IFACE"
 ip route add default via "$GW"

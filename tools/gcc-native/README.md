@@ -150,6 +150,7 @@ uncommitted changes are not sent (it warns about them).
 | flex, bison | yes | yes | |
 | makeinfo | yes | no (GCC skips the manuals) | |
 | expect, runtest | expect only: `push-dejagnu` | **neither**: no testsuite | |
+| a detached command after ssh closes | keeps running | **killed** (ALT's logind): `--hold` | |
 
 Use the 8C2. Don't build on the 2C3: it belongs to a contact and has two
 cores.

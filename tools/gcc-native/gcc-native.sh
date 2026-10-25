@@ -18,6 +18,10 @@
 #   --rev REV           commit to push (default: --src's HEAD)
 #   --name NAME         name of the build (default: the commit's short hash)
 #   -j N                parallel jobs (default 4: half the 8C2)
+#   --hold              keep ssh open while a long command (bootstrap,
+#                       test, ...) runs instead of detaching it: on
+#                       the 4C, ALT's logind ends a session's
+#                       processes when it closes, setsid or not
 #
 # Commands:
 #   check               what the machine has for a native build
@@ -114,6 +118,7 @@ while [ $# -gt 0 ]; do
     --rev) rev=$2; shift 2 ;;
     --name) name=$2; shift 2 ;;
     -j) jobs=$2; shift 2 ;;
+    --hold) hold=1; shift ;;
     -h|--help) usage ;;
     -*) die "unknown option $1" ;;
     *) break ;;
@@ -153,6 +158,13 @@ remote_bg() {
     local log=$1
     shift
     upload
+    if [ -n "${hold-}" ]; then
+        echo "running, ssh held: $log"
+        "$root/tools/setup/e2k-ssh" -o ServerAliveInterval=60 -o ServerAliveCountMax=10 \
+            ${port:+-p "$port"} "$remote" \
+            "cd $rdir && mkdir -p $(dirname "$log") && ${SRCNAME:+SRCNAME=$(q "$SRCNAME")} bash remote.sh $(q "$@") > $log 2>&1 < /dev/null; echo exit \$?: $log"
+        return
+    fi
     ssh_ "cd $rdir && mkdir -p $(dirname "$log") && { ${SRCNAME:+SRCNAME=$(q "$SRCNAME")} setsid nohup bash remote.sh $(q "$@") > $log 2>&1 < /dev/null & } && echo started: $log"
 }
 
@@ -202,6 +214,13 @@ push)
         if [ ! -e "$pre/gmp" ]; then
             mkdir -p "$pre"
             (cd "$src" && contrib/download_prerequisites --directory="$pre")
+            # It links them into the tree it runs from (and leaves a
+            # tree's own links alone); the cache gets links of its own,
+            # relative, which the tar below carries.
+            for d in "$pre"/*/; do
+                d=$(basename "$d")
+                ln -sfn "$d" "$pre/${d%-*}"
+            done
         fi
         # The unpacked packages and the gmp, mpfr, mpc and isl links to them.
         tar -C "$pre" -c --exclude='*.tar.*' . \

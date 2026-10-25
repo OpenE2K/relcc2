@@ -14,7 +14,8 @@ Usage:
   run.py GENDIR [-o OUTDIR] [--target T[,T...]] [--cc NAME[@T]=COMMAND]...
          [--cxx NAME=COMMAND]...
          [--runner COMMAND | --remote [USER@]HOST [--ssh-key FILE]
-          [--ssh-port N] [--remote-dir DIR] [--remote-jobs N]
+          [--ssh-port N] [--host-key-alias NAME] [--remote-dir DIR]
+          [--remote-jobs N]
           [--keep-remote]]
          [--pairs CALLER:CALLEE,...] [--known FILE] [-j N]
 
@@ -190,14 +191,15 @@ class Remote:
     """Run programs on an Elbrus machine over SSH. One master connection
     is shared by all runs."""
 
-    def __init__(self, host, key, remote_dir, outdir, port=None, keep=False):
+    def __init__(self, host, key, remote_dir, outdir, port=None, keep=False,
+                 host_key_alias=None):
         self.host, self.dir, self.outdir = host, remote_dir, outdir
         self.keep, self.uploaded = keep, None
         # A socket path must be short (about 100 bytes), so it can't live
         # in OUTDIR.
         self.sockdir = tempfile.mkdtemp(prefix="relcc2-ssh-",
                                         dir=os.environ.get("XDG_RUNTIME_DIR"))
-        self.ssh = ["ssh", *sshkey.options(key, port),
+        self.ssh = ["ssh", *sshkey.options(key, port, host_key_alias),
                     "-o", "ControlMaster=auto",
                     "-o", f"ControlPath={self.sockdir}/%C",
                     "-o", "ControlPersist=60"]
@@ -320,6 +322,9 @@ def main():
     ap.add_argument("--ssh-key", type=Path,
                     help="default: $RELCC2_SSH_KEY or secrets/id_ed25519")
     ap.add_argument("--ssh-port", type=int)
+    ap.add_argument("--host-key-alias", metavar="NAME",
+                    help="the name the host key is known by, when --remote "
+                    "gives an address")
     ap.add_argument("--remote-dir", default="relcc2/compat")
     ap.add_argument("--remote-jobs", type=int, default=4)
     ap.add_argument("--keep-remote", action="store_true",
@@ -379,7 +384,7 @@ def main():
     if args.remote:
         host = Remote(args.remote, sshkey.find_key(args.ssh_key),
                       args.remote_dir, out,
-                      args.ssh_port, args.keep_remote)
+                      args.ssh_port, args.keep_remote, args.host_key_alias)
         run_jobs = args.remote_jobs
     else:
         host = Local(args.runner or default_runner(run_target))

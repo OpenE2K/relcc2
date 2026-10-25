@@ -57,9 +57,13 @@ def find_key(given=None):
              "RELCC2_SSH_KEY; refusing to connect with ssh's own keys")
 
 
-def options(key, port=None):
-    """ssh/scp options that use KEY and nothing else."""
+def options(key, port=None, host_key_alias=None):
+    """ssh/scp options that use KEY and nothing else.  HOST_KEY_ALIAS is
+    the name the machine's host key is known by, for a host given by
+    address (when its .lan name doesn't resolve)."""
     o = ["-i", str(key), "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes"]
     if port:
         o += ["-o", f"Port={port}"]
+    if host_key_alias:
+        o += ["-o", f"HostKeyAlias={host_key_alias}"]
     return o

@@ -6,7 +6,8 @@
 # binutils, gdb, GCC and its runtime libraries, libffi.  Nothing in it
 # comes from lcc's trees or an installed Elbrus system.
 #
-#   build.sh CROSS [--out DIR] [--stage STEP] [--only STEP] [--skip STEP] [-j N]
+#   build.sh CROSS [--out DIR] [--kernel DIR] [--stage STEP] [--only STEP]
+#            [--skip STEP] [-j N]
 #
 # CROSS is an installed PoC cross toolchain on a sysroot of our own
 # (toolchains/poc-cross/cross-VERSION-CPU-own/gcc-e2k-VERSION-CPU, made by
@@ -14,8 +15,9 @@
 # builds everything else, the kernel included.  OUT (default
 # toolchains/distro/out) gets build/STEP, logs/STEP.log, root/ (the
 # whole system), initrd/ (the part that boots from memory) and the
-# images.  --stage starts at STEP, --only runs it alone, --skip (any
-# number of times) leaves it out.  Steps, in order:
+# images.  --kernel is the kernel's source tree (default
+# toolchains/poc06/linux-src).  --stage starts at STEP, --only runs it
+# alone, --skip (any number of times) leaves it out.  Steps, in order:
 #
 #   runtime   glibc and GCC's runtime libraries from CROSS
 #   busybox   busybox 1.37.0, defconfig
@@ -28,7 +30,7 @@
 #   gdb       OpenE2K/gdb, hosted on E2K
 #   gcc       the PoC as the system's compiler (a canadian cross, as
 #             tools/gcc-replay/record.sh builds it)
-#   kernel    toolchains/poc06/linux-src, config-mcst-e8c2: zImage (what
+#   kernel    the --kernel tree, config-mcst-e8c2: zImage (what
 #             the kernel's make install puts in /boot) and the modules
 #   rootfs    tools/distro/rootfs and relcc2's public key for root
 #   initrd    initrd.img: busybox, glibc and dropbear only
@@ -40,12 +42,14 @@
 set -e
 D=$(cd "$(dirname "$0")" && pwd)
 R=$(cd "$D/../.." && pwd)
-[ $# -ge 1 ] || { sed -n '9,9p' "$0" >&2; exit 1; }
+[ $# -ge 1 ] || { sed -n '9,10p' "$0" >&2; exit 1; }
 X=$(cd "$1" && pwd); shift
 out=$R/toolchains/distro/out stage=runtime only= skip= jobs=$(nproc)
+ksrc=$R/toolchains/poc06/linux-src
 while [ $# -gt 0 ]; do
 	case $1 in
 	--out) mkdir -p "$2"; out=$(cd "$2" && pwd); shift 2 ;;
+	--kernel) ksrc=$(cd "$2" && pwd); shift 2 ;;
 	--stage) stage=$2; shift 2 ;;
 	--only) stage=$2 only=1; shift 2 ;;
 	--skip) skip="$skip $2 "; shift 2 ;;
@@ -213,13 +217,17 @@ s_gcc() {
 }
 
 s_kernel() {
-	local K="make -C $R/toolchains/poc06/linux-src O=$B/kernel ARCH=e2k CROSS_COMPILE=$T- CC=$X/bin/$T-gcc"
+	local K="make -C $ksrc O=$B/kernel ARCH=e2k CROSS_COMPILE=$T- CC=$X/bin/$T-gcc"
+	# kbuild's .cmd files name the sources by absolute path: objects of
+	# another tree would look up to date.
+	[ "$(cat "$B/kernel/.relcc2-ksrc" 2>/dev/null)" = "$ksrc" ] || rm -rf "$B/kernel"
 	mkdir -p "$B/kernel"
-	cp "$R/toolchains/poc06/linux-src/config-mcst-e8c2" "$B/kernel/.config"
+	echo "$ksrc" > "$B/kernel/.relcc2-ksrc"
+	cp "$ksrc/config-mcst-e8c2" "$B/kernel/.config"
 	# No graphics drivers but the 8C2's onboard AST2500 (DRM_AST):
 	# amdgpu, radeon and nouveau alone are 38 MB of the 189 MB of
 	# modules and most of their build time.
-	"$R/toolchains/poc06/linux-src/scripts/config" --file "$B/kernel/.config" \
+	"$ksrc/scripts/config" --file "$B/kernel/.config" \
 		-d DRM_AMDGPU -d DRM_RADEON -d DRM_NOUVEAU -d FB_RADEON \
 		-d DRM_QXL -d DRM_VIRTIO_GPU -d DRM_BOCHS -d DRM_UDL \
 		-d DRM_SMI -d FB_MGA3D

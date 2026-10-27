@@ -73,7 +73,12 @@ stack (P116). The build with both fixed (PoC `0.5+52`, 2026-10-26),
 its glibc rebuilt by it: the same 7,093 files, 952 modules and 1,341 ELF
 files, and every `.comment` string the audit counts (4,439, archive
 members included) is `0.5+52`'s; 67 programs had carried both
-compilers' strings before. Not booted yet.
+compilers' strings before. It was not booted.
+
+GCC's testsuite on the 8C2 then found P117, P118 and a scheduler ICE,
+and LAME at `-O3` hung the compiler. The build with these fixed (PoC
+`0.5+56`, 2026-10-27), its glibc rebuilt by it, has the same counts.
+All 4,439 strings are `0.5+56`'s. Not booted yet.
 
 ## The image
 

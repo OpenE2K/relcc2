@@ -78,7 +78,24 @@ compilers' strings before. It was not booted.
 GCC's testsuite on the 8C2 then found P117, P118 and a scheduler ICE,
 and LAME at `-O3` hung the compiler. The build with these fixed (PoC
 `0.5+56`, 2026-10-27), its glibc rebuilt by it, has the same counts.
-All 4,439 strings are `0.5+56`'s. Not booted yet.
+All 4,439 strings are `0.5+56`'s.
+
+It booted on the 8C2 on 2026-10-28, with all 8 CPUs. On it:
+- The native g++ built a threaded C++ program that throws in a thread,
+  and gdb stopped in its threads.
+- The ABI compat suite (v5 code, lcc and the PoC in both roles) had 0
+  unexpected failures, on the system's own glibc, libstdc++ and
+  libgcc_s.
+- GNU make 4.4.1, built with its `configure` and `build.sh`, rebuilt
+  itself, and its second and third builds are identical.
+- That make and the system's gcc built set 2 (NPB, PolyBench, Lua,
+  SQLite's speedtest1, LAME). The native build and the cross's build
+  both match a run on the installed OS on all 26 checks.
+
+The initramfs has no modules and the AoE driver is one, so the system
+partition takes three steps. First pipe `aoe.ko` over SSH (`cat >
+/run/aoe.ko`, since dropbear has no SFTP server). Then load it with
+`insmod /run/aoe.ko aoe_iflist=eth0` and mount `/dev/etherd/e0.1p2`.
 
 ## The image
 

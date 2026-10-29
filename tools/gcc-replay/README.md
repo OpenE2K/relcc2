@@ -208,7 +208,7 @@ Traps met while the method was worked out:
 | 4 | `0.5+37` | v3 on the 4C; 8C2 on the 8C2 | 2,578 same on each | nothing: N matches C on every compile, on both machines |
 
 P108, P109 and P110 are in `docs/spec-poc-findings.md` and the PoC's
-`STATUS.claude.md` ("Since v0.5"). None was known before. P108 can't
+`STATUS.claude.md` ("v0.6"). None was known before. P108 can't
 show in a bootstrap, whose stages are all built by GCC.
 
 ## Files

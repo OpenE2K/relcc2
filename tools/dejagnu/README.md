@@ -47,7 +47,7 @@ make -C BUILD/gcc -k -j4 check-gcc RUNTESTFLAGS="--target_board=e2k-4c"
 make -C BUILD/gcc -k check-gcc RUNTESTFLAGS="--target_board=e2k-qemu{-O0,-O2} dg.exp=pr1*.c"
 ```
 
-`run-gcc-tests.sh -b BUILD [-t BOARD] [-l c++] [-j N] [RUNTESTFLAGS...]`
+`run-gcc-tests.sh -b BUILD [-t BOARD] [-l c++|fortran] [-j N] [RUNTESTFLAGS...]`
 does this and the binutils setup below, and keeps `-j` within each
 machine's limit; `-i GCC` tests an installed compiler with the testsuite
 of a GCC source tree (`-s`, default `toolchains/gcc`) instead. Results
@@ -295,7 +295,10 @@ change, gave the same 102 PASS, 27 FAIL and 23 UNSUPPORTED.
 - **SSH boards**: the program runs with the remote system's
   `libgcc_s.so.1` and `libstdc++.so.6` (MCST's), not the build tree's,
   unless linked statically (`--target_board='e2k-4c/-static-libgcc'`,
-  `-static-libstdc++` for C++). GCC marks `dg-set-target-env-var` tests
+  `-static-libstdc++` for C++). The machines may have no
+  `libgfortran.so.5` at all, so `-l fortran` (`check-gfortran`) links the
+  Fortran runtime statically:
+  `-t 'e2k-4c/-static-libgfortran/-static-libquadmath/-static-libgcc'`. GCC marks `dg-set-target-env-var` tests
   UNSUPPORTED on remote targets.
 - **Guality on the SSH boards**: the `guality.h` tests start gdb from
   the test program itself (`popen`), so they use the remote's gdb as

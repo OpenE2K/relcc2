@@ -9,8 +9,9 @@
 #   tools/dejagnu/run-gcc-tests.sh -i GCC [options] [RUNTESTFLAGS...]
 #
 #   -b BUILD   a GCC build tree configured with --target=e2k-linux-gnu:
-#              runs "make -k check-gcc" (or check-g++) in BUILD/gcc; the
-#              results are in BUILD/gcc/testsuite/gcc/gcc.sum (g++/g++.sum)
+#              runs "make -k check-gcc" (check-g++, check-gfortran) in
+#              BUILD/gcc; the results are in BUILD/gcc/testsuite/gcc/gcc.sum
+#              (g++/g++.sum, gfortran/gfortran.sum)
 #   -i GCC     test an installed compiler instead (the path of
 #              e2k-linux-gnu-gcc) with runtest and the testsuite of -s
 #   -s SRC     GCC source tree for -i (default toolchains/gcc)
@@ -19,7 +20,9 @@
 #   -t BOARD   e2k-qemu (default), e2k-4c, e2k-8c2, e2k-2c3 or e2k-ssh,
 #              with DejaGnu variants if wanted: 'e2k-qemu/-O0' or
 #              'e2k-4c{-O0,-O2}'; settings in tools/dejagnu/README.md
-#   -l LANG    c (check-gcc, default) or c++ (check-g++)
+#   -l LANG    c (check-gcc, default), c++ (check-g++) or fortran
+#              (check-gfortran; on the SSH boards link the runtime
+#              statically: README.md, "Known limits")
 #   -j N       parallel runtest processes (default 1; at most 4 on
 #              e2k-4c, e2k-8c2 and e2k-ssh, 2 on e2k-2c3); with -i they
 #              share the tests as GCC's "make -jN check" does, each in
@@ -71,7 +74,8 @@ fi
 case $lang in
 c) check=check-gcc tool=gcc ;;
 c++) check=check-g++ tool=g++ ;;
-*) die "-l c or -l c++" ;;
+fortran) check=check-gfortran tool=gfortran ;;
+*) die "-l c, -l c++ or -l fortran" ;;
 esac
 case $jobs in
 ''|*[!0-9]*|0) die "-j takes a number of jobs" ;;
@@ -140,6 +144,7 @@ else
     mkdir -p "$out"
     out=$(cd "$out" && pwd)
     gxx=$(echo "$gcc" | sed 's/gcc\([^/]*\)$/g++\1/')
+    gfortran=$(echo "$gcc" | sed 's/gcc\([^/]*\)$/gfortran\1/')
     guess=$("$src/config.guess")
     triplet=$("$src/config.sub" "$alias")
     # What GCC's Makefile writes into BUILD/gcc/site.exp, for a compiler
@@ -160,6 +165,7 @@ set HOSTCFLAGS ""
 set TEST_ALWAYS_FLAGS ""
 set GCC_UNDER_TEST "$gcc"
 set GXX_UNDER_TEST "$gxx"
+set GFORTRAN_UNDER_TEST "$gfortran"
 EOF
     }
     sum="$out/$tool.sum"

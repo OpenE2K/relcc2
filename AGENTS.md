@@ -678,13 +678,13 @@ control speculation (sections 7.6, 7.7).
 0. `docs/spec-poc-findings.md` (the PoC agent's file, untracked): every
    entry through I56, A36 and P107 is folded into `spec/` and `doc/` and
    removed from it (I55, I56, A32–A36 and P95–P107 on 2026-10-24).
-   Open: A37–A49 and P108–P127 (from `tools/gcc-replay`,
+   Open: A37–A50 and P108–P127 (from `tools/gcc-replay`,
    `tools/quadmath` and libffi, 2026-10-24; A40–A43, P114 and P115 from
    the first boots of `tools/distro`, 2026-10-25; A44, A45 and P116 from
    glibc's testsuite on the 8C2, 2026-10-26; A46 from glibc's testsuite
    on the 4C and 8C2, P117 and P118 from GCC's on the 8C2, 2026-10-26;
    A47–A49 and P119–P121 from building OS Elbrus's packages with
-   MCST's PDK, 2026-10-30, P122–P127 on 2026-10-31); new ones continue as I57, A50, P128.
+   MCST's PDK, 2026-10-30, A50 and P122–P127 on 2026-10-31); new ones continue as I57, A51, P128.
 1. Extend the compat suite (see Current state). It runs on the 4C with
    `run.py --target v3 --remote ...`; all pairs match qemu except the
    tag-trap tests, which pass on the 4C and on the 8C2 (v5, `--target

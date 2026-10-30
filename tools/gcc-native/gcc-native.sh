@@ -354,9 +354,10 @@ xcheck)
         echo "configuring $x/build"
         "$src/configure" --build=x86_64-pc-linux-gnu \
             --host=e2k-unknown-linux-gnu --target=e2k-unknown-linux-gnu \
-            --prefix="$x/inst" --enable-languages=c,c++,lto \
+            --prefix="$x/inst" --enable-languages=c,c++,fortran,lto \
             --disable-multilib --disable-nls --disable-libsanitizer \
             --disable-libssp --disable-libitm --disable-libquadmath \
+            --disable-libquadmath-support \
             --disable-werror --disable-bootstrap --enable-checking=yes \
             --with-gmp-include="$deps/include" --with-gmp-lib="$deps/lib64" \
             --with-mpfr-include="$deps/include" --with-mpfr-lib="$deps/lib64" \

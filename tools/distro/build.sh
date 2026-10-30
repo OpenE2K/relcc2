@@ -101,7 +101,7 @@ s_runtime() {
 	mkdir -p "$ROOT/usr/lib64"
 	local l
 	for l in libgcc_s.so.1 libstdc++.so.6 libatomic.so.1 libgomp.so.1 \
-		 libquadmath.so.0; do
+		 libquadmath.so.0 libgfortran.so.5; do
 		[ -e "$X/$T/lib64/$l" ] || { echo "CROSS has no $l"; continue; }
 		cp -a "$X/$T/lib64/$l"* "$ROOT/usr/lib64/"
 	done
@@ -211,7 +211,7 @@ s_gcc() {
 	# glibc as 0.0 (tools/gcc-replay/README.md, "Pitfalls").
 	conf "$src" "$B/gcc" --target=$T --with-build-sysroot="$S" \
 		${tune:+--with-tune=$tune} --with-pkgversion="$pkg native" \
-		--enable-languages=c,c++,lto --disable-multilib --disable-nls \
+		--enable-languages=c,c++,fortran,lto --disable-multilib --disable-nls \
 		--disable-libsanitizer --disable-libssp --disable-libitm \
 		--enable-checking=yes --disable-werror --disable-bootstrap
 	mk "$B/gcc"; mk "$B/gcc" DESTDIR="$ROOT" install-strip

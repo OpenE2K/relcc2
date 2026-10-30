@@ -101,9 +101,10 @@ if after gcc; then
 	 nice -n 10 "$W/src/configure" --target=e2k-linux-gnu --prefix="$P" \
 		--with-sysroot="$S" \
 		--with-pkgversion="relcc2 PoC $version $short" \
-		--enable-languages=c,c++,lto --disable-multilib --disable-nls \
+		--enable-languages=c,c++,fortran,lto --disable-multilib --disable-nls \
 		--disable-libsanitizer --disable-libssp --disable-libitm \
-		--disable-libquadmath --enable-checking=yes --disable-werror \
+		--disable-libquadmath --disable-libquadmath-support \
+		--enable-checking=yes --disable-werror \
 		--disable-bootstrap &&
 	 nice -n 10 make -j"$jobs" &&
 	 make install-strip) > "$log/gcc.log" 2>&1

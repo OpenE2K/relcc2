@@ -213,11 +213,13 @@ Options for `bootstrap`, `lccbuild` and `selfbuild`:
 - `-- CONFIGURE-ARGS`: extra configure arguments, for example
   `-- --with-arch=elbrus-v5`.
 
-Every build is configured as the PoC's cross build is: C, C++ and LTO;
-no multilibs, NLS, sanitizers, SSP or ITM; the machine's own binutils.
-libquadmath is also off, because the machines' glibc `<bits/fenv.h>`
-fails in C23 (`spec/abi/source-compat.md`, "Headers"). The PoC's cross
-sysroot patches that header; a native build can't.
+Every build is configured as the PoC's cross build is: C, C++, Fortran
+and LTO; no multilibs, NLS, sanitizers, SSP or ITM; the machine's own
+binutils. libquadmath is also off, because the machines' glibc
+`<bits/fenv.h>` fails in C23 (`spec/abi/source-compat.md`, "Headers").
+The PoC's cross sysroot patches that header; a native build can't. So
+the native gfortran is built without libquadmath support
+(`--disable-libquadmath-support`): no `REAL(16)`.
 
 ## Layout on the machine
 

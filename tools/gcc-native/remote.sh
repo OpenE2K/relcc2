@@ -70,9 +70,9 @@ stamp() { date '+%F %T'; }
 # C23 (spec/abi/source-compat.md, "Headers"), and the machines'
 # /usr/include has that header (the PoC's cross sysroot patches it).
 # shellcheck disable=SC2054  # the commas belong to the option
-COMMON=(--enable-languages=c,c++,lto --disable-multilib --disable-nls
+COMMON=(--enable-languages=c,c++,fortran,lto --disable-multilib --disable-nls
         --disable-libsanitizer --disable-libssp --disable-libitm
-        --disable-libquadmath --disable-werror
+        --disable-libquadmath --disable-libquadmath-support --disable-werror
         --with-as=/usr/bin/as --with-ld=/usr/bin/ld)
 
 cmd_check() {

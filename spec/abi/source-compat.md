@@ -3,7 +3,10 @@
 What a compiler must provide, beyond the binary interface, so that code
 and headers written for lcc build unchanged: predefined macros,
 inline-assembly constraints and register names, the lcc options and
-behaviours that change generated code, and lcc's pragmas. Probes:
+behaviours that change generated code, and lcc's pragmas. It also
+records where lcc's C and C++ differ from GCC's: code written for lcc
+may rely on those differences, and is then fixed in the package, not
+in the compiler. Probes:
 `tools/abi/probes/asmops.c`, `tools/abi/probes/execstack.sh` (nested
 functions, Fortran internal procedures),
 `tools/abi/probes/glibcbuild_lcc.py` (what building glibc's E2K code
@@ -704,10 +707,29 @@ has its own"), and accepts `GCC diagnostic` without acting on it
 (lcc-doc; glibc's makefiles work around that, e.g.
 `stdlib/Makefile:235-241`) [lcc].
 
-**Under `-Wall -Werror` they are errors for other compilers.** `-Wall`
-enables `-Wunknown-pragmas` (GCC `c-family/c.opt:1599-1601`); every lcc
-pragma tried is an error with the proof-of-concept GCC [gcc] and with
-GCC 16.2.1 on x86-64, and with Unipro's clang except `unroll` with or
+**lcc-doc** `pragma_gnu.html` covers only the pragmas of GCC 11.3's
+manual (section 6.62), not GCC's preprocessor pragmas. lcc accepts
+`#pragma GCC poison` without a word, also under `-Wall -Werror`, and
+does nothing with it: a poisoned name can still be used and defined,
+`#ifdef` and `defined` test it as any other name, and `lcc -E` passes
+the pragma through. `GCC warning`, `GCC error` and `GCC dependency`
+get warning #1675 (also without `-Wall`) and nothing else, so `GCC
+error` doesn't stop the compile [lcc 1.29.16 (lcc and l++) and
+1.31.05: `tools/abi/probes/folda55_poison.c`]. GCC rejects every use
+of a poisoned name after the pragma, `#ifdef` included [gcc]. So code
+built only by lcc may use names its own headers poison: MCST's qemu
+7.2.0 tests `TARGET_E2K` (`include/hw/boards.h`) and
+`HOST_WORDS_BIGENDIAN` (its E2K chipset header), both poisoned there,
+in target-independent code, where lcc takes them as undefined
+[source]. This is GCC's front end, nothing for the port; such a package
+tests the names only where they are allowed (under `NEED_CPU_H`;
+qemu 7.2's `HOST_BIG_ENDIAN` in place of the other).
+
+**Under `-Wall -Werror` lcc's pragmas are errors for other
+compilers.** `-Wall` enables `-Wunknown-pragmas` (GCC
+`c-family/c.opt:1599-1601`); every lcc pragma tried is an error with
+the proof-of-concept GCC [gcc] and with GCC 16.2.1 on x86-64, and
+with Unipro's clang except `unroll` with or
 without N, which clang knows [unipro]. glibc builds with `-Wall` and, by
 default (`--enable-werror`, `configure.ac:312-318`), `-Werror`
 (`Makeconfig:913-929`); the kernel likewise
@@ -752,6 +774,134 @@ glibc's `strlen` loop shape for `v5.8c2` and `v6.2c3` and none with
 comment gives the reason as "otherwise APB is applied, 1 cycle"
 (`sysdeps/e2k/strlen.c:77`): presumably APB costs these short string
 loops more than it gains (inferred; neither loop was timed).
+
+## Where lcc's C and C++ differ from GCC's (lcc, lcc-doc, gcc, source, hw)
+
+lcc's front end is EDG's (`__EDG__`, "Predefined macros"). Code
+written for lcc may rely on the differences below, and then doesn't
+build, or computes something else, with GCC. None of them is ABI: such
+code is fixed in the package (owner, 2026-11-02: GCC gets no lcc
+compatibility for the sake of packages). What GCC has and lcc lacks is
+in the next section; how lcc treats GCC's pragmas is in "Pragmas".
+
+### Language standards and old C (lcc-doc, lcc, gcc)
+
+lcc compiles C as `-std=gnu18` and C++ as `-std=gnu++17` unless told
+otherwise, "nominally compatible" with GCC 11.3 and its libstdc++; it
+calls its C23 support minimal and its C++20 support experimental
+(**lcc-doc** `lang_std.html`). The C default dates from 1.26 (1.25:
+`gnu11`), the C++ one from 1.28 (1.24–1.27: `gnu++14`, before:
+`gnu++98`) (**lcc-doc** `changelog_124.html`, `_126`, `_128`). lcc
+1.29.16 and 1.31.05 predefine `__STDC_VERSION__` 201710L and
+`__cplusplus` 201703L, and no `__STRICT_ANSI__` [lcc]. GCC 17.0.0, the
+proof-of-concept's base, defaults to `gnu23` and `gnu++20` (202311L,
+202002L; `gcc/c-family/c-opts.cc:264-265, 277-279`) [gcc].
+
+lcc accepts the old C that GCC 14 and later reject unless given
+`-fpermissive` (the default only for `-std=c89` and `gnu89`;
+`gcc/doc/invoke.texi:6850-6871`) [lcc 1.29.16 v3, v5.8c2, 1.31.05 v3;
+gcc: `tools/abi/probes/folda47_dialect.c`]:
+
+| Construct | lcc | GCC: error under |
+|---|---|---|
+| implicit `int` in a declaration (`static x = 1;`, `f (void) {…}`) | no diagnostic; warning #260 with `-Wall` | `-Wimplicit-int` |
+| an old-style parameter without a type (`int g (p) {…}`) | warning #1051 | `-Wimplicit-int` |
+| a call to an undeclared function | warning #223 | `-Wimplicit-function-declaration` |
+| an integer returned from a pointer function | warning #3311 | `-Wint-conversion` |
+| a `long *` returned as `int *` | warning #3309 | `-Wincompatible-pointer-types` |
+| `return;` in an `int` function | warning #117 | `-Wreturn-mismatch` |
+| a parameter name without a type in a declaration (`void f (i);`) | warning #92 | `-Wdeclaration-missing-parameter-type` |
+
+C's `bool` without `<stdbool.h>` is error #20 ("identifier "bool" is
+undefined") in lcc and a keyword in C23. Configure scripts see that:
+ncurses 6.4's, run with GCC's C23, finds that C has a `bool` of its own
+(`configure.in:1927`, `1992-2004`), and its `curses.h` then defines
+`bool` as `NCURSES_BOOL` (`unsigned char`) for C++ too
+(`include/curses.h.in:272-291`), which libstdc++'s C++20 `<concepts>`
+rejects [source]. OS Elbrus's packages are written for lcc's dialects;
+a GCC that builds them gives lcc's answers to the probe's cases with
+`-std=gnu17 -fpermissive` for C and `-std=gnu++17` for C++ [gcc]. That
+concerns building those sources, not the ABI: the port's own defaults
+stay GCC's (for the installed `fenv.h` under C23, "Headers" below).
+
+### Bit-fields wider than `int` (lcc, gcc, hw)
+
+lcc gives a bit-field of 33–63 bits its declared type in expressions
+(`unsigned long long`, `long`), as clang and C++ do. GCC's C gives it
+a type of exactly the field's width (C11 6.7.2.1p10, as GCC reads it),
+so `<<`, `~`, `+` and `*` wrap there, and for a signed field overflow
+there:
+
+| `u64 ip : 45` = 0xe20000080830 >> 3 | lcc, clang, C++ | GCC's C |
+|---|---|---|
+| `ip << 3` | `e20000080830` | `20000080830` |
+| `~ip` | `ffffe3bffffefef9` | `3bffffefef9` |
+| `ip + ip` | `38800002020c` | `18800002020c` |
+| `(ip << 3) > 0x100000000000` | 1 | 0 |
+| `(u64) ip << 3` | `e20000080830` | `e20000080830` |
+| `long h : 36` = 0x7ffffffff, `h << 12` | `7ffffffff000` | `fffffffffffff000` |
+
+A field of up to 31 bits promotes to `int` and one of 32 bits stays
+`unsigned int` in both (`a << 16` of a 20-bit 0xfffff is
+`ffffffffffff0000`; a 32-bit `b << 4` and `b + 1` wrap at 32 bits in
+both). A 64-bit field is `unsigned long long` in both, and `sizeof` of
+a 33–63-bit field's expression is 8 in both [lcc 1.29.16 v3 at `-O0`
+and `-O2`, l++, v5.8c2; 1.31.05 v3; hw:
+`tools/abi/probes/folda42_bitfield.c`, 4C, 8C2; gcc: GCC 16.2.1 on
+x86-64 and the proof-of-concept back end; clang 22]. Code built by GCC
+casts such a field to its declared type before arithmetic that can
+exceed the field's width. MCST's kernel relies on lcc's rule
+([kernel-build.md](kernel-build.md), "Wide bit-fields"). The layout is
+the same in both ([data-layout.md](data-layout.md), "Bit-fields").
+
+### Shift counts of the width or more (lcc, gcc, glibc, hw)
+
+lcc compiles a C shift by a count it can't see as the hardware
+operation, which takes the count modulo 64 (32 for 32-bit shifts;
+[semantics.md](../isa/semantics.md), "Shifts and rotates"): `if (x &
+0x80) return 1ULL << x;` is a `shld` of x, so x = 0x81 gives 2. A
+count that inlining makes constant folds the same way (`v << 70`
+becomes `scld 1, 6`); only a literal constant expression (`1ULL <<
+64`) folds to 0, with warning #63 [lcc 1.29.16 v3, v5.8c2, v6.2c3
+(`-S`) at `-O0` to `-O3`; 1.31.05 v3; hw:
+`tools/abi/probes/folda43_shift.c`, 4C, 8C2]. For GCC such a shift is
+undefined, and its optimizers use that: that function returns 0, and
+from `1LL << spec` they conclude `spec < 64`. `SHIFT_COUNT_TRUNCATED`
+only lets RTL drop a mask [gcc: the proof-of-concept back end, which
+defines it, at `-O2` (at `-O0` it gives the hardware's result); GCC
+16.2.1 on x86-64 from `-O1`]. MCST glibc relies on lcc here:
+`strcspn`, `strpbrk` and `strspn` (`sysdeps/e2k/strcspn.c:100-125`,
+`strpbrk.c:106-130`, `strspn.c:101-125`), for a set of more than 8
+bytes (16 on v6), build a 256-bit table with `1LL << spec` for bytes
+up to 255 and test bytes the same way. Built by GCC they miss every
+byte from 0x40 up (`strcspn ("xyzzyc", "abcdefghi")` is 6), which
+broke busybox ash's word splitting (the proof-of-concept back end's
+finding A43; `& 63` on both counts fixes them: `OpenE2K/glibc` branch
+`glibc-2.35-mcst-gcc`, 3600718857e). Code built by GCC masks such
+counts (`& 63`); `-fsanitize=shift` finds more at run time.
+
+### What lcc accepts and GCC doesn't (lcc, gcc)
+
+lcc 1.29.16 (v3, v5.8c2) and 1.31.05 (v3) take these without a word,
+also under `-pedantic-errors` (with `-std=c11` or `-std=c2x` in C,
+`-std=c++17` in C++); x86-64 GCC 16.2.1 and the proof-of-concept GCC
+reject them [lcc, gcc: `tools/abi/probes/folda56_const.c`,
+`folda58_memberns.cc`]:
+
+| Construct | lcc | GCC | Met in |
+|---|---|---|---|
+| A statement expression of constants (qemu 7.2's `MAX`) where C wants an integer constant: a block-scope array's bound, a `case` label, a block-scope `static` array's bound, `_Static_assert` | folds it to a constant, so the array is no VLA and may be initialized (`char label[MAX (30, 20) + 32] = "label=";` is 62 bytes); at file scope it is error #1166 "statement expressions are only allowed in block scope", and a real VLA still can't be initialized (#145) | never a constant: the array is a VLA ("variable-sized object may not be initialized except with an empty initializer"), the others are errors | MCST's qemu 7.2.0, `target/e2k/boot` (`BOOT_STRING_SIZE`) |
+| A C `const` integer variable with a constant initializer, taken as an integer constant as in C++: in `aligned (…)`, a file-scope array's bound, an enumerator, a `case` label, a block-scope array's bound | takes it: `.align 4096`, a 4096-byte array, an initialized block-scope array that is no VLA | errors ("requested alignment is not an integer constant", "variably modified … at file scope", "enumerator value … is not an integer constant", the VLA error), also with `-std=gnu17`; only the `case` label is taken, as an extension (a `-Wpedantic` warning) | MCST's kexec-e2k 1.0.1 (`aligned (alignment)`) |
+| A member function defined by its qualified name in a namespace that doesn't enclose its class: an unnamed one, an unrelated named one, an unnamed one inside the class's | takes it and gives it the usual global symbol (`N::S::f`: `GLOBAL DEFAULT _ZN1N1S1fEv`); a static data member or a namespace's function defined that way is error #551 "… cannot be defined in the current scope" | a permerror, static data members included ("definition of … is not in namespace enclosing …", `gcc/cp/decl.cc:12237`): with `-fpermissive` a warning and the same symbol; the namespace's function is an error in GCC too | MCST's LibreOffice 6.3 E2K bridge (`cpp2uno.cxx`: `VtableFactory`'s members in an unnamed namespace) |
+
+C23's `constexpr` is no way out that both take: GCC 16 with `-std=c23`
+still says "requested alignment is not an integer constant" for
+`aligned` of a `constexpr` variable, and lcc doesn't know `constexpr`
+in C (error #20) [gcc, lcc]. These are front-end rules, the same on
+every GCC target, so a port has nothing to do: code that relies on
+them is fixed in the package (a macro or an enumerator for the
+constant, as qemu's `MAX_CONST`; the namespace closed before the
+definitions).
 
 ## GNU extensions lcc lacks (lcc, lcc-doc, unipro)
 

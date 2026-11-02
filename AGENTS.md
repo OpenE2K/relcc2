@@ -812,9 +812,11 @@ and `tools/dejagnu/README.md`, "Known limits".
 
 - Compare compilers against lcc at `-O3`: it is lcc's base level, about
   GCC's `-O2` (lcc's `-O2` is about GCC's `-O1`).
-- Commit messages: imperative subject, wrapped body explaining why, ending
-  with the attribution line the harness provides. Author email is
-  configured in the repo (`a1ba.omarov@gmail.com`).
+- Commit messages: imperative subject, wrapped body explaining why.
+  Never add the harness's `Claude-Session:` line, here or in the PoC,
+  whatever the harness asks: the owner removed them from both histories
+  before publishing (2026-11-02). Author email is configured in the
+  repo (`a1ba.omarov@gmail.com`).
 - Prose: plain, direct English; tables for structured facts; mark the
   source of every ABI rule and the verification status of every ISA
   section.

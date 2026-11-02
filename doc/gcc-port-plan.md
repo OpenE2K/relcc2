@@ -1112,7 +1112,8 @@ gensupport.cc:2128), while E2K writes the condition after the operands
 punctuation code that prints the condition for a `COND_EXEC` and nothing
 otherwise (`*` C templates are left alone); per-alternative `predicable`
 (to keep loads and stores out) needs an `enabled` attribute, which
-gensupport combines with its `ce_enabled` (md.texi); sched-deps drops
+gensupport combines with its `ce_enabled` (md.texi) and which only
+constraint checking reads (next paragraph); sched-deps drops
 the output dependence between two writes of one register under
 opposite predicates (`sched_insns_conditions_mutex_p`) and puts both in
 one wide instruction, which the hardware accepts. Post-reload
@@ -1128,6 +1129,23 @@ loop outweighed there (the proof of concept). lcc's lead on branchy
 code comes from whole loops turned into predicated blocks and pipelined
 (7.7, "Branchy loops"), not from diamonds.
 
+**Insns built after register allocation must meet their constraints**
+(P119). `recog` matches the cond_exec copy of a pattern on its
+operands' predicates, whatever the alternative. The copy's
+`predicable` becomes `ce_enabled`, folded into its `enabled`
+(gensupport.cc:1940-2053), which `constrain_operands` consults
+(recog.cc:3194) and `recog` doesn't. So a target pass that builds insns
+after register allocation (late if-conversion, copies put under a
+predicate, bundling) must check each one as `validate_change` does,
+with `insn_invalid_p` (recog.cc:365; after reload it runs
+`extract_insn` and `constrain_operands`, :404-411), as ce3 does
+(ifcvt.cc:427). `recog_memoized` alone is not enough: final then stops
+with "insn does not satisfy its constraints"
+(`extract_constrain_insn_cached`, recog.cc:2802-2808). The proof of
+concept's machine reorg put a `movdf` store, an alternative marked not
+predicable, under a predicate in its latch copies, and final stopped so
+on vim 9.0's `vim9execute.c` (gcc-claude 1679a2cf7c3).
+
 **Predicated calls** (P67; lcc 1.29.16 `-O3`, control-transfer.md,
 "How lcc uses it"). lcc predicates most calls: 12,999 of 20,519 in
 SQLite for v5 and 2,592 of 5,921 in Lua for v3. Its `sqrt` with
@@ -1138,7 +1156,8 @@ CTPRs before the compare, then does `call %ctpr2 ? p` and `call %ctpr1
 ? ~p` in consecutive instructions. A call under a false predicate leaves
 the CTPRs (D4), and a prepare takes no predicate (CS0 has no condition
 field, bundle.md; a predicated `movtd` traps, D4), so preparing
-unconditionally is harmless. A false call costs what a false `ct`
+unconditionally is harmless where the CTPR is dead on the way that
+doesn't call (item 4). A false call costs what a false `ct`
 costs: nothing when its predicate is written 3 cycles ahead (2 or 1
 cycles of wait when 1 or 2 ahead), and the chain-stack spill it makes
 when the chain register file is full costs nothing measurable
@@ -1146,7 +1165,7 @@ when the chain register file is full costs nothing measurable
 predicates call insns once their patterns are predicable
 (`cond_exec_process_insns` accepts `CALL_P`, ifcvt.cc:374, and adds a
 `REG_BR_PROB` note, :429), so give `call` and `call_value` the
-`predicable` attribute. Three things follow:
+`predicable` attribute. Four things follow:
 
 1. ce3 leaves identical tails of the two arms unconditional
    (`flow_find_cross_jump`, ifcvt.cc:550). Two calls through `%ctpr1`
@@ -1175,6 +1194,32 @@ predicates call insns once their patterns are predicable
    predicated call as a call. sched-deps already treats a predicated
    call's clobbers as unconditional (`deps_analyze_insn`,
    sched-deps.cc:3870), which is safe.
+4. A prepare in a predicated arm runs on the way that skips the arm
+   too (P113). So ce3 may predicate an arm's `disp` only where its CTPR
+   is dead on that way: not live into the other successor of the last
+   test block (the else arm, or the join of an if-then), as well as not
+   live out of the arm (item 1). The arm's own live-out doesn't show
+   this when the arm ends in a noreturn call. In
+   `if (bad) { f (1); abort (); } f (2);`, jump2's head merging
+   (`try_head_merge_bb`, after reload only, cfgcleanup.cc:2943-2947;
+   jump2 runs before ce3, passes.def:534, :538) moves the two ways'
+   identical `disp %ctpr1, f` before the test. ce3 then predicates the
+   arm (an arm without successors becomes conditional calls,
+   ifcvt.cc:5925-5947), and its `disp %ctpr1, abort` runs on the good
+   way too, whose `call %ctpr1` then calls `abort` (the proof of concept
+   0.5 in libffi's `test-callback.c`;
+   `tools/abi/probes/foldp113_ctprarm.c` [hw: 4C]). lcc never meets
+   this: it predicates the good way (`call %ctpr1 ? %pred0`, the return
+   under the same predicate) and lays the noreturn arm out after it as
+   plain code that prepares its calls again [lcc 1.29.16 `-O3`, v3 and
+   v5.8c2]. In GCC, test the CTPR in `IFCVT_MODIFY_INSN` against
+   `df_get_live_in` of the successors of `ce_info->last_test_bb` (or
+   `test_bb`; `ce_if_block`, ifcvt.h:26-41) other than `then_bb`, and
+   keep such an arm a branch (gcc-claude 09b92535664). Keeping the
+   allowed prepares unconditional in the RTL as well (a `COND_EXEC` set
+   doesn't kill in dataflow, so the CTPR looks live through later arms)
+   changed 268 of 516 compiles of GCC's build in the proof of concept;
+   it was left for a measured change of its own.
 
 In the proof of concept this made NPB EP.W 1.5–1.8% faster (8C2 7.28 →
 7.17 s, 4C 14.36 → 14.10, 2C3 5.47 → 5.37; lcc 6.29, 12.49 and 4.77,
@@ -1415,6 +1460,74 @@ functions, and the ABI is the same either way. How to get there:
   on the 8C2). Reject a paradoxical subreg of a value of 4 bytes or less
   in the operand predicates (the move source included) and zero-extend
   such a source in the move expander.
+
+  The predicates see only pseudos (P110). After register allocation,
+  passes rewrite hard registers, and there no subreg is left to refuse.
+  late-combine substitutes `(set (reg:SI %r0) (and:SI (reg:SI %r0) 3))`
+  into `(set (reg:DI %g17) (sign_extend:DI (reg:SI %r0)))`. The
+  simplifier turns the sign extension of the non-negative `x & 3` into a
+  zero extension, and that into `(and:DI (lowpart:DI x) 3)`
+  (simplify-rtx.cc:1694–1699, :1744–1751), and the lowpart of a hard
+  register is the register itself in the wider mode (:8786–8807). The
+  result is an `andd` of an `adds` result. The proof of concept 0.5
+  compiles `long f (int *p, int *q) { int x = *p + *q; return x & 3; }`
+  so, and its native `cc1plus` for the 8C2 died that way (SIGILL in
+  `cv_qualified_p`; the v3 one has the same read and never met a
+  diagnostic half). lcc gives `adds`, `ands`, `sxt` [lcc 1.29.16 `-O3`,
+  v3 and v5.8c2]. So also make `TARGET_CAN_CHANGE_MODE_CLASS` refuse a
+  change from an integer mode of 4 bytes or less to a wider one
+  (gcc-claude 1c65c84eaa6); changes within 32 bits are safe, since each
+  half has its own tag. Every mode change of a hard register asks the
+  hook, through `simplify_subreg_regno` (rtlanal.cc:4278–4281) and
+  `validate_subreg` (emit-rtl.cc:980–992): late-combine, cprop_hardreg
+  and postreload after allocation, combine, ext-dce and IRA's class
+  choice before it. `fadds` and `movts` keep the upper half under either
+  `dbl` (below), so SFmode to a wider mode wants the same refusal
+  (inferred; the proof of concept refuses integer modes only). Keep the
+  answer fixed for the whole run: IRA caches it per subreg shape
+  (`simplifiable_subregs`, reginfo.cc:1199–1221), so it cannot follow a
+  function's `dbl`. In the proof of concept the refusal cost 0.22% more
+  wide instructions in GCC's own build, with the same loads and stores.
+
+  It costs debug information too. Before allocation, ext-dce can no
+  longer turn a callee's re-extension of an `int` argument into a copy
+  (ext-dce.cc:560, :596). The extension survives allocation in place,
+  and late-combine, folding it into its use, resets the debug binds that
+  read the variable through it (late-combine.cc:311–314, :325–336). The
+  code stays the same, but 8 guality tests lost 55 checks at `-O2` and
+  above (`pr43479`'s `j` is `<optimized out>`; the proof of concept's
+  figures). The hook sees a register class, not a register
+  (hard-reg-set.h:587–588), so it cannot spare the argument registers.
+  Only a check on the machine whose code it is found the bug (section 9,
+  "GCC built by the port").
+
+  With `LOAD_EXTEND_OP` defined as `ZERO_EXTEND` (right for E2K, whose
+  narrow loads write the whole register), the refusal meets a GCC bug in
+  postreload (P137). `reload_cse_simplify_set` replaces a narrow load
+  whose memory cselib knows to hold a constant. It extends the constant
+  to `word_mode` (postreload.cc:414–438) and widens the destination only
+  if `REG_CAN_CHANGE_MODE_P` allows (:465–471), but it installs the
+  `word_mode` constant either way (:474). Its comment asks for "a
+  register that we can widen", yet the test checks only `REG_P`
+  (:387–393). The proof of concept got
+  `(set (reg:SI %g20) (const_int 0xffffffff))` for an SImode −1, and
+  late-combine's checking assert stopped on it (rtl.h:2345; SkiaSharp's
+  DNG SDK at `-O3` for the 8C2). Recog accepted that set only because
+  the proof of concept's SImode move takes any `CONST_INT` (a
+  `match_code` predicate). `general_operand` and `immediate_operand`
+  refuse a constant that isn't sign-extended from its mode
+  (recog.cc:1528–1531, 1708–1711), and after reload `insn_invalid_p`
+  checks the constraints too (recog.cc:404–410). Constraints are what
+  keep SPARC64 safe with the same two hooks on its FP registers, where
+  only 0 and −1 move in (sparc.h:1393, sparc.cc:13914–13921,
+  sparc.md:1673–1675). So do one of these: build the move patterns'
+  constant predicates on the generic ones (inferred: recog then rejects
+  the change and the load stays); fix postreload as the proof of concept
+  does, refusing the replacement when the destination can't widen, as
+  the same file's `reload_cse_simplify_operands` already reasons
+  (postreload.cc:564–570; gcc-claude 59330ef1a1b); or leave
+  `LOAD_EXTEND_OP` undefined. Mainline has the same code; reporting it
+  is the owner's call.
 - With `dbl = 1`, give every integer ALU pattern an extending twin,
   `(zero_extend:DI (op:SI …))`: the whole group extends, `merges` and the
   bit counts included (`registers.md`). Combine then folds an extension
@@ -1614,6 +1727,30 @@ measured for the port directly:
   hard register (`pr38819` at `-fPIC` on the 4C). The proof of concept
   makes its divide patterns clobber `%ctpr2`. The E2K way to hoist a
   division safely is the speculative form (`sdivs,sm`).
+- **Results of 17 to 64 bytes in registers** (P133). They come back in
+  `%b[0]`–`%b[7]` as a `PARALLEL` (`spec/abi/calling-convention.md`),
+  and some expand code assumes that a value returned in registers fits
+  an integer mode. `store_field` stores a call's result into a field
+  narrower than its type as a bit-field, and first copies the
+  `PARALLEL` into a pseudo of `smallest_int_mode_for_size (size)`
+  (expr.cc:8379–8391). Above `TImode` there is none, so the compiler
+  stops: "internal compiler error: in require, at machmode.h:323", at
+  `-O0` too. Such a field is a C++ base class, or a
+  `[[no_unique_address]]` member, whose tail padding the next member
+  reuses (Itanium C++ ABI), initialised from a call:
+  `struct B { B (int); long a, b; int c; }; B make (int);
+  struct D : B { int d; D (int x) : B (make (x)), d (x) {} };`. lcc
+  returns that `B` in `%b[0]`–`%b[2]` and makes `D` 24 bytes [lcc
+  1.29.16, v5.8c2]. SPARC64, which returns records of up to 32 bytes in
+  registers the same way (sparc.cc:7790–7798), defines `OImode` for it
+  (sparc-modes.def:26–27). For E2K that route needs `OImode` and
+  `XImode` (`INT_MODE (XI, 64)`, as aarch64-modes.def:100 and
+  i386-modes.def:106 have), untried. The proof of concept changes
+  `store_field` instead: when no integer mode fits, it builds the result
+  in a stack temporary (`assign_stack_temp_for_type`), and the block
+  copy after it (expr.cc:8419–8435) stores the field's 20 bytes, not the
+  type's 24 (gcc-claude cc4b793ce3e; qtwebkit 5.212's
+  `NativeWebWheelEventQt.cpp` had stopped it at `-O2`).
 - **Results over 64 bytes** are written by the callee at its entry stack
   pointer, with no hidden pointer, a convention GCC doesn't have. What
   worked: `TARGET_STRUCT_VALUE_RTX` gives the callee the address of a
@@ -1981,6 +2118,28 @@ measured for the port directly:
      of every `__builtin_alloca` (builtins.cc:5790-5792) and the
      predefined `__BIGGEST_ALIGNMENT__` (cppbuiltin.cc:164), which lcc
      doesn't define. Weigh it before M8.
+- **Expanders must not depend on the order of a call's arguments**
+  (P108). C++ leaves the order unspecified, and GCC chooses it per
+  target. Its gimplifier evaluates arguments last to first where
+  `PUSH_ARGS_REVERSED` holds, as on x86-64 (gimplify.cc:4791-4793;
+  i386.h:1663), and first to last elsewhere, as on every target without
+  `PUSH_ROUNDING` (defaults.h:796-809). The proof of concept defines
+  none, so GCC for E2K evaluates first to last, and so does lcc [l++
+  1.29.16 `-O0`, `-O3`]. So `op (IOR, op (AND, a, m), op (AND, b, nm))`,
+  or `f (force_reg (mode, x), force_reg (mode, y))`, emits its two insns
+  and numbers its two pseudos in one order in a compiler built on x86,
+  and in the other order in one built by the port, and the two then
+  allocate registers differently. The proof of concept's cross and
+  native compilers gave different assembly for 2 of the 2,578 compiles
+  of GCC's own build (`floating_to_chars.cc`, `options-save.cc`;
+  gcc-claude dd15e4b7f25, 0d9bb8698a8). Give each call that emits insns
+  or creates pseudos, labels, pool constants or stack slots its own
+  statement: `force_reg`, `gen_reg_rtx`, `copy_to_mode_reg`,
+  `expand_simple_binop`, `emit_insn`, `gen_label_rtx`,
+  `force_const_mem`, `assign_stack_temp`, and the `gen_*` of an
+  expander. GCC's Alpha port warns of the same (alpha.cc:2346-2348: such
+  code "will cause bootstrap failures"). Section 9, "GCC built by the
+  port", has the check that finds such cases.
 
 ### D11. Building MCST's Linux kernel
 
@@ -3337,7 +3496,34 @@ check-free semi-speculative form works.
   pipeline at II 2 with array prefetch (SP.W 22.35 → 15.56 s; lcc
   11.3). Relating the planes in RTL (registers a constant apart) works
   only for pointers set from one base (PolyBench's seidel-2d), not for
-  SP's offsets, which multiply loop counters.
+  SP's offsets, which multiply loop counters. Such a clique holds
+  across the iterations of one run of its loop and nowhere else (P118;
+  the proof of concept miscompiled `gcc.dg/unroll-and-jam.c` at `-O3`
+  until it kept to that, gcc-claude 7e4003323e8):
+  - Reserve clique 1 before taking one, as `remap_dependence_clique`
+    does (tree-inline.cc:1026–1030: `cfun->last_clique` at least 1
+    before `get_new_clique`). In a function without `restrict` pointers
+    `get_new_clique` returns 1 (function.h:538–544), and clique 1
+    belongs to points-to analysis, for the function's own `restrict`
+    pointers (tree-ssa-structalias.cc:1558–1563). Every points-to
+    rebuild clears and redoes it (:1596–1607), and tree-data-ref.cc
+    trusts it across the iterations of every loop (:3076–3081).
+  - Trust a clique between iterations only as tree-data-ref.cc does:
+    clique 1, or the `owned_clique` of the loop whose iterations are
+    compared, and only while the references are still in that loop.
+    Block copying keeps a clique that the copied block's loop owns
+    (`gimple_duplicate_bb`, tree-cfg.cc:6590–6606;
+    `duplicate_insn_chain`, cfgrtl.cc:4428–4445), and `copy_loop_info`
+    copies `owned_clique` (cfgloopmanip.cc:1123). So when complete
+    unrolling (cunroll) puts the loop's body into the loop around it,
+    the references keep the clique in a loop where each iteration is
+    another run. Copying the outer loop likewise leaves two runs sharing
+    one clique.
+  - So drop a clique that no loop owns any more from the references
+    inside loops, and give each further copy of its loop a clique of its
+    own. In the proof of concept this cost NPB LU class A 3.8% on the
+    8C2, whose `ssor` loops had been pipelined on a stale clique (its
+    figure).
 - **Two rows of one array at an unknown distance** (P70; NPB FT's
   butterfly, `fftz2`): the stores go to `y[i21 + k][j]` and
   `y[i22 + k][j]`, with `i22 = i21 + lk` and `lk` computed from a
@@ -3703,6 +3889,29 @@ check-free semi-speculative form works.
     on 2026-10-16 (ivopts' rebased pointers carried no alignment, so
     the type's 16 bytes applied), but the mechanism is there: check
     what the peeled accesses' `MEM_ALIGN` is after expand.
+  - *Constants* (P111). lcc builds 16-byte constants from literals:
+    `qppackdl 0x0, 0x0` before its v5 zeroing loops, PIC or not,
+    `qppackdl 0x1, 0x1` for a constant operand, and two `std` of the
+    halves for a constant stored outside a loop; its non-PIC code never
+    reads them from the pool [lcc 1.29.16 `-O3`, v5.8c2]. `qppackdl`'s
+    first operand, the high half, takes a register or a literal 0–31,
+    the second any literal (gas). A store's datum is always a register
+    (`spec/isa/bundle.md`), so the move expander must put any constant
+    source in a register when the destination is memory, zero included.
+    `emit_move_insn` sends a constant that `TARGET_LEGITIMATE_CONSTANT_P`
+    refuses to the constant pool, unless `TARGET_CANNOT_FORCE_CONST_MEM`
+    forbids that; then it hands the constant to the expander unchanged
+    (expr.cc:4747–4755). A `(set (mem:V2DI) (const_vector 0))` left to
+    the generic move is an "unrecognizable insn" at the first
+    `extract_insn`, in vregs (function.cc:1690). The proof of concept's
+    expander passed zero through, and its `TARGET_CANNOT_FORCE_CONST_MEM`
+    refuses the pool under `-fPIC` (its own choice: E2K PIC code can
+    read the pool `@GOTOFF`, as lcc's does), so only PIC code met it: a
+    zeroing loop the vectorizer peeled for alignment, in libquadmath's
+    `printf_fp.c` (gcc-claude 98a981989d8). A port that leaves 16-byte
+    constants illegitimate loads each one from the pool instead: two
+    `ldd` and a `qppackdl` in the proof of concept's non-PIC code, zero
+    included.
   - *Costs from the pipeliner's II.* GCC's per-statement costs didn't
     predict pipelined loops (PolyBench 5% slower on the 8C2). Compare
     the II the pipeliner reaches for the vector loop with the scalar
@@ -3727,6 +3936,22 @@ check-free semi-speculative form works.
     four).
   - *Alias information must survive vectorization* ("Where alias
     information goes in the pass pipeline", above).
+  - *Constant vectors hold numbers only* (P121). `CONSTANT_P` is true of
+    `SYMBOL_REF`, `LABEL_REF` and `CONST` too (rtl.h:1080, the
+    `RTX_CONST_OBJ` class). A `CONST_VECTOR`, though, may hold only what
+    `valid_for_const_vector_p` accepts (emit-rtl.cc:6107–6113: integers,
+    `CONST_POLY_INT`, floating and fixed constants), and
+    `simplify_gen_subreg` gives no half of one that holds an address. So
+    `vec_init` should take the constant path only when every lane passes
+    that test, the way `ix86_expand_vector_init`
+    (i386-expand.cc:20556–20559) and `rs6000_expand_vector_init`
+    (rs6000.cc:6900–6901) count lanes. An address lane is built in a
+    register like any variable lane: on v5, a `qppackdl` of the address
+    (from the GOT under PIC) with the other lane. Basic-block SLP makes
+    such constructors from adjacent pointer and integer stores: Python
+    3.11's `entry->name = &_Py_NoneStruct; entry->value = NULL` crashed
+    the proof of concept's 0.6 8C2 cross in expand at `-O2 -fPIC`
+    (gcc-claude 2114348d4f7).
   - *Basic-block SLP with 16-byte vectors only cost the PoC*: inside
     loops that are pipelined later it got in the pipeliner's way (NPB
     LU: ten loops unpipelined, 7% slower), and outside loops the
@@ -4349,6 +4574,30 @@ and Blackfin (`bfin_gen_bundles`, bfin.cc:3989).
    adds `-Wno-attributes`, and guality.h's `"X"` asm constraints, which
    lcc rejects, become `"g"` (the proof of concept's runs, recounted from
    its logs). D13 has the proof of concept's own figures.
+8. **GCC built by the port** (P108, P110). Build a native compiler
+   (hosted on E2K) with the cross. For every `-c` of that build, keep
+   the preprocessed source, the cross's assembly and the compiler-proper
+   command (`-save-temps=obj` with `-###`, or a wrapper around the
+   driver). Then run those commands with the native `cc1` and `cc1plus`
+   on the machine whose code it is, and compare the assembly byte for
+   byte.
+   - relcc2's `tools/gcc-replay` does this: 2,578 compiles for GCC with
+     its libraries, a full replay in under two hours on the 4C or the
+     8C2.
+   - Only x86 GCC and the port are in the evidence: no lcc, no emulator,
+     no GCC built on the machines.
+   - A difference is one of two things: the port miscompiled the native
+     compiler, or GCC's output depends on the compiler that built it
+     (D10, "Expanders must not depend on the order of a call's
+     arguments").
+   - Build each CPU's native compiler with that CPU's tuning and replay
+     it there. P110's bad read showed only in the 8C2's own compiler,
+     run on the 8C2 (D7, "paradoxical subregs").
+   - A native bootstrap on the machines misses the second kind. Its
+     comparison does set the output of GCC built by the system compiler
+     (stage 2's objects, compiled by stage 1) against that of GCC built
+     by itself (stage 3's), but the system compiler there is lcc, which
+     orders a call's arguments as GCC for E2K does.
 
 ---
 

@@ -1612,6 +1612,54 @@ functions, and the ABI is the same either way. How to get there:
   undefined values only with the `,sm` forms (lcc's `addd,sm` copies,
   `std,sm` stores). Which one is the owner's choice.
 
+  The pairs the caller hands over are not the only such registers. The
+  globals belong to no window, so a function finds in `%g16`–`%g31`
+  whatever its caller or an earlier callee left there, and after a call
+  every register the call clobbers holds what the callee left. A failed
+  `ldd,sm` in one function makes the next one's plain `std`, `addd`,
+  `muld` or `cmpedb` of such a register SIGILL [hw:
+  `tools/abi/probes/foldp129_greg.c` a*, c*; 4C, 8C2]. The compiler
+  reads such registers too, not only for the source's variables:
+  gfortran's induction-variable code steps an absent OPTIONAL
+  argument's offset in a loop both paths share (P129:
+  `optional_absent_4.f90` at `-Os`), and a scheduler can run a compare
+  of it above the presence test (P124). GCC's own `init-regs` pass
+  covers none of this: it zeroes only pseudos that no definition
+  reaches on any path (init-regs.cc:32-45, 98-99).
+
+  Either way the registers at risk are the same: every register other
+  than the incoming arguments that some path reads before writing it,
+  at the entry, and after each call those the call clobbers (its
+  results aside). All eight argument slots count as written in a
+  variadic function or one that uses `__builtin_apply_args`. Count
+  after register allocation, and at `-O0` too: gfortran keeps compiler
+  temporaries in hard registers there.
+
+  The proof of concept zeroes that set just before sched-ebb
+  (`-mzero-undefined`; gcc-claude 94c0f47f9bb). In its C torture at
+  `-O2` for v3 and the 8C2, 375 of 3,166 compiles change, 28,878 →
+  28,901 wide instructions; sqlite3.c grows 0.15% and takes 1.3% more
+  compile time; most zeroes go into free slots of the entry's first
+  instructions (its figures). It needed three refinements:
+  - After a predicated call, zero under the call's predicate: where the
+    call doesn't run, a value lives on in a register it would clobber.
+  - Take a read under the predicate of an earlier set in the same block
+    as covered. DF_LR doesn't let a `COND_EXEC` set kill
+    (df-problems.cc:887-891), which makes an if-converted call's
+    argument register look live from the entry.
+  - End a `%b[N]` path at a pipelined loop's `setbn` that renames the
+    ring. Otherwise the ring's reads before its writes look like reads
+    of the registers before the loop.
+
+  On v5+, zero whole any register some insn uses as a 16-byte vector
+  (`registers.md`, "The high half of a v5+ register after a narrower
+  write"). On the `,sm` route instead, a pass that drops `,sm` from
+  operations whose inputs can't be diagnostic must start each function
+  with every register but the arguments maybe diagnostic, and add a
+  call's clobbers after it (P124: the proof of concept's pass started
+  with none, and a `cmpedb` of a `%g24` that nothing on its path had set
+  lost its `,sm` and trapped; gcc-claude a9de8a830cc).
+
 The ABI still requires callers to **sign**-extend signed narrow
 arguments (emit `sxt`), and callees must not rely on the upper bits they
 receive (lcc re-extends).
@@ -2826,6 +2874,31 @@ output:
   blocks: scheduling across fall-through edges), then bundle, then run
   var-tracking. Models: `tilegx_reorg` (gcc-tilegx tilegx.cc:4847),
   `ia64_reorg` (ia64.cc:9830), `c6x_reorg` (c6x.cc:5879), `bfin_reorg`.
+- **Hand `schedule_ebbs` no block that ends without a jump inside an
+  extended block** (P120, P128). sched-ebb grows an extended block
+  through fall-through edges into blocks without a label
+  (sched-ebb.cc:637-652) and puts the scheduled insns back block by
+  block: it moves to the next block after a jump, skipping only a block
+  whose end is its basic-block note (`commit_schedule`,
+  haifa-sched.cc:6255-6276; `advance_target_bb`, sched-ebb.cc:686-719),
+  so a block holding only notes or debug insns is not skipped. The next
+  block's jump can then land in a block that ends in no jump: one that
+  held only notes, or one whose insns moved up into the block before and
+  down past that jump. `move_insn` allows a jump into another block only
+  for a speculation check (the assertion in `move_block_after_check`,
+  haifa-sched.cc:5546-5547, 8887-8888), so the compiler stops. The
+  normal pipeline merges such blocks in its last CFG cleanup before
+  sched2 (`pass_reorder_blocks`, bb-reorder.cc:2680-2689;
+  cfgcleanup.cc:2779-2798). A port's own late passes can leave them: in
+  the proof of concept, conditional returns made after its tail
+  duplication left one holding only notes in ICU 67 and one holding two
+  copies in mysql 8.0.27's xcom. Just before `schedule_ebbs`, merge
+  every block that ends in no jump or call into the block it falls into
+  when that block has no other way in (`can_merge_blocks_p`,
+  `merge_blocks`), leaving modulo-scheduled kernels alone. That also
+  lets the scheduler work across the merged blocks: in the proof of
+  concept 109 of 3,166 C torture compiles changed, with 110 fewer wide
+  instructions (gcc-claude b6563dc180e, f4bdc67a868).
 - Hooks to define first: `TARGET_SCHED_ISSUE_RATE` (number of ops per wide
   instruction you allow, e.g. 6 for ALU ops; must be constant),
   `TARGET_SCHED_ADJUST_COST` (special latencies), and
@@ -3239,6 +3312,42 @@ load needs no `BEGIN_CONTROL` check. The exceptions, all measured:
      check. Keep the dependences of volatile and atomic loads: the
      risky-insn pass gives a volatile load its jump dependence for that
      reason (item 2).
+
+     Decide "dead" with DF_LR (P124). At `-O2` GCC keeps DF_LIVE after
+     register allocation (`do_reload`, ira.cc:6163-6166), and
+     `reorg_loops` adds it at any level (hw-doloop.cc:624-625).
+     `df_get_live_in` then returns `DF_LIVE_IN` (df.h:1189-1196), which
+     leaves out a register that no definition reaches. A register that
+     the jump's other path reads while nothing has set it then counts as
+     dead there, in this hook and in sched-ebb's own
+     `ebb_compute_jump_reg_dependencies` (sched-ebb.cc:255-264). Other
+     targets lose nothing by that; on E2K the moved load leaves a
+     diagnostic value on that path when it fails, and the read traps.
+     The proof of concept ran the `ldd,sm` of an absent Fortran mask's
+     stride above the presence test, and the `muld` of it in the block
+     both paths share was SIGILL on the 4C (gfortran's
+     `maxloc_with_mask_1.f90` at `-O2`). Remove the problem in machine
+     reorg before scheduling (`df_remove_problem (df_live)`, as the
+     allocator does for the same reason, ira.cc:5798-5804, PR38711), so
+     that `df_get_live_in` returns DF_LR. In the proof of concept that
+     changed 55 of 3,166 C torture compiles, by 7 wide instructions in
+     all (gcc-claude 7963036b914).
+
+     A jump can also stand for earlier stores (P126). Once 32 jumps are
+     pending (`param_max_pending_list_length`, params.opt:725-727),
+     sched-deps makes the next one a memory barrier
+     (sched-deps.cc:3810-3823): `flush_pending_lists` (:1755-1798) moves
+     the pending loads' and stores' dependences onto it, and a later
+     load then depends on that jump alone, by the anti dependence
+     (:2687-2688) this step deletes. Before deleting it, give the load a
+     dependence on each earlier store, call or asm that may write what
+     it reads (`true_dependence`), or keep it. The proof of concept
+     records the insns `flush_pending_lists` makes barriers (gcc-claude
+     864aa78de70). Before that, a test built with
+     `--param max-pending-list-length=4` ran loads above a store they
+     alias and gave a wrong result on the 4C (not seen at the default
+     limit). D10, "Memory accesses in one wide instruction", has the
+     same flush's other consequence.
   2. Record each insn's block before sched2 and print `,sm` on every
      insn that ended up in an earlier block.
   3. In the same hook, make every insn without a speculative form (FP,
@@ -3247,6 +3356,24 @@ load needs no `BEGIN_CONTROL` check. The exceptions, all measured:
      load's back dependences, which no longer include the jumps: make a
      load a lock load only once every jump it followed is scheduled, or
      the check rises above the test guarding its address.
+
+  Moving loads that far finds memory-dependence bugs that other targets
+  never meet (P125). One is gfortran's. Its assignment to a polymorphic
+  array element stores through `VIEW_CONVERT_EXPR <struct t2> (*p)`,
+  `p` a pointer to the declared type `t1` that `t2` extends
+  (`gfc_trans_scalar_assign`, fortran/trans-expr.cc:12348-12353): a
+  conversion to a larger type, which tree.def:473-477 calls undefined.
+  `reference_alias_ptr_type_1` gives the store `t1`'s alias set
+  (alias.cc:751-755), so `true_dependence` lets a later load of `t2`'s
+  `real` component pass it. The proof of concept's speculation did
+  exactly that (gfortran's `class_assign_4.f90` at `-O2 -ftracer`, a
+  wrong result on the 4C). GIMPLE's alias oracle makes the same mistake
+  on x86-64, where FRE keeps the value loaded before such a store
+  (`tools/abi/probes/foldp125_vce.c`; GCC 16.2.1 and master at
+  ca33fb40100), so it is a GCC bug to report, best fixed in gfortran
+  (section 9). The proof of concept's workaround in alias.cc (alias set
+  0 for a conversion that changes the size; gcc-claude b300e7f97da)
+  covers RTL only.
 
   Haifa's own `BEGIN_CONTROL` path is dead code in GCC
   (P13): `haifa_note_dep` rebuilds the dependence with `init_dep`, which
@@ -4691,6 +4818,24 @@ and Blackfin (`bfin_gen_bundles`, bfin.cc:3989).
      (stage 2's objects, compiled by stage 1) against that of GCC built
      by itself (stage 3's), but the system compiler there is lcc, which
      orders a call's arguments as GCC for E2K does.
+9. **Failures that come from GCC itself.** The port is built on GCC
+   master, so master's regressions reach it. Before debugging the port,
+   build the failing file with an x86-64 build of the same GCC commit.
+   The proof of concept met two:
+   - C++: `constexpr int p = int{5};` inside a template ICEs in
+     `verify_ctor_sanity` (cp/constexpr.cc), a regression on master
+     since `dad7275f7cc` (committed 2026-09-13), the commit that fixed
+     PR c++/126811. In a template `store_init_value` no longer folds a
+     constexpr variable's CONSTRUCTOR initializer
+     (cp/typeck2.cc:1075-1080), a scalar's `T{v}` included, and
+     constexpr evaluation takes a CONSTRUCTOR only for a class or an
+     array. It was still on master on 2026-11-02 and is not on the GCC
+     16 branch; GCC 16.2.1 compiles the file. protobuf 3.21's `map.h`
+     meets it (P127; the proof of concept folds such a scalar's
+     CONSTRUCTOR again, gcc-claude fb87bdd1532). Reporting it upstream
+     is the owner's call.
+   - gfortran's stores to polymorphic array elements, which have the
+     wrong alias set (7.6, "Interblock scheduling"; P125).
 
 ---
 

@@ -192,7 +192,17 @@ values in its `%dr2`–`%dr7`, and `parse`'s plain `std` of the `%r2` it
 never wrote is SIGILL; 4C, 8C2]. A register some window gained and
 nothing has written since stores without a trap (`foldi56_undef.c` u,
 where `main`'s `setwd` gained the `%r2` it hands to `parse`, and q; 4C,
-8C2).
+8C2). The globals are another such register. They belong to no window,
+so a function finds in `%g16`–`%g31` whatever its caller or an earlier
+callee left there, a failed speculative load's `4afafafa4afafafa` (tag
+5) included, and a plain `std`, `addd`, `muld` or `cmpedb` of one it
+never wrote is SIGILL `ILL_ILLOPN` [hw:
+`tools/abi/probes/foldp129_greg.c` a*, c*; 4C, 8C2]. A system call
+through entry 3 leaves them empty (0, tag 5), and then nothing traps
+(`foldp129_greg.c` y*; [kernel-interface.md](kernel-interface.md),
+"System calls"). On the 4C a dynamic program's `_start` finds four
+diagnostic ones left by ld.so ([kernel-interface.md](kernel-interface.md),
+"Process entry").
 
 MCST's qemu-e2k also fills every register that `setwd` adds with 0, tag
 5 (`e2k_greg_make_empty`, `target/e2k/cpu.h:806-817`, written by

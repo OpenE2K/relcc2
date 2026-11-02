@@ -310,6 +310,21 @@ covers memory slots too: lcc writes a narrow argument in slot 8 and up as
   reads it with `getsp 0`.
 - No other stack allocation may happen between filling the area and the
   call.
+- lcc reserves one area, at entry, for the function's largest call
+  (`getsp` −64 for 8 slots, −80 when another call in the function
+  passes 10), and an `alloca` block goes right above it: at the stack
+  pointer after the block's own `getsp` plus the area's size [lcc
+  1.29.16 and 1.31.05, `-O0` and `-O3`]. GCC does the same under
+  `ACCUMULATE_OUTGOING_ARGS` (`STACK_DYNAMIC_OFFSET`,
+  `gcc/function.cc:1486-1507`) [source]. So an `alloca` block is an
+  8-slot call's slot 8 only while no call in the function has more
+  slots. MCST's LibreOffice UNO bridge passes a method's stack
+  arguments that way (`callVirtualMethod`, built with `optimize (0)`;
+  [source-compat.md](source-compat.md), "Inline assembly"): at `-O2`
+  GCC deletes such a block and its `memcpy` as dead stores, which
+  `optimize (0)` prevents, while lcc `-O3` keeps them [gcc; hw:
+  `tools/abi/probes/folda53_regvar.c` `stack8` and `stack8+10`, 4C and
+  8C2].
 - The area belongs to the callee for the duration of the call: it may
   store its register arguments into their slots (Unipro's variadic
   callees and libffi's closures do) and use the area as scratch. A caller

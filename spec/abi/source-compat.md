@@ -236,6 +236,36 @@ not already fixed, and deletes the first of two consecutive writes
 `-ffixed-g16` … `-ffixed-g25` ([kernel-build.md](kernel-build.md),
 "Global registers").
 
+A local register variable (`register T v asm ("g16")` in a function)
+is its register wherever lcc reads or writes the variable, outside asm
+too: a read at entry takes what the caller, or a jump into the
+function, left there; the register is read again after every call, so
+`"b[0]"`–`"b[7]"` variables read a call's result; and a plain
+assignment writes the register and is kept up to the next call [lcc
+1.29.16 v3 and v5.8c2 (v6.2c3 read with `-S`), 1.31.05 v3 and v5.8c2,
+`-O0` and `-O3`; hw: `tools/abi/probes/folda53_regvar.c`, 4C and 8C2].
+MCST's LibreOffice UNO bridge relies on it
+(`bridges/source/cpp_uno/gcc3_linux_e2k`): `cpp_vtable_call` takes the
+method's index from `%g16`, which MCST's code snippet sets before it
+jumps there, and `callVirtualMethod` calls the method through a
+pointer to a `void` function, then reads the result from
+`b[0]`–`b[7]` [source]. GCC promises a local register variable's
+register only for extended-asm operands and calls other uses
+unsupported (`gcc/doc/extend.texi:13369-13412`) [source]. x86-64 GCC
+16.2.1 at `-O2` reads the register at the first read but takes two
+reads with calls between them for one value, read after the last call
+[gcc]; the proof-of-concept GCC, which zeroes a register it finds read
+before it is written (one answer to
+[gcc-port-plan.md](../../doc/gcc-port-plan.md), D7, "A register that
+may hold no value"), reads 0 at entry and after the calls and drops the
+assignment at `-O2` [gcc; hw: 8C2]. Both compilers honour an empty asm
+with the variable as its output (`asm volatile ("" : "=r" (g16))`) for
+the entry read and, for the results, a call through a pointer to a
+function returning a 64-byte struct, which comes back in those
+registers ([calling-convention.md](calling-convention.md), "Results")
+[lcc, gcc; hw: 4C, 8C2]. Where the bridge puts its stack arguments is
+in calling-convention.md, "Stack argument area".
+
 lcc also binds two names that are not registers, each with or without
 `%` [lcc 1.29.16 and 1.31.05 at `-O0` and `-O2`;
 `tools/abi/probes/glibcbuild_lcc.py`]:
@@ -287,6 +317,30 @@ with `i` to `addd` reaches gas as `0xffffffff`, which gas encodes as
 `_f64 0xffffffff`, that is +4294967295, not −1 ([bundle.md](../isa/bundle.md),
 "Literal values"). The installed headers cast such operands to an
 unsigned 64-bit type first (`__e2k_syscall_arg_t`).
+
+**A narrow input tied to a wider output** (`asm ("" : "=r" (long_r) :
+"0" (1))`, as GCC's `g++.dg/opt/pr23478.C` writes): from `-O1` lcc
+clears the output's register with a 64-bit operation and writes the
+input with a 32-bit one under `dbl = 0`, in the same wide instruction
+for a constant or a value computed from an argument (`addd,1 0x0, 0x0,
+%r3` with `adds,2 0x1, 0x0, %r3`; [bundle.md](../isa/bundle.md), "Two
+writes of one register"), or in the next one after a load or for a
+narrow type. The upper half is therefore 0: an `int` or `unsigned`
+input is zero-extended, never sign-extended (`-1` gives `0xffffffff`),
+and a `short` or `char` input is computed in 32 bits (`(short) (v +
+1)` as `(int) v + 1`, as x86-64 GCC does too) and then zero-extended.
+At `-O0` lcc writes only the low half, and the upper half is what the
+register held [lcc 1.29.16 v3, v5.8c2, v6.2c3, 1.31.05; hw:
+`tools/abi/probes/folda52_tie.c`, 4C and 8C2]. Unipro, always `dbl =
+1`, zero-extends from the input's own width (`sxt` 6, 5, 4: `(short)
+-1` gives `0xffff`) [unipro]. GCC leaves these bits undefined: LRA
+makes the input a lowpart subreg of the output's register
+(`gcc/lra-constraints.cc:1165-1176`) [source]. Code written for x86-64
+or AArch64, where a 32-bit write zeroes the upper half, relies on
+them, GCC's own pr23478 included; a compiler that writes such an input
+with a 32-bit operation under `dbl = 0` leaves the caller's upper half
+in the output [hw: the probe built by a proof-of-concept GCC that did
+so, 4C].
 
 An `m` operand may follow an operation's channel digit with no space:
 MCST's kernel writes `"{st"#mem_size_letter ","
@@ -421,6 +475,9 @@ uapi's clobber list names them ([kernel-interface.md](kernel-interface.md),
 | `asm volatile`, any clobbers | a barrier for everything: reserves the outgoing area, prepares `return %ctpr3` and loop `disp`s again after it (also with no clobbers: CTPRs are never kept across it), and reloads memory as if `"memory"` were given |
 | non-volatile | follows the clobber list: keeps `return %ctpr3` prepared across it unless `"ctpr3"`, `"call"` or a `"b[N]"` is listed; may put operands in `%g16`–`%g31` unless `"call"` or that `gN` is listed; reuses a value loaded before it unless `"memory"`, `"call"` or a `"b[N]"` is listed (`asmconv.py`, "Effects") |
 | non-volatile with outputs, opaque (`-mno-asm-inline`, lcc's default) | in every case probed, kept when its outputs are unused, and two identical ones neither merged nor moved out of a loop (`kernelbuild.py` `barrier`, `open`). GCC deletes the first kind and merges or hoists the second (`gcc/doc/extend.texi:11700-11711`, `gcc/cse.cc:2743-2760`) [gcc]; MCST's kernel relies on lcc here for `barrier()`, per-CPU stores and state-register reads ([kernel-build.md](kernel-build.md), "Inline assembly the kernel relies on") |
+| opaque (lcc's default; under `-masm-inline`, one after `_Pragma ("no_asm_inline")`), its template writing a global register variable that no operand or clobber names | the template isn't read: two reads of the variable around the asm are merged, as GCC merges them, and at `-O2` without `-ffixed-g16` lcc may keep a temporary of its own in a register the template writes. A value copied from the variable before the asm stays in lcc's temporary (`%g16`; `%g26` with `-ffixed-g16` … `g25`; a window register under `-fkernel`), whatever the template names (`folda41_gregasm.c`) |
+| parsed (`-masm-inline`, without `no_asm_inline`) | the template is read: lcc knows which global registers the asm reads and writes, copies a variable before an asm that overwrites it, and uses the register directly where the template leaves it alone (`folda41_gregasm.c`) |
+| any, listing as a clobber only a global register variable written just before it | the write is kept, opaque or parsed: lcc never deletes a write to a register variable (`folda41_gregasm.c`) |
 
 The uapi system call macros list neither `"memory"` nor `"call"`, so they
 rely on this (inferred). GCC does not treat `asm volatile` as a memory clobber and may
@@ -438,6 +495,30 @@ asm, and before and after it with `"memory"`. lcc reads it again after a
 uapi-style `read` (`tools/abi/probes/pocplan.c` `sys_read_twice`: `ldb`
 before and after the asm) [lcc 1.29.16 `-O2` and `-O3`, v3.4c, v5.8c2,
 v6.2c3; 1.31.05 `-O3`, v3, v6.2c3].
+
+**Global register variables.** GCC knows an asm only by its operands
+and clobbers ("the type of access must be provided to the compiler via
+constraints", `gcc/doc/extend.texi:13272-13277`) [source; gcc: GCC
+16.2.1 `-O2` on x86-64, `tools/abi/probes/folda41_gregasm.c -DVOL`;
+lcc, for the rows above: the same probe, 1.29.16 and 1.31.05, v3 and
+v5.8c2, at `-O2` and `-O3 -fkernel -masm-inline`, opaque also v6.2c3]:
+
+- A register the template writes without a clobber is unchanged for
+  GCC, so a copy taken before the asm may be read from the register
+  after it.
+- A clobber is an overwrite that doesn't read: a write to the variable
+  just before the asm is dead and deleted. A read after the asm may
+  still be merged with one before it by the tree optimizers, which
+  don't see clobbers.
+- Only an operand (`"+r" (var)`) makes GCC read the variable again and
+  keep the write.
+
+So code built by GCC gives an asm each global register variable it
+reads or may change as an operand: `"+r"` for "may change", `"=r"` for
+an overwrite, `"r"` for a read. A clobber is right only for a register
+whose old value is dead. MCST's kernel relies on lcc here in three
+macros ([kernel-build.md](kernel-build.md), "Global registers named
+only in templates and clobbers").
 
 lcc's `asm_inline`, `no_asm_inline` and `asm_length` pragmas, and what
 other compilers do with them, are in "Pragmas" below.
@@ -494,6 +575,21 @@ Register names for `-ffixed-<reg>` and `-fcall-used-<reg>` (as in GCC):
   A compiler that leaves them alone can store a register holding a
   diagnostic value (an empty one, as in registers a window gains, does
   not trap).
+- **Zero-initialized data**: lcc puts every explicitly initialized
+  object in `.data` (`.tdata` for `__thread`), also when the
+  initializer is zero (`= 0`, `= { 0 }`, `= { }`, `0.0`, a null
+  pointer), at file scope and for function-scope statics alike; only
+  objects without an initializer go to `.bss` or `.tbss` (common with
+  `-fcommon`). It accepts `-fzero-initialized-in-bss` and
+  `-fno-zero-initialized-in-bss` silently and places objects the same
+  either way. GCC puts zero-initialized objects in `.bss` and `.tbss`
+  unless given `-fno-zero-initialized-in-bss`, which then places them
+  exactly as lcc does [lcc 1.29.16 v3, v5.8c2, v6.2c3 at `-O0`, `-O2`
+  and `-O3 -fkernel`, l++; 1.31.05 v3, v5.8c2; gcc: the
+  proof-of-concept back end, GCC 16.2.1 on x86-64;
+  `tools/abi/probes/folda40_zerobss.c`]. The ABI doesn't depend on it;
+  MCST's kernel does ([kernel-build.md](kernel-build.md), "Data written
+  before `.bss` is cleared").
 - **Signals**: a fault in a speculative operation only tags its result;
   the program gets `SIGILL` when a non-speculative operation (a store, a
   branch) uses the value, instead of `SIGSEGV`, `SIGBUS` or `SIGFPE`.

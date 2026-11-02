@@ -283,7 +283,7 @@ compiler), with E2K files in `lib/GNU/gcc-11/libgcc/config/e2k/`:
 | File | Lines | What |
 |---|---|---|
 | `unwind-dw2-e2k.c` | 1192 | The unwinder: walks the chain stack instead of interpreting CFI; copyright AO MCST and FSF |
-| `sfp-machine.h`, `t-softfp`, `tf-signs.c`, `sfp-exceptions.c` | ~200 | Soft-float for `__float128` |
+| `sfp-machine.h`, `t-softfp`, `tf-signs.c`, `sfp-exceptions.c` | ~200 | Soft-float for `__float128`; built by lcc, `sfp-exceptions.c` raises only invalid and divide by zero (`spec/abi/registers.md`, "`__float128` in MCST's libgcc and libquadmath"); GCC builds it right |
 | `clear-cache.c` | 79 | `__e2k_clear_cache`, which `__clear_cache` calls through `CLEAR_INSN_CACHE` in `gcc_objdir/tm.h` (D1, "Trampolines") |
 | `crtalign.S`, `crtfastmath.c` | 29 | Extra crt objects |
 | `libgcc-glibc.ver` | 63 | Symbol versions glibc expects from libgcc |
@@ -350,7 +350,12 @@ mainline libgcc this way, `docs/spec-poc-findings.md` A7, A10, A11):
   configuration without futexes or pinned memory (lcc ships LLVM's
   `libomp`, not libgomp); libquadmath needs the `__builtin_*q` builtins
   (`fabsq`, `copysignq`, `nanq`, `nansq`, `infq`, `huge_valq`) and
-  `-std=gnu17` (glibc's e2k `fenv.h` breaks under C23). libgo:
+  `-std=gnu17` (glibc's e2k `fenv.h` breaks under C23). gfortran and
+  libgfortran: `REAL(16)` through libquadmath, not libm's `*f128`
+  functions, whose `sqrtf128` is a placeholder (`spec/abi/registers.md`,
+  "MCST glibc's FP bugs"); both pick libm when the target glibc is 2.26
+  or later (`gcc/fortran/trans-types.cc:1010-1018`,
+  `libgfortran/configure.ac:684-700`). libgo:
   `-fsplit-stack` needs nothing. GCC's default `supports_split_stack`
   hook already rejects it (`gcc/common/common-target.def:65-74`,
   `gcc/opts.cc:1282-1291`), lcc rejects it too, and libgo's configure
@@ -3297,6 +3302,24 @@ load needs no `BEGIN_CONTROL` check. The exceptions, all measured:
   the port does (D8). A checked form is
   possible (item 5): a speculative operation reading the result, with
   `rbranch ? %dt_alN`, catches the diagnostic.
+  **Owner's decision (2026-10-31):** a Fortran procedure that uses the IEEE
+  modules runs no FP operation speculatively. gfortran calls
+  `_gfortran_ieee_procedure_entry` at the start of every procedure
+  whose namespace uses `IEEE_ARITHMETIC`, `IEEE_EXCEPTIONS` or
+  `IEEE_FEATURES` (`is_ieee_module_used`, trans-decl.cc:7201-7215,
+  8343-8347), and around each `IEEE_LOGB`, `IEEE_RINT`, `IEEE_REM` and
+  `IEEE_NEXT_AFTER` (trans-intrinsic.cc:10627-10698). The call saves
+  the FP state and clears every flag (libgfortran's
+  `ieee/ieee_helper.c:177-185`), so such a procedure always runs with
+  the flags clear. The proof of concept finds the call (its
+  `REG_CALL_DECL`) in machine reorg and compiles the function as under
+  `-mno-spec-fp` (P131, gcc-claude `152bc2642d8`). Two gaps remain. A
+  contained procedure that reaches the modules by host association gets
+  no such call (only its host does: host gfortran 16.2.1 and the proof
+  of concept alike), so a test for the call misses it, although it may
+  clear the flags itself. And the procedures it calls, libgfortran and
+  libm included, run with the flags clear too (3.3, "Runtime
+  libraries"; `spec/abi/registers.md`, "MCST glibc's FP bugs").
 - Integer division: `sdivd,sm` by zero gives a diagnostic; safe to
   speculate as such (lcc does in loops: 64–72% of its integer divisions
   are `,sm`), but outside loops rarely worth it (11+ cycles).
@@ -4874,6 +4897,12 @@ and Blackfin (`bfin_gen_bundles`, bfin.cc:3989).
      (mainline's `gcc/testsuite` has none).
    - A test that checks the flags libm raises for domain errors fails
      (inferred).
+   - A Fortran procedure that uses an IEEE module runs with every flag
+     clear (gfortran clears them on entry), so its libm calls can die:
+     `gfortran.dg/ieee`'s `ieee_2` (`logbf (0)`), `large_3` (`sqrtl`),
+     `dec_math_1` (`tanl`), and `minmax_3` and `minmax_4` (`fmaxf (NaN,
+     x)`, at `-O0`) [hw: the proof of concept on the 4C;
+     `tools/abi/probes/foldp131_libm.c`].
 
    Build such a test with lcc too before debugging the port.
 7. **Debug information**: GCC's guality tests on hardware

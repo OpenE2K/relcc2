@@ -7,7 +7,7 @@
      $LCC -O0 tools/abi/probes/libmchk.c -lm -o libmchk-O0
      $LCC -O3 -fno-spec-fp tools/abi/probes/libmchk.c -lm -o libmchk-nsf
      $LCC -O3 -static tools/abi/probes/libmchk.c -lm -o libmchk-static
-     ./libmchk [sqrt|err|fmod]          # on hardware; no argument: all
+     ./libmchk [sqrt|err|fmod|remquo]   # on hardware; no argument: all
 
    Each line is FUNCTION MODE CLEARED (ARGS) -> OUTCOME.  MODE is the
    rounding mode set with fesetround; CLEARED the flags cleared before
@@ -21,7 +21,8 @@
    libmchk+OFFSET", OFFSET being that copy; a SIGILL inside a shared
    library names it with the offset from its load address.  Otherwise
    the line has the result (%a and its bits), errno and the flags set
-   after the call.
+   after the call, and for remquo, remquof and remquol the quotient bits
+   they store ("quo").
 
    The d* cases call sqrt and sqrtf directly, so they show lcc's own
    expansion (an inline root, `,sm' at -O3, and a libm call for negative
@@ -56,12 +57,21 @@
      stores the result with std,sm, so some come back as numbers with
      bit 30 of each word set (sqrt (2) as 0x7ff6a09e667f3bcd) instead.
    - acos (2), asin (2), log (-1), log10 (-1), logf (-1), log (0),
-     exp (1000), pow (0, -1) set errno but raise no flag.  */
+     exp (1000), pow (0, -1) set errno but raise no flag.
+   - remquo (x, y) (the "remquo" set) first reduces x with MCST's fmod
+     (x, 8 * y) (glibc sysdeps/ieee754/dbl-64/s_remquo.c:49-50), so in
+     FE_DOWNWARD it hangs where that fmod does (remquo (+-0x1p52, 2),
+     (0x1p40, 2), (0x1p1023, 0.5), and (0x1p33, 2) on the 4C and 8C2);
+     remquof and remquol go through fmodf and fmodl and return.  Its
+     own zero results have the right sign, and the quotient bits are
+     right.  4C and 8C2, 2026-11-03; the 2C3 (v6 libm, bound 31) not
+     run yet.  */
 
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <errno.h>
 #include <fenv.h>
+#include <limits.h>
 #include <math.h>
 #include <signal.h>
 #include <stdio.h>
@@ -78,6 +88,9 @@ typedef float (*ff1) (float);
 typedef float (*ff2) (float, float);
 typedef long double (*fl1) (long double);
 typedef long double (*fl2) (long double, long double);
+typedef double (*fdq) (double, double, int *);
+typedef float (*ffq) (float, float, int *);
+typedef long double (*flq) (long double, long double, int *);
 
 static fd1 volatile p_sqrt = sqrt, p_log = log, p_acos = acos, p_asin = asin,
   p_acosh = acosh, p_atanh = atanh, p_sin = sin, p_exp = exp, p_cbrt = cbrt,
@@ -88,6 +101,11 @@ static ff1 volatile p_sqrtf = sqrtf, p_logf = logf;
 static ff2 volatile p_fmodf = fmodf, p_remf = remainderf;
 static fl1 volatile p_sqrtl = sqrtl;
 static fl2 volatile p_fmodl = fmodl, p_reml = remainderl;
+static fdq volatile p_remquo = remquo;
+static ffq volatile p_remquof = remquof;
+static flq volatile p_remquol = remquol;
+/* remquo's quotient bits, printed when set.  */
+static int quo = INT_MIN;
 
 __attribute__ ((noinline)) static double
 d_sqrt (double x)
@@ -148,6 +166,7 @@ static const struct op ops[] = {
   { "log", D, 1 }, { "logf", F, 1 }, { "acos", D, 1 }, { "asin", D, 1 },
   { "acosh", D, 1 }, { "atanh", D, 1 }, { "sin", D, 1 }, { "exp", D, 1 },
   { "cbrt", D, 1 }, { "atan", D, 1 }, { "log10", D, 1 },
+  { "remquo", D, 2 }, { "remquof", F, 2 }, { "remquol", L, 2 },
 };
 
 static int
@@ -189,11 +208,13 @@ static void
 flags (char *b, int e)
 {
   int f = fetestexcept (FE_ALL_EXCEPT);
-  sprintf (b, "errno %-6s flags %s%s%s%s%s%s", e == EDOM ? "EDOM"
-           : e == ERANGE ? "ERANGE" : e ? "other" : "0",
-           f & FE_INVALID ? "V" : "", f & FE_DIVBYZERO ? "Z" : "",
-           f & FE_OVERFLOW ? "O" : "", f & FE_UNDERFLOW ? "U" : "",
-           f & FE_INEXACT ? "X" : "", f ? "" : "-");
+  int n = sprintf (b, "errno %-6s flags %s%s%s%s%s%s", e == EDOM ? "EDOM"
+                   : e == ERANGE ? "ERANGE" : e ? "other" : "0",
+                   f & FE_INVALID ? "V" : "", f & FE_DIVBYZERO ? "Z" : "",
+                   f & FE_OVERFLOW ? "O" : "", f & FE_UNDERFLOW ? "U" : "",
+                   f & FE_INEXACT ? "X" : "", f ? "" : "-");
+  if (quo != INT_MIN)
+    sprintf (b + n, "  quo %d", quo);
 }
 
 /* The tags of a double or float result, without a non-speculative
@@ -222,7 +243,7 @@ child (int op, double x, double y, int mode, int clr)
   sa.sa_flags = SA_SIGINFO;
   sigaction (SIGILL, &sa, NULL);
   alarm (1);
-  char fb[64];
+  char fb[96];
   const char *n = ops[op].name;
   fesetround (modes[mode]);
   feclearexcept (clr);
@@ -239,6 +260,7 @@ child (int op, double x, double y, int mode, int clr)
         else if (!strcmp (n, "fmod")) r = p_fmod (x, y);
         else if (!strcmp (n, "remainder")) r = p_rem (x, y);
         else if (!strcmp (n, "pow")) r = p_pow (x, y);
+        else if (!strcmp (n, "remquo")) r = p_remquo (x, y, &quo);
         else if (!strcmp (n, "hypot")) r = p_hypot (x, y);
         else if (!strcmp (n, "log")) r = p_log (x);
         else if (!strcmp (n, "acos")) r = p_acos (x);
@@ -271,6 +293,7 @@ child (int op, double x, double y, int mode, int clr)
         else if (!strcmp (n, "dsqrtf")) r = d_sqrtf (x);
         else if (!strcmp (n, "fmodf")) r = p_fmodf (x, y);
         else if (!strcmp (n, "remainderf")) r = p_remf (x, y);
+        else if (!strcmp (n, "remquof")) r = p_remquof (x, y, &quo);
         else r = p_logf (x);
         unsigned t = tags (r);
         int e = errno;
@@ -292,6 +315,7 @@ child (int op, double x, double y, int mode, int clr)
         long double r;
         if (!strcmp (n, "sqrtl")) r = p_sqrtl (x);
         else if (!strcmp (n, "fmodl")) r = p_fmodl (x, y);
+        else if (!strcmp (n, "remquol")) r = p_remquol (x, y, &quo);
         else r = p_reml (x, y);
         int e = errno;
         flags (fb, e);
@@ -401,6 +425,27 @@ fmod_cases (void)
       run (e[i].n, e[i].x, e[i].y, m, 0);
 }
 
+static void
+remquo_cases (void)
+{
+  static const struct
+  {
+    const char *n;
+    double x, y;
+  } e[] = {
+    { "remquo", 0x1p52, 2 }, { "remquo", -0x1p52, 2 },
+    { "remquo", 0x1p40, 2 }, { "remquo", 0x1p33, 2 },
+    { "remquo", 0x1p30, 2 }, { "remquo", 0x1p1023, 0.5 },
+    { "remquo", 8, 2 }, { "remquo", -8, 2 }, { "remquo", 7, 2 },
+    { "remquo", -7, 2 }, { "remquo", 5, 3 },
+    { "remquof", 0x1p40, 2 }, { "remquof", 8, 2 }, { "remquof", -7, 2 },
+    { "remquol", 0x1p64, 2 }, { "remquol", 8, 2 }, { "remquol", -7, 2 },
+  };
+  for (unsigned m = 0; m < 4; m++)
+    for (unsigned i = 0; i < sizeof e / sizeof *e; i++)
+      run (e[i].n, e[i].x, e[i].y, m, 0);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -412,5 +457,7 @@ main (int argc, char **argv)
     err_cases ();
   if (all || !strcmp (w, "fmod"))
     fmod_cases ();
+  if (all || !strcmp (w, "remquo"))
+    remquo_cases ();
   return 0;
 }

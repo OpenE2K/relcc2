@@ -412,15 +412,17 @@ suite that calls `fesetenv (FE_DFL_ENV)` sees both. A compiler's
 `-ffast-math` startup should do what lcc's does (link MCST's
 `crtfastmath.o`).
 
-**MCST's `fmod` and `remainder` hang in `FE_DOWNWARD`** [hw:
+**MCST's `fmod`, `remainder` and `remquo` hang in `FE_DOWNWARD`** [hw:
 `tools/abi/probes/libmchk.c` `fmod`, on the 4C (ALT's glibc 2.35), the
 8C2 and the 2C3 (their libm is byte-identical to that of lcc 1.29.16's
-v5.8c2 and v6.2c3 sysroots); the static `libm.a` and lcc 1.31.05's
-glibc 2.41 behave the same; glibc `sysdeps/e2k/fpu/e_fmod.c:17-21,27,
+v5.8c2 and v6.2c3 sysroots), and `libmchk.c` `remquo` on the 4C and the
+8C2; the static `libm.a` and lcc 1.31.05's glibc 2.41 behave the same;
+glibc `sysdeps/e2k/fpu/e_fmod.c:17-21,27,
 61-64,69,78-81,84-96,114-117`, `e_remainder.c:19-23,29,39,76,91-101,122`,
-`e_fmodf.c:26,64,99`, `e_fmodl.c:21,61-68,82`, `f2c.h:24,41`]. MCST's
-own `fmod` and `remainder` (which halves x first) subtract multiples of
-y from x in chunks. The loop runs while x's bit pattern, read as an
+`e_fmodf.c:26,64,99`, `e_fmodl.c:21,61-68,82`, `f2c.h:24,41`,
+`sysdeps/ieee754/dbl-64/s_remquo.c:49-50,103-107`]. MCST's own `fmod`
+and `remainder` (which halves x first) subtract multiples of y from x
+in chunks. The loop runs while x's bit pattern, read as an
 unsigned 64-bit number, exceeds y's by more than 26 exponents (31 in a
 v6 build). When rounding down, an exact step `x − q·y` gives −0 (IEEE
 754's sign for an exact zero difference in that mode). Its pattern,
@@ -444,9 +446,20 @@ exact zero we tried came out with the wrong sign except `fmod (0x1.8p40,
 3.0)`, whose last step leaves y, which the code replaces with +0.
 Nonzero results are right, and so is every result in the other three
 rounding modes (checked against Python's `math.fmod` and
-`math.remainder`). A test that calls `fmod` or `remainder` in
-`FE_DOWNWARD` can hang on E2K, for example when it uses them as the
-reference for a rounding-mode test.
+`math.remainder`).
+
+`remquo` takes the same loop. MCST has no `remquo` of its own, and
+glibc's generic one first reduces x with `__ieee754_fmod (x, 8 * y)`
+(`remquo` in the 4C's and the 8C2's libm.so.6 calls `__fmod_finite`).
+So when rounding down, `remquo (±0x1p52, 2.0)`, `(0x1p40, 2.0)`,
+`(0x1p1023, 0.5)` and `(0x1p33, 2.0)` never return on the 4C and the
+8C2 (`fmod (0x1p33, 16.0)` is the case of `fmod (0x1p30, 2.0)`), and
+`remquo (0x1p30, 2.0)` returns; the 2C3 was not run. Unlike `fmod`'s,
+its zero results have the right sign (it replaces a zero by +0 and then
+puts x's sign on), and the quotient bits are right. `remquof` and
+`remquol` go through `fmodf` and `fmodl` and return. A test that calls
+`fmod`, `remainder` or `remquo` in `FE_DOWNWARD` can hang on E2K, for
+example when it uses them as the reference for a rounding-mode test.
 
 **MCST's libm needs the sticky FP flags set** [hw:
 `tools/abi/probes/libmchk.c` `sqrt` and `err`, on the 4C, 8C2 and 2C3,
@@ -532,6 +545,19 @@ GCC's `gcc.dg/torture/pr68264.c` clears the flags and calls `acos` of a
 NaN. Built by lcc, it dies with SIGILL in `acos` (`-O2` and `-O0`, on
 the 8C2).
 
+With every flag clear, `logbf (0.0f)` and `logb (0.0)` also return a
+diagnostic value, and `logbl (0.0L)` dies inside libm. So do `tan`,
+`tanf`, `tanl`, `sinl`, `cosl` and `sincosl` of ordinary arguments
+(`tanl (0.5236L)`, `tan (π/4)`), and `fmaxf (NAN, 0.0f)`. `logb*` of
+nonzero numbers, infinities and NaNs, `tanl (0.0L)`, `tanl (1.0L)`,
+`fmaxf (0.0f, NAN)`, `fmax` and `fmaxl` work [hw:
+`tools/abi/probes/foldp131_libm.c`, lcc 1.29.16 `-O3 -fno-spec-fp` and
+`-O0`; the 4C (ALT's glibc 2.35-alt2.29.023) and the 8C2 (Elbrus Linux
+9.5.5); not run on the 2C3]. gfortran clears every flag on entry to a
+procedure that uses an IEEE module, so Fortran's IEEE tests meet these
+(`gfortran.dg/ieee`'s `ieee_2`, `large_3`, `dec_math_1`, `minmax_3`
+and `minmax_4`; the proof-of-concept back end's finding P131).
+
 **MCST's libm raises no exception for most domain and range errors**
 [hw: `libmchk.c` `err`, the three machines, shared and static alike;
 glibc `sysdeps/e2k/fpu/e_acos.c:104-106`, `e_log.c:39-40`,
@@ -566,6 +592,104 @@ are right, except that `round` returns a signalling NaN unchanged:
 neither quieted nor raising invalid. So this libm is no reference for
 the flags of rounding, and its `round` is one more function that needs
 the sticky flags set (above).
+
+**MCST's v3 `scalb` gives 0 for an exponent of 2^63 or more** [glibc
+`sysdeps/e2k/fpu/e_scalb.c:40-80`, `e_scalbf.c:42-82`,
+`e_scalbl.c:38-75`; hw: `tools/abi/probes/folda46_scalb.c`, ALT's libm
+on the 4C and the v3 sysroot's static `libm.a` on the 4C and the 8C2;
+lcc 1.31.05's v3 `libm.a` (glibc 2.41) the same; not run on the 2C3].
+For `__iset__ <= 3`, MCST's `scalb`, `scalbf` and `scalbl` add `(long
+long) fn` to x's exponent and test the sum for underflow before they
+test `fn` against 5000 (500, 50000). For `fn` ≥ 2^63 the conversion
+gives 0x8000000000000000, so the sum takes the underflow branch:
+`scalb (1, 0x1p63)`, `scalb (1, DBL_MAX)`, `scalbf (1, FLT_MAX)` and
+`scalbl (1, LDBL_MAX)` are +0 instead of +∞, and `scalb (-3, 0x1p64)`
+is −0, where glibc's tests want ±∞ with overflow
+(`math/libm-test-scalb.inc:129-144`). Negative exponents give the right
+±0. lcc made the conversion speculative (`fdtoidtr,1,sm` in
+`__scalb_finite`), so with `FE_INVALID` clear these calls die with
+SIGILL inside libm; the proof-of-concept back end's GCC-built glibc
+returns 0 with invalid (its finding A46). For `__iset__` 4 and up the
+code clamps `fn` first and scales with `fscaled`, `fscales` or
+`fxscalesx`, and the 8C2's libm and the v5.8c2 `libm.a` give every
+value right. On both machines, with every flag clear, each `scalb`,
+`scalbf` or `scalbl` call whose result is inexact, overflows or
+underflows dies with SIGILL inside libm, as most of libm does (above).
+`scalb` is obsolete (POSIX.1-2008 dropped it), so this is mostly noise
+in glibc's `test-*-scalb`.
+
+**MCST's `sqrtf128` returns its argument** [glibc
+`sysdeps/e2k/fpu/e_sqrtf128.c:5-15`,
+`sysdeps/ieee754/float128/float128_private.h:192, 371`; hw:
+`tools/abi/probes/folda50_sqrtf128.c`, the 4C and the 8C2, shared and
+static, lcc 1.31.05's glibc 2.41 the same; not run on the 2C3; gcc].
+`__ieee754_sqrtf128` is a placeholder, `return a;`, meant "to formally
+make sysdeps/ieee754/float128 for e2k" (x86's soft-fp version needs an
+`sfp-machine.h` that E2K's glibc lacks). `sqrtf128 (2)` is 2 and
+`sqrtf128 (-42)` is −42, bit for bit. The generic `_Float128` code takes
+its roots from there (`sqrtl` and `__ieee754_sqrtl` are `sqrtf128` and
+`__ieee754_sqrtf128` in the float128 build). So `f32sqrtf128 (2)`,
+`f64sqrtf128 (2)` and `powf128 (2, 0.5)` are 2, `hypotf128 (3, 4)` is
+13, and `asinf128` and `acosf128 (0.75)`, `acoshf128` and `asinhf128
+(3)`, `tgammaf128 (30.5)` and `j0f128 (50)` are wrong from the second
+or third digit. By the source, so are `cabsf128`, `csqrtf128` and the
+complex functions built on them. `expf128`, `logf128` and `sinf128` are
+right. C code that calls these gets the placeholder whatever compiler
+built it. GCC's Fortran takes `REAL(16)` math from libm's `*f128`
+functions when the target glibc is 2.26 or later
+(`gcc/fortran/trans-types.cc:1010-1018`), and libgfortran's `configure`
+does when libm has them (`libgfortran/configure.ac:681-697`). A port
+must send both to libquadmath instead. The proof-of-concept back end
+does (gcc-claude `752e5e1f420`); without that, `gfortran.dg`'s
+`ieee/large_1`, `quad_2` and `dec_math` fail (its finding A50).
+
+### `__float128` in MCST's libgcc and libquadmath
+
+**MCST's soft-fp raises only invalid and divide by zero** [libgcc
+`config/e2k/sfp-exceptions.c:5-34` in lcc's runtime tarball; lcc
+1.29.16; hw: `tools/abi/probes/folda39_quadmath.c`, 4C and 8C2; not run
+on the 2C3]. lcc compiles `__float128` arithmetic and conversions to
+libgcc's soft-fp calls (`__addtf3`, `__divtf3`, `__trunctfdf2`, ...),
+which raise their flags through `__sfp_handle_exceptions`. That
+function computes `0/0`, `1/0`, `max + max`, `min * min` and `max - 1`
+from `const double` locals under `optimize (0)`. lcc folds arithmetic
+on initialized `const` objects even at `-O0`, whatever flag it would
+raise, except a division by zero; with `-frounding-math` it doesn't. So
+the `libgcc.a` of lcc 1.29.16 and 1.31.05, and the `libgcc_s.so.1` of
+lcc 1.29.16's sysroots and of the 4C and the 8C2, store +∞, 0 and
+`DBL_MAX` where the last three operations should be and keep only the
+two `fdivd`. Every `__float128` result of lcc code is right, but
+overflow, underflow and inexact are never raised: `1/3` raises nothing
+(x86: inexact), and `1e4900Q * 1e4900Q` gives +∞ with no flag. GCC
+compiles the same file into five run-time operations [gcc].
+
+**lcc's libquadmath is no reference** [hw: `folda39_quadmath.c`: the
+4C's `libquadmath.so.0` and lcc 1.29.16 v3's alike, the 8C2's the same
+but for the trap offsets; libquadmath source in lcc's runtime tarball;
+`tools/quadmath` sweeps every function]. The system's
+`libquadmath.so.0` is lcc's build of GCC 11's libquadmath, with its own
+copy of that soft-fp:
+
+| Call | lcc's library | Why |
+|---|---|---|
+| any result that overflows, underflows or is inexact (`expq (1)`, `expq (±12000)`) | right value, no flag | the soft-fp above |
+| `fmaq (3, 0x1.5555555555555555555555555556p-115, 1)` (x · y = 2^-113 + 2^-226) | 1; right: 1 + 2^-112 | `fmaq.c:218-225` rounds to odd by or-ing `fetestexcept (FE_INEXACT)` into the last bit after a soft-fp addition |
+| `coshq (12000)` rounding down or toward zero | +∞; right: the largest finite | its overflow is `huge * huge` of a `static const` (`coshq.c:56, 107`), which lcc folds |
+| `sqrtq (2)`, so `powq (2, 0.5)` and `hypotq (1, 1)` | one ulp high | GCC 11's `sqrtq` is a double seed and Newton steps (`sqrtq.c:23-31`); GCC 14 made it exact (PR 114623) |
+| `strtoflt128 ("-nan")`, `("-nan(0x123)")` | +NaN | GCC 11 drops the sign; GCC 13 keeps it (PR 94756) |
+| `expq (-12000)` rounding up | the smallest subnormal, which is right | x86 GCC folds `expq.c`'s `TINY * TINY` and gets 0 |
+| after `feclearexcept`: `sqrtq` of an inexact root, `powq (x, 0.5)`, `hypotq (1, 1)`, `asinq` and `acosq (0.75)`, `tgammaq (30.5)` | SIGILL in `__extenddftf2` | `sqrtq` starts from libm's `sqrt`, whose diagnostic result ("MCST glibc's FP bugs") the conversion traps on |
+| the same: `sinq (1e10)`, `j0q (50)` | SIGILL in `__quadmath_kernel_rem_pio2` | its argument reduction is lcc's speculative double code |
+
+With small arguments (`sinq (1)`, `j0q (1)`, `asinq (0.5)`, `tgammaq
+(0.5)`, `atanq (1)`) the functions return after `feclearexcept`.
+Invalid and divide by zero (`logq (-1)`, `logq (0)`, `0/0`, `1/0`) are
+raised as on x86. So a port's libquadmath must be checked against x86's
+build of the same GCC source (`tools/quadmath`), not against the
+system's. That reference has a gap of its own: from GCC 14, `sqrtq`
+raises no inexact on any target, because `libquadmath/sfp-machine.h`
+defines no `FP_EX_INEXACT` and `soft-fp.h:110-111` then makes it 0
+[gcc: x86 GCC 16]. (The proof-of-concept back end's finding A39.)
 
 ## DWARF register numbers
 

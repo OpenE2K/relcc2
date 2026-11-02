@@ -195,8 +195,9 @@ where `main`'s `setwd` gained the `%r2` it hands to `parse`, and q; 4C,
 8C2). The globals are another such register. They belong to no window,
 so a function finds in `%g16`–`%g31` whatever its caller or an earlier
 callee left there, a failed speculative load's `4afafafa4afafafa` (tag
-5) included, and a plain `std`, `addd`, `muld` or `cmpedb` of one it
-never wrote is SIGILL `ILL_ILLOPN` [hw:
+5) included, and a plain `std`, `addd`, `muld` or `cmpedb` of such a
+diagnostic one, which the function never wrote, is SIGILL `ILL_ILLOPN`
+[hw:
 `tools/abi/probes/foldp129_greg.c` a*, c*; 4C, 8C2]. A system call
 through entry 3 leaves them empty (0, tag 5), and then nothing traps
 (`foldp129_greg.c` y*; [kernel-interface.md](kernel-interface.md),
@@ -335,8 +336,8 @@ it ("Results").
   [source-compat.md](source-compat.md), "Inline assembly"): at `-O2`
   GCC deletes such a block and its `memcpy` as dead stores, which
   `optimize (0)` prevents, while lcc `-O3` keeps them [gcc; hw:
-  `tools/abi/probes/folda53_regvar.c` `stack8` and `stack8+10`, 4C and
-  8C2].
+  `tools/abi/probes/folda53_regvar.c` `stack8` and `stack8+10`, lcc on
+  the 4C and 8C2, the proof of concept on the 8C2].
 - The area belongs to the callee for the duration of the call: it may
   store its register arguments into their slots (Unipro's variadic
   callees and libffi's closures do) and use the area as scratch. A caller

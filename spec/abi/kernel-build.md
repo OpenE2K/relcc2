@@ -369,8 +369,9 @@ one "must be provided to the compiler via constraints"
 writes without a clobber is unchanged for GCC, so a copy taken before
 the asm may be read from the register after it. A clobber is an
 overwrite that doesn't read, so a write to the variable just before
-the asm is dead and deleted [gcc: GCC 16.2.1 `-O2` on x86-64 and the
-proof-of-concept back end, `tools/abi/probes/folda41_gregasm.c`]. lcc
+the asm is dead and deleted [gcc: GCC 16.2.1 `-O2` on x86-64,
+`tools/abi/probes/folda41_gregasm.c -DVOL`; the proof-of-concept back
+end before gcc-claude `1830fba1c76`, on the kernel (the table below)]. lcc
 parses an asm under the kernel's `-masm-inline` unless
 `__no_asm_inline` closes it, and then sees which global registers the
 template reads and writes; parsed or not, it never deletes a write to
@@ -997,12 +998,11 @@ errors are fixed.
   by a `%ctpr2` write at entry, the instruction-buffer erratum
   124206/135900 and whether `rbranch ? %dt_alN` at entry or exit
   triggers it): they are privileged and come from the sources only.
-- Whether a GCC `ttable_tmp.o` and `ttable.o` get equal windows: the
-  proof-of-concept back end of 2026-10-16 couldn't compile `ttable.c`
-  (39 operands).
+- Whether a GCC `ttable_tmp.o` and `ttable.o` get equal windows: not
+  compared (the proof-of-concept back end of 2026-10-16 couldn't compile
+  `ttable.c`; its later kernel boots on the 8C2).
 - GCC and the v5+ per-CPU atomics cast to `void` (inferred, not
   probed); recordmcount.pl itself on a whole build (the probe applies
   its rules).
 - What MCST's own clang (lccrt) does with `__interrupt__` and
   `-flb-option=`: not available as an oracle.
-- Linking a whole vmlinux and modules with a GCC.

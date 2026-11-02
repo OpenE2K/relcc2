@@ -61,7 +61,8 @@ and behaviours that change generated code" below). meson reads
 `--version`: output containing both `e2k` and `lcc` (case-sensitive)
 is lcc's, even after its "Free Software Foundation" line made it GCC
 (`mesonbuild/compilers/detect.py:353-356` for C and C++, `:751` for
-Fortran; meson 1.12.1, and OS Elbrus's 1.7.0 the same). meson then
+Fortran; meson 1.12.1; OS Elbrus's 1.7.0 has the same code at
+`detect.py:341, 711, 1511`). meson then
 takes the version from `__LCC__` and `__LCC_MINOR__` (`:1553`), 1.00.0
 when they are missing, and offers only that version's standards
 (`c.py:329-346`, `cpp.py:621-641`): for 1.00.0, `c89` to `gnu99` and
@@ -266,7 +267,7 @@ with the variable as its output (`asm volatile ("" : "=r" (g16))`) for
 the entry read and, for the results, a call through a pointer to a
 function returning a 64-byte struct, which comes back in those
 registers ([calling-convention.md](calling-convention.md), "Results")
-[lcc, gcc; hw: 4C, 8C2]. Where the bridge puts its stack arguments is
+[lcc, gcc; hw: lcc on the 4C and 8C2, the proof of concept on the 8C2]. Where the bridge puts its stack arguments is
 in calling-convention.md, "Stack argument area".
 
 lcc also binds two names that are not registers, each with or without
@@ -478,9 +479,9 @@ uapi's clobber list names them ([kernel-interface.md](kernel-interface.md),
 | `asm volatile`, any clobbers | a barrier for everything: reserves the outgoing area, prepares `return %ctpr3` and loop `disp`s again after it (also with no clobbers: CTPRs are never kept across it), and reloads memory as if `"memory"` were given |
 | non-volatile | follows the clobber list: keeps `return %ctpr3` prepared across it unless `"ctpr3"`, `"call"` or a `"b[N]"` is listed; may put operands in `%g16`–`%g31` unless `"call"` or that `gN` is listed; reuses a value loaded before it unless `"memory"`, `"call"` or a `"b[N]"` is listed (`asmconv.py`, "Effects") |
 | non-volatile with outputs, opaque (`-mno-asm-inline`, lcc's default) | in every case probed, kept when its outputs are unused, and two identical ones neither merged nor moved out of a loop (`kernelbuild.py` `barrier`, `open`). GCC deletes the first kind and merges or hoists the second (`gcc/doc/extend.texi:11700-11711`, `gcc/cse.cc:2743-2760`) [gcc]; MCST's kernel relies on lcc here for `barrier()`, per-CPU stores and state-register reads ([kernel-build.md](kernel-build.md), "Inline assembly the kernel relies on") |
-| opaque (lcc's default; under `-masm-inline`, one after `_Pragma ("no_asm_inline")`), its template writing a global register variable that no operand or clobber names | the template isn't read: two reads of the variable around the asm are merged, as GCC merges them, and at `-O2` without `-ffixed-g16` lcc may keep a temporary of its own in a register the template writes. A value copied from the variable before the asm stays in lcc's temporary (`%g16`; `%g26` with `-ffixed-g16` … `g25`; a window register under `-fkernel`), whatever the template names (`folda41_gregasm.c`) |
-| parsed (`-masm-inline`, without `no_asm_inline`) | the template is read: lcc knows which global registers the asm reads and writes, copies a variable before an asm that overwrites it, and uses the register directly where the template leaves it alone (`folda41_gregasm.c`) |
-| any, listing as a clobber only a global register variable written just before it | the write is kept, opaque or parsed: lcc never deletes a write to a register variable (`folda41_gregasm.c`) |
+| non-volatile, opaque (lcc's default; under `-masm-inline`, one after `_Pragma ("no_asm_inline")`), its template writing a global register variable that no operand or clobber names | the template isn't read: two reads of the variable around the asm are merged, as GCC merges them, and at `-O2` without `-ffixed-g16` lcc may keep a temporary of its own in a register the template writes. A value copied from the variable before the asm stays in lcc's temporary (`%g16`; `%g26` with `-ffixed-g16` … `g25`; a window register under `-fkernel`), whatever the template names (`folda41_gregasm.c`) |
+| non-volatile, parsed (`-masm-inline`, without `no_asm_inline`) | the template is read: lcc knows which global registers the asm reads and writes, copies a variable before an asm that overwrites it, and uses the register directly where the template leaves it alone (`folda41_gregasm.c`) |
+| non-volatile, opaque or parsed, listing as a clobber only a global register variable written just before it | the write is kept, opaque or parsed: lcc never deletes a write to a register variable (`folda41_gregasm.c`) |
 
 The uapi system call macros list neither `"memory"` nor `"call"`, so they
 rely on this (inferred). GCC does not treat `asm volatile` as a memory clobber and may
@@ -678,7 +679,7 @@ or in a header only lcc includes (the script's survey):
 | Pragma | Meaning (lcc-doc) | glibc E2K | Linux `arch/e2k` | For a GCC port |
 |---|---|---|---|---|
 | `loop count (N)` (the manual also writes `loop_count`) | the next loop runs about N iterations (ignored under `-fprofile-use`) | 223, 40 | 37, 17 | accept and ignore: GCC has no pragma for an iteration estimate |
-| `unroll (N)`, `unroll` | unroll the next loop N times, or fully without N; also raises an unknown iteration estimate to N times the pipelining minimum | 84, 18 | 18, 7 | `GCC unroll N` |
+| `unroll (N)`, `unroll` | unroll the next loop N times, or fully without N; also raises an unknown iteration estimate to N times the pipelining minimum | 84, 18 | 18, 7 | `GCC unroll N`; the bare form has no counterpart (below) |
 | `noprefetch`; `prefetch` | no array prefetch (APB) for the loop's regular loads; or force it. Software prefetch is not affected | 122, 25; 0 | 3, 1; 0 | accept; a port that uses APB honours `noprefetch` (below) |
 | `ivdep` | assume no loop-carried dependence where none is proven (1.31: ignored with `-m128`) | 0 | 16, 3 | `GCC ivdep` |
 | `novector`; `vector always`, `vector aligned`, `vector unaligned`, `vector nontemporal` | no vectorising; force it, assume aligned (8 bytes on v1–v4, 16 from v5) or unaligned accesses, keep stores out of the caches | 0 | 6, 1; 3, 2 (`aligned`) | `GCC novector`; ignore the rest |
@@ -718,10 +719,11 @@ error` doesn't stop the compile [lcc 1.29.16 (lcc and l++) and
 1.31.05: `tools/abi/probes/folda55_poison.c`]. GCC rejects every use
 of a poisoned name after the pragma, `#ifdef` included [gcc]. So code
 built only by lcc may use names its own headers poison: MCST's qemu
-7.2.0 tests `TARGET_E2K` (`include/hw/boards.h`) and
-`HOST_WORDS_BIGENDIAN` (its E2K chipset header), both poisoned there,
-in target-independent code, where lcc takes them as undefined
-[source]. This is GCC's front end, nothing for the port; such a package
+7.2.0 tests `TARGET_E2K` in `include/hw/boards.h`, which
+target-independent code includes too and where qemu poisons every
+`TARGET_*` name, and `HOST_WORDS_BIGENDIAN` in
+`hw/e2k/sim-iohub/e2k-chipset.h`, a name qemu 7.2 poisons everywhere
+(`qemu/osdep.h`); lcc takes both as undefined [source]. This is GCC's front end, nothing for the port; such a package
 tests the names only where they are allowed (under `NEED_CPU_H`;
 qemu 7.2's `HOST_BIG_ENDIAN` in place of the other).
 
@@ -803,11 +805,11 @@ calls its C23 support minimal and its C++20 support experimental
 1.29.16 and 1.31.05 predefine `__STDC_VERSION__` 201710L and
 `__cplusplus` 201703L, and no `__STRICT_ANSI__` [lcc]. GCC 17.0.0, the
 proof-of-concept's base, defaults to `gnu23` and `gnu++20` (202311L,
-202002L; `gcc/c-family/c-opts.cc:264-265, 277-279`) [gcc].
+202002L; `gcc/c-family/c-opts.cc:265-266, 278-280`) [gcc].
 
 lcc accepts the old C that GCC 14 and later reject unless given
 `-fpermissive` (the default only for `-std=c89` and `gnu89`;
-`gcc/doc/invoke.texi:6850-6871`) [lcc 1.29.16 v3, v5.8c2, 1.31.05 v3;
+`gcc/doc/invoke.texi:6843-6864`) [lcc 1.29.16 v3, v5.8c2, 1.31.05 v3;
 gcc: `tools/abi/probes/folda47_dialect.c`]:
 
 | Construct | lcc | GCC: error under |
@@ -870,8 +872,8 @@ operation, which takes the count modulo 64 (32 for 32-bit shifts;
 0x80) return 1ULL << x;` is a `shld` of x, so x = 0x81 gives 2. A
 count that inlining makes constant folds the same way (`v << 70`
 becomes `scld 1, 6`); only a literal constant expression (`1ULL <<
-64`) folds to 0, with warning #63 [lcc 1.29.16 v3, v5.8c2, v6.2c3
-(`-S`) at `-O0` to `-O3`; 1.31.05 v3; hw:
+64`) folds to 0, with warning #63 [lcc 1.29.16 v3 and v5.8c2 at `-O0`
+to `-O3`, v6.2c3 `-O3` (`-S`); 1.31.05 v3 `-O3`; hw:
 `tools/abi/probes/folda43_shift.c`, 4C, 8C2]. For GCC such a shift is
 undefined, and its optimizers use that: that function returns 0, and
 from `1LL << spec` they conclude `spec < 64`. `SHIFT_COUNT_TRUNCATED`
@@ -900,7 +902,7 @@ reject them [lcc, gcc: `tools/abi/probes/folda56_const.c`,
 |---|---|---|---|
 | A statement expression of constants (qemu 7.2's `MAX`) where C wants an integer constant: a block-scope array's bound, a `case` label, a block-scope `static` array's bound, `_Static_assert` | folds it to a constant, so the array is no VLA and may be initialized (`char label[MAX (30, 20) + 32] = "label=";` is 62 bytes); at file scope it is error #1166 "statement expressions are only allowed in block scope", and a real VLA still can't be initialized (#145) | never a constant: the array is a VLA ("variable-sized object may not be initialized except with an empty initializer"), the others are errors | MCST's qemu 7.2.0, `target/e2k/boot` (`BOOT_STRING_SIZE`) |
 | A C `const` integer variable with a constant initializer, taken as an integer constant as in C++: in `aligned (…)`, a file-scope array's bound, an enumerator, a `case` label, a block-scope array's bound | takes it: `.align 4096`, a 4096-byte array, an initialized block-scope array that is no VLA | errors ("requested alignment is not an integer constant", "variably modified … at file scope", "enumerator value … is not an integer constant", the VLA error), also with `-std=gnu17`; only the `case` label is taken, as an extension (a `-Wpedantic` warning) | MCST's kexec-e2k 1.0.1 (`aligned (alignment)`) |
-| A member function defined by its qualified name in a namespace that doesn't enclose its class: an unnamed one, an unrelated named one, an unnamed one inside the class's | takes it and gives it the usual global symbol (`N::S::f`: `GLOBAL DEFAULT _ZN1N1S1fEv`); a static data member or a namespace's function defined that way is error #551 "… cannot be defined in the current scope" | a permerror, static data members included ("definition of … is not in namespace enclosing …", `gcc/cp/decl.cc:12237`): with `-fpermissive` a warning and the same symbol; the namespace's function is an error in GCC too | MCST's LibreOffice 6.3 E2K bridge (`cpp2uno.cxx`: `VtableFactory`'s members in an unnamed namespace) |
+| A member function defined by its qualified name in a namespace that doesn't enclose its class: an unnamed one, an unrelated named one, an unnamed one inside the class's | takes it and gives it the usual global symbol (`N::S::f`: `GLOBAL DEFAULT _ZN1N1S1fEv`); a static data member or a namespace's function defined that way is error #551 "… cannot be defined in the current scope" | a permerror, static data members included ("definition of … is not in namespace enclosing …", `gcc/cp/decl.cc:12189`): with `-fpermissive` a warning and the same symbol; the namespace's function is an error in GCC too | MCST's LibreOffice 6.3 E2K bridge (`cpp2uno.cxx`: `VtableFactory`'s members in an unnamed namespace) |
 
 C23's `constexpr` is no way out that both take: GCC 16 with `-std=c23`
 still says "requested alignment is not an integer constant" for
@@ -987,11 +989,13 @@ under `__GLIBC_USE (IEC_60559_BFP_EXT_C2X)`, as x86's copy does for
 both. So `#include <fenv.h>` fails under `-std=c23` / `gnu23` (GCC's
 default) without `_GNU_SOURCE`: "unknown type name 'femode_t'". lcc
 1.29.16 fails the same way under `-std=c2x` [lcc; hw]. The header is
-byte-identical in lcc 1.29.16's v3, v5.8c2 and v6.2c3 sysroots and in
-`/usr/include` on the 4C and the 8C2, and `OpenE2K/glibc`'s copy
-differs only in its copyright line. In each, the line to change is line
-106, `#if __GLIBC_USE (IEC_60559_BFP_EXT)` before `femode_t`, which
-must read `IEC_60559_BFP_EXT_C2X` [glibc, lcc; hw]. lcc 1.31.05's
+the same in lcc 1.29.16's v3, v5.8c2 and v6.2c3 sysroots, in
+`/usr/include` on the 4C and the 8C2 and in `OpenE2K/glibc`, except for
+its copyright comment: one line in the sysroots, three on the machines
+and in `OpenE2K/glibc`, whose copies are byte-identical. In each, the
+line to change is the `#if __GLIBC_USE (IEC_60559_BFP_EXT)` before
+`femode_t` (line 104 in the sysroots, 106 elsewhere), which must read
+`IEC_60559_BFP_EXT_C2X` [glibc, lcc; hw]. lcc 1.31.05's
 glibc 2.41 already guards `femode_t` with `IEC_60559_BFP_EXT_C23` (line
 118) and needs nothing.
 

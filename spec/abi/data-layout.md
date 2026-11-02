@@ -68,7 +68,7 @@ alignment, and the size is padded to a multiple of the alignment.
   zero-width bit-field aligns the next member to its declared type.
 
 This matches the common System V rules (as on x86-64). It is layout
-only: the type a field wider than 32 bits has in an expression differs
+only: the type a field of 33–63 bits has in an expression differs
 between lcc and GCC's C ([source-compat.md](source-compat.md),
 "Bit-fields wider than `int`").
 

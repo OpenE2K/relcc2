@@ -623,8 +623,8 @@ in glibc's `test-*-scalb`.
 `sysdeps/ieee754/float128/float128_private.h:192, 371`; hw:
 `tools/abi/probes/folda50_sqrtf128.c`, the 4C and the 8C2, shared and
 static, lcc 1.31.05's glibc 2.41 the same; not run on the 2C3; gcc].
-`__ieee754_sqrtf128` is a placeholder, `return a;`, meant "to formally
-make sysdeps/ieee754/float128 for e2k" (x86's soft-fp version needs an
+`__ieee754_sqrtf128` is a placeholder, `return a;`, which "just lets
+one formally make sysdeps/ieee754/float128 for e2k" (x86's soft-fp version needs an
 `sfp-machine.h` that E2K's glibc lacks). `sqrtf128 (2)` is 2 and
 `sqrtf128 (-42)` is −42, bit for bit. The generic `_Float128` code takes
 its roots from there (`sqrtl` and `__ieee754_sqrtl` are `sqrtf128` and

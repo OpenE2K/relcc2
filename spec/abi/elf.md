@@ -294,7 +294,9 @@ For a compiler: lcc writes no note, and an object without one needs no
 executable stack, so writing only an `"x"` note, in an object that
 builds a trampoline on the stack, leaves every other object as lcc's
 are. GCC's `file_end_indicate_exec_stack` also writes `""` into the
-others (`gcc/varasm.cc:8189-8199`), which links the same. MCST gas
+others (`gcc/varasm.cc:8189-8199`); a program built from them then
+gets an `RW` `PT_GNU_STACK` instead of none, with the same effect at
+run time. MCST gas
 accepts GCC's spelling, `.section .note.GNU-stack,"",@progbits`.
 Mixing these objects with lcc's is harmless and draws no linker warning,
 because no note means non-executable. A single `"x"` object makes the

@@ -762,9 +762,17 @@ which runs a handler and leaves no token, as Darwin's `#pragma mark`,
 `gcc/config/darwin.h:1199-1203`, when not only preprocessing). The
 mapped ones are deferred pragmas with GCC's ids (`PRAGMA_UNROLL`,
 `PRAGMA_IVDEP`, `PRAGMA_NOVECTOR`; `gcc/c-family/c-pragma.cc:1857-1867`).
-lcc's bare `unroll`, which it accepts [lcc], has no GCC counterpart
-(GCC's unroll pragma needs a count); in the kernel tree only clang-built
-BPF selftests use it [kernel].
+lcc's bare `unroll`, which lcc and l++ accept (l++ inside templates
+too) [lcc], has no GCC counterpart. GCC's unroll pragma needs a count in
+C and C++, so a port that maps lcc's `unroll` to `PRAGMA_UNROLL` makes
+the bare form an error ("expected expression before end of line" in C,
+"expected primary-expression" in C++), while GCC for other targets
+ignores it as an unknown pragma, with a warning under `-Wall` [gcc: the
+proof of concept; GCC 16.2.1 on x86-64]. `OpenE2K/glibc` and MCST's
+libgcc E2K files have none. In the kernel tree only BPF selftest
+programs use it (14 lines in 3 files), and clang or bpf-gcc builds
+those for the BPF target [glibc, kernel:
+`tools/abi/probes/foldp101_pragma_runs.py`; libgcc].
 
 Ignoring them loses only hints, except perhaps `noprefetch` in a port
 that uses array prefetch: lcc `-O3` puts `bap` and two `mova`s into

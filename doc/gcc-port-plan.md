@@ -792,6 +792,27 @@ produce slow code: correctness first, then the VLIW work.
 - `--enable-languages=c,c++`, libstdc++ (or use lcc's `libstdc++.so.6`
   first), C++ exceptions via the E2K unwinder (3.3); the compat suite's
   `eh` unit with `--cxx gcc='...'`.
+- **Speculative devirtualization in sources only lcc has built** (P134).
+  From `-O2` GCC guesses a virtual call's target
+  (`-fdevirtualize-speculatively`, opts.cc:646): it compares the
+  function pointer loaded from the vtable with the guess (`gimple_ic`,
+  value-prof.cc:1299-1336) and calls or inlines the guess on that path.
+  An inlined destructor stores its class's vtable address, so the
+  object references a vtable (with `-frtti`, also its typeinfo chain)
+  that the source never needed. lcc 1.29.16 makes no such reference,
+  and some sources depend on that. qpdf 10.0.1's `test_large_file`
+  deletes a `StreamDataProvider` that GCC guesses is a
+  `QPDF::CopiedStreamDataProvider`, a class `libqpdf.so` hides
+  (`-fvisibility=hidden`): GCC's object has 5 references to its vtable,
+  lcc's none, and the link fails. qtwebkit 5.212 mixes `-frtti` and
+  `-fno-rtti` files, so such a vtable names a base typeinfo that no
+  object defines. A shared library linked without `--no-undefined`
+  builds with such a reference and fails only when loaded.
+  `tools/abi/probes/foldp134_devirt.cc` shows the mechanism. x86 GCC
+  does the same, so the port's default needn't change, but a
+  distribution build should expect these link errors in C++ packages
+  and build those with `-fno-devirtualize-speculatively`, as the proof
+  of concept's OS Elbrus build does for C++.
 - libatomic, libgomp (generic Linux fallbacks first).
 
 ---
@@ -854,6 +875,26 @@ in its frame, the jump writes the label's address over the saved IP
 (byte 8) and calls `longjmp`; the frame resumes at the label with the
 registers of its latest call (`spec/abi/stack-and-unwinding.md`,
 checked on the 4C; the proof of concept implements both this way).
+
+**`__builtin_apply`**, when it comes (P135): if the port zeroes the
+registers that dataflow finds live but unset after a call (one way to
+do D7's "A register that may hold no value"; the proof of concept, after
+allocation, zeroes every register a call clobbers and leaves live, other
+than its result), the `untyped_call` expander must describe the call as
+setting every result register. The usual shape is a plain `call`, the
+moves into the result block and a `blockage` (riscv.md:4398-4417). That
+tells DF only that the call clobbers `%b[0]`–`%b[7]`: DF gives the
+`blockage` no register effects (df-scan.cc:2967-2990), and it ignores
+the `REG_UNTYPED_CALL` note that `expand_builtin_apply` puts on the call
+(builtins.cc:1780-1788, reg-notes.def:232-245), which only
+`rtx_properties`, and so rtl-ssa, reads (rtlanal.cc:2333-2341). The proof
+of concept's pass therefore zeroed `%b[0]`–`%b[7]` before the result
+block saved them, and `__builtin_return` returned 0 (`builtin-return-1`,
+`-2` and `builtin-apply-4` in gcc.dg and gcc.dg/torture/stackalign, on
+the 4C). Give the call a `PARALLEL` of all result registers at
+non-overlapping offsets, as aarch64's `untyped_call` does
+(aarch64.md:1708-1751; gcc-claude 14d39f9e645), or make the pass honour
+`REG_UNTYPED_CALL`.
 
 **Trampolines.** MCST's libffi has the model (`src/e2k/ffi.c:316-342`):
 two wide instructions, 40 bytes. The `__ptr32__` form uses `getpl` and
@@ -2281,7 +2322,20 @@ on the host):
   the preprocessor, not with `c_register_pragma`, or the runs glibc and
   the kernel write (`unroll (N)` or `ivdep`, then `loop count (N)`)
   stop GCC's parser (`spec/abi/source-compat.md`, "Pragmas", has the
-  mechanism and the counts).
+  mechanism and the counts). Mapped that way, a bare `#pragma unroll`
+  (lcc: unroll fully) is an error (in C, "expected expression before
+  end of line"), where GCC for other targets ignores it as unknown:
+  GCC's unroll pragma needs a count in C and C++
+  (`c_parser_pragma_unroll`, c-parser.cc:16033-16061;
+  `cp_check_pragma_unroll`,
+  cp/semantics.cc:15127-15150, run again when a template is
+  instantiated). MCST's kernel and glibc don't use it (P138):
+  `OpenE2K/glibc` has none, and `OpenE2K/linux` only 14 lines in three
+  BPF selftest programs (`tools/testing/selftests/bpf/progs`), which
+  clang or bpf-gcc builds for the BPF target (`Makefile:339-351` there)
+  (`tools/abi/probes/foldp101_pragma_runs.py`); nor do MCST's libgcc
+  E2K files and libffi. Packages do (PyTorch; section 11, "Decisions and
+  open questions").
 - **Asm operands**: `TRAP_HANDLER_DONE` has 39 and lcc allows 50. GCC's
   limit, `MAX_RECOG_OPERANDS`, is the largest operand count of any md
   pattern (at least 29) plus 1 (genconfig.cc:285, 320), 30 for a port
@@ -2319,7 +2373,30 @@ on the host):
   "Profiling"), which `recordmcount.pl` and the ftrace patcher read
   back: `disp %ctprN, _mcount`, then the `call` in a wide instruction
   with SS and CS1, no transfer between, `cr1.wpsz` ≤ 4; and accept
-  `-mptr64`, which `recordmcount.pl` passes.
+  `-mptr64`, which `recordmcount.pl` passes. Emit the call as RTL from
+  `PROFILE_HOOK` and leave `FUNCTION_PROFILER` empty, as LoongArch does
+  (`emit_library_call` of `_mcount`, loongarch.h:759-770; aarch64,
+  riscv and sparc do the same): for E2K an `rrd %cr0.hi` into a pseudo
+  and a libcall `_mcount (frompc)` (P136). `expand_function_start` runs
+  the hook after the parameters and the static chain have left their
+  registers (function.cc:5294-5374), so the window, the outgoing `%b[]`,
+  the argument area, the CTPRs the call empties and every pass that
+  tracks calls see it; a call printed as text after the prologue would
+  be hidden from all of them. Define `PROFILE_BEFORE_PROLOGUE` too (the
+  default `TARGET_PROFILE_BEFORE_PROLOGUE` reads it, targhooks.cc:2294),
+  as hppa does with its RTL hook (pa.h:664-679). Otherwise
+  `make_prologue_seq` puts a `blockage` after the prologue, meant for
+  text profilers (function.cc:5965-5969), and that is the barrier 7.3
+  warns about ("The frame setup is no scheduling barrier"). The proof of
+  concept's scheduler crossed it at latency 0: `addd %r8, 64, %r0`, a
+  large result's address, landed in `getsp`'s own wide instruction,
+  read the old `%r8`, and the function died at entry (SIGSEGV on the
+  4C). With an empty `FUNCTION_PROFILER` the macro changes only that
+  blockage and lets shrink-wrapping run (shrink-wrap.cc:655; the entry
+  call keeps the prologue in the first block anyway). The proof of
+  concept's `-pg` then gives lcc's operations and gprof's exact call
+  graph, dynamic and `-static-pie` (`tools/abi/probes/pgprof.c`, 4C;
+  gcc-claude 4cfb17c09e9).
 - **`ttable.c`'s windows** (v3 and v4 kernels): seven trap-return
   functions keep their names and a `setwd`, and none gets a larger
   window in `ttable.o` than in `ttable_tmp.o`, whose `setwd`s the build
@@ -2970,6 +3047,22 @@ Copy TILE-Gx (gcc-tilegx), which prints the same `{ }` syntax:
 4. Known pitfalls TILE-Gx handled: a call must end its wide instruction;
    inline `asm` is never put in braces; the profiler call prints its own
    group.
+5. **Thunks** (`TARGET_ASM_OUTPUT_MI_THUNK`, P130). GCC emits a thunk
+   outside the pass pipeline: the hook builds a few insns and runs
+   `final` on them itself (`expand_thunk`, symtab-thunks.cc:383-390), so
+   machine reorg, the scheduler and the bundler never see them, and
+   their UIDs start from 1 again (`init_emit`, emit-rtl.cc:5984-5991).
+   Per-insn state that reorg keeps by UID for `final`'s hooks (group
+   marks, `,sm` flags, channels) still holds the previous function's
+   entries, and the thunk's insns pick them up: the proof of concept
+   printed `{,sm` and `.accept,sm strict_delay` in a thunk of Qt 4.8.7's
+   lucene (`SegmentInfos.cpp`), which gas rejects. Clear such tables at
+   each function's end (gcc-claude 44d09ff888e), and give the thunk
+   itself what reorg would have, as other ports do: ia64's thunk calls
+   `emit_all_insn_group_barriers` (ia64.cc:11105-11109), C6x's resets
+   `c6x_current_insn` (c6x.cc:764), and TILE-Gx prints its thunk
+   unbundled (tilegx.cc:4978-4984). A register the thunk uses as scratch
+   must honour `-ffixed-gN` (D11).
 
 For E2K add the `nop N` field: when consecutive groups are scheduled
 more than one cycle apart, print `nop N` (N = gap − 1, maximum 7) inside
@@ -4921,6 +5014,19 @@ Decided by the owner:
 - `UPSR.fsm` is never changed (2026-10-11): with it set the FP predicate
   compares give x86 results for NaN operands (semantics.md), and code
   may assume it clear (registers.md).
+- No lcc-compatibility extensions in GCC for the sake of packages
+  (2026-11-02, decided on the proof of concept). When a package needs a
+  form only lcc accepts, the package gets the fix, not GCC: a test of
+  `__LCC__`, the lines dropped, or MCST's E2K patch left out. GCC bug
+  fixes are not such extensions. The case was PyTorch 2.7.1's bare
+  `# pragma unroll` (`aten/src/ATen/cpu/vec/vec_base.h:1158`, in a
+  template): the proof of concept's change that accepted it was
+  reverted, and its OS Elbrus build drops those lines. What the proof of
+  concept already had stays (lcc's pragmas, `__builtin_e2k_*`). MCST's
+  Linux and glibc are not packages in this sense: what they ask of a
+  compiler is in D11 and D12, and neither uses the bare `unroll` (D11).
+  Whether the port provides the lcc forms they need or those sources
+  get patched is the owner's call.
 
 ### lcc's builtins and intrinsics (source compatibility)
 

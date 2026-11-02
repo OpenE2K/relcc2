@@ -211,7 +211,7 @@ executed by `ct`.
 | 32 predicate registers, each one bit; compares write them; ALU ops can be predicated through CDS syllables; control transfers take conditions | `spec/isa/bundle.md` (PLS, CDS, ctcond) | `BImode` predicate class, `define_cond_exec`, conditional branches on predicates |
 | Control transfer = prepare (`disp`/`movtd`/`return` into `%ctpr1–3`) then `ct`/`call`; prepare→`ct` latency 5 cycles (`disp`), 6 (`return`), 9 (`movtd`); also an immediate `ibranch label ? cond` with no preparation | guide 6.1, ch. 10.9–10.10; `bundle.md` CS0/SS | Simplest correct start: `ibranch` for jumps; later split prepare/transfer so the scheduler can hoist `disp` |
 | One wide instruction per cycle: 6 ALU channels, each op allowed only in some channels; ≤ 4 32-bit literal slots; 1 control transfer and 1 prepare; 3 predicate-logic ops; store/load channel restrictions | `bundle.md`, `spec/isa/binutils-ops.yaml` (`channels` per op) | DFA description (section 7) |
-| **The pipeline interlocks almost everything, but stalls are expensive**: register results, compare → predicate users, `disp`/`movtd` → `ct`, `%fpcr`/`%pfpfr` were all correct at distance 1 on the 4C; the only non-interlocked case found is `rwd %lsr` → `rrd %lsr` (needs 4 cycles). An operand that arrives `k` cycles late costs about a whole extra latency, not `k` cycles (`spec/isa/timing.md`). gas's `strict_delay` mode (ops outside braces) pads compares and privileged state-register accesses anyway | `spec/isa/timing.md` [hw], guide 6.1, MCST gas | One op per wide instruction is correct. Scheduling with exact latencies is what makes code fast; keep gas's padding (no `.ignore strict_delay`) until the scheduler places `nop`s itself (section 7.4) |
+| **The pipeline interlocks almost everything, but stalls are expensive**: register results, compare → predicate users, `disp`/`movtd` → `ct`, `%fpcr`/`%pfpfr` were all correct at distance 1 on the 4C; the exceptions are a `%lsr` write (read and loop count 4 cycles later) and predicate readers close to a taken return (`spec/isa/timing.md`, "Hazards"). An operand that arrives `k` cycles late costs about a whole extra latency, not `k` cycles (`spec/isa/timing.md`). gas's `strict_delay` mode (ops outside braces) pads compares and privileged state-register accesses anyway | `spec/isa/timing.md` [hw], guide 6.1, MCST gas | One op per wide instruction is correct; under `.ignore strict_delay` only with a `nop 1` on an FP compare whose predicate the next instruction reads (M0). Scheduling with exact latencies is what makes code fast; keep gas's padding (no `.ignore strict_delay`) until the scheduler places `nop`s itself (section 7.4) |
 | **gas assigns channels itself** if you omit `,N`, and treats an op outside braces as its own wide instruction (checked: `addd`, `addd`, `ldd` in one brace group were placed in channels 1, 2, 0) | tested with MCST gas | Early milestones print plain ops; channel numbers are never required |
 | `setwd dbl=1` makes 32-bit ops zero-extend into the full register; `dbl=0` leaves the upper half untouched (including a stale diagnostic tag that traps when stored) | `registers.md`, `calling-convention.md` "Unused parts of a slot" | per function like lcc: `dbl=1` where unsigned 32-bit results need zero-extending, else `dbl=0` (owner's decision, D7) |
 | Speculative mode (`,sm`): faults become a tagged result; a non-speculative use of a tagged value traps | guide 10.2, `calling-convention.md` | Control speculation needs no check instruction (section 7.6) |
@@ -555,10 +555,20 @@ produce slow code: correctness first, then the VLIW work.
   like lcc (owner's decision: follow lcc, D9). The first makes stores
   *address, offset, data* (`bundle.md`, "Assembler syntax notes"); the
   second stops gas from padding compares and state-register accesses, so
-  the compiler owns all delays. That is safe from the start because the
-  hardware interlocks everything user code touches except `rwd %lsr` →
-  `rrd %lsr` (`spec/isa/timing.md`); early braceless code just stalls
-  (slow, not wrong) until the scheduler (M4) places `nop`s.
+  the compiler owns all delays. That is almost safe from the start. The
+  hardware interlocks everything user code touches except a `%lsr`
+  write and predicate readers close to a taken return
+  (`spec/isa/timing.md`, "Hazards"). Braceless code never puts a reader
+  in a return's own instruction. But on v3 an FP compare, a reader of
+  its predicate and a taken return in three consecutive wide
+  instructions give the reader the old predicate (4C; gcc.c-torture
+  `pr39501.c` at `-O0`, I57). So the output code adds `nop 1` to an FP
+  compare whose predicate the next instruction reads (the reader would
+  stall that long anyway), and starts with an empty wide instruction a
+  jump target that reads a predicate in its first instruction and
+  returns in its second, since the predecessor's compare can't be seen.
+  The rest of early braceless code just stalls (slow, not wrong) until
+  the scheduler (M4) places `nop`s.
 
 ### M1. Straight-line code and branches, `-O0`/`-O1` (3–6 weeks)
 
@@ -1254,9 +1264,12 @@ both in one instruction before v6). In the proof-of-concept back end
 4 M (fetch bubbles 16.3% → 3.4% of cycles; CoreMark +14.9%, Linpack
 −4.7% time on the 8C2), with no profile. One trap: a predicated op or
 `merge` in the wide instruction of a taken **return** reads a predicate
-written one instruction earlier as it was before the compare, without
-a stall (timing.md, "Hazards"; branches and calls wait), so the bundler
-must keep 2 cycles there and not rely on the interlock.
+written shortly before as it was before the compare, without a stall
+(timing.md, "Hazards"; branches and calls wait), so the bundler must
+keep 2 cycles there after an integer compare or predicate logic and 4
+after an FP compare, and on v3 2 cycles between an FP compare and a
+reader in the instruction before the return, not relying on the
+interlock.
 
 Indirect calls: `movtd %reg, %ctprN` (latency 9) then `call`. The
 `movtd` must not carry a predicate: gas accepts `movtd … ? %predN`, but
@@ -2854,11 +2867,18 @@ gas accepts `nop 0`). Never shorten a wait: an operand early by e
 cycles stalls 4 × ceil(e/4), so the PoC, which capped waits at `nop 7`,
 ran `x = x / d + k` at 21 cycles an iteration instead of 16 (P35).
 
-For correctness, the only non-interlocked hazards measured on the 4C
-are the loop-register writes: `rwd %lsr` (and v5+ `%lsr1`) → `rrd` of
-either or the loop's first instruction (4 cycles), → `rrd %ilcr` (5;
-timing.md, loops.md); loop-mode code (7.7) must respect them.
-Privileged state registers (which gas pads) don't appear in user code.
+For correctness, the non-interlocked hazards measured are the
+loop-register writes: `rwd %lsr` (and v5+ `%lsr1`) → `rrd` of either
+or the loop's first instruction (4 cycles), → `rrd %ilcr` (5;
+timing.md, loops.md), which loop-mode code (7.7) must respect; and on
+v3 and v5 predicate readers close to a taken return: an integer compare
+or predicate logic 2 cycles, an FP compare 4, before a reader in the
+return's instruction, and on v3 an FP compare 2 cycles before a reader
+in the instruction before it (timing.md, "Hazards"; D4). The latencies
+keep these apart within a block; the final pass above must check them
+across block boundaries too, since a reader at a jump's target counts
+from a producer before the jump. Privileged state registers (which gas
+pads) don't appear in user code.
 
 **Count each wide instruction's size** (I52). At most 16 words fit
 (`spec/isa/bundle.md`, "Counting the size"), and the DFA can't hold that:

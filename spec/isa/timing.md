@@ -1481,7 +1481,8 @@ and memory (apb.md, "Plain loads beside an area"; `pocchk3.c` `bk`,
 | ALU, multiply, divide, load → register use | yes | values correct at any distance ≥ 1, also integer ↔ FP and across clusters |
 | an operation **under a false predicate** → a reader of its destination | **no wait** | a reader one cycle after an `ldd` or `muld` whose predicate is false runs as if that operation wrote another register (2.0 cycles a step, against 5.9 and 9.8 when it executes; `pocchk.c`, 4C, 8C2, 2C3): the interlock follows the predicate, so the other arm of an if-converted if-else costs nothing |
 | compare → predicated ALU op, `ct ? pred`, `ibranch ? pred` | yes | correct at distance ≥ 1 |
-| compare or predicate logic (`pass`/`landp`/`pass`) → predicated op or `merge` in the wide instruction of a **taken return** (`ct %ctpr3` after `return`) | **no** | at distance 1 the op reads the predicate as it was before the compare or logic, with no stall (in the 2026-10-10 runs an `addd` reader after a compare got the new value instead in 4 of 4 runs on the 4C and 1 of 4 on the 8C2, so the outcome depends on timing; `merge` readers, and readers after predicate logic, always got the old one); at distance 2 it reads the new value (`i17l_*` for predicate logic: 4C, 8C2, 2C3; the proof-of-concept back end's finding I38). A taken branch (`ct %ctpr1`, near or far), a `call`, a `ct` that is not taken and no transfer all wait (`tools/isa-probes/preds.c`, `i17_*`; 4C and Elbrus-8C2; the proof-of-concept back end's finding I17, where a `merge` in a return's instruction broke expat). Keep a compare 2 instructions before any predicate reader in a return's instruction. On v6 (the 2C3) distance 1 reads the new value. |
+| compare or predicate logic → predicated op (a store too) or `merge` in the wide instruction of a **taken return** (`ct %ctpr3` after `return`, also under a true condition) | **no** | the op reads the predicate as it was before the producer, with no stall, when an integer compare or predicate logic (`pass`/`landp`/`pass`, also on an FP compare's result) is 1 cycle before it, or an FP compare (`fcmp*sb`, `fcmp*db`, `fxcmp*sb`) 1 or 3 cycles before it, or 2 before a `merge` (an RLP reader is right at 2). Integer compares and logic 2 cycles before, and FP compares 4, give the new value [hw: `tools/isa-probes/foldi57_retpred.c`; 4C, 8C2]. An `addd` reader 1 cycle after an integer compare got the new value in 4 of 4 runs on the 4C and 1 of 4 on the 8C2 on 2026-10-10 (`preds.c` `i17_*`), but the old one in every `foldi57_retpred` run (there one reading in 80 after logic got the new value, on the 8C2): the outcome depends on timing. A taken branch (`ct %ctpr1`, near or far), a `call`, a `ct` that is not taken and no transfer all wait (`tools/isa-probes/preds.c` `i17_*`, `foldi57_retpred.c`; the proof-of-concept back end's findings I17, where a `merge` in a return's instruction broke expat, and I38). A taken branch between the producer and the reader changes nothing: a reader at the target counts from the producer. On v6 (the 2C3) an integer compare or logic 1 cycle before reads the new value (`i17l_*`); FP compares were not run there. |
+| FP compare → predicated op or `merge` in the wide instruction **right before** a taken return | **no on v3** | on the 4C an FP compare 1 cycle before the reader, which is 1 cycle before a taken return (also a conditional one), gives the reader the old predicate: gcc.c-torture `pr39501.c` at `-O0`, one operation per wide instruction (the proof-of-concept back end's finding I57). 2 cycles between compare and reader, or 2 between reader and return, give the new value; integer compares and logic are right here, and so is the 8C2 [hw: `foldi57_retpred.c`; 4C, 8C2; not run on the 2C3] |
 | compare → `andp`, `andp` → predicated ALU op | yes | correct at distance ≥ 1 |
 | `andp` → `andp` in the same wide instruction (a CLP reading `@p4` written by an earlier CLP) | — | sees the new value: predicate logic chains inside one instruction |
 | an operation in ALC K whose operand isn't ready, in an instruction with `pass %spredK` | **no wait, by design** | the instruction issues without waiting for ALC K: the operation sees a diagnostic operand (SIGILL without `,sm`, a diagnostic result with it) and `%spredK` is true; 1,000 iterations of a load and such a consumer one instruction later take 6,002 cycles against 10,001 without `%spred` (`preds.c` `spt_*`, 4C, 8C2, 2C3; [predicates.md](predicates.md)) |
@@ -1494,6 +1495,18 @@ and memory (apb.md, "Plain loads beside an area"; `pocchk3.c` `bk`,
 | **`rwd %lsr` or `%lsr1` → the loop's `alc`** | **no** | iterations issued 1–3 cycles after the write count down the old `%lsr`, the new count applies from 4 ([loops.md](loops.md), "Registers") |
 | `getsap` → `rrd %usd.lo` (protected mode) | **no** | old value at distance 1–2, new from 3 (`tools/abi/probes/protected/pmleft.c` `usd`; 4C, 8C2, 2C3; [protected-mode.md](../abi/protected-mode.md), "Stack pointers"). `getsp` → `rrd %usd.lo` in 64-bit code was not measured |
 | anything in the same wide instruction | — | every operation reads the state from before the wide instruction (distance 0 sees the old value) |
+
+So on v3 and v5 keep an integer compare or predicate logic 2 cycles,
+and an FP compare 4 cycles, before a predicate reader in a taken
+return's instruction, and on v3 keep an FP compare 2 cycles before a
+reader in the instruction right before a taken return. Scheduling at
+the latencies meets both rules ([predicates.md](predicates.md),
+"Timing") for the producers the scheduler sees; a reader at a jump's
+target counts from a producer before the jump. lcc puts the `merged` of
+a `long double` select in the return's instruction exactly 4 cycles
+after its `fxcmpltxb` [lcc 1.29.16 `-O3`, v3, v5.8c2]. gas's
+`strict_delay` padding (below) meets the rules too; unscheduled output
+under `.ignore strict_delay` must add the delay itself.
 
 **Other stalls** the performance monitors found [hw:
 `tools/isa-probes/pmu2.c`, 4C, 8C2, 2C3, two runs; the events in
@@ -1511,12 +1524,14 @@ isa-score doesn't model these (it treats two `getsp`s as a 2-cycle
 dependence through the stack pointer, `tools/isa-score/model.py`).
 
 gas, for operations written outside braces (its `strict_delay` mode,
-`gas/config/tc-e2k.c`), inserts `nop 2` after compares and `ccto*`,
-`nop 5` or `wait all_e=1` after writes to the system registers flagged
+`gas/config/tc-e2k.c`), inserts `nop 2` after integer compares and
+`ccto*` and `nop 4` after FP compares, `nop 5` or `wait all_e=1` after
+writes to the system registers flagged
 in `include/opcode/e2k/state-regs.def` (`%psr`, `%cwd`, `%psp`, `%pcsp`,
 `%usd`, segment registers and others), and `nop 4` after reading `%cud`
-and `%gd`. On the 4C the compare padding is not needed for correctness
-(it saves the stall cost above); the system-register cases are
+and `%gd`. On the 4C and 8C2 the compare padding is needed for
+correctness only before predicate readers near a taken return (above);
+elsewhere it saves the stall cost; the system-register cases are
 privileged and not tested here.
 
 Where the floating-point state lives (glibc `sysdeps/e2k/fpu`): the
@@ -1762,11 +1777,12 @@ conflicts, the store bank rule (two stores agreeing in address bits
 
   A fused multiply-add (5) is thus cheaper than `fmul_addd` (8) and
   rounds once (semantics.md).
-- **A compare before a taken return**: the predicate written by a
-  compare, or by predicate logic (`landp`), one instruction before a
-  `ct %ctpr3` that returns now reaches a predicated operation or `merge`
-  in the return's instruction (v3 and v5 read the old value; Hazards,
-  below).
+- **A compare before a taken return**: the predicate written by an
+  integer compare, or by predicate logic (`landp`), one instruction
+  before a `ct %ctpr3` that returns now reaches a predicated operation
+  or `merge` in the return's instruction (v3 and v5 read the old value;
+  "Hazards", above). FP compares 1–3 cycles before, which v3 and v5 read
+  wrong, were not run on v6.
 - **`movtd` and `ct` through the same CTPR in one instruction**: the
   `ct` does not transfer (falls through); v3 and v5 transfer to the old
   target (`bench.py` hazard `movtd_ct`, distance 0).
@@ -1873,6 +1889,8 @@ lcc's changelogs name scheduling changes it made for later CPUs, which
 
 - v4; v6 on the Elbrus-16C (the 2C3 is the v6 machine measured). v7
   is out of scope (not in silicon).
+- FP compares before predicate readers near a taken return on the 2C3
+  ("Hazards": `foldi57_retpred.c` was not run there).
 - The divider's reservation model: why a single-precision square root
   conflicts at distances that depend on its operand and on whether the
   gap is a `nop N` in its instruction, and what decides runs of four

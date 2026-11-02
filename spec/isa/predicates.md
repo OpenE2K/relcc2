@@ -44,9 +44,10 @@ Marks:
   `movtd` into a CTPR, which is SIGILL under any predicate ("RLP").
 - A predicate is ready for a predicated operation or `merge` 2 cycles
   after an integer compare or predicate logic (1 on v6), for a `ct` 3;
-  4 and 5 after an FP compare. Inside one instruction, predicate logic
-  chains two levels deep for free; every other reader in the writer's
-  own instruction sees the old value [hw].
+  4 and 5 after an FP compare. Readers near a taken return don't wait
+  on v3 and v5: they need these distances ("Timing"). Inside one
+  instruction, predicate logic chains two levels deep for free; every
+  other reader in the writer's own instruction sees the old value [hw].
 - lcc uses predicates in 47% of its wide instructions [lcc]: one
   compare, both arms of an if under opposite predicates, `landp` trees
   for `&&`/`||`, a conditional `ct` per path.
@@ -525,7 +526,8 @@ are interlocked unless the table says otherwise:
 | CLP → CLP through a `%pred` | 1 | 1 |
 | a reader in the writer's own instruction | reads the old value | the same |
 | an operation under a false predicate → a reader of its destination | no wait | no wait |
-| compare or logic one instruction before a **taken return** → predicated operation or `merge` in the return's instruction | **not interlocked**: a `merge`, or anything after predicate logic, read the old value; an `addd` after a compare read the new one in 4 of 4 runs on the 4C and 1 of 4 on the 8C2; keep 2 instructions | reads the new value |
+| compare or logic shortly before a **taken return** → predicated operation or `merge` in the return's instruction | **not interlocked**: the old value from an integer compare or logic 1 cycle before, or an FP compare 1–3 cycles before (2 only for `merge`); keep 2 cycles (integer, logic) or 4 (FP) | integer compare or logic: the new value; FP not run |
+| FP compare 1 cycle before a predicated operation or `merge` in the instruction right before a taken return | v3 (4C): the old value; v5 (8C2): the new | not run |
 | `%spred` on a consumer of a late operand | no wait (the operation gets a diagnostic operand) | the same |
 
 A predicated operation or `merge` that reads its predicate too early
@@ -694,9 +696,12 @@ Rules a compiler must follow:
 - Don't read a predicate in a function before writing it: the callee's
   initial contents are the caller's, or zeros in a frame the kernel
   built.
-- On v3–v5, keep a compare or predicate logic at least 2 instructions
-  before a predicated operation or `merge` that shares an instruction
-  with a taken return.
+- On v3–v5, keep an integer compare or predicate logic 2 cycles, and an
+  FP compare 4 cycles, before a predicated operation or `merge` that
+  shares an instruction with a taken return. On v3, also keep an FP
+  compare 2 cycles before such a reader in the instruction right before
+  a taken return ([timing.md](timing.md), "Hazards"; hw:
+  `tools/isa-probes/foldi57_retpred.c`, 4C, 8C2).
 - Everything else is interlocked: a predicate read too early stalls
   and is correct. A reader in the writer's own instruction gets the
   old value, by design.
@@ -744,6 +749,7 @@ Neither qemu can be trusted on predicates beyond the basics:
 | `,sm` load under a diagnostic predicate (`isaleft.c` `dl_*`) | no access (above) | no access | reads memory: its bits with bit 30 set (`41234567c9abcdef`), and pages an untouched page in |
 | a `,sm` compare under a diagnostic predicate | diagnostic result | diagnostic | clean result |
 | a predicated write to a CTPR (`movtd`) | SIGILL `ILL_ILLOPC`, predicate true or false (`callsstack_tail.c` `movtdp`) | conditional | SIGILL |
+| an FP compare, a reader of its predicate and a taken return in three consecutive instructions | v3: the old value ("Timing") | the new value, as `elbrus-v3` and `-v5` (gcc.c-torture `pr39501.c` at `-O0`: the proof-of-concept back end's finding I57) | not run |
 | `incr` condition | — | searched in all CDS | searched in CDS0 only |
 
 ## Not checked yet
@@ -754,6 +760,8 @@ Neither qemu can be trusted on predicates beyond the basics:
   rejects all three, so a test needs hand encoding).
 - A `movtd` into a CTPR under a `%pcnt` condition (a `%pred` one traps,
   "RLP"; the community qemu traps on both).
+- FP compares before readers near a taken return on v6 ("Timing":
+  `foldi57_retpred.c` was not run on the 2C3).
 - What a false call costs on the 8C2: only its spill of a full chain
   register file was read there (`callsstack_pcall` `shtp`); v3–v5 share
   their timings, so the 4C's figures probably hold.

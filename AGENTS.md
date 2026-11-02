@@ -688,7 +688,7 @@ Owner's decisions (plan section 11, "Decisions and open questions"):
 - A Fortran procedure that uses the IEEE modules runs no FP operation
   speculatively (2026-10-31; plan 7.6, "FP operations").
 - No lcc-compatibility extensions in GCC for the sake of packages
-  (decided on the proof of concept): a package that needs a form only
+  (decided for the proof of concept): a package that needs a form only
   lcc accepts gets the fix, or MCST's patch is dropped; GCC bug fixes
   are not such extensions (2026-11-02; plan section 11).
 

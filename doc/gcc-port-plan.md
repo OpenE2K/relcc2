@@ -211,7 +211,7 @@ executed by `ct`.
 | 32 predicate registers, each one bit; compares write them; ALU ops can be predicated through CDS syllables; control transfers take conditions | `spec/isa/bundle.md` (PLS, CDS, ctcond) | `BImode` predicate class, `define_cond_exec`, conditional branches on predicates |
 | Control transfer = prepare (`disp`/`movtd`/`return` into `%ctpr1–3`) then `ct`/`call`; prepare→`ct` latency 5 cycles (`disp`), 6 (`return`), 9 (`movtd`); also an immediate `ibranch label ? cond` with no preparation | guide 6.1, ch. 10.9–10.10; `bundle.md` CS0/SS | Simplest correct start: `ibranch` for jumps; later split prepare/transfer so the scheduler can hoist `disp` |
 | One wide instruction per cycle: 6 ALU channels, each op allowed only in some channels; ≤ 4 32-bit literal slots; 1 control transfer and 1 prepare; 3 predicate-logic ops; store/load channel restrictions | `bundle.md`, `spec/isa/binutils-ops.yaml` (`channels` per op) | DFA description (section 7) |
-| **The pipeline interlocks almost everything, but stalls are expensive**: register results, compare → predicate users, `disp`/`movtd` → `ct`, `%fpcr`/`%pfpfr` were all correct at distance 1 on the 4C; the exceptions are a `%lsr` write (read and loop count 4 cycles later) and predicate readers close to a taken return (`spec/isa/timing.md`, "Hazards"). An operand that arrives `k` cycles late costs about a whole extra latency, not `k` cycles (`spec/isa/timing.md`). gas's `strict_delay` mode (ops outside braces) pads compares and privileged state-register accesses anyway | `spec/isa/timing.md` [hw], guide 6.1, MCST gas | One op per wide instruction is correct, except for the groups that act within one instruction, and under `.ignore strict_delay` only with a `nop 1` on an FP compare whose predicate the next instruction reads (M0). Scheduling with exact latencies is what makes code fast; keep gas's padding (no `.ignore strict_delay`) until the scheduler places `nop`s itself (section 7.4) |
+| **The pipeline interlocks almost everything, but stalls are expensive**: register results, compare → predicate users, `disp`/`movtd` → `ct`, `%fpcr`/`%pfpfr` were all correct at distance 1 on the 4C; the exceptions are a `%lsr` write (read and loop count 4 cycles later) and predicate readers close to a taken return (`spec/isa/timing.md`, "Hazards"). An operand that arrives `k` cycles late costs about a whole extra latency, not `k` cycles (`spec/isa/timing.md`). gas's `strict_delay` mode (ops outside braces) pads compares and privileged state-register accesses anyway | `spec/isa/timing.md` [hw], guide 6.1, MCST gas | One op per wide instruction is correct, except for the groups that act within one instruction, and under `.ignore strict_delay` only with M0's two delays (a `nop 1` on an FP compare whose predicate the next instruction reads, an empty instruction at some jump targets). Scheduling with exact latencies is what makes code fast. Under lcc's `.ignore strict_delay` (D9, the owner's choice) the compiler places every delay: M0 lists those unscheduled code needs, 7.4 the scheduler's |
 | **gas assigns channels itself** if you omit `,N`, and treats an op outside braces as its own wide instruction (checked: `addd`, `addd`, `ldd` in one brace group were placed in channels 1, 2, 0) | tested with MCST gas | Early milestones print plain ops; channel numbers are never required |
 | `setwd dbl=1` makes 32-bit ops zero-extend into the full register; `dbl=0` leaves the upper half untouched (including a stale diagnostic tag that traps when stored) | `registers.md`, `calling-convention.md` "Unused parts of a slot" | per function like lcc: `dbl=1` where unsigned 32-bit results need zero-extending, else `dbl=0` (owner's decision, D7) |
 | Speculative mode (`,sm`): faults become a tagged result; a non-speculative use of a tagged value traps | guide 10.2, `calling-convention.md` | Control speculation needs no check instruction (section 7.6) |
@@ -395,10 +395,11 @@ mainline libgcc this way, `docs/spec-poc-findings.md` A7, A10, A11):
     which neither libquadmath's nor libgfortran's build passes.
   - gfortran and libgfortran: `REAL(16)` through libquadmath, not
     libm's `*f128` functions, whose `sqrtf128` is a placeholder
-    (`spec/abi/registers.md`, "MCST glibc's FP bugs"); both pick libm
-    when the target glibc is 2.26 or later
-    (`gcc/fortran/trans-types.cc:1010-1018`,
-    `libgfortran/configure.ac:681-697`). Build libgfortran without FP
+    (`spec/abi/registers.md`, "MCST glibc's FP bugs"). gfortran picks
+    libm when the target glibc is 2.26 or later
+    (`gcc/fortran/trans-types.cc:1010-1018`), and libgfortran's
+    configure does when libm has `strtof128`, `strfromf128`, `sinf128`
+    and `cacosf128` (`libgfortran/configure.ac:681-697`). Build libgfortran without FP
     speculation too, as libquadmath: every procedure that uses the IEEE
     modules clears the flags on entry (`ieee_procedure_entry`,
     `libgfortran/ieee/ieee_helper.c:177-185`; 7.6, "FP operations").
@@ -626,7 +627,7 @@ produce slow code: correctness first, then the VLIW work.
   scheduler hasn't bundled (`-O0`, `-fno-schedule-insns2`, a first port
   without a bundler), print each group in braces, or emit it from one
   pattern whose template has them (an atomic read-modify-write, 3.3,
-  is best one such pattern).
+  is best emitted as one such pattern).
 - Start every file with `.ignore ld_st_style` and `.ignore strict_delay`
   like lcc (owner's decision: follow lcc, D9). The first makes stores
   *address, offset, data* (`bundle.md`, "Assembler syntax notes"); the
@@ -640,9 +641,10 @@ produce slow code: correctness first, then the VLIW work.
   instructions give the reader the old predicate (4C; gcc.c-torture
   `pr39501.c` at `-O0`, I57). So the output code adds `nop 1` to an FP
   compare whose predicate the next instruction reads (the reader would
-  stall that long anyway), and starts with an empty wide instruction a
-  jump target that reads a predicate in its first instruction and
-  returns in its second, since the predecessor's compare can't be seen.
+  stall that long anyway), and starts a jump target with an empty wide
+  instruction when the target reads a predicate in its first instruction
+  and returns in its second, since the predecessor's compare can't be
+  seen.
   With the groups above braced, the rest of early braceless code just
   stalls (slow, not wrong) until the scheduler (M4) places `nop`s.
 
@@ -941,9 +943,9 @@ the `REG_UNTYPED_CALL` note that `expand_builtin_apply` puts on the call
 (builtins.cc:1780-1788, reg-notes.def:232-245), which only
 `rtx_properties`, and so rtl-ssa, reads (rtlanal.cc:2333-2341). The proof
 of concept's pass therefore zeroed `%b[0]`–`%b[7]` before the result
-block saved them, and `__builtin_return` returned 0 (`builtin-return-1`,
-`-2` and `builtin-apply-4` in gcc.dg and gcc.dg/torture/stackalign, on
-the 4C). Give the call a `PARALLEL` of all result registers at
+block saved them, and `__builtin_return` returned 0
+(`gcc.dg/builtin-return-1` and `gcc.dg/torture/stackalign`'s
+`builtin-return-1`, `-2` and `builtin-apply-4`, on the 4C). Give the call a `PARALLEL` of all result registers at
 non-overlapping offsets, as aarch64's `untyped_call` does
 (aarch64.md:1708-1751; gcc-claude 14d39f9e645), or make the pass honour
 `REG_UNTYPED_CALL`.
@@ -1768,7 +1770,7 @@ functions, and the ABI is the same either way. How to get there:
   (`registers.md`, "The high half of a v5+ register after a narrower
   write"). On the `,sm` route instead, a pass that drops `,sm` from
   operations whose inputs can't be diagnostic must start each function
-  with every register but the arguments maybe diagnostic, and add a
+  with every register but the arguments as maybe diagnostic, and add a
   call's clobbers after it (P124: the proof of concept's pass started
   with none, and a `cmpedb` of a `%g24` that nothing on its path had set
   lost its `,sm` and trapped; gcc-claude a9de8a830cc).
@@ -1892,7 +1894,8 @@ Owner's decision: emit what lcc emits.
 
 - `.ignore ld_st_style` and `.ignore strict_delay` at the top of every
   file; the compiler inserts every delay itself (`nop N`, or independent
-  work), including the 4 cycles between `rwd %lsr` and `rrd %lsr`.
+  work), including the 4 cycles between `rwd %lsr` and `rrd %lsr` and
+  the predicate delays before a taken return (M0, D4, 7.4).
 - Wrap each user `asm` in `.accept strict_delay` … `.ignore
   strict_delay` (lcc also adds `.ias_line N, "file"`), so gas pads
   hand-written code that is not bundled.
@@ -2404,8 +2407,8 @@ on the host):
   instantiated). MCST's kernel and glibc don't use it (P138):
   `OpenE2K/glibc` has none, and `OpenE2K/linux` only 14 lines in three
   BPF selftest programs (`tools/testing/selftests/bpf/progs`), which
-  clang or bpf-gcc builds for the BPF target (`Makefile:339-351` there)
-  (`tools/abi/probes/foldp101_pragma_runs.py`); nor do MCST's libgcc
+  clang or bpf-gcc builds for the BPF target (`Makefile:339-351` there;
+  `tools/abi/probes/foldp101_pragma_runs.py`); nor do MCST's libgcc
   E2K files and libffi. Packages do (PyTorch; section 11, "Decisions and
   open questions").
 - **Asm operands**: `TRAP_HANDLER_DONE` has 39 and lcc allows 50. GCC's
@@ -2507,10 +2510,13 @@ rely on lcc doing neither, so a GCC-built kernel needs those asms
 `volatile`. Volatile is not enough where an asm names a global register
 only in its template or clobbers, as `barrier()` does: GCC then deletes
 the register variable's write before it or reads a stale copy after it,
-so the kernel needs the register as an operand, unless the port reads
-templates as lcc does (`spec/abi/kernel-build.md`, "Global registers
-named only in templates and clobbers"). Nor is the decompressor's wait
-for the boot CPU, which GCC makes endless: the boot CPU's plain store to
+so the kernel needs the register as an operand, unless the port, as
+the proof of concept does in `TARGET_MD_ASM_ADJUST`, makes an asm use
+and clobber every global register its template names and use every
+fixed global register among its clobbers (`spec/abi/kernel-build.md`,
+"Global registers named only in templates and clobbers"). The
+decompressor's wait for the boot CPU isn't the port's to fix either;
+GCC makes it endless: the boot CPU's plain store to
 the flag before a jump asm without `"memory"` is dead to GCC, and the
 other CPUs spin for ever (`spec/abi/kernel-build.md`, "A store before a
 jump"; the store needs `WRITE_ONCE`).
@@ -3118,7 +3124,7 @@ Copy TILE-Gx (gcc-tilegx), which prints the same `{ }` syntax:
    compiler can rely on"). The rules and their exceptions are in D13.
 4. Known pitfalls TILE-Gx handled: a call must end its wide instruction;
    inline `asm` is never put in braces; the profiler call prints its own
-   group.
+   group (with `PROFILE_HOOK`, D11, there is no profiler text).
 5. **Thunks** (`TARGET_ASM_OUTPUT_MI_THUNK`, P130). GCC emits a thunk
    outside the pass pipeline: the hook builds a few insns and runs
    `final` on them itself (`expand_thunk`, symtab-thunks.cc:383-390), so
@@ -3195,18 +3201,18 @@ every constant above 15 as a literal (its figures).
 
 **Insns the scheduler never saw** (P132). The `TImode` marks of step 1
 exist only where Haifa scheduled. It skips blocks flagged
-`BB_DISABLE_SCHEDULE` (sched-ebb.cc:634–651, sched-rgn.cc:3010–3021),
+`BB_DISABLE_SCHEDULE` (sched-ebb.cc:634–651, sched-rgn.cc:3010–3021).
 GCC's SMS flags its prologue, epilogue and kernel unless
 `-freschedule-modulo-scheduled-loops` is given (modulo-sched.cc:1174–1209,
-1754–1757) and leaves no marks of its own, and a port's own pipeliner
-or a pass after the final schedule can leave unmarked insns too. A
+1754–1757) and leaves no marks of its own; a port's own pipeliner, or a
+pass after the final schedule, can leave unmarked insns too. A
 bundler that opens a group only at a mark or a call, as step 1 does,
 puts all of them into the group before it, which no DFA has checked.
 The proof of concept met this in aom 3.8.1 at `-O2` for the 8C2: its
 pipeliner split a loop's entry edge for the prologue while the previous
 loop's exit was still pending on that edge (`insert_insn_on_edge`,
-committed into the new block later). The `aaurw %r, %aabf0` that stops array prefetch (MAS
-0x3f, in CS1) landed beside `setbn`'s `setwd`, and gas said "cannot
+committed into the new block later). The `aaurw %r, %aabf0` that stops
+array prefetch (MAS 0x3f, in CS1) landed beside `setbn`'s `setwd`, and gas said "cannot
 encode MAS: CS1 syllable is busy with set-instructions"
 (`spec/isa/bundle.md`, "Bundling restrictions"); it also read a
 register the same group zeroed and got the old value (7.3). Either give
@@ -3380,7 +3386,7 @@ load needs no `BEGIN_CONTROL` check. The exceptions, all measured:
   `ieee/ieee_helper.c:177-185`), so such a procedure always runs with
   the flags clear. The proof of concept finds the call (its
   `REG_CALL_DECL`) in machine reorg and compiles the function as under
-  `-mno-spec-fp` (P131, gcc-claude `152bc2642d8`). Two gaps remain. A
+  its `-mno-spec-fp` (P131, gcc-claude `152bc2642d8`). Two gaps remain. A
   contained procedure that reaches the modules by host association gets
   no such call (only its host does: host gfortran 16.2.1 and the proof
   of concept alike), so a test for the call misses it, although it may
@@ -4962,7 +4968,7 @@ and Blackfin (`bfin_gen_bundles`, bfin.cc:3989).
      when lcc builds it [hw: 8C2]. MCST's libquadmath likewise: `sinq
      (1e30)` after `feclearexcept` dies with SIGILL [hw: 4C;
      `tools/abi/probes/foldp112_quadspec.c`].
-   - A test that calls `fmod` or `remainder` in `FE_DOWNWARD` can hang
+   - A test that calls `fmod`, `remainder` or `remquo` in `FE_DOWNWARD` can hang
      (mainline's `gcc/testsuite` has none).
    - A test that checks the flags libm raises for domain errors fails
      (inferred).
@@ -5112,8 +5118,10 @@ Decided by the owner:
 - `UPSR.fsm` is never changed (2026-10-11): with it set the FP predicate
   compares give x86 results for NaN operands (semantics.md), and code
   may assume it clear (registers.md).
+- A Fortran procedure that uses the IEEE modules runs no FP operation
+  speculatively (2026-10-31; 7.6, "FP operations").
 - No lcc-compatibility extensions in GCC for the sake of packages
-  (2026-11-02, decided on the proof of concept). When a package needs a
+  (2026-11-02, decided for the proof of concept). When a package needs a
   form only lcc accepts, the package gets the fix, not GCC: a test of
   `__LCC__`, the lines dropped, or MCST's E2K patch left out. GCC bug
   fixes are not such extensions. The case was PyTorch 2.7.1's bare

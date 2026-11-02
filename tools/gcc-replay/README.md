@@ -188,7 +188,9 @@ Traps met while the method was worked out:
   assembly were byte-identical, apart from `cc1-checksum` and
   `cc1plus-checksum`, which hash archives that carry timestamps. All
   2,729 objects matched too, but the linked programs did not. MCST ld's
-  output depends on ASLR (A37 in `docs/spec-poc-findings.md`). So
+  output depends on memory it never initializes (`spec/abi/elf.md`,
+  "Rarely used operators, ifunc and gold": copy relocations for data
+  reached only through the GOT). So
   replay N with the records of its own run, as `ship.py` sends them.
 - **Not under qemu.** Under MCST's qemu, N's `cc1plus` took about 70
   minutes on one large input (`rx.ii`), and qemu loops for ever on

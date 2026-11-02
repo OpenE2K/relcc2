@@ -15,10 +15,10 @@ Status: **draft** (2026-10-13; bootstraps below). Checked first, all on the 8C2:
 - stage 1's libiberty built by lcc `-O3` (80 s);
 - `fetch` and `clean`.
 
-The first full bootstrap (2026-10-13, `f5316cda77d`) stopped in stage
+The first full bootstrap (2026-10-13, `319a6d87af3`) stopped in stage
 1 after 57 minutes. lcc refused one file, `gcc/tree-data-ref.cc`: it
 passes a `vec<tree>` through `...` and fetches it with `va_arg` (EDG
-error #1291). `native-build` commit `76b0bd07e3c` gives `conflict_fn`
+error #1291). `native-build` commit `b2682dbadb3` gives `conflict_fn`
 fixed parameters instead. `xcheck` (below) then compiled every host
 object with lcc, and the bootstrap was restarted on 2026-10-14.
 
@@ -44,7 +44,7 @@ the lcc-built one (`cp/pt.cc`, `fold-const.cc`, ... about 1,000 s in
 all, identical output), and lcc itself compiling the same files at
 `-O3` takes 20% longer.
 
-**Bootstrap 8 passed** (`5ec2d06d909`, 2026-10-16; 7 h 10 min on the
+**Bootstrap 8 passed** (`1ef84e9df17`, 2026-10-16; 7 h 10 min on the
 8C2 at `-j 4`): stage 2 and 3 objects are identical. `pack` made the
 native tarball from its install:
 `gcc-e2k-0.4+native-build.7-e2k-elbrus-8c2-native-elbrus-linux-9.5.5.tar.xz`,

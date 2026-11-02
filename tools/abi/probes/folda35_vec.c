@@ -22,7 +22,7 @@
    up to 2^31 bytes; 2^32 is "error #1684: vector size is too large".
    A non-power-of-two number of elements is error #1685, a size that is
    not a multiple of the element error #1686.  The proof-of-concept GCC
-   (build of 2026-10-23, with its 7aa4f344377) gives N up to 2^28 bytes,
+   (build of 2026-10-23, with its 41099d2c29c) gives N up to 2^28 bytes,
    then 2^28 (default_vector_alignment caps the layout at ELF's
    MAX_OFILE_ALIGNMENT, 2^28 bytes), and refuses the 2^31-byte char
    vector ("number of vector components 2147483648 exceeds

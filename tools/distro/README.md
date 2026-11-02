@@ -44,7 +44,7 @@ compressed (23 MB), `image.boot` of 67 MB and `distro.img` of 2.5 GB.
 The `check` step's audit: no file names `/opt/mcst`, none carries lcc's
 mark (`elbrus_optimizing_compiler_v...`, a weak symbol lcc puts in every
 object; it writes no `.comment`), and all 5,967 ELF files' `.comment`
-is `GCC: (relcc2 PoC 0.5+43 efd6f1c4975)`.
+is `GCC: (relcc2 PoC 0.5+43 09b92535664)`.
 
 Its first boots (2026-10-25) found two places where MCST's code relies on
 lcc's C:

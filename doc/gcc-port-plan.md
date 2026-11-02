@@ -3219,7 +3219,7 @@ check-free semi-speculative form works.
     counter (checking that nothing reads the slot after the loop). The
     proof of concept's `jacld` then pipelined (II 103, 4 stages): LU.W on
     the 4C 23.63–23.79 → 22.19–22.68 s (lcc 17.88; gcc-claude
-    b28002c9f27); the v5 code of that loop got a register for its
+    825bf8e1965); the v5 code of that loop got a register for its
     counter. lcc keeps the count only in `%lsr`, written before the loop
     (`rwd %g17, %lsr` in `jacld`'s preheader; lcc `-O3`, v3, v5, v6).
   - *The hook must check where the loop is entered* (P68). A loop's
@@ -3964,7 +3964,7 @@ check-free semi-speculative form works.
   (it used 12 cycles up to v5 and 16 on v6; L2 takes 9 cycles on the
   4C, 11 on the 8C2 and 13 on the 2C3, timing.md) it gained: CG.W 0.75
   → 0.72 s on the 8C2 (lcc 0.68), 0.81 → 0.77 on the 2C3 (gcc-claude
-  9dbb3274d4f). The same in while loops that often leave early
+  a2a7847e18c). The same in while loops that often leave early
   (CoreMark's list searches) cost CoreMark 1%. So give a gather in a
   counted loop of unknown length at least an L2 hit's latency, and the
   far distance where the loop is known to run long or the prologue is
@@ -4012,7 +4012,7 @@ check-free semi-speculative form works.
     `jacld` kernel names 177 distinct registers (98 `%b[]`, 63 `%r`,
     `%g16`–`%g31`) of the 192 in its window and the 16 globals, and lcc
     doesn't overlap iterations of these loops at all (above). The proof
-    of concept (gcc-claude 2ced4f36492, 02a87b004a2, 1f82859c980) skips
+    of concept (gcc-claude 2949c74fac7, 5a1a074f631, 716dc42360e) skips
     IIs a lower bound rules out (half the peak, and the lifetimes over 2
     II, in pairs), moves nodes within their dependences to cut the peak
     and then the lifetimes (not loads: moving them nearer their uses
@@ -4045,7 +4045,7 @@ check-free semi-speculative form works.
     a slot the loop body stores as a copy of the stored value: of the
     same iteration when the store comes first, of the previous iteration
     when the load does, and in the first iteration the value loaded from
-    the slot before the loop (gcc-claude b90c3b67c22: `jacld` then
+    the slot before the loop (gcc-claude ac2b1825109: `jacld` then
     schedules at II 105–134). Predictive commoning makes such values: at
     `-O2` it runs, without unrolling, whenever the loop vectorizer is on
     (tree-predcom.cc:3571–3588), and in `jacld`'s `j` loop it carries
@@ -4079,7 +4079,7 @@ check-free semi-speculative form works.
     bzip2 and Linpack it shortened 15 (SP's `x_solve` 48 → 30,
     `z_solve` 72 → 55) and lengthened 2: LU.W 4.4% faster on the 8C2
     and 7.8% on the 4C, SP 2–2.6%, PolyBench adi 3–6% (gcc-claude
-    62bdc8316cf, 11506a4c3a6, e451fb3964a). lcc doesn't overlap `blts`:
+    77c41e7c909, 58dd22a6c2b, db0130bd33c). lcc doesn't overlap `blts`:
     a one-stage `loop_mode` kernel of 112 wide instructions taking 253
     cycles on v5 and v6 (85 `movad`), 129 and 239 on v3 (plain loads),
     whose operations isa-score bounds at 209 cycles by the recurrence

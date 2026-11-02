@@ -202,9 +202,9 @@ Traps met while the method was worked out:
 
 | Round | PoC | N on | Result | Found |
 |---|---|---|---|---|
-| 1 | `0.5+32` | v3 on the 4C and 8C2, split | 2,576 same, 2 DIFFERENT | P108: an unspecified argument order made GCC's output depend on its builder (`floating_to_chars.cc`, `options-save.cc`); explained by `5c8611c427a`, `884271b01d0` |
-| 2 | `0.5+32` | 8C2's record (C compiling N) | gas refused two wide instructions of `libcpp/lex.cc` | P109: a field descriptor is a literal; `bf94db7bf47` |
-| 3 | `0.5+34` | 8C2 on the 8C2 | 2,543 same, 35 `rc=4`, 0 DIFFERENT | P110: SIGILL in `cv_qualified_p`, a post-RA 64-bit read of a 32-bit result; `05f8cbc2657` |
+| 1 | `0.5+32` | v3 on the 4C and 8C2, split | 2,576 same, 2 DIFFERENT | P108: an unspecified argument order made GCC's output depend on its builder (`floating_to_chars.cc`, `options-save.cc`); explained by `dd15e4b7f25`, `0d9bb8698a8` |
+| 2 | `0.5+32` | 8C2's record (C compiling N) | gas refused two wide instructions of `libcpp/lex.cc` | P109: a field descriptor is a literal; `b86bc097186` |
+| 3 | `0.5+34` | 8C2 on the 8C2 | 2,543 same, 35 `rc=4`, 0 DIFFERENT | P110: SIGILL in `cv_qualified_p`, a post-RA 64-bit read of a 32-bit result; `1c65c84eaa6` |
 | 4 | `0.5+37` | v3 on the 4C; 8C2 on the 8C2 | 2,578 same on each | nothing: N matches C on every compile, on both machines |
 
 P108, P109 and P110 are in `docs/spec-poc-findings.md` and the PoC's

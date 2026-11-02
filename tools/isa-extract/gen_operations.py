@@ -142,6 +142,8 @@ PROBES = {
     "glibcbuild_entry.s": ("abi/glibcbuild_entry.s", "4C, 8C2, 2C3"),
     "foldi56_undef.s": ("abi/foldi56_undef.c", "4C, 8C2"),
     "folda52_tie.s": ("abi/folda52_tie.c", "4C, 8C2"),
+    "folda44_retext.s": ("abi/folda44_retext.c", "4C, 8C2"),
+    "foldp129_greg.s": ("abi/foldp129_greg.c", "4C, 8C2"),
     "foldi55.s": ("abi/foldi55.c", "8C2"),
 }
 ABI_PROBES = "tools/abi/probes"

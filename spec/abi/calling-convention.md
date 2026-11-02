@@ -305,7 +305,9 @@ for `int`). A new compiler should extend in both places: the compat
 suite's `ext` unit passes garbage above the value and fails a callee that
 trusts the caller. (compat: both compilers extend as callers.) The rule
 covers memory slots too: lcc writes a narrow argument in slot 8 and up as
-`sxt` and a full 64-bit `std`, not `stb`/`sth`/`stw`.
+`sxt` and a full 64-bit `std`, not `stb`/`sth`/`stw`. Results take the
+same rule, the other way round, and there MCST's assembly does depend on
+it ("Results").
 
 ## Stack argument area (guide 9.4; lcc, unipro)
 
@@ -422,9 +424,26 @@ covers memory slots too: lcc writes a narrow argument in slot 8 and up as
   memory, so the callee must finish reading them before it writes the
   result (libffi's closures build the result in a separate buffer and
   copy it last, `src/e2k/ffi.c`).
-- Integer results narrower than 64 bits are extended to 64 bits (guide;
-  compat: lcc and Unipro extend `_Bool`, `char`, `short` and `int`
-  results).
+- Integer results narrower than 64 bits are extended to 64 bits by the
+  callee (guide; compat: lcc and Unipro extend `_Bool`, `char`, `short`
+  and `int` results). lcc's callers extend them again, from the type's
+  own width, before using them as 64-bit values: `sxt 2` after a call
+  returning `int`, `6` for `unsigned`, `1` for `short`, `4` for
+  `unsigned char` [lcc 1.29.16 v3, v5.8c2 and v6.2c3, 1.31.05 v3; hw:
+  `tools/abi/probes/folda44_retext.c` with `folda44_retext.s`, 4C,
+  8C2]. MCST's assembly depends on it. glibc's `clone.S` (:84, :93),
+  `clone2.S` (:91, :100) and `longjmp.S` (:63, `setjmp`'s second
+  return) return their `int` with `adds 0x0, …, %r0` under `setwd wsz =
+  0x8`, whose `dbl` is 0, so `%r0`'s upper half keeps what was there:
+  for `clone`, the `fn` pointer [glibc; [registers.md](registers.md),
+  `dbl`]. A caller that trusts the callee gets that half: `(long)
+  child_pid` was 0x456500002130 for PID 0x2130 (the proof-of-concept
+  back end's finding A44). So a new compiler's callers must extend
+  narrow results again, as lcc's do, and its callees extend them too.
+  Unipro's callers extend from 32 bits only (`sxt 2` for `short`, `6`
+  for `unsigned char`), which is right for MCST's `int` returns but not
+  for a `short` or `char` result with garbage above it [unipro; hw:
+  `folda44_retext.c`].
 
 ## C++ classes that are not trivially copyable (lcc: l++ 1.29.16 `-O1`)
 

@@ -350,7 +350,9 @@ mainline libgcc this way, `docs/spec-poc-findings.md` A7, A10, A11):
   configuration without futexes or pinned memory (lcc ships LLVM's
   `libomp`, not libgomp); libquadmath needs the `__builtin_*q` builtins
   (`fabsq`, `copysignq`, `nanq`, `nansq`, `infq`, `huge_valq`) and
-  `-std=gnu17` (glibc's e2k `fenv.h` breaks under C23). gfortran and
+  either `-std=gnu17` or a fixincludes rule for glibc's e2k
+  `bits/fenv.h`, which breaks under C23 (`spec/abi/source-compat.md`,
+  "Headers"). gfortran and
   libgfortran: `REAL(16)` through libquadmath, not libm's `*f128`
   functions, whose `sqrtf128` is a placeholder (`spec/abi/registers.md`,
   "MCST glibc's FP bugs"); both pick libm when the target glibc is 2.26

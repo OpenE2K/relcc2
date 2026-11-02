@@ -668,6 +668,33 @@ same again built for the Elbrus-2C3 (v6, `run.sh v6.2c3 --ssh-port
   PLT call would use) for a function from another object and for a
   preemptible one in a shared library; for a function the executable
   defines it needs no dynamic relocation.
+- **Copy relocations for data reached only through the GOT depend on
+  uninitialized memory.** An executable (PIE or not) that refers to a
+  shared library's variable only through `R_E2K_GOT` needs no copy: the
+  GOT slot gets an `R_E2K_64_ABS` against the library's symbol. MCST ld
+  still adds an `R_E2K_64_COPY` (the slot then points at the
+  executable's copy, and every later `.bss` address moves) when the
+  symbol's hash entry has `gotoff_ref` set. Only `R_E2K*_GOTOFF*`
+  relocations set that bit, but `_bfd_e2k_elf_link_hash_newfunc` never
+  initializes it, so it holds whatever the hash table's memory held
+  [binutils `bfd/elfxx-e2k.c:1395, 2604-2640, 3690-3696, 4104`]. Both
+  outputs work, but two links of the same objects can differ. In
+  `tools/abi/probes/folda37_copyrel.sh`'s link, ld 2.41-29.023 makes the
+  copy when glibc's `MALLOC_PERTURB_` is even (ld's new memory then
+  filled with an odd byte) and not when it is odd or unset, natively on
+  the 4C and the 8C2 and as an x86 cross built from
+  `OpenE2K/binutils-gdb`, and every output runs [hw; not run on the
+  2C3]. The x86 cross ld 2.41-29.018 that lcc in `/opt/mcst` runs made
+  no copy either way. Shared libraries are not affected. lcc's and the
+  proof-of-concept back end's `libstdc++.a` reach `stdin`, `stdout`,
+  `stderr` and `__libc_single_threaded` only through the GOT, so a
+  `-static-libstdc++` link meets it: two builds of one native GCC gave
+  identical objects but different `gcov`, `gcc` and `cc1plus`, and
+  relinking `gcov` with its x86 cross ld made the copy of
+  `__libc_single_threaded` in 4 of 8 runs (the proof-of-concept back
+  end's finding A37; not rerun).
+  Compare builds by their objects, or link with an odd
+  `MALLOC_PERTURB_`.
 - **gold** has an E2K backend (`gold/e2k.cc`, enabled in
   `gold/configure.tgt`) but MCST does not ship it. Built from source and
   given lcc's link lines, it links a static program correctly but breaks

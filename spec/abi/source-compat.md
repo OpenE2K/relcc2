@@ -985,6 +985,30 @@ The e2k `bits/fenv.h` in lcc's sysroot (and in `OpenE2K/glibc`,
 `__GLIBC_USE (IEC_60559_BFP_EXT)`, while `fenv.h` declares `fegetmode`
 under `__GLIBC_USE (IEC_60559_BFP_EXT_C2X)`, as x86's copy does for
 both. So `#include <fenv.h>` fails under `-std=c23` / `gnu23` (GCC's
-default) without `_GNU_SOURCE`: "unknown type name 'femode_t'". A GCC
-port needs `-std=gnu17` or `-D_GNU_SOURCE` for its test runs and to
-build libquadmath, or a fixincludes rule.
+default) without `_GNU_SOURCE`: "unknown type name 'femode_t'". lcc
+1.29.16 fails the same way under `-std=c2x` [lcc; hw]. The header is
+byte-identical in lcc 1.29.16's v3, v5.8c2 and v6.2c3 sysroots and in
+`/usr/include` on the 4C and the 8C2, and `OpenE2K/glibc`'s copy
+differs only in its copyright line. In each, the line to change is line
+106, `#if __GLIBC_USE (IEC_60559_BFP_EXT)` before `femode_t`, which
+must read `IEC_60559_BFP_EXT_C2X` [glibc, lcc; hw]. lcc 1.31.05's
+glibc 2.41 already guards `femode_t` with `IEC_60559_BFP_EXT_C23` (line
+118) and needs nothing.
+
+A port can do without `-std=gnu17` or `-D_GNU_SOURCE` by a fixincludes
+rule for `e2k*-*-linux*` that rewrites that exact line of `bits/fenv.h`
+and skips a file that already names `IEC_60559_BFP_EXT_C2X`. GCC runs
+fixincludes over the target's headers when it is built, so the rule
+covers a cross sysroot and, for a native compiler, the machine's own
+`/usr/include`. The proof-of-concept back end's rule
+(`glibc_e2k_femode`, gcc-claude `d5d98c3c4a9`) fixes only `bits/fenv.h`
+there, and its native compilers on the 4C and the 8C2 compile
+`#include <fenv.h>` under `-std=c23` [gcc; hw]. Without a fix,
+libquadmath still builds, but without `<fenv.h>`: its `configure`
+(`AC_CHECK_HEADERS(fenv.h)`, `libquadmath/configure.ac:139`, autoconf
+2.69) finds the header present but not compilable and leaves
+`HAVE_FENV_H` undefined. The library then ignores the rounding mode,
+and `fmaq` loses its round-to-odd step (`quadmath-imp.h`'s fallbacks;
+inferred from GCC's source, not built). `config.h`'s `_GNU_SOURCE`
+doesn't help: `quadmath-imp.h` includes `<errno.h>` and `<stdlib.h>`
+before `config.h`.

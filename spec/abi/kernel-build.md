@@ -9,7 +9,12 @@ code a compiler must not emit in kernel mode, and the tools that read
 compiler output back. Every kernel-mode effect (trap entry, the TLB, the
 AAU, physical mode) is privileged and comes from the kernel sources;
 what lcc does comes from compiling probes and kernel files on the host.
-Nothing here ran on hardware.
+Nothing here ran on hardware except the proof-of-concept back end's own
+kernel, booted on the 8C2 (`tools/distro`): where a section says how a
+GCC-built kernel failed, the boot showed it, and its objects and
+compile-only probes gave the cause. That kernel's source changes are
+commits on branch `mcst-linux-6.1.y-gcc` of `OpenE2K/linux`, cited
+below as "kernel branch" and a commit.
 
 Marks as in [README.md](README.md), with: **[source]** read in the
 kernel tree (the README's **kernel**) or, for what GCC does, in GCC's
@@ -26,7 +31,8 @@ options), observed with the proof-of-concept back end
 lacks is not recorded here; the requirements below say what any port
 needs. Kernel paths: `asm/` is `arch/e2k/include/asm/`; other paths are
 under `arch/e2k/` unless they start with `include/`, `scripts/`,
-`kernel/sched/`, `kernel/trace/` or `mm/slub`, or say "top".
+`arch/l/`, `crypto/`, `drivers/`, `kernel/sched/`, `kernel/trace/` or
+`mm/slub`, or say "top".
 
 Probe: `tools/abi/probes/kernelbuild.py` (sections `options`, `gregs`,
 `gvars`, `gregapi`, `barrier`, `attrs`, `attrs2`, `open`, `modifiers`,
@@ -66,7 +72,7 @@ option in it, and nothing reports it.
 | `-march=elbrus-vN` (generic) or `-mtune=elbrus-<cpu>` (machine kernel; `-mcpu` for clang) | `:62-70, 87-142` | | |
 | `-fexclude-ctpr2 -fno-semi-spec-ld`, and `-fno-dam` if `CONFIG_MIGHT_HAVE_CPU_HWBUG_L1I_RBRANCH_CALLS` (`CPU_ISET_MIN` ≤ 6); `-fglobal-regs` and `-fsemi-spec-ld` removed | `kernel/Makefile:57-82`: `ttable.o`, `ttable_tmp.o` (trap entry and exit) | no `%ctpr2` ("needed when building the Linux kernel" [lcc-doc]); no DAM | rejected |
 | `-fno-global-regs` | `kernel/cpu/Makefile:14-16` (`iset_v3.o`, `iset_v5.o`: they save and restore `%g16`–`%g31`), `p2v/Makefile:30` (`boot_head.o`), `kvm/Makefile:47, 57-58`, `kernel/libeprof/Makefile:5` | no global temporaries | rejected |
-| `-fno-semi-spec-ld -fno-spec-ld -fno-jump-tables -ftrivial-auto-var-init=uninitialized` | `p2v/Makefile:11-13`, `kernel/Makefile:139-142` (kexec), `boot/Makefile:10-11`, `kvm/guest/Makefile:56-57`: code that runs at physical addresses | no speculative loads at all; no jump tables (but see below) | `-fno-jump-tables` and `-ftrivial-auto-var-init` accepted, the rest rejected |
+| `-fno-semi-spec-ld -fno-spec-ld -fno-jump-tables -ftrivial-auto-var-init=uninitialized` | `p2v/Makefile:11-13`, `kernel/Makefile:139-142` (kexec), `boot/Makefile:10-11`, `kvm/guest/Makefile:56-57`: code that runs at physical addresses | no speculative loads at all; no jump tables (but see "Volatile stores, jump tables, alignment"; what else GCC must not add there: "Physical mode") | `-fno-jump-tables` and `-ftrivial-auto-var-init` accepted, the rest rejected |
 | `__no_semispec` | `asm/compiler.h:212-222` on every `.uaccess_functions` function (`asm/uaccess.h:397-411`: a `noinline` wrapper around an `always_inline` body) | lcc ≥ 1.31.05: `optimize("-fno-semi-spec-ld")`, `optimize("-fno-loop-apb")`: no semi-speculative load (fully speculative ones with recovery instead) and no APB; 1.29.16 ignores both silently, hence `optimize("O1")` for older lcc: no speculative load at all. Both reach the inlined body [lcc: `tools/abi/probes/foldp103_nosemispec.py`]. clang `optnone` | **not defined**: `uaccess.h:411` fails to parse ("expected ';' before 'long'"); what a port needs is under "Speculative loads" |
 | `-pg` | top `Makefile:789` (`CONFIG_FUNCTION_TRACER`) | below, "ftrace" | passes the empty-file test, but the proof-of-concept back end then says "sorry, unimplemented" for any function |
 | `-Wframe-larger-than=6144` | `kernel/Makefile:6-8` (`CONFIG_VIRTUALIZATION`; 4096 or 8192 in the KVM code) | accepted | accepted; top `Makefile:879-883` passes `CONFIG_FRAME_WARN` (0 in `defconfig`) to every compiler but lcc |
@@ -114,7 +120,8 @@ keeps the user's values there, while `%g26`–`%g31` may change
 ([kernel-interface.md](kernel-interface.md), "Fast system calls").
 `barrier()`, `barrier_preemption()` and `barrier_data()` clobber
 `"g19", "g18", "g20"` so that per-CPU addresses are recomputed after
-them (`asm/compiler.h:114-195`).
+them (`asm/compiler.h:114-195`); GCC takes such a clobber for an
+overwrite ("Global registers named only in templates and clobbers").
 
 ### What lcc does [lcc]
 
@@ -350,7 +357,46 @@ no need for the output variables" (`gcc/doc/extend.texi:11700-11711`,
 needs these asms volatile (a kernel change) or loses per-CPU writes,
 the opening of user access, AAU clearing and every compiler barrier.
 (The v5+ per-CPU atomics were not probed; that GCC deletes them too
-follows from the same rule.)
+follows from the same rule.) Volatile is not enough where an asm names
+a global register only as a clobber or in its template (next section).
+
+### Global registers named only in templates and clobbers [lcc, gcc, source]
+
+GCC knows an asm only by its operands and clobbers: accesses to a
+register variable "may be optimized as usual", and an asm's access to
+one "must be provided to the compiler via constraints"
+(`gcc/doc/extend.texi:13272-13277`) [source]. A register the template
+writes without a clobber is unchanged for GCC, so a copy taken before
+the asm may be read from the register after it. A clobber is an
+overwrite that doesn't read, so a write to the variable just before
+the asm is dead and deleted [gcc: GCC 16.2.1 `-O2` on x86-64 and the
+proof-of-concept back end, `tools/abi/probes/folda41_gregasm.c`]. lcc
+parses an asm under the kernel's `-masm-inline` unless
+`__no_asm_inline` closes it, and then sees which global registers the
+template reads and writes; parsed or not, it never deletes a write to
+a register variable before an asm that clobbers it
+([source-compat.md](source-compat.md), "What lcc assumes an asm does")
+[lcc: the same probe, 1.29.16 and 1.31.05, v3 and v5.8c2]. Three of the
+kernel's asms rely on lcc here:
+
+| Asm | What it does | lcc (the kernel's `-masm-inline`) | GCC |
+|---|---|---|---|
+| `ASM_RESTORE_GREG_V5` for `__iset__` ≥ 5 (`asm/e2k_api.h:361-371`; the v3 form and the form for kernels built below v5 clobber `"%g" #numlo, "%g" #numhi`, `:318-341, 373-386`) | `ldrqp` into `%xg16`–`%xg31` in the template, no clobbers | parsed (no `__no_asm_inline`): sees the writes | used `%g17` in place of a local copy of `current` after the asm had loaded the user's `%g17`: the return to user trapped and retried, each retry leaving a `finish_user_trap_handler_sw_fill` frame, until "procedure stack overflow" |
+| `barrier()`, `barrier_preemption()`, `barrier_data()` (`asm/compiler.h:131-132, 152-195`) | `"g19", "g18", "g20"` as clobbers meaning "may change" | keeps the write before it | deletes the write before it once the asm is kept (`preempt \|= NEED_RESCHED; barrier ();` became nothing) |
+| `WRITE_UACCESS_REGS_CACHED` (`asm/e2k_api.h:2141-2160`; `asm/mmu_context.h:163, 212, 290, 363, 465`) | `mmurw` reads `%g21` and `%g20` in the template, listed only as clobbers | keeps `current_mmu_context = ctx` | deleted it from `handle_sys_call`: the next `copy_to_user` wrote to the MMU the empty `%g20` a system call return leaves (`diag_operand`) |
+
+So making these asms volatile ("Non-volatile asm with an unused
+output") is not enough for GCC: their clobbers then delete the writes
+to the preempt count and `current_mmu_context` before them. A GCC build
+needs each register as an operand of its register variable (`"+r"` for
+"may change", `"r"` for a read) and the v5 restore's clobbers, or a
+compiler that reads templates and treats a clobbered fixed global
+register as used. The kernel branch adds the clobbers (`dca8c245644`:
+the v5 restore and two asms that write a `%gN`); the proof-of-concept
+back end does the rest in `TARGET_MD_ASM_ADJUST`: an asm uses and
+clobbers every global register its template names, and uses every fixed
+global register among its clobbers (gcc-claude `1830fba1c76`; its
+finding A41).
 
 ### State-register reads (`*_OPEN`) [lcc, gcc, source]
 
@@ -387,6 +433,45 @@ may move one out of a loop (`gcc/doc/extend.texi:11706-11709`), and CSE
 takes two with the same template, constraints and inputs as equal
 (`gcc/cse.cc:2743-2760`). A GCC-built kernel needs these reads
 volatile.
+
+### A store before a jump [lcc, gcc, source]
+
+The decompressor's secondary CPUs wait for the boot CPU in `while
+(unpacking_in_progress) E2K_NOP(7);` (`boot/decompress.c:643-644`), on
+a plain `static int unpacking_in_progress = 1` (`:89`, in `.data` by its
+initializer: "Data written before `.bss` is cleared"). The boot CPU
+clears it with a plain store (`:735`) and jumps into the kernel through
+`jump_to_image` (`:591-605`): `E2K_JUMP_ABSOLUTE_WITH_ARGUMENTS_2`, an
+`asm volatile` that clobbers `"ctpr1"`, `"r0"` and `"r1"` but not
+memory, then `unreachable ()` (`asm/e2k_api.h:7036-7049`), which for
+GCC is an empty `asm volatile` and `__builtin_unreachable ()`
+(`include/linux/compiler-gcc.h:65-70`) [source].
+
+lcc takes every `asm volatile` for a memory barrier
+([source-compat.md](source-compat.md), "What lcc assumes an asm does"),
+so it keeps the store and loads the flag in every iteration [lcc
+1.29.16 `-O1`, `-O3`, `-O3 -fkernel`, v3, v5.8c2, v6.2c3; 1.31.05
+`-O3`, v3, v4.8c, v5.8c2, v6.2c3: `tools/abi/probes/foldp115_deadstore.c`].
+
+GCC deletes the store: nothing reads memory after it, and DSE takes a
+store to global memory as dead when its block ends in
+`__builtin_unreachable` (`gcc/tree-ssa-dse.cc:1157-1185`). With no
+store left, the whole-program visibility pass marks the variable
+read-only (`ipa_discover_variable_flags`, `gcc/ipa.cc:790-835`), and
+CCP folds every read to the initializer 1. The wait then has no load
+(`{nop 7}` and a `ct` back), and the other CPUs never leave it.
+`E2K_NOP`'s `"memory"` clobber doesn't help: to GCC the variable is no
+longer memory [gcc: the proof-of-concept back end on `decompress.c` and
+on the probe; GCC 16.2.1 on x86-64 alike].
+
+The race is in the source: C gives no meaning to a plain flag shared
+between CPUs. The other flag, `got_updating_in_progress`, uses
+`READ_ONCE`/`WRITE_ONCE` (`:776, 801`) and survives. A GCC-built
+decompressor needs the store as `WRITE_ONCE`, or a `"memory"` clobber
+on the jump asm, whose target does read memory. A volatile read alone
+keeps the load but not the store, and still spins [gcc: the probe;
+`-DJUMP_CLOBBERS_MEMORY` adds the clobber]. The kernel branch uses
+`READ_ONCE` and `WRITE_ONCE` on this flag too (`9f265f593a4`).
 
 ### `%L`, `%H` and 16-byte operands [lcc, source, gcc]
 
@@ -571,6 +656,78 @@ a zeroing loop into `memset` at `-O2` unless `-ffreestanding` or
 `-fno-tree-loop-distribute-patterns` is given, neither of which the
 kernel passes [gcc].
 
+### Physical mode [source, lcc, gcc]
+
+`p2v/` is the code that runs before the kernel turns on virtual memory:
+at the physical address the loader put the image at, with virtual
+addressing off (`asm/p2v/boot_v2p.h:38-78`). Its calls and branches are
+IP-relative and work. Data is linked at its virtual address, so p2v
+reaches it only through `boot_vp_to_pp ()`, `boot_get_vo_value ()` and
+the like, which add the image's physical base (`:165-166, 196-197`)
+[source]. An object the compiler makes itself and addresses with an
+absolute literal (`R_E2K_64_ABS_LIT`) is read at its virtual address.
+
+lcc makes none there. Built with the kernel's options
+(`config-mcst-e8c2`, lcc 1.29.16 `e2k-v5.8c2`), its 18 p2v objects read
+no object it made and call no function the source doesn't name; the
+zero `.LCO` constants it leaves in `boot_init.o`, `boot_map.o` and
+`boot_string.o` are unreferenced [lcc]. GCC adds three kinds of
+reference there [gcc: the proof-of-concept back end on the kernel and
+on `tools/abi/probes/foldp114_physmode.c`]:
+
+| What GCC adds | Where in p2v | What stops it |
+|---|---|---|
+| a `CSWTCH` lookup table in `.rodata` for an `if`-chain or `switch` that picks constants. If-to-switch runs whenever jump tables or bit tests are allowed (`gcc/gimple-if-to-switch.cc:482-486`), and switch conversion asks only for `-ftree-switch-conversion` (`gcc/tree-switch-conversion.cc:2929-2933`, the table at `:1027-1045`), so `-fno-jump-tables` doesn't cover it | `boot_get_e2k_machine_id` (`p2v/boot_e2k_sic.c:22-54`): a 48-byte table | `-fno-tree-switch-conversion` |
+| a `memset` call for a zeroing loop, which reaches the ordinary `memset`, not `boot_memset` ("Block moves") | the 512-entry loops of `boot_pud_alloc`, `boot_pmd_alloc` and `boot_pte_alloc`, inlined into `boot_get_pte` (`p2v/boot_map.c:131-133, 152-155, 174-177`); `boot_string.o` | `-ffreestanding` or `-fno-tree-loop-distribute-patterns` (`gcc/c-family/c-opts.cc:499-504, 961-965`) |
+| a 16-byte constant from the constant pool (`.rodata.cst16`) in a vectorized loop, v5 and later | the same loops once they are no longer `memset` | `-fno-tree-vectorize`. A port that builds a zero vector with `qppackdl 0x0, 0x0` instead of loading it from the pool has none for these loops |
+
+The first kernel the proof-of-concept back end built hung reading the
+table. With `-fno-tree-switch-conversion -ffreestanding
+-fno-tree-vectorize` its p2v objects read no `CSWTCH` table or pool
+constant, and name the same undefined symbols as lcc's (kernel branch
+`2801f915fb0`) [gcc]. Even under `-ffreestanding`, GCC calls `memset`
+or `memcpy` for a large struct copy or zeroing and for a large
+`__builtin_memset` ("Block moves"); p2v has none today. lcc's own hazard
+there is a different one: it still makes a jump table of absolute
+addresses from a 9-case `switch` under `-fno-jump-tables` ("Volatile
+stores, jump tables, alignment"), and its p2v objects have none.
+
+The decompressor (`boot/`) is built `-fpic` (`boot/Makefile:118-119`),
+so GCC addresses such a table `@GOTOFF` from an IP-relative GOT base,
+which works at the decompressor's load address [gcc]. There the problem
+is a call. GCC turns `strncmp (s, lit, n)`, with `n` past the literal's
+NUL, into `strcmp (s, lit)` (`gcc/gimple-fold.cc:2936-2949`).
+`parse_console_params` compares 22 bytes against the 21-character
+`"KERNEL_ARGS_STRING_EX"` (`boot/decompress.c:615`,
+`arch/l/include/asm/bootinfo.h:31-32`), while the decompressor defines
+only `strstr` and `strncmp` (`boot/string_fpic.c:20, 43`). lcc keeps the
+`strncmp`; in GCC, `-ffreestanding` (`-fno-builtin`) keeps it (kernel
+branch `260133372de`) [lcc; gcc].
+
+### Data written before `.bss` is cleared [source, lcc, gcc]
+
+Physical-mode boot code writes some zero-initialized variables before
+it clears `.bss`. `boot_startup` runs `boot_parse_param`, whose
+`dump_console=` handler sets `serial_dump_console_num`
+(`arch/l/kernel/console.c:47`, `p2v/boot_printk/console.c:64-75`), and
+`boot_setup_serial_console`, which sets it from the command line too
+(`parse_console_params`, `:94-98`); only then does `boot_init` call
+`boot_setup` and so `boot_clear_bss` (`p2v/boot_head.c:678-679, 710`,
+then `:644`, `:452`). `boot_cpucount` (`p2v/boot_head.c:49`) and the
+boot console's state are written the same way [source]. lcc puts every
+explicitly initialized object in `.data`, zero or not
+([source-compat.md](source-compat.md), "Zero-initialized data"), so they
+survive the clearing; GCC puts them in `.bss` [lcc; gcc:
+`tools/abi/probes/folda40_zerobss.c`]. The proof-of-concept back end's
+kernel printed its early messages on ttyS0 despite `dump_console=1` and
+lost the CPU count, and 558 of the kernel's symbols are `.data` in
+lcc's vmlinux and `.bss` in that back end's. MCST knew the hazard in one
+place: the decompressor initializes its two cross-CPU flags to 1 so
+that they are in `.data` "before .bss section is cleared"
+(`boot/decompress.c:84-89`). A GCC kernel build needs
+`-fno-zero-initialized-in-bss`, which gives lcc's placement (kernel
+branch `715653c1a6b`).
+
 ### Forced inlining [lcc-doc, lcc, source]
 
 `-fforce-inline` (in `-fkernel`) inlines every function declared
@@ -628,6 +785,31 @@ multiplies (`muld` and `umulhd`) and variable 128-bit shifts (shift
 pairs) itself at every level, or vmlinux is left with undefined symbols
 (the proof of concept met it: its P106). `clz`, `ctz`, `popcount`,
 `ffs`, `bswap` and `parity` are inline in both.
+
+### Wide bit-fields [source, lcc, gcc]
+
+lcc computes with a bit-field of 33–63 bits in its declared type, GCC's
+C in a type of the field's width ([source-compat.md](source-compat.md),
+"Where lcc's C differs from GCC's"; `tools/abi/probes/folda42_bitfield.c`),
+and the kernel relies on lcc's rule. `get_cr0_ip (cr0)` is `(cr0.Ip <<
+3)` with a 45-bit `u64 Ip` (`asm/cpu_regs_types.h:578-589`;
+`E2K_VA_SIZE` is 48, `asm/base_regs_types.h:21`). Built by GCC it drops
+the IP's top 3 bits, so `is_from_C1_wait_trap` (`asm/hardirq.h:19-25`)
+never matches and an idle CPU's interrupts return into `C1_wait_trap`:
+the CPU never leaves idle. `drivers/mcst/e2k-iommu.c` shifts 36-bit
+page numbers by `IO_PAGE_SHIFT` (12): `long h_page_table : 36` (`:83`,
+`:933`) and `addr : 36` (`:359`, `:1700`), which lose their top bits
+from 64 GiB up. Nine more sums or differences of a 48-bit address field
+and an index (`PSP_PTR_V6`, `PCSP_PTR_V6`, `USD_BASE_V6`, `ap.Base +
+Curptr`, `cutd.base + 32 * index`, `ctpr2.ta_base + …`, `ap_base +
+ind`, two `usd.Ptr - usd.Ind`) agree under both rules while the result
+is a valid 48-bit address, and generic `drivers/iommu/dma-iommu.c`
+shifts the 58-bit `iommu_msi_iova` (`:1744`). These are the sites a
+warning for such arithmetic found over `config-mcst-e8c2`'s vmlinux and
+modules (the proof-of-concept back end's `-Wbitfield-arith`, gcc-claude
+`5a6816627e9`; its finding A42) [source; gcc]. A GCC build must cast
+such fields before the arithmetic (`(u64) (cr0).Ip << 3`; kernel branch
+`f120941bae6`, and `08fb9a267a6` for the IOMMU).
 
 ## Erratum #123567 and `-ffix-lcc-bug123567` [lcc, source]
 
@@ -767,7 +949,7 @@ compiler of 2026-10-16, `FUNCTION_TRACER` off, stops on:
 |---|---|---|
 | `'CONFIG_CC_IS_LCC' is not defined` (`-Werror=undef`) | `asm/compiler.h:215` | `#elif CONFIG_CC_IS_LCC` (kernel) |
 | `ignoring '#pragma asm_length'` | `asm/compiler.h:62`, `asm/e2k_api.h` | lcc's pragmas |
-| `suggest parentheses around '&&' within '||'`, `cast to pointer from integer of different size` (a 61-bit bit-field, `asm/system.h:791`), `%llx` with a bit-field argument, an unused variable, `static` function used in a non-static `inline` one | many `arch/e2k` headers | warnings lcc doesn't give, with `-Werror` (kernel) |
+| `suggest parentheses around '&&' within '\|\|'`, `cast to pointer from integer of different size` (`(void *) get_cr0_ip (…)` at `asm/system.h:791`: GCC gives the 45-bit `Ip << 3` a 45-bit type, "Wide bit-fields"), `%llx` with a bit-field argument, an unused variable, `static` function used in a non-static `inline` one | many `arch/e2k` headers | warnings lcc doesn't give, with `-Werror` (kernel) |
 | `call-clobbered register used for global register variable` | `asm/cpu_features.h:58-59`, `current.h`, ... | the dropped `-ffixed-g16` … `g25` |
 | `'interrupt' attribute directive ignored` | `asm/string.h:363, 385`, `native_cpu_regs_access.h:36`, `fast_syscalls.h`, `iset_v3.c` | `__interrupt` |
 | implicit declaration of `__builtin_e2k_pshufb`, `popcnts`, `lzcnts`, `scls`, ... (an error by default since GCC 14) | `asm/string.h`, `bitops.h`, `checksum.h` | lcc builtins: 31 distinct ones in `arch/e2k`, all in [lcc-builtins.md](lcc-builtins.md) |

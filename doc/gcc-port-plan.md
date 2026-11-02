@@ -2071,12 +2071,44 @@ on the host):
 - **Erratum #123567** (`spec/isa/hwbugs.md`): 8C2 and generic kernels
   ask for `-ffix-lcc-bug123567`, a real wide instruction between a store
   and a later load that may intersect it.
+- **Physical-mode code** (`p2v/`, and the decompressor in `boot/`;
+  `spec/abi/kernel-build.md`, "Physical mode"). It runs with virtual
+  memory off and reaches data only through `boot_vp_to_pp ()`, so it
+  must get no data or calls the source doesn't name, and lcc adds none.
+  GCC adds three:
+  - a `CSWTCH` table for an `if`-chain (`-fno-jump-tables` doesn't stop
+    switch conversion);
+  - a `memset` call for a zeroing loop;
+  - in a vectorized loop, a 16-byte constant from the pool.
+
+  The first proof-of-concept kernel hung reading the table. Its kernel
+  branch (`OpenE2K/linux` `mcst-linux-6.1.y-gcc`) passes
+  `-fno-tree-switch-conversion -ffreestanding -fno-tree-vectorize` for
+  `p2v/` (`2801f915fb0`), and `-ffreestanding` for the decompressor
+  (`260133372de`), where GCC otherwise turns `strncmp` of a literal into
+  `strcmp`, which the decompressor doesn't define. Build a zero vector
+  with `qppackdl 0x0, 0x0` rather than from the pool (7.7,
+  "Auto-vectorization with 16-byte vectors", *Constants*); then zeroing
+  loops need no pool constant. Large block moves still call `memset` or
+  `memcpy` under `-ffreestanding`. This code also writes zero-initialized
+  variables before it clears `.bss`, so the kernel needs
+  `-fno-zero-initialized-in-bss`, lcc's placement
+  (`spec/abi/kernel-build.md`, "Data written before `.bss` is cleared").
 
 Not the port's to fix: GCC deletes a non-volatile asm whose outputs are
 unused and merges or hoists identical ones (its documented semantics),
 and the kernel's `barrier()`, per-CPU stores and state-register reads
 rely on lcc doing neither, so a GCC-built kernel needs those asms
-`volatile`.
+`volatile`. Volatile is not enough where an asm names a global register
+only in its template or clobbers, as `barrier()` does: GCC then deletes
+the register variable's write before it or reads a stale copy after it,
+so the kernel needs the register as an operand, unless the port reads
+templates as lcc does (`spec/abi/kernel-build.md`, "Global registers
+named only in templates and clobbers"). Nor is the decompressor's wait
+for the boot CPU, which GCC makes endless: the boot CPU's plain store to
+the flag before a jump asm without `"memory"` is dead to GCC, and the
+other CPUs spin for ever (`spec/abi/kernel-build.md`, "A store before a
+jump"; the store needs `WRITE_ONCE`).
 
 ### D12. Building MCST's glibc
 

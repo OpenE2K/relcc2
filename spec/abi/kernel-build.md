@@ -790,7 +790,7 @@ pairs) itself at every level, or vmlinux is left with undefined symbols
 
 lcc computes with a bit-field of 33–63 bits in its declared type, GCC's
 C in a type of the field's width ([source-compat.md](source-compat.md),
-"Where lcc's C differs from GCC's"; `tools/abi/probes/folda42_bitfield.c`),
+"Bit-fields wider than `int`"; `tools/abi/probes/folda42_bitfield.c`),
 and the kernel relies on lcc's rule. `get_cr0_ip (cr0)` is `(cr0.Ip <<
 3)` with a 45-bit `u64 Ip` (`asm/cpu_regs_types.h:578-589`;
 `E2K_VA_SIZE` is 48, `asm/base_regs_types.h:21`). Built by GCC it drops

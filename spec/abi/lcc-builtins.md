@@ -326,7 +326,27 @@ operations; that file, its `e2kintrin.h` (424 of lcc's names, plus one
 of its own) and `cpuid.h` are MCST's, "all rights reserved", like lcc's. lcc's own
 `e2kbuiltin.h` is that layer for lcc: about 1,000 `__builtin_ia32_*`
 definitions on E2K builtins and 8 internal helper macros
-(`E2K_16F_TO_32F` and the like), nothing an E2K program uses directly.
+(`E2K_16F_TO_32F` and the like). It includes `<e2kintrin.h>`, and lcc's
+x86 headers reach it through `ia32intrin.h` (`lcc -H`, 1.29.16 and
+1.31.05; Unipro's `e2kbuiltin.h` includes its `e2kintrin.h` too) [lcc,
+unipro].
+
+The operation builtins need no header, but MCST's own patches include
+`<e2kbuiltin.h>` all the same (OS Elbrus 9.5.5's PDK) [source]. In
+openssl, nettle, botan and gost-engine it stands only for operation
+builtins: 277 calls of 16 (`qppackdl`, `qpmgme`, `qppermb`, `qpxor`,
+`addcd_c`, `qpkuzebgn`, `addcd`, `umulhd`, …). kamailio, firefox and
+thunderbird use its x86 layer. kamailio's `membar ()` is
+`__builtin_ia32_pause ()`, which the header makes an asm `nop`: a
+compiler barrier without `wait`, so no hardware fence (without the
+header lcc warns #223 and calls an external `__builtin_ia32_pause`)
+[lcc]. firefox and thunderbird call `_xgetbv` from it, with
+`__cpuidex` from lcc's `<cpuid.h>`, in Skia's and xsimd's x86 CPU
+detection. Beyond these, MCST's patches of 21 packages add an
+`#include` of an x86 intrinsic header (openssl's `sha512.c` takes
+`__rolq` and `__rorq` from `<x86intrin.h>` under `__e2k__`, its v7 AES
+code `_mm_*` from `<wmmintrin.h>`), and those of 20 add `__e2k__` to a
+test for x86 (40 packages in all) [source].
 
 ## For a GCC port
 
@@ -352,4 +372,10 @@ definitions on E2K builtins and 8 internal helper macros
   and others: `#error` unless built with `-DNO_WARN_X86_INTRINSICS`, no
   `__SSE__` macros), written from the x86 semantics and the E2K operation
   pages, not from `e2kbuiltin.h`.
+- **No `<e2kbuiltin.h>`.** Code that includes it only for the operation
+  builtins builds once the include is dropped or limited to `__LCC__`;
+  code that uses its x86 layer, or takes an x86 path under `__e2k__`,
+  needs that branch limited to `__LCC__`, as for any compiler without
+  x86 intrinsics. Both are changes to the packages (owner, 2026-11-02:
+  GCC gets no lcc compatibility for the sake of packages).
 - `tools/abi/builtins/run.py` is the acceptance test.

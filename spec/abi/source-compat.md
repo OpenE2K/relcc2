@@ -25,6 +25,7 @@ pragmas); macros from `lcc -dM -E -xc /dev/null`.
 | `__LCC_MAS_NO` 0, `__LCC_MAS_SPEC` `0x10000000`, `__LCC_MAS_VOLATILE` `0x20000000`, `__LCC_MAS_CLEARTAG` `0x40000000`, `__LCC_CHAN_ANY` −1 | yes | yes | arguments of the `__builtin_loadmas_*`/`storemas_*` builtins; glibc (2 files) | define if those builtins are supported |
 | `__SIZEOF_LONG_DOUBLE__` 16, `__SIZEOF_FLOAT80__` 16, `__SIZEOF_FLOAT128__` 16, `__LDBL_MANT_DIG__` 64 | yes | `__SIZEOF_LONG_DOUBLE__`, `__FLOAT128__` | glibc (`bits/floatn.h`) | define (GCC does from the modes) |
 | `__LONG_DOUBLE__` 80 | yes (1.31.05 expands it to the undefined name `TARGET_LONG_DOUBLE_BITSIZE`, a bug) | no | nothing found | not needed |
+| `_LITTLE_ENDIAN` | 1 in every mode (C and C++, `-ansi`, `-std=c99` … `gnu++20`, `-mptr32`, `-mptr128`); the manual marks it deprecated (**lcc-doc** `predefined_macro.html`) | no: `__LITTLE_ENDIAN__` 1, as clang on every little-endian target | portable headers that don't know E2K: virtualgl 2.6.5's copy of boost's `endian.h` reads glibc's `__BYTE_ORDER` only when `__GLIBC__` is already defined, then these macros and a CPU list, else `#error` ("needs to be set up for your CPU type"); MCST's opencv E2K code (`3rdparty/emlx`, whose build passes `-D_LITTLE_ENDIAN` itself for GCC and clang) | the owner's call: GCC defines it on little-endian PowerPC, C6x and MicroBlaze (`gcc/config/rs6000/rs6000.h:618-619`, `c6x/c6x.h:83`, `microblaze/microblaze-c.cc:45-46`); otherwise the package tests `__BYTE_ORDER__` or `__e2k__` |
 | `__REGISTER_PREFIX__`, `__USER_LABEL_PREFIX__` | empty | `__USER_LABEL_PREFIX__` empty | | empty |
 | `__GNUC__` | 11 (`-gcc-version` selects 7, 9 or 11) | 4 | | the GCC version |
 
@@ -36,6 +37,43 @@ and, from GCC 7, `_Float128` with the `f128` suffix (`__HAVE_FLOAT128`
 = 1). `bits/mathinline.h` (lcc only) shows the inline-asm style
 below.
 
+lcc's other predefined macros are its EDG front end's (`__EDG__`,
+`__EDG_VERSION__` 604, `__EDG_SIZE_TYPE__`, `__EDG_PTRDIFF_TYPE__`; in
+C++ also `_BOOL`, `_WCHAR_T`, `__RTTI`, `__PLACEMENT_DELETE`,
+`__ARRAY_OPERATORS`, `__VARIADIC_TEMPLATES`,
+`__CHAR16_T_AND_CHAR32_T` and more `__EDG_*`), `__SIGNED_CHARS__`
+(with `-funsigned-char`, `__CHAR_UNSIGNED__` instead, as in GCC;
+**lcc-doc** `predefined_macro.html`) and the markers `LCC_BUG_148755`
+and `LCC_BUG_158436` [lcc: `-dM` of 1.29.16 against the
+proof-of-concept GCC, C and C++, `-O2`]. MCST's patches test `__EDG__`
+in seven packages (range-v3, blender and blender-tools, cmake,
+coreutils, emacs, glib), to work around lcc's front end in code that
+another compiler skips, and none of the others [source: OS Elbrus
+9.5.5's PDK]. A new compiler defines none of them.
+
+**How build systems tell lcc from GCC** [source, gcc]. CMake tests
+`__LCC__` (`Modules/Compiler/LCC-C-DetermineCompiler.cmake`, CMake
+4.3.4), and glibc's configure looks for `lcc:` in `$CC -v` ("Options
+and behaviours that change generated code" below). meson reads
+`--version`: output containing both `e2k` and `lcc` (case-sensitive)
+is lcc's, even after its "Free Software Foundation" line made it GCC
+(`mesonbuild/compilers/detect.py:353-356` for C and C++, `:751` for
+Fortran; meson 1.12.1, and OS Elbrus's 1.7.0 the same). meson then
+takes the version from `__LCC__` and `__LCC_MINOR__` (`:1553`), 1.00.0
+when they are missing, and offers only that version's standards
+(`c.py:329-346`, `cpp.py:621-641`): for 1.00.0, `c89` to `gnu99` and
+`c++98`. lcc 1.29.16's `--version`
+(`lcc:1.29.16:Jan-22-2026:e2k-8c2-linux.cross:x86_64-linux`, then
+`gcc (GCC) 11.3.0 compatible`) makes it lcc 1.29.16. The
+proof-of-concept crosses print `e2k-linux-gnu-gcc (relcc2 PoC 0.6+23
+…) 17.0.0`, `e2k` from the program name and `lcc` inside "relcc2", so
+meson takes them for lcc 1.00.0 and refuses `c_std=c11` ("None of
+values ['c11'] are supported by the C compiler"); the same compiler
+printing "RELCC2 PoC" is gcc 17.0.0 [gcc: `meson setup` with a cross
+file]. So a GCC for E2K keeps a lower-case "lcc" out of its
+pkgversion and program name. A sound test for meson would be
+`__LCC__`, which GCC must not define (above).
+
 CPUs and ISA versions, as lcc's `-mtune` and `-march` take them
 (**lcc-doc**): `elbrus-4c` v3; `elbrus-8c`, `elbrus-1c+` v4; `elbrus-8c2`
 v5; `elbrus-12c`, `elbrus-16c`, `elbrus-2c3` v6; `elbrus-48c`, `elbrus-8v7`
@@ -43,6 +81,30 @@ v7. `-march=elbrus-v3`..`v7` (v2, `elbrus-2c+`, was dropped in 1.30).
 `-mtune` overrides `-march` and marks the binary as runnable on that CPU
 only (`EF_E2K_INCOMPAT`, [elf.md](elf.md)). Run-time CPU checks are
 below.
+
+Both options also take `native` (**lcc-doc** `lcc_options.htm`, 1.29.16
+and 1.31.05; lcc lists it first among the valid arguments;
+`-mcpu=native` is an unrecognized option). A native lcc puts the
+machine in its place: `-mtune=native` is the machine's CPU (on the 4C
+the same code as `-mtune=elbrus-4c`, with `__elbrus_4c__` and
+`EF_E2K_INCOMPAT`; on the 8C2 `elbrus-8c2`), and `-march=native` the
+machine's ISA without a CPU (`elbrus-v3` on the 4C; `elbrus-v5` on the
+8C2, whose lcc is otherwise tuned for `elbrus-8c2`: no
+`__elbrus_8c2__`, `e_flags` 0x5000000). It reads no file to find out
+(no `/proc/cpuinfo` under strace on the 4C). A cross lcc puts its own
+default in its place, which then overrides like any value:
+`-march=elbrus-v6 -march=native` gives the default ISA, and since
+`-mtune` overrides `-march`, `-mtune=native` with any `-march` gives
+the compiler's default target (`e2k-v3`: v3 with no CPU; `e2k-v5.8c2`:
+`elbrus-8c2`); alone, either changes nothing [lcc:
+`tools/abi/probes/folda54_native.c`, the 1.29.16 crosses for v3,
+v3.4c, v4.8c, v5.8c2 and v6.2c3, 1.31.05's for v3, v4.8c, v5.8c2 and
+v6.2c3, native lcc on the 4C and 8C2]. Build systems pass them
+(modem-manager-gui's `Makefile_h`, mumps's CMake for GNU Fortran).
+Other GCC targets find the CPU in a native compiler's driver
+(`host_detect_local_cpu`: `config/i386/i386.h:649-688`,
+`config/aarch64/aarch64.h:1578-1588`; LoongArch reads `cpucfg`,
+`config/loongarch/loongarch-cpu.cc`) [source].
 
 ## CPU detection at run time (lcc, lcc-doc)
 

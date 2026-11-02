@@ -16,8 +16,13 @@ give the same output, as GCC's own bootstrap comparison assumes. Each
 difference is one of two things:
 
 1. the port miscompiled some part of N; or
-2. GCC's output depends on the compiler that built it, which a
-   bootstrap never sees (P108 below).
+2. GCC's output depends on the compiler that built it (P108 below). A
+   bootstrap compares the output of GCC built by the system compiler
+   (stage 2's objects) with that of GCC built by itself (stage 3's), so
+   it sees this only when the system compiler makes the unspecified
+   choice differently from the port. On the machines that compiler is
+   lcc, which evaluates a call's arguments first to last, as GCC for
+   E2K does.
 
 The evidence then holds only x86 GCC, which is taken as correct, and the
 port. lcc compiles nothing here, no emulator runs, and no GCC is built
@@ -207,9 +212,11 @@ Traps met while the method was worked out:
 | 3 | `0.5+34` | 8C2 on the 8C2 | 2,543 same, 35 `rc=4`, 0 DIFFERENT | P110: SIGILL in `cv_qualified_p`, a post-RA 64-bit read of a 32-bit result; `1c65c84eaa6` |
 | 4 | `0.5+37` | v3 on the 4C; 8C2 on the 8C2 | 2,578 same on each | nothing: N matches C on every compile, on both machines |
 
-P108, P109 and P110 are in `docs/spec-poc-findings.md` and the PoC's
-`STATUS.claude.md` ("v0.6"). None was known before. P108 can't
-show in a bootstrap, whose stages are all built by GCC.
+P108, P109 and P110 are in the PoC's `STATUS.claude.md` ("v0.6"), and
+`doc/gcc-port-plan.md` says what each asks of a port. None was known
+before. A bootstrap on the machines would not show P108: lcc builds its
+stage 1 and orders a call's arguments as GCC for E2K does, while x86
+GCC, which built C, orders them the other way.
 
 ## Files
 

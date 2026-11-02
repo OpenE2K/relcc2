@@ -692,8 +692,7 @@ register they take ALC0, 1, 3 or 4.
 
 What a compiler can rely on (MCST gas 2.41-29, checked by assembling and
 disassembling; literals, register widths, channels and braces, and
-operands also by the proof-of-concept backend,
-`docs/spec-poc-findings.md` I3):
+operands also by the proof-of-concept back end, its finding I3):
 
 - **Literals.** A bare constant, symbol or relocation operator is
   accepted as src2 without the `[ _f64,_lts0 ... ]` decoration

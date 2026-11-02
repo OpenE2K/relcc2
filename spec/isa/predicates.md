@@ -698,8 +698,9 @@ Rules a compiler must follow:
   built.
 - On v3–v5, keep an integer compare or predicate logic 2 cycles, and an
   FP compare 4 cycles, before a predicated operation or `merge` that
-  shares an instruction with a taken return. On v3, also keep an FP
-  compare 2 cycles before such a reader in the instruction right before
+  shares an instruction with a taken return. On v3 (v4 not measured),
+  also keep an FP compare 2 cycles before such a reader in the
+  instruction right before
   a taken return ([timing.md](timing.md), "Hazards"; hw:
   `tools/isa-probes/foldi57_retpred.c`, 4C, 8C2).
 - Everything else is interlocked: a predicate read too early stalls

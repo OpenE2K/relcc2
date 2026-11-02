@@ -789,7 +789,7 @@ clear, `sin (1.0)` with all flags clear
 `tools/abi/probes/libmchk.c`, 4C, 8C2, 2C3). So does MCST's
 `libquadmath.so.0` (GCC 11's, built by lcc): `sinq (1e30)` dies with
 SIGILL after `feclearexcept` (`tools/abi/probes/foldp112_quadspec.c`,
-4C; [registers.md](../abi/registers.md), "`__float128` in MCST's
+4C; not run on the 8C2 or 2C3; [registers.md](../abi/registers.md), "`__float128` in MCST's
 libgcc and libquadmath").
 
 A compiler can speculate FP as lcc does (fast, but code that clears or

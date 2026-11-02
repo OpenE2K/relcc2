@@ -99,7 +99,8 @@ differ from v6 (measured: timing.md, "Elbrus-2C3 (v6)").
   `secrets/id_ed25519`, never commit or copy it).
   4× E2S, 16 cores, 61 GiB DDR3 (two memory channels per processor
   instead of three), ALT Linux (kernel 6.1.158-alt1.9.1: MCST's older
-  6.1-1.9 tree; the 8C2 and 2C3 run 6.1-1.19 and 6.1-1.18), native lcc
+  6.1-1.9 tree; the 8C2 runs 6.1-1.19 since 2026-11-03, 6.1-1.17 in the
+  earlier runs the spec records, and the 2C3 6.1-1.18), native lcc
   1.29.16, gdb, perf. Its `lcc` is ALT's wrapper (`gcc_wrapper`), which
   runs `/opt/mcst/bin/lcc -O3 -march=elbrus-v3 -gdwarf32
   -DLCC_BUG_148755` before the user's options, so native lcc there
@@ -420,8 +421,8 @@ Facts that change how code is written or probed:
   and v5, predicate readers near a taken return: a predicated op or
   `merge` in the return's instruction needs an integer compare or
   predicate logic 2 cycles, and an FP compare 4 cycles, before it; on
-  v3 one in the instruction right before the return needs an FP compare
-  2 cycles before it.
+  v3 (v4 not measured) one in the instruction right before the return
+  needs an FP compare 2 cycles before it.
 - **Timing** (timing.md). On v3 and v5: integer 1, FP and multiply 4,
   L1 load 3 (v6: 5), `disp` → `ct` 5. Crossing between ALC0–2 and
   ALC3–5 costs +1 for integer and load results and +2 for FP ones.
@@ -439,7 +440,9 @@ Facts that change how code is written or probed:
   return issued in time is free; a taken `ibranch` costs 6. Every call
   and return empties `%ctpr1`–`3`, and a taken `ct` through an empty
   CTPR traps. Don't prepare and transfer through one CTPR in one
-  instruction: gas refuses it before v6, and v6 falls through.
+  instruction: gas refuses a `disp` with it before v6 but accepts a
+  `movtd`; v3 and v5 then transfer to the old target, and v6 falls
+  through.
 - **Results** (semantics.md) where the guide is wrong or names mislead:
   - `sxt` 4–6 zero-extend.
   - `merge` gives the first operand when the predicate is false.
@@ -563,7 +566,8 @@ Headline facts, with where the details are:
   `%g0`–`%g15` reach the interrupted code. A system call through entry
   3 returns `%g16`–`%g31` empty (0, tag 5), so the port's `"call"`
   clobber must cover them; a callee can leave a diagnostic value in any
-  of them, so a function must not read one it hasn't written (plan D7).
+  of them, so a function must not read one non-speculatively before
+  writing it (plan D7).
   A `getsp` amount must be in a window register
   or `%g16`+. `setwd dbl` affects only 32-bit integer ALU results. A
   function holding 80-bit or v5+ 128-bit values in registers needs
@@ -683,10 +687,10 @@ Owner's decisions (plan section 11, "Decisions and open questions"):
   intrinsics and no predefined x86 feature macros (2026-10-06).
 - A Fortran procedure that uses the IEEE modules runs no FP operation
   speculatively (2026-10-31; plan 7.6, "FP operations").
-- No lcc-compatibility extensions in GCC for the sake of packages: a
-  package that needs a form only lcc accepts gets the fix, or MCST's
-  patch is dropped; GCC bug fixes are not such extensions (2026-11-02;
-  plan section 11).
+- No lcc-compatibility extensions in GCC for the sake of packages
+  (decided on the proof of concept): a package that needs a form only
+  lcc accepts gets the fix, or MCST's patch is dropped; GCC bug fixes
+  are not such extensions (2026-11-02; plan section 11).
 
 A first port can print one operation per line with no braces, except
 for the groups that act within one wide instruction (predicate-logic
@@ -699,7 +703,9 @@ assigns the channels, and with its `strict_delay` padding left on (no
 `nop 4`); the hardware interlocks the rest except the cases under
 "Interlocks" above, so such code is correct, only slow (plan section
 2). Under `.ignore strict_delay`, on v3 an FP compare whose predicate
-the next instruction reads needs a `nop 1` (plan M0).
+the next instruction reads needs a `nop 1`, and a jump target that
+reads a predicate in its first instruction and returns in its second
+starts with an empty one (plan M0).
 GCC has no loop-rotation support, and only sel-sched does check-free
 control speculation (sections 7.6, 7.7).
 
@@ -754,8 +760,9 @@ and `tools/dejagnu/README.md`, "Known limits".
   the same instruction (hardware: the old one; registers.md), and runs
   a predicated `movtd` into a CTPR conditionally (gas accepts it;
   hardware traps under any predicate; predicates.md, "RLP"), and gives
-  a reader the new predicate where the hardware gives the old one after
-  an FP compare near a taken return (predicates.md, "Timing"). Run
+  the new predicate to a reader between an FP compare and a taken
+  return in three consecutive instructions, where the 4C reads the old
+  one (predicates.md, "Emulators"). Run
   atomics and hand-written prologues on hardware.
 - **Hangs (MCST's qemu).** A plain store of a register with an empty
   tagged half repeats its wide instruction for ever, as does a store
@@ -811,7 +818,8 @@ and `tools/dejagnu/README.md`, "Known limits".
   overflow, underflow or inexact, and libm's `sqrtf128` returns its
   argument: check a libquadmath against x86's build of the same source
   (`tools/quadmath`) and take Fortran's `REAL(16)` from libquadmath
-  (registers.md, "`__float128` in MCST's libgcc and libquadmath").
+  (registers.md, "MCST glibc's FP bugs" and "`__float128` in MCST's
+  libgcc and libquadmath").
 - **MCST's gdb** misreads a 16-byte float given as a bare `DW_OP_regN`;
   `next` over a call ending in `longjmp` runs to the end (registers.md,
   "How MCST's gdb reads them").

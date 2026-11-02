@@ -48,8 +48,9 @@ six it doesn't implement.
   `movaqp` from one area per iteration run at an iteration a cycle;
   after a trap outside a loop the areas keep their positions
   (apb.md, "v6").
-- Smaller changes: a compare one instruction before a taken return now
-  reaches the return's instruction; `movtd` and `ct` through one CTPR
+- Smaller changes: an integer compare or predicate logic one
+  instruction before a taken return now reaches the return's
+  instruction (FP compares not run on v6); `movtd` and `ct` through one CTPR
   in one instruction don't transfer; `stmqp` takes any address; the
   divider no longer delays ALC5 FP operations; `abg` is gone (gas
   rejects it), replaced by `abgc`/`rbgc`.

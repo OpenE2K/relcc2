@@ -19,7 +19,8 @@ changelog: "updated to 6.1-1.9 mcst source tree"), the others 6.1-1.17
 and 6.1-1.18 (`/proc/config.gz`). `OpenE2K/linux` is at 6.1-1.19-open,
 and its history holds 6.1-1.9 (commit 6a2673970ea0) and 6.1-1.17-open
 (d639a5da9813); line numbers here are 6.1-1.19's unless a commit is
-named. Where the 4C differs, the older tree is the reason ("Overflow
+named. The 8C2 has run MCST's `6.1.0-1.19-e8c2` since 2026-11-03; the
+results here are from its 6.1-1.17 unless a row says otherwise. Where the 4C differs, the older tree is the reason ("Overflow
 signals", the trampoline page, "Contexts and threads"). The probes are
 `tools/abi/probes/sysabi.c` (sections 1–10; `./sysabi maps` for the PIE
 and static builds), `sigeh.cc` with `sigeh-c.c` (exceptions and

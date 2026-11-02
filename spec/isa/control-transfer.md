@@ -490,7 +490,7 @@ call, a `switch`, an early exit and an indirect call:
   instruction) and `fsqrttd,sm ? p`. A prepare takes no predicate (CS0
   has no condition field, [bundle.md](bundle.md)), so lcc prepares
   unconditionally [lcc; the proof-of-concept back end's P67]. A prepare
-  written in a conditional arm therefore runs on both ways. lcc keeps a
+  written in a conditional arm therefore runs on both paths. lcc keeps a
   noreturn arm (`if (bad) { f (...); abort (); }`) out of predication:
   it predicates the good way and lays the arm out after it as plain
   code that prepares its calls again [lcc 1.29.16 `-O3`, v3, v5.8c2;

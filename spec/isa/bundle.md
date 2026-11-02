@@ -576,7 +576,13 @@ gas rejects these combinations within one wide instruction:
 - a load or store with a MAS together with `setwd`, `setbn`, `setbp`,
   `wait` or a `call` ("cannot encode MAS: CS1 syllable is busy with
   set-instructions", for each of them): the MAS goes in CS1, which those
-  also use [checked, v3, v5, v6]. CS1 has a MAS field for each of ALC0,
+  also use [checked, v3, v5, v6]. An `aaurw*` or `aaurr*` is such an
+  access (its MAS 0x3f always goes in CS1, "Counting the size"): beside
+  `setwd`, `setbn`, both, `wait` or a `call` an `aaurw` gets the same
+  error, while beside a lock load, a MAS store or an `aaurrd` in
+  another channel it assembles [checked:
+  `tools/abi/probes/foldp132_cs1.sh`, v3, v5, v6; found by the
+  proof-of-concept back end, P132]. CS1 has a MAS field for each of ALC0,
   2, 3 and 5 (opc 6, above), so MAS accesses don't exclude each other:
   two lock loads (`ldd,0,sm … mas=0x4` and `ldd,3,sm … mas=0x4`), or two
   locks and two checks (`ldd,0,sm … mas=0x4`, `ldd,2 … mas=0x3`,
@@ -625,6 +631,15 @@ its v3 libraries put an unpredicated default in a lower channel and a
 predicated override in a higher one (`addd,0,sm 0x0, %dr0, %dr3;
 addd,1 %dr0, 0x1, %dr3 ? %pred1`), and 165 hold two unpredicated
 writes (`getsp,0` and `ldd,2` into one register) ([predicates.md](predicates.md)).
+
+A 32-bit write under `dbl = 0` in the higher channel replaces only the
+low half: with `addd,0 0x0, %dr0, %dr1` and `adds,1 0x1, 0x0, %r1` in
+one instruction (or `addd,1` with `adds,3`, across clusters) `%dr1`
+holds `%dr0`'s upper half and 1; with the channels swapped, `%dr0`;
+under `dbl = 1` the 32-bit result, zero-extended, wins whole. lcc uses
+the first form to zero-extend an asm input
+([source-compat.md](../abi/source-compat.md), "Other constraints") [hw:
+`tools/abi/probes/folda52_tie.c` `ww_*`; 4C, 8C2; not run on the 2C3].
 
 ### Memory accesses in one wide instruction [hw]
 
@@ -676,7 +691,8 @@ register they take ALC0, 1, 3 or 4.
   clang writes `%empty.hi`, which gas rejects.
 
 What a compiler can rely on (MCST gas 2.41-29, checked by assembling and
-disassembling; the first four also by the proof-of-concept backend,
+disassembling; literals, register widths, channels and braces, and
+operands also by the proof-of-concept backend,
 `docs/spec-poc-findings.md` I3):
 
 - **Literals.** A bare constant, symbol or relocation operator is
@@ -691,6 +707,19 @@ disassembling; the first four also by the proof-of-concept backend,
 - **Channels and braces.** Without braces each operation is its own wide
   instruction; inside braces gas still assigns channels to operations
   written without `,N`. `nop N` inside braces sets the header's `nop`.
+- **Groups that act within one instruction** come out split without
+  braces. gas rejects two of the splits: a predicate-logic chain
+  ("undefined @p0 used as an incoming parameter for CLP0") and an
+  `rbranch ? %dt_alN` away from its speculative operation. It assembles
+  the rest without a message: a loop end's `alc`, `abn` or `abp` away
+  from its `ct` (a split `alc` counts down before the `ct` reads
+  `%LOOP_END`, so N iterations become N − 1 from N = 2 on); a DAM check
+  or a wait-unlock store away from its `rbranch` (`%MLOCK` holds only in
+  their instruction: [speculation.md](speculation.md),
+  [atomics.md](../abi/atomics.md)); and `rrd %ip` away from the
+  PC-relative literal added to it (16 bytes off) [checked: gas; hw:
+  `tools/isa-probes/foldp117_split.c`, 4C, 8C2; not run on the 2C3;
+  found by the proof-of-concept back end, P117].
 - **Operands.** `merged a, b, dst, ~%predN` takes a negated predicate;
   `getsp %rN, %drM` and `getsp 0, %drM` (read the stack pointer) work; a
   constant address works as `ldd 0x0, sym, %dr4` / `std 0x0, sym, %dr4`.

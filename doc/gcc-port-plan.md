@@ -211,7 +211,7 @@ executed by `ct`.
 | 32 predicate registers, each one bit; compares write them; ALU ops can be predicated through CDS syllables; control transfers take conditions | `spec/isa/bundle.md` (PLS, CDS, ctcond) | `BImode` predicate class, `define_cond_exec`, conditional branches on predicates |
 | Control transfer = prepare (`disp`/`movtd`/`return` into `%ctpr1–3`) then `ct`/`call`; prepare→`ct` latency 5 cycles (`disp`), 6 (`return`), 9 (`movtd`); also an immediate `ibranch label ? cond` with no preparation | guide 6.1, ch. 10.9–10.10; `bundle.md` CS0/SS | Simplest correct start: `ibranch` for jumps; later split prepare/transfer so the scheduler can hoist `disp` |
 | One wide instruction per cycle: 6 ALU channels, each op allowed only in some channels; ≤ 4 32-bit literal slots; 1 control transfer and 1 prepare; 3 predicate-logic ops; store/load channel restrictions | `bundle.md`, `spec/isa/binutils-ops.yaml` (`channels` per op) | DFA description (section 7) |
-| **The pipeline interlocks almost everything, but stalls are expensive**: register results, compare → predicate users, `disp`/`movtd` → `ct`, `%fpcr`/`%pfpfr` were all correct at distance 1 on the 4C; the exceptions are a `%lsr` write (read and loop count 4 cycles later) and predicate readers close to a taken return (`spec/isa/timing.md`, "Hazards"). An operand that arrives `k` cycles late costs about a whole extra latency, not `k` cycles (`spec/isa/timing.md`). gas's `strict_delay` mode (ops outside braces) pads compares and privileged state-register accesses anyway | `spec/isa/timing.md` [hw], guide 6.1, MCST gas | One op per wide instruction is correct; under `.ignore strict_delay` only with a `nop 1` on an FP compare whose predicate the next instruction reads (M0). Scheduling with exact latencies is what makes code fast; keep gas's padding (no `.ignore strict_delay`) until the scheduler places `nop`s itself (section 7.4) |
+| **The pipeline interlocks almost everything, but stalls are expensive**: register results, compare → predicate users, `disp`/`movtd` → `ct`, `%fpcr`/`%pfpfr` were all correct at distance 1 on the 4C; the exceptions are a `%lsr` write (read and loop count 4 cycles later) and predicate readers close to a taken return (`spec/isa/timing.md`, "Hazards"). An operand that arrives `k` cycles late costs about a whole extra latency, not `k` cycles (`spec/isa/timing.md`). gas's `strict_delay` mode (ops outside braces) pads compares and privileged state-register accesses anyway | `spec/isa/timing.md` [hw], guide 6.1, MCST gas | One op per wide instruction is correct, except for the groups that act within one instruction, and under `.ignore strict_delay` only with a `nop 1` on an FP compare whose predicate the next instruction reads (M0). Scheduling with exact latencies is what makes code fast; keep gas's padding (no `.ignore strict_delay`) until the scheduler places `nop`s itself (section 7.4) |
 | **gas assigns channels itself** if you omit `,N`, and treats an op outside braces as its own wide instruction (checked: `addd`, `addd`, `ldd` in one brace group were placed in channels 1, 2, 0) | tested with MCST gas | Early milestones print plain ops; channel numbers are never required |
 | `setwd dbl=1` makes 32-bit ops zero-extend into the full register; `dbl=0` leaves the upper half untouched (including a stale diagnostic tag that traps when stored) | `registers.md`, `calling-convention.md` "Unused parts of a slot" | per function like lcc: `dbl=1` where unsigned 32-bit results need zero-extending, else `dbl=0` (owner's decision, D7) |
 | Speculative mode (`,sm`): faults become a tagged result; a non-speculative use of a tagged value traps | guide 10.2, `calling-convention.md` | Control speculation needs no check instruction (section 7.6) |
@@ -550,7 +550,31 @@ produce slow code: correctness first, then the VLIW work.
 - Goal: `make all-gcc` succeeds; `e2k-linux-gnu-gcc -S` on `int f(int
   x){return x+1;}` prints something gas accepts.
 - Print **one operation per line, no braces, no channel numbers**: gas
-  makes each one a wide instruction and picks the channel.
+  makes each one a wide instruction and picks the channel. The
+  exceptions are operations that act within one wide instruction, which
+  need braces of their own even then (P117):
+  - a predicate-logic chain: `pass` into `@p0`–`@p6`, `landp`, the
+    `pass` out to `%predN` (`@p` values exist only inside the
+    instruction);
+  - a loop end: `alc`, `abn` and `abp` act on their instruction's
+    transfer. On a line of its own, `alc` counts down before the `ct`
+    reads `%LOOP_END`, and the loop runs one iteration short without a
+    message;
+  - a DAM check or a wait-unlock store with its `rbranch`: `%MLOCK`
+    holds only in that instruction, so a split `rbranch` is never taken;
+  - an `rbranch ? %dt_alN` with its speculative operation;
+  - `rrd %ip` with the PC-relative literal added to it: the literal
+    counts from its own instruction, so a split GOT base is 16 bytes
+    off.
+
+  gas rejects only the predicate-logic and `%dt_al` splits and
+  assembles the rest without a word [hw:
+  `tools/isa-probes/foldp117_split.c`, 4C, 8C2; gas;
+  `spec/isa/bundle.md`, "What a compiler can rely on"]. So whenever the
+  scheduler hasn't bundled (`-O0`, `-fno-schedule-insns2`, a first port
+  without a bundler), print each group in braces, or emit it from one
+  pattern whose template has them (an atomic read-modify-write, 3.3,
+  is best one such pattern).
 - Start every file with `.ignore ld_st_style` and `.ignore strict_delay`
   like lcc (owner's decision: follow lcc, D9). The first makes stores
   *address, offset, data* (`bundle.md`, "Assembler syntax notes"); the
@@ -567,8 +591,8 @@ produce slow code: correctness first, then the VLIW work.
   stall that long anyway), and starts with an empty wide instruction a
   jump target that reads a predicate in its first instruction and
   returns in its second, since the predecessor's compare can't be seen.
-  The rest of early braceless code just stalls (slow, not wrong) until
-  the scheduler (M4) places `nop`s.
+  With the groups above braced, the rest of early braceless code just
+  stalls (slow, not wrong) until the scheduler (M4) places `nop`s.
 
 ### M1. Straight-line code and branches, `-O0`/`-O1` (3–6 weeks)
 
@@ -1258,18 +1282,30 @@ its `disp`, and a taken one `5 − D`, still less than an `ibranch`
 the fall-through path included. Prepare **every** branch whose block has
 a CTPR free after the jump, taking the CTPRs in turn so each `disp` can
 move above the transfer before it, and add an anti dependence of at
-least 1 from a transfer to a later `disp` of the same CTPR (gas rejects
-both in one instruction before v6). In the proof-of-concept back end
+least 1 from a transfer to a later `disp` of the same CTPR: in one wide
+instruction gas rejects the pair before v6, v3 and v5 transfer to the
+CTPR's old target, and v6 falls through [hw:
+`tools/isa-probes/foldp122_dispct.c`, 4C, 8C2; control-transfer.md,
+"Restrictions" and "v6"]. In the proof-of-concept back end
 (P15) that took taken-`ibranch` cycles in CoreMark from 171 M to about
 4 M (fetch bubbles 16.3% → 3.4% of cycles; CoreMark +14.9%, Linpack
-−4.7% time on the 8C2), with no profile. One trap: a predicated op or
-`merge` in the wide instruction of a taken **return** reads a predicate
-written shortly before as it was before the compare, without a stall
-(timing.md, "Hazards"; branches and calls wait), so the bundler must
-keep 2 cycles there after an integer compare or predicate logic and 4
-after an FP compare, and on v3 2 cycles between an FP compare and a
-reader in the instruction before the return, not relying on the
-interlock.
+−4.7% time on the 8C2), with no profile. These dependences keep apart
+only insns the scheduler places. Code laid out with clocks of its own
+(a modulo scheduler's prologues and kernel, 7.7), or emitted after the
+scheduler, has none, and a jump without a clock of its own joins the
+cycle before it. So the bundler (7.4, step 1) must itself open a new
+wide instruction rather than put a transfer together with a prepare
+(`disp`, `ldisp`, `sdisp`, `movtd`, `return`) of the CTPR it reads,
+whichever of the two comes first: in the proof of concept a pipelined
+loop's second way in ended in `ct %ctpr2` in the cycle of the kernel's
+`disp %ctpr2` (harfbuzz 8.0.1 for the 8C2; P122). One trap: a
+predicated op or `merge` in the wide instruction of a taken **return**
+reads a predicate written shortly before as it was before the compare,
+without a stall (timing.md, "Hazards"; branches and calls wait), so the
+bundler must keep 2 cycles there after an integer compare or predicate
+logic and 4 after an FP compare, and on v3 2 cycles between an FP
+compare and a reader in the instruction before the return, not relying
+on the interlock.
 
 Indirect calls: `movtd %reg, %ctprN` (latency 9) then `call`. The
 `movtd` must not carry a predicate: gas accepts `movtd … ? %predN`, but
@@ -2696,6 +2732,21 @@ Written in `.md` with `define_automaton`, `define_cpu_unit`,
   bits, bundle.md), as in lcc's first instructions (M1), so they must
   not exclude one another: emit them as one insn (D2) or give each its
   own unit.
+  Count each insn's literals from what its output template prints, not
+  from the constants in its RTL (P109). A field operation (`getf*`, v5
+  `getfz*`, `insf*`) prints a descriptor, a 16-bit literal (half an
+  LTS) whatever constants its RTL holds: any descriptor with a nonzero
+  *len* is above 15, the largest free `src2` constant
+  (`spec/isa/semantics.md`, "Field extract"; bundle.md, "Literal
+  values"). Only a register descriptor takes none. The proof of concept
+  counted v5's `getfz` from its RTL, a shift and a mask both below 16,
+  as needing no literal and packed it beside two 64-bit addresses,
+  which fill all four LTS; gas refused the instruction ("literals
+  cannot be packed into a wide command"; libcpp's `lex.cc` for the 8C2:
+  `addd 0x0, sym`, `ldw,sm 0x0, sym+264` and `getfzs %r1, 8351`).
+  The other way round, a `getfd` that implements an `and` with a 64-bit
+  low mask takes one 16-bit literal, not the two LTS of its RTL
+  constant.
 - **Reservations**: one per class of operation, e.g. "simple integer op in
   any of ALC0–5", "load in ALC0, 2, 3, 5", "store in ALC2 or 5", "divide in
   ALC5", "128-bit op in a channel pair". Which channels each operation may
@@ -2882,9 +2933,10 @@ pads) don't appear in user code.
 
 **Count each wide instruction's size** (I52). At most 16 words fit
 (`spec/isa/bundle.md`, "Counting the size"), and the DFA can't hold that:
-two operations with the same literal value share an LTS, a constant 0–31
-is free as `src1` but half an LTS as `src2`, half-syllables pair into
-words, and the total rounds up to an even count. Compute the size the
+two operations with the same literal value share an LTS, a constant 0–15
+is free in either operand and one of 16–31 only as `src1` (half an LTS
+as `src2`), half-syllables pair into words, and the total rounds up to
+an even count. Compute the size the
 way gas does, from each insn's channel and literals, in the pass that
 marks the groups (step 1 above), and start a new group when an insn
 would take one past 16 words. It rarely bites: 0.02–0.13% of lcc's wide
@@ -2902,6 +2954,27 @@ compiled code (the size part of `Checker.bundle`). The proof of concept's count 
 channel assignment matched gas's for 95% of the 71,299 instructions of
 its Lua build and was 2–4 words high for the rest, mostly from counting
 every constant above 15 as a literal (its figures).
+
+**Insns the scheduler never saw** (P132). The `TImode` marks of step 1
+exist only where Haifa scheduled. It skips blocks flagged
+`BB_DISABLE_SCHEDULE` (sched-ebb.cc:634–651, sched-rgn.cc:3010–3021),
+GCC's SMS flags its prologue, epilogue and kernel unless
+`-freschedule-modulo-scheduled-loops` is given (modulo-sched.cc:1174–1209,
+1754–1757) and leaves no marks of its own, and a port's own pipeliner
+or a pass after the final schedule can leave unmarked insns too. A
+bundler that opens a group only at a mark or a call, as step 1 does,
+puts all of them into the group before it, which no DFA has checked.
+The proof of concept met this in aom 3.8.1 at `-O2` for the 8C2: its
+pipeliner split a loop's entry edge for the prologue while the previous
+loop's exit was still pending on that edge (`insert_insn_on_edge`,
+committed into the new block later). The `aaurw %r, %aabf0` that stops array prefetch (MAS
+0x3f, in CS1) landed beside `setbn`'s `setwd`, and gas said "cannot
+encode MAS: CS1 syllable is busy with set-instructions"
+(`spec/isa/bundle.md`, "Bundling restrictions"); it also read a
+register the same group zeroed and got the old value (7.3). Either give
+each unmarked insn of such a block a wide instruction of its own, as
+the proof of concept does (gcc-claude b7e5cc7eb0d), or run those insns
+through the DFA as you group them.
 
 If later passes could insert labels inside a group, wrap each group in a
 `SEQUENCE` as C6x does (`c6x_gen_bundles`, c6x.cc:4622).

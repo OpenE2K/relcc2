@@ -144,10 +144,12 @@ So:
   v6+ allows it. Different CTPRs are fine: lcc puts `call %ctpr2` and
   `disp %ctpr1, loop_head` next to each other. [hw] On v3 and v5 a
   `movtd` and a `ct` through the same CTPR in one instruction (gas
-  accepts `movtd`) transfer to the CTPR's old target; on v6 (the
-  Elbrus-2C3) the `ct` doesn't transfer at all (`bench.py` hazard
-  `movtd_ct`, distance 0). Neither is useful: prepare at least 9
-  cycles ahead.
+  accepts `movtd`) transfer to the CTPR's old target, and so does a
+  `disp` with a `ct` through its CTPR, which gas refuses there
+  (hand-encoded from gas's v6 output: `tools/isa-probes/foldp122_dispct.c`,
+  4C, 8C2); on v6 (the Elbrus-2C3) the `ct` doesn't transfer at all
+  (`bench.py` hazard `movtd_ct`, distance 0; "v6"). None of these is
+  useful: prepare ahead (5 cycles for `disp`, 9 for `movtd`).
 - `movtd` and `getpl` into a CTPR go only in ALC0
   ([bundle.md](bundle.md), "Bundling restrictions").
 - [hw] A `movtd` into a CTPR must not carry a predicate: gas accepts

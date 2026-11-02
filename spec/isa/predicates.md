@@ -711,9 +711,10 @@ Rules a compiler must follow:
   corrupted data. Combine such predicates only through `landp`'s second
   operand, or keep the operations under them `,sm` and stores off them.
 - Two enabled writes of one register in one instruction leave the
-  highest channel's value (for ALU operations and loads alike,
-  bundle.md); two writes of one predicate leave the higher compare
-  channel's, a CLP's over any compare's, and the higher CLP's.
+  highest channel's value (for ALU operations and loads alike; of a
+  32-bit write under `dbl = 0`, only the low half: bundle.md); two
+  writes of one predicate leave the higher compare channel's, a CLP's
+  over any compare's, and the higher CLP's.
 - `pass @pK, %predN` only from a CLP (`@p4`–`@p6`); never feed a
   `movep` result to a CLP.
 - A `call` under a false predicate costs what a false `ct` costs: its

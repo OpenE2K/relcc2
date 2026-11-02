@@ -68,6 +68,12 @@ a shift and an `and` (or two shifts) elsewhere:
 | 13–15 | v1–v4: BYTE, which byte holds the sign bit (below; `getfd` 13–15, `getfs` 13–14); v5+: ignored by `getf`; bits 13–15 are the low-zero count of `getfzd` and `getfzs` |
 | 16 and up | ignored |
 
+A constant descriptor with *len* ≥ 1 is at least 64, above the free
+4-bit `src2` literal (0–15), so a field operation with a constant field
+(`getf*`, `getfz*`, `insf*`) always takes a literal: half an LTS as a
+16-bit one, a whole LTS where lcc writes one with bit 15 set as 32-bit
+(below; [bundle.md](bundle.md), "Literal values") [checked: gas].
+
 `tools/isa-probes/getf.c` runs every offset, length, sign bit and BYTE
 value with five values of src1 (368,640 cases a machine) against the
 community qemu's two helpers, and the 4C follows its v1 rule, the

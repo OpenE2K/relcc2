@@ -64,8 +64,9 @@ Known differences between ours and x86 that are not bugs:
 ## Pitfalls
 
 - **Argument order.** C leaves the order of a call's arguments
-  unspecified, and x86 GCC and the PoC differ (P108 in
-  `docs/spec-poc-findings.md`): `mk (rnd () & 1, e, rnd (), rnd ())`
+  unspecified, and x86 GCC and the PoC differ (`doc/gcc-port-plan.md`,
+  D10, "Expanders must not depend on the order of a call's
+  arguments"): `mk (rnd () & 1, e, rnd (), rnd ())`
   built different inputs on the two hosts. One `rnd ()` per statement.
 - **Libcalls move.** GCC takes soft-fp's functions (`__trunctfdf2`,
   `__addtf3`, ...) for const, so it may call them after the

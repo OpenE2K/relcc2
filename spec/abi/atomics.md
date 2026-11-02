@@ -6,7 +6,7 @@ compiler: 16-byte atomics. Probe: `tools/abi/probes/atomics.c`
 (assembly only).
 
 On hardware (Elbrus 4C, by the proof-of-concept backend,
-`docs/spec-poc-findings.md` A2b): 8 threads, half running a function
+finding A2b): 8 threads, half running a function
 built by lcc and half the same function built with these sequences by
 another compiler, on shared objects: `fetch_add` on `long`, `int`,
 `short`, `char`, strong and weak CAS loops on `long` and `int`, and an
@@ -458,7 +458,7 @@ lock-free 1, because that system's libatomic is built for the 8C2
 **lcc's v5 and v6 sequences** [lcc 1.29.16 and 1.31.05 `-O3`,
 `e2k-v5.8c2` and `e2k-v6.2c3`: `tools/abi/probes/pocabi1_atom16.c`; the
 two versions differ only in scheduling around the templates; found by
-the proof-of-concept back end, `docs/spec-poc-findings.md` A29]. The
+the proof-of-concept back end, finding A29]. The
 value lives in one `qp` register: `qppackdl hi, lo` builds it (a
 constant too: `qppackdl 0x0, 0x0`), and `qpswitchd` (which swaps the
 halves) and `addd 0x0, q` take the high and low halves out. Every

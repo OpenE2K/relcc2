@@ -59,7 +59,7 @@ every prepare for v3 targets (`e2k-v3`, `e2k-v3.4c`, or
 `v5.8c2`, `v6.*`, or `-march`/`-mtune` for a later CPU); gas then
 encodes no SS for a prepare alone (default depth) and `ipd 3` in an SS
 it makes for a `ct`. With the code in the instruction cache it makes no
-measurable difference (zlib on the 8C2, the PoC; docs/spec-poc-findings
+measurable difference (zlib on the 8C2, the PoC; finding
 I25) [lcc, hw]. For code that is not in the instruction cache it does:
 given enough lead, a prepare with `ipd 3` or with no SS fetches all of a
 cold three-line (768-byte) target, lcc's v3 `ipd 2` loses 50 (4C) to
@@ -255,7 +255,7 @@ cycles); with a taken `ibranch` in the consumer's instruction the pair
 takes 8 cycles, not 12, while a prepared `ct` there adds nothing and the
 stall is paid (monitors, `stall_*`). So padding with `nop` before an
 `ibranch` back edge doesn't pay, as the proof-of-concept backend found
-(`docs/spec-poc-findings.md` I4); with a `ct` back edge it does. A compiler should prepare every likely-taken transfer
+(finding I4); with a `ct` back edge it does. A compiler should prepare every likely-taken transfer
 early (5 cycles before for `disp`, 9 for `movtd`) and keep `ibranch` for
 rarely taken branches or when no CTPR is free.
 

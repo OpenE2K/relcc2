@@ -274,7 +274,7 @@ Which operations trap on such a register when its upper half is
 diagnostic (a speculative `ldd` from a bad address leaves the whole
 register diagnostic, then a 32-bit `adds` writes the low half under
 `dbl = 0`), Elbrus 4C. The operation rows come from the
-proof-of-concept backend's probe (`docs/spec-poc-findings.md`, A1), the
+proof-of-concept backend's probe (finding A1), the
 copy rows from `tagtrap.c` variants e and f (hw; the 8C2 and 2C3 give
 the same):
 
@@ -373,7 +373,7 @@ it ("Results").
   `-O0`) read whatever the slot held, while Unipro's callees read the
   register (`pocabi1_va.cc -DGARBAGE`, its control line). Found by the
   proof-of-concept back end, whose callers counted the declared
-  parameters without the pointer (`docs/spec-poc-findings.md` A24).
+  parameters without the pointer (finding A24).
 - `va_list` is `char *`, a plain pointer to the next slot (lcc's
   `__builtin_va_list`: `__builtin_types_compatible_p (va_list, char *)` is
   1, with `void *` or `signed char *` 0); `va_start(ap, last)` sets it to
@@ -387,7 +387,7 @@ it ("Results").
   1.29.16 v3 and v6.2c3, 1.31.05 v3; Unipro 20.1.8 `-march=elbrus-v3`:
   `tools/abi/probes/pocabi1_valist.cc`, linked both ways and run under
   MCST's qemu; found by the proof-of-concept back end,
-  `docs/spec-poc-findings.md` A27].
+  finding A27].
 - `va_arg` of any type larger than 8 bytes (`__int128`, `long double`,
   `__float128`, `_Complex double`, aggregates of any size; checked with a
   24-byte struct) first rounds the pointer up to a 16-byte **address**
@@ -477,7 +477,7 @@ Trivially copyable classes follow the C rules above. The C rule applied
 to these classes breaks objects that point into themselves
 (`std::string`'s short-string buffer): the proof-of-concept backend's
 `to_string` returned a string with a null `c_str ()` until it used the
-hidden pointer (`docs/spec-poc-findings.md` A9).
+hidden pointer (finding A9).
 
 The compat suite's `cxxclass` unit checks both rules across compilers
 (lcc and Unipro, under qemu and on the 4C): classes with a user copy

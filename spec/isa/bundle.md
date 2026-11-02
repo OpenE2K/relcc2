@@ -645,7 +645,7 @@ the first form to zero-extend an asm input
 
 Memory accesses to one address in one wide instruction are **not**
 simultaneous: on the 4C (`tools/isa-probes/samewi.c`, 1,000 runs each,
-also found by the proof-of-concept backend, `docs/spec-poc-findings.md`
+also found by the proof-of-concept backend, findings
 I9 and I12) they take effect in the order ALC2 before ALC5, and a load
 before a store in the same cluster:
 

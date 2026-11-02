@@ -39,7 +39,7 @@ every call): [stack-and-unwinding.md](stack-and-unwinding.md), "Stack
 registers".
 
 Window size limits (Elbrus 4C; `tools/abi/probes/winsize.c`, and the
-proof-of-concept backend's probe, `docs/spec-poc-findings.md` A2):
+proof-of-concept backend's probe, finding A2):
 
 - A callee's `setwd wsz` must be **at least the part of the caller's
   window it inherits**, `caller wsz − wbs` pairs; otherwise `setwd` raises
@@ -330,7 +330,7 @@ of floating types) must do the same for both pairs, since `long double`
 uses `%fpcr`/`%fpsr`. Processes start with all six flags set
 (`%pfpfr` 0x1fbf, `%fpsr` 0x3f; speculation.md), so code (and tests)
 must not assume clear flags at startup. (Found by the proof-of-concept
-backend, `docs/spec-poc-findings.md` P7.)
+backend, finding P7.)
 
 **Traps** [hw: `tools/isa-probes/sregs.c` `fp`, the three machines;
 kernel `arch/e2k/kernel/traps.c:1845-1885`]. `float`, `double` and
@@ -385,7 +385,7 @@ and `dlclose` doesn't undo it; a program linked against such a library
 starts `main` with 0x9fff. GCC's ports leave `crtfastmath.o` out of
 shared objects for this reason (x86 since 2022, PR 55522;
 `doc/gcc-port-plan.md`, 3.1). The proof-of-concept back end found the
-`-shared` case (`docs/spec-poc-findings.md` A28). glibc's `fesetround`,
+`-shared` case (finding A28). glibc's `fesetround`,
 `feclearexcept`, `feholdexcept`, `feupdateenv`, `feenableexcept`,
 `fegetenv` and `fesetenv` of a saved environment keep both bits;
 `fesetenv (FE_DFL_ENV)` and `fesetenv

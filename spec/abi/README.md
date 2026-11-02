@@ -40,6 +40,11 @@ Each rule is marked with where it comes from:
 
 Where lcc and Unipro disagree, lcc is the reference: it built the system.
 
+A "finding" (A10, I12, P7: ABI, ISA, port plan) is one of the
+proof-of-concept GCC back end's reports of what this specification
+lacked or got wrong. Each was rechecked with relcc2's own probes or the
+sources and folded into the text that cites it.
+
 The compatibility suite runs mixed lcc and Unipro programs under qemu-e2k
 and on an Elbrus 4C (v3). On the 4C every pair gives the same results as
 under qemu except the tests in "Unused parts of a slot"

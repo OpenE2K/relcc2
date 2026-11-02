@@ -154,7 +154,7 @@ pulls in `dlopen`, NSS or iconv fails ("hidden symbol `__cpu_info'
 isn't defined") unless something else defines and fills it. The
 proof-of-concept backend's libgcc does that from `%idr`, matching lcc's
 values under qemu (v3, v5, v6) and on the 4C
-(`docs/spec-poc-findings.md` A10).
+(finding A10).
 
 **`__cpu_init` must work before ld.so is relocated, and twice.** ld.so's
 `_start2` calls it first, before `_dl_start` relocates ld.so (glibc
@@ -208,7 +208,7 @@ Constraints, as lcc 1.28+ defines them:
   after an asm with an `x` output before reading it with `movfi`, and
   switches such functions to `setwd nfx = 0` [lcc]. The `movx` after the
   output turned out unnecessary on the 4C and under MCST's qemu
-  (`docs/spec-poc-findings.md` A12); why lcc emits it is not known.
+  (finding A12); why lcc emits it is not known.
   glibc's `bits/mathinline.h`, the only user of `x` in the sysroot, is
   included only under `__LCC__`.
 - lcc accepts `_Pragma("asm_inline")` before an `asm` (it allows lcc to

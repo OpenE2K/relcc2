@@ -378,7 +378,7 @@ The protocol, as lcc uses it and as measured:
    records no entry, so its check always reloads and sets `%MLOCK`
    (`k_nosm*` in `spec.c`: ALC0 and ALC3, two registers, nothing in
    between; found by the proof-of-concept backend,
-   `docs/spec-poc-findings.md` I10).
+   finding I10).
 2. **Stores**: any store that overlaps the entry's bytes, even partly
    (a 4-byte store into an 8-byte entry), removes it. Stores elsewhere
    do not.

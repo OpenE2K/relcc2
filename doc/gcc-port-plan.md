@@ -311,7 +311,7 @@ rewrite: drop the `-llcc` link in `t-linux` (GCC's own
 paths (e.g. the DWARF register ranges in `_Unwind_SetGR`). What else
 building it takes (`spec/abi/stack-and-unwinding.md`,
 `spec/abi/source-compat.md`; the proof-of-concept backend built
-mainline libgcc this way, `docs/spec-poc-findings.md` A7, A10, A11):
+mainline libgcc this way, findings A7, A10, A11):
 
 - MCST also changed the generic `libgcc/unwind.inc` (`#if defined
   __e2k__`: a chain-stack cache in the unwind context, reset before phase
@@ -1903,7 +1903,7 @@ Owner's decision: emit what lcc emits.
 
 ### D10. What GCC needs that its defaults get wrong
 
-Found by the proof-of-concept backend (`docs/spec-poc-findings.md`),
+Found by the proof-of-concept backend (its findings),
 each one cost it a debugging session, except where an item says it was
 measured for the port directly:
 
@@ -3009,7 +3009,7 @@ Written in `.md` with `define_automaton`, `define_cpu_unit`,
   free alternative: two loads take ALC0 and ALC2 and the store has
   nowhere to go, while loads in ALC0 and ALC5 with the store in ALC2
   fit with three more operations. With `ndfa` the proof of concept's
-  daxpy kernel fits one wide instruction (`docs/spec-poc-findings.md`
+  daxpy kernel fits one wide instruction (finding
   P8).
 - Declare the channel units with `define_query_cpu_unit` if you want to
   read the chosen channel back (7.5); that also needs

@@ -51,7 +51,7 @@ Each thread has three stacks (guide 9.1.1):
   bug shows only for large allocations. lcc puts the amount in `%g24`,
   saving and restoring the old value around it (`adds` + `getsp %g24`;
   the 32-bit form, whose amount the kernel sign-extends). Found by the
-  proof-of-concept backend (`docs/spec-poc-findings.md` A16).
+  proof-of-concept backend (finding A16).
   The kernel grows the stack by the amount asked for, rounded up to a
   page and at least 16 KiB, and then rewrites the stack size in every
   chain frame, so the first deep recursion in the main thread costs
@@ -825,7 +825,7 @@ frames is an offset into the procedure stack (`this_psp - psp_base`,
 `e2k_frame_this_id`), not a data-stack address. A `DW_AT_frame_base` of
 `DW_OP_call_frame_cfa` (GCC's default) therefore makes every argument
 and local unreadable, while backtraces still work (proof-of-concept
-backend, `docs/spec-poc-findings.md` A13). lcc's frame base is a window
+backend, finding A13). lcc's frame base is a window
 register holding a data-stack address: at `-O0` the register just after
 the argument registers (`%r2` with two argument slots, `%r8` with eight
 or more; `%r1` with none or one), set from `getsp` plus the frame size;
@@ -1131,7 +1131,7 @@ from the `_setjmp` call (so not inside a rotating loop). On the 4C
 before the second call is intact at the label, from depths 0 to 256
 (spilled windows included). The proof-of-concept backend uses this for
 nested functions and `__builtin_setjmp`, PIC and non-PIC
-(`docs/spec-poc-findings.md` A15).
+(finding A15).
 
 **What it costs** [hw: `tools/abi/probes/ctlcost.cc`, lcc 1.29.16 `l++
 -O2`; `%clkr` cycles, pinned to one CPU, median of 7 runs; four runs

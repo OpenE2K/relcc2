@@ -416,6 +416,21 @@ C++ exceptions use MCST's E2K `libgcc_s`:
   augmentation gives the personality routine and LSDA. **CFI instructions
   are ignored**, so a compiler only needs to emit the FDE with its
   augmentation data (lcc and Unipro emit empty CFI programs).
+- The unwinder keeps no register rules. MCST's `unwind-dw2.h` leaves
+  the rows out of `_Unwind_FrameState` on E2K (`#if ! defined
+  __e2k__`), and its build sets `DWARF_FRAME_REGISTERS` to 48
+  (`gcc_objdir/tm.h`) [libgcc]. So its frames are small:
+  `_Unwind_RaiseException` takes 1,440 bytes of user stack,
+  `_Unwind_ForcedUnwind` 1,328 and `uw_init_context` 160 [lcc 1.29.16's
+  `libgcc_s.so.1` in the v3 and v5.8c2 sysroots: the first `getsp`].
+  That matters because the unwinder runs on the thread's current stack,
+  a signal handler's alternate stack included. A thread blocked in
+  `read` inside a handler on the alternate stack, and then cancelled,
+  needs an alternate stack of at least 11,392 bytes with MCST's
+  `libgcc_s`: `2 * SIGSTKSZ` is enough and `SIGSTKSZ` is not [hw:
+  `tools/abi/probes/foldp116_altcancel.c`; 4C, 8C2; not run on the
+  2C3]. A libgcc built with more rows needs more
+  ([gcc-port-plan.md](../../doc/gcc-port-plan.md), 3.3).
 - A frame without an FDE is skipped rather than ending the search, so C code
   compiled without `-fexceptions` doesn't stop exceptions.
 - On reaching a landing pad, libgcc writes the exception object and

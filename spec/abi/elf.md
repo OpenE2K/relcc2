@@ -184,8 +184,9 @@ although the kernel keeps the main stack non-executable (kernel
 programs get non-executable stacks without one, and ld prints no
 "missing .note.GNU-stack" warning for its objects. The tools were
 checked by compiling and linking (`tools/abi/probes/execstack.sh`), the
-run-time behaviour from the sources and the machines' own files. No code
-was run on a stack.
+run-time behaviour from the sources and the machines' own files. Code on
+the stack (trampolines) ran in `RWE` programs and faulted in the others
+(below) [hw: `tools/abi/probes/foldp123_tramp.c`, 4C, 8C2].
 
 | Tool | No note in any input | `""` note | `"x"` note | Source |
 |---|---|---|---|---|
@@ -237,10 +238,15 @@ What the segment does at run time (kernel, glibc):
   doesn't touch the personality, `arch/e2k/include/asm/elf.h:248-280`).
 - The page tables enforce it. Every protection without `VM_EXEC` maps to
   a PTE with `UNI_PAGE_NON_EX`, or to an invalid one for no access
-  (`arch/e2k/mm/init.c:63-80`, `include/asm/pgtable_def.h:527-554`). An
-  instruction-page fault in a mapping without `VM_EXEC` is `SIGSEGV` with
-  `SEGV_ACCERR`, "page is not executable" (`arch/e2k/mm/fault.c:3224-3226,
-  3615-3617, 3694-3697`). Not run.
+  (`arch/e2k/mm/init.c:63-80`, `include/asm/pgtable_def.h:527-554`). A
+  jump to a trampoline on a non-executable stack (no `PT_GNU_STACK`, or
+  `RW`) is `SIGSEGV` with `SEGV_MAPERR` and `si_addr` the entry [hw:
+  `foldp123_tramp.c`, 4C, 8C2], not the `SEGV_ACCERR`, "page is not
+  executable", of `access_error` (`arch/e2k/mm/fault.c:3224-3226,
+  3615-3617, 3694-3697`). With `CONFIG_MAKE_ALL_PAGES_VALID`
+  (`arch/e2k/Kconfig:848-850`, default y), such a fetch presumably ends
+  at "instruction page protection for valid address" (`fault.c:3850,
+  3858-3862`; inferred).
 - glibc: `DEFAULT_STACK_PERMS` is `PF_R | PF_W`
   (`sysdeps/e2k/stackinfo.h:31-32`). It is the starting value of
   `_dl_stack_flags` in ld.so and in static programs (`elf/rtld.c:344`,
@@ -284,10 +290,12 @@ sources with the note) was not established.
 | | `/usr/lib64` | 776 | 748 | 28 | 0 |
 | | `/usr/libexec` | 37 | 34 | 3 | 0 |
 
-For a compiler: write the note in every object, `""` normally and `"x"`
-only where a trampoline is built on the stack, as GCC's
-`file_end_indicate_exec_stack` does (`gcc/varasm.cc:8189-8199`). MCST
-gas accepts GCC's spelling, `.section .note.GNU-stack,"",@progbits`.
+For a compiler: lcc writes no note, and an object without one needs no
+executable stack, so writing only an `"x"` note, in an object that
+builds a trampoline on the stack, leaves every other object as lcc's
+are. GCC's `file_end_indicate_exec_stack` also writes `""` into the
+others (`gcc/varasm.cc:8189-8199`), which links the same. MCST gas
+accepts GCC's spelling, `.section .note.GNU-stack,"",@progbits`.
 Mixing these objects with lcc's is harmless and draws no linker warning,
 because no note means non-executable. A single `"x"` object makes the
 program's main stack and every thread stack executable, with the linker

@@ -253,7 +253,7 @@ read with `git show`:
 | `e2k-modes.def` | Extra modes if needed (e.g. condition modes) | `loongarch-modes.def` |
 | `e2k.opt` | `-m` options (`-march=elbrus-vN`, `-mtune=`, ...) | `or1k.opt` |
 | `elbrus-v3.md` … | Pipeline (DFA) descriptions per CPU generation (section 7) | `ia64/itanium2.md`, `c6x/c6x.md` |
-| `linux.h` | `GLIBC_DYNAMIC_LINKER "/lib64/ld-linux.so.2"`, link spec, OS macros; `CPP_SPEC "%{pthread:-D_REENTRANT}"` (lcc's `-pthread` defines it, and autoconf's `AX_PTHREAD` rejects `-pthread` without it; `riscv/linux.h:40`, `aarch64/aarch64-linux.h:39`; the PoC's P39); `TARGET_ASM_FILE_END file_end_indicate_exec_stack` (as `or1k/linux.h:47` and `loongarch/linux.h:58`): the GNU-stack note, `"x"` only in objects with a stack trampoline (`spec/abi/elf.md`, "Executable stack"; D1, "Trampolines"); `ENDFILE_SPEC` = a math-file spec followed by `GNU_USER_TARGET_ENDFILE_SPEC`, as `loongarch/gnu-user.h:59-61, 69-72`, with libgcc's `extra_parts="$extra_parts crtfastmath.o"` (`libgcc/config.host:993-994`) and MCST's `crtfastmath.c` (3.3), which sets fz and daz. GCC's ports write `%{Ofast\|ffast-math\|funsafe-math-optimizations:%{!shared:crtfastmath.o%s}}`; lcc links it into shared libraries too, and loading such a library switches the loading thread and its later threads to flush-to-zero (`spec/abi/registers.md`, "Flush to zero"; A28). GCC removed exactly that on x86 (PR 55522, `88b531d0323`; invoke.texi:18862-18864); doing what lcc does (decision 7) means dropping `%{!shared:...}`: a decision for you | `or1k/linux.h` |
+| `linux.h` | `GLIBC_DYNAMIC_LINKER "/lib64/ld-linux.so.2"`, link spec, OS macros; `CPP_SPEC "%{pthread:-D_REENTRANT}"` (lcc's `-pthread` defines it, and autoconf's `AX_PTHREAD` rejects `-pthread` without it; `riscv/linux.h:40`, `aarch64/aarch64-linux.h:39`; the PoC's P39); `TARGET_ASM_FILE_END` for the GNU-stack note: lcc writes none, and on E2K none means a non-executable stack, so call `file_end_indicate_exec_stack` only when `trampolines_created` (an `"x"` note); other ports define the hook as that function (`or1k/linux.h:47`, `loongarch/linux.h:58`), which writes `""` into every other object (`spec/abi/elf.md`, "Executable stack"; D1, "Trampolines"); `ENDFILE_SPEC` = a math-file spec followed by `GNU_USER_TARGET_ENDFILE_SPEC`, as `loongarch/gnu-user.h:59-61, 69-72`, with libgcc's `extra_parts="$extra_parts crtfastmath.o"` (`libgcc/config.host:993-994`) and MCST's `crtfastmath.c` (3.3), which sets fz and daz. GCC's ports write `%{Ofast\|ffast-math\|funsafe-math-optimizations:%{!shared:crtfastmath.o%s}}`; lcc links it into shared libraries too, and loading such a library switches the loading thread and its later threads to flush-to-zero (`spec/abi/registers.md`, "Flush to zero"; A28). GCC removed exactly that on x86 (PR 55522, `88b531d0323`; invoke.texi:18862-18864); doing what lcc does (decision 7) means dropping `%{!shared:...}`: a decision for you | `or1k/linux.h` |
 | `t-e2k` | Makefile fragment (multilibs, generated `.md`) | `or1k/t-or1k`, `c6x/t-c6x` |
 | `gcc/common/config/e2k/e2k-common.cc` | Option defaults per `-O` level (e.g. enable scheduling at `-O1`) | `common/config/tilegx/`, `common/config/c6x/` |
 
@@ -318,6 +318,31 @@ mainline libgcc this way, `docs/spec-poc-findings.md` A7, A10, A11):
   2). Carry those hunks, not only the `config/e2k/` files.
 - The unwinder returns to landing pads normally after `set_backtrace`;
   `__builtin_eh_return` is never used, so no `eh_return` pattern.
+- Define `DWARF_FRAME_REGISTERS` as 48, as MCST's libgcc build does
+  (`gcc_objdir/tm.h:58, 133, 192` in the runtime tarball). MCST's
+  unwinder reads only the CIE's and FDE's augmentation, never a
+  register rule, but mainline libgcc's `_Unwind_FrameState`
+  (`unwind-dw2.h`) holds a row for each of
+  `__LIBGCC_DWARF_FRAME_REGISTERS__` + 1 registers, by default
+  `FIRST_PSEUDO_REGISTER` (`defaults.h:408-409`,
+  `c-cppbuiltin.cc:1627-1628`). The unwinder runs on whatever stack the
+  thread is on, a signal handler's alternate stack included: a thread
+  cancelled while blocked in a system call unwinds from SIGCANCEL's
+  handler. With the proof of concept's 261 hard registers each frame
+  state took 2.4 KB, and glibc's `tst-cancel21` (in a glibc it built)
+  died of SIGSEGV on its `2 * SIGSTKSZ` alternate stack (P116; 48 rows
+  from gcc-claude `d675534bef0`). The smallest alternate stack that
+  case survives is 11,392 bytes with MCST's `libgcc_s`, 12,416 with 48
+  rows and 16,256 with 261 [hw: `tools/abi/probes/foldp116_altcancel.c`;
+  4C, 8C2; not run on the 2C3]. MCST's own `unwind-dw2.h` leaves the
+  rows out on E2K (`#if ! defined __e2k__`, lines 34-52); carrying that
+  hunk, like the `unwind.inc` ones, would save the last kilobyte.
+  `DWARF_FRAME_RETURN_COLUMN` defaults to `DWARF_FRAME_REGISTERS` when
+  there is no `PC_REGNUM` (`defaults.h:425-431`), so define it too: 0,
+  the column lcc's CIEs give. Also define `INCOMING_RETURN_ADDR_RTX`
+  (any register; nothing reads the rule): it is what makes
+  `DWARF2_UNWIND_INFO` 1 (`defaults.h:355-358`), and without it
+  exceptions default to SJLJ (`common/common-targhooks.cc:31-46`).
 - CPU detection: the unwinder picks the procedure-stack layout (v1–v4
   or v5+) with `__builtin_cpu_is`, which lcc backs with `__cpu_info` from
   proprietary `liblcc`. Define and fill `__cpu_info` in libgcc instead
@@ -344,33 +369,53 @@ mainline libgcc this way, `docs/spec-poc-findings.md` A7, A10, A11):
   libgcc_s for thread exit and cancellation and asserts the symbol
   exists (`sysdeps/e2k/unwind-arch.h`), so without it every thread that
   exits through glibc's unwinder aborts.
-- Runtime libraries: libatomic builds unchanged; libgomp needs an
-  `e2k*-*-linux*` entry (`config_path="linux posix"`) in
-  `libgomp/configure.tgt`, else it falls back to the POSIX
-  configuration without futexes or pinned memory (lcc ships LLVM's
-  `libomp`, not libgomp); libquadmath needs the `__builtin_*q` builtins
-  (`fabsq`, `copysignq`, `nanq`, `nansq`, `infq`, `huge_valq`) and
-  either `-std=gnu17` or a fixincludes rule for glibc's e2k
-  `bits/fenv.h`, which breaks under C23 (`spec/abi/source-compat.md`,
-  "Headers"). gfortran and
-  libgfortran: `REAL(16)` through libquadmath, not libm's `*f128`
-  functions, whose `sqrtf128` is a placeholder (`spec/abi/registers.md`,
-  "MCST glibc's FP bugs"); both pick libm when the target glibc is 2.26
-  or later (`gcc/fortran/trans-types.cc:1010-1018`,
-  `libgfortran/configure.ac:684-700`). libgo:
-  `-fsplit-stack` needs nothing. GCC's default `supports_split_stack`
-  hook already rejects it (`gcc/common/common-target.def:65-74`,
-  `gcc/opts.cc:1282-1291`), lcc rejects it too, and libgo's configure
-  then builds without split stacks (`libgo/configure.ac:454-499`). E2K
-  cannot support split stacks (`spec/abi/stack-and-unwinding.md`, "No
-  split stacks"). libgo's fallback starts goroutines with `makecontext`
-  (`libgo/runtime/runtime.h:494-500`), which E2K's glibc lacks: it needs
-  `makecontext_e2k` and `freecontext_e2k`, each goroutine gets its own
-  kernel hardware stacks, and every switch is a system call
-  (`spec/abi/kernel-interface.md`, "User contexts"). Goroutines move
-  between threads; the kernel's rules for that (keep the threads that
-  run goroutines alive, reach TLS only through functions that read it)
-  are in the same file, "Contexts and threads".
+- Runtime libraries:
+  - libatomic builds unchanged.
+  - libgomp needs an `e2k*-*-linux*` entry (`config_path="linux
+    posix"`) in `libgomp/configure.tgt`, else it falls back to the POSIX
+    configuration without futexes or pinned memory (lcc ships LLVM's
+    `libomp`, not libgomp).
+  - libquadmath needs the `__builtin_*q` builtins (`fabsq`, `copysignq`,
+    `nanq`, `nansq`, `infq`, `huge_valq`) and either `-std=gnu17` or a
+    fixincludes rule for glibc's e2k `bits/fenv.h`, which breaks under
+    C23 (`spec/abi/source-compat.md`, "Headers"). If the port
+    speculates FP by default, as lcc does (7.6, "FP operations"), build
+    libquadmath without FP speculation (the port's `-fno-spec-fp`; the
+    proof of concept adds an `e2k*-linux*` case to the `XCFLAGS` of
+    `libquadmath/configure.ac`, beside powerpc64le's, gcc-claude
+    `dfe7708392e`). Programs clear the flags before calling it, to see
+    what it raised, and its `__quadmath_rem_pio2q`, behind `sinq`,
+    `cosq`, `tanq` and the Bessel and complex functions, is
+    double-precision loops whose speculative operations then give
+    diagnostic values and SIGILL (built by the proof of concept at
+    `-O2`, 62 of its 255 FP operations are `,sm`). MCST's lcc-built
+    `libquadmath.so.0` dies so: `sinq (1e30)` after `feclearexcept` is
+    SIGILL [hw: 4C; `tools/abi/probes/foldp112_quadspec.c`]. Nothing is
+    needed if the port speculates FP only under `-fno-trapping-math`,
+    which neither libquadmath's nor libgfortran's build passes.
+  - gfortran and libgfortran: `REAL(16)` through libquadmath, not
+    libm's `*f128` functions, whose `sqrtf128` is a placeholder
+    (`spec/abi/registers.md`, "MCST glibc's FP bugs"); both pick libm
+    when the target glibc is 2.26 or later
+    (`gcc/fortran/trans-types.cc:1010-1018`,
+    `libgfortran/configure.ac:681-697`). Build libgfortran without FP
+    speculation too, as libquadmath: every procedure that uses the IEEE
+    modules clears the flags on entry (`ieee_procedure_entry`,
+    `libgfortran/ieee/ieee_helper.c:177-185`; 7.6, "FP operations").
+  - libgo: `-fsplit-stack` needs nothing. GCC's default
+    `supports_split_stack` hook already rejects it
+    (`gcc/common/common-target.def:65-74`, `gcc/opts.cc:1282-1291`), lcc
+    rejects it too, and libgo's configure then builds without split
+    stacks (`libgo/configure.ac:454-499`). E2K cannot support split
+    stacks (`spec/abi/stack-and-unwinding.md`, "No split stacks").
+    libgo's fallback starts goroutines with `makecontext`
+    (`libgo/runtime/runtime.h:494-500`), which E2K's glibc lacks: it
+    needs `makecontext_e2k` and `freecontext_e2k`, each goroutine gets
+    its own kernel hardware stacks, and every switch is a system call
+    (`spec/abi/kernel-interface.md`, "User contexts"). Goroutines move
+    between threads; the kernel's rules for that (keep the threads that
+    run goroutines alive, reach TLS only through functions that read
+    it) are in the same file, "Contexts and threads".
 - DWARF, for MCST's gdb (`spec/abi/registers.md`, "How MCST's gdb
   reads them"; `spec/abi/stack-and-unwinding.md`, "Debug information"):
   - gdb ignores CFI (it has no CFI unwinder) and misreads
@@ -921,12 +966,17 @@ two wide instructions, 40 bytes. The `__ptr32__` form uses `getpl` and
 gas assembles this text, with zero literals or with real ones, to
 exactly libffi's words on v3, v5 and v6
 (`tools/abi/probes/execstack/tramp-text.s`; `execstack.sh` compares the
-bytes). So `TARGET_ASM_TRAMPOLINE_TEMPLATE` can print it. The chain
-literal is bytes 16–23 and the function's is bytes 24–31, each with its
-high half first (`spec/abi/elf.md`, "Literal fields").
-`TARGET_TRAMPOLINE_INIT` therefore copies the template and stores each
-value rotated by 32 bits as one doubleword, which gives libffi's two
-words. It must then flush the 40 bytes itself, as
+bytes). So `TARGET_ASM_TRAMPOLINE_TEMPLATE` can print it, but
+`TARGET_TRAMPOLINE_INIT` needs no template. The chain literal is bytes
+16–23 and the function's is bytes 24–31, each with its high half first
+(`spec/abi/elf.md`, "Literal fields"). Like libffi, which stores its
+ten words as constants (`ffi.c:316-325`), the hook can store the five
+doublewords `0x61c0dcd10c000032`, `0x11c0deec`, the chain and the
+function each rotated by 32 bits, and `0x8000042000001001` (gas's words
+for the text above). That is five stores with literals instead of a
+template's five loads and five stores, and no template in the object:
+only a hook that calls `assemble_trampoline_template` uses one
+(varasm.cc:3021-3047). It must then flush the 40 bytes itself, as
 `loongarch_trampoline_init` does (`loongarch.cc:8525-8582`).
 
 MCST's libgcc builds `__clear_cache` from GCC's `libgcc2.c`, with
@@ -941,17 +991,19 @@ The port needs the same `CLEAR_INSN_CACHE` definition or a `clear_cache`
 pattern, because without either GCC expands `__builtin___clear_cache` to
 nothing (`builtins.cc:6056-6083`).
 
-- `TRAMPOLINE_SIZE` 40 and `TRAMPOLINE_ALIGNMENT` 64 bits, the
-  alignment of a wide instruction. libffi reserves 56 bytes
-  (`ffitarget.h:54`).
+- `TRAMPOLINE_SIZE` 40 (104 with the `CODE_PLACEMENT` slack below) and
+  `TRAMPOLINE_ALIGNMENT` 64 bits, the alignment of a wide instruction.
+  libffi reserves 56 bytes (`ffitarget.h:54`).
 - The `movtd` and the `ct` must be in separate instructions. In one
   instruction, v3 and v5 jump to the CTPR's old target and v6 doesn't
   jump at all, yet gas accepts the pair on every version. It rejects
   only `disp` + `ct` through one CTPR before v6
   (`spec/isa/control-transfer.md`, "Restrictions"). With the `ct` one
   instruction after the `movtd`, the pair costs max(1, 9) + 1 = 10
-  cycles instead of 2, so each call through a trampoline loses 8 cycles
-  (control-transfer.md's rule; not measured for a trampoline).
+  cycles (control-transfer.md's rule), and a call through the
+  trampoline takes 10.0 cycles more than the same indirect call made
+  directly [hw: `tools/abi/probes/foldp123_tramp.c`; 4C and 8C2, v3 and
+  8C2 code, lcc and the proof of concept alike; not run on the 2C3].
 - The trampoline writes only `%ctpr1` and `%g12`, both call-clobbered,
   and touches no window register. Like a PLT entry (`spec/abi/elf.md`),
   it runs in the callee's new window and passes the arguments through
@@ -961,25 +1013,38 @@ nothing (`builtins.cc:6056-6083`).
   trampoline or a libffi closure between this trampoline's `addd` and
   the nested function's first read of `%g12`: the nested function then
   gets the wrong chain. libffi has the same window.
-- A trampoline on the stack needs an executable stack. With
-  `TARGET_ASM_FILE_END file_end_indicate_exec_stack` (`linux.h`, 3.1),
-  every object that builds one gets an `"x"` note
-  (`trampolines_created`, `builtins.cc:6183-6185`), and ld marks the
-  program `RWE` with a warning (`spec/abi/elf.md`, "Executable stack").
-  Without such a note, or with `-z noexecstack`, the stack is not
-  executable and the call is `SIGSEGV` (kernel
-  `arch/e2k/mm/fault.c:3224-3226`; inferred, not run).
-- (inferred) `CODE_PLACEMENT` (`spec/isa/hwbugs.md`): a trampoline's
-  entry is a call target written at run time, out of reach of gas's NOP
-  padding. On the CPUs the erratum lists, it can therefore land at a bad
-  page offset: 0xdc0–0xdff, and the kernel's BPF JIT also avoids
+- A trampoline on the stack needs an executable stack. Every object
+  that builds one needs an `"x"` note (`trampolines_created`,
+  `builtins.cc:6183-6185`), and ld then marks the program `RWE` with a
+  warning (`spec/abi/elf.md`, "Executable stack"). Without such a note,
+  or with `-z noexecstack`, the stack is not executable and the call is
+  `SIGSEGV` with `SEGV_MAPERR`, `si_addr` the entry [hw:
+  `foldp123_tramp.c`, 4C, 8C2]. lcc writes no note at all
+  (`spec/abi/elf.md`), so doing what lcc does (decision 7) means a
+  `TARGET_ASM_FILE_END` that calls `file_end_indicate_exec_stack` only
+  when `trampolines_created`, writing an `"x"` note (`linux.h`, 3.1).
+  Pointing the hook at `file_end_indicate_exec_stack` itself, as other
+  Linux ports do, also writes `""` into every other object
+  (varasm.cc:8191-8198); both link the same. Trampolines built this way
+  work on the 4C and the 8C2, statically and dynamically, recursively
+  (each activation reaches its own frame) and from every 16-byte stack
+  position of a page [hw: `foldp123_tramp.c`, the proof of concept's
+  trampolines, gcc-claude `6d0a5ba760f`].
+- `CODE_PLACEMENT` (`spec/isa/hwbugs.md`): a trampoline's entry is a
+  call target written at run time, out of reach of gas's NOP padding.
+  On the CPUs the erratum lists, it can therefore land at a bad page
+  offset: 0xdc0–0xdff, and the kernel's BPF JIT also avoids
   0xee0–0xfff. The listed CPUs are the v3–v6 models E2S, E8C, E1C+,
   E8C2, E12C, E16C and the E2C3 up to rev 1, which covers all three of
-  our machines. A safe port reserves some slack in the frame and lets
-  `TARGET_TRAMPOLINE_ADJUST_ADDRESS` and `TARGET_TRAMPOLINE_INIT` both
-  move the entry off those offsets; a heap allocator skips those slots.
-  MCST's libffi doesn't bother (`ffi.c:276, 316-325`), and no failure
-  has been seen.
+  our machines. A safe port reserves 64 bytes of slack
+  (`TRAMPOLINE_SIZE` 104) and has `TARGET_TRAMPOLINE_ADJUST_ADDRESS` and
+  `TARGET_TRAMPOLINE_INIT` compute the same entry without a branch:
+  with `o = a & 0xfff`, add `0xe00 - o` when `o - 0xdc0` < 64 unsigned
+  (the proof of concept; CSE shares the two). A heap allocator skips
+  those slots. MCST's libffi doesn't bother (`ffi.c:276, 316-325`), and
+  entries left at 0xdc0–0xdff ran 400,000 calls right on the 4C and the
+  8C2 [hw: `foldp123_tramp.c` `noadjust`], so this is a precaution like
+  gas's padding, not a demonstrated need.
 - **Heap trampolines** (`-ftrampoline-impl=heap`, GCC 14) need no
   executable stack. The compiler side is generic: the function calls
   `__gcc_nested_func_ptr_created (chain, func, &slot)` on entry and
@@ -4894,7 +4959,9 @@ and Blackfin (`bfin_gen_bundles`, bfin.cc:3989).
    (`spec/abi/registers.md`, "MCST glibc's FP bugs"):
    - A test that clears the FP flags and then calls libm can die with
      SIGILL inside it. `gcc.dg/torture/pr68264.c` dies in `acos`, also
-     when lcc builds it [hw: 8C2].
+     when lcc builds it [hw: 8C2]. MCST's libquadmath likewise: `sinq
+     (1e30)` after `feclearexcept` dies with SIGILL [hw: 4C;
+     `tools/abi/probes/foldp112_quadspec.c`].
    - A test that calls `fmod` or `remainder` in `FE_DOWNWARD` can hang
      (mainline's `gcc/testsuite` has none).
    - A test that checks the flags libm raises for domain errors fails

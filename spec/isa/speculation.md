@@ -786,7 +786,11 @@ glibc the same way, so its libm returns diagnostic values or dies after
 `sqrt (2.0)` with `FE_INEXACT` clear, `sqrt (-1.0)` with `FE_INVALID`
 clear, `sin (1.0)` with all flags clear
 ([registers.md](../abi/registers.md), "MCST glibc's FP bugs";
-`tools/abi/probes/libmchk.c`, 4C, 8C2, 2C3).
+`tools/abi/probes/libmchk.c`, 4C, 8C2, 2C3). So does MCST's
+`libquadmath.so.0` (GCC 11's, built by lcc): `sinq (1e30)` dies with
+SIGILL after `feclearexcept` (`tools/abi/probes/foldp112_quadspec.c`,
+4C; [registers.md](../abi/registers.md), "`__float128` in MCST's
+libgcc and libquadmath").
 
 A compiler can speculate FP as lcc does (fast, but code that clears or
 unmasks FP exceptions breaks) or keep FP operations non-speculative

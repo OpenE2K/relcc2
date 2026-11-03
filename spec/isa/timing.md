@@ -92,6 +92,7 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | packed integer → integer op | 4 + 2 | 4 | — |
 | packed integer → FP add | 4 | 1 | — |
 | FP add → packed integer (`pxord`); packed integer → FP add in the other cluster (`bench.py` `faddd_to_pxord`, `faddd_to_pxord_x`, `pxord_to_faddd_x`; 4C, 8C2) | — | 4 (6 to the other cluster); 4. So a `pxord` between two FP operations in one cluster takes them 5 cycles apart, an `xord` 7 (6 + 1); with a cluster crossing either takes at least 7 | — |
+| packed integer (`paddh`) → `andd`; `andd` → packed integer, in its cluster and the other; `paddh` → `pandd` → `paddh` (`bench.py` `paddh_to_andd`, `andd_to_paddh`, `andd_to_paddh_x`, `paddh_to_pandd`, `pandd_to_paddh`; 4C) | — | 4; 1 (2 to the other cluster); 1 and 1. So a logic operation between two packed ones in one cluster takes them 2 cycles apart as `pandd`, 5 as `andd` | — |
 | conversions (`fdtoid`, `idtofd`, `fstofd`, `fdtofs`, `fstoid`, `fstoidtr`, `fdtoidtr`, `fdtoistr`, `istofd`, `istofs`, `idtofs`) → an op reading the result in its format | — | 4 (5 or 6 in another format, see Formats) | — |
 | `fdtoid` → integer op | — | 6 | — |
 | integer op → `idtofd` | — | 1 | — |

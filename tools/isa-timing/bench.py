@@ -270,6 +270,19 @@ SCHED = {
                                ("faddd,0 %dr2, %dr5, %dr2", 12)], 6),
     "pxord_to_addd": ("%dr4", [("pxord,0 %dr2, %dr5, %dr2", None),
                                ("addd,0 %dr2, %dr5, %dr2", 12)], 6),
+    # Vector logic between packed operations: an integer and against a
+    # packed one after and before a packed add (the PoC's V8 logic was
+    # integer; lcc's is packed).
+    "paddh_to_andd": ("%dr3", [("paddh,0 %dr2, %dr5, %dr2", None),
+                               ("andd,0 %dr2, %dr2, %dr2", 12)], 6),
+    "andd_to_paddh": ("%dr3", [("andd,0 %dr2, %dr2, %dr2", None),
+                               ("paddh,0 %dr2, %dr5, %dr2", 12)], 6),
+    "paddh_to_pandd": ("%dr3", [("paddh,0 %dr2, %dr5, %dr2", None),
+                                ("pandd,0 %dr2, %dr2, %dr2", 12)], 6),
+    "pandd_to_paddh": ("%dr3", [("pandd,0 %dr2, %dr2, %dr2", None),
+                                ("paddh,0 %dr2, %dr5, %dr2", 12)], 6),
+    "andd_to_paddh_x": ("%dr3", [("andd,0 %dr2, %dr2, %dr2", None),
+                                 ("paddh,3 %dr2, %dr5, %dr2", 12)], 6),
     "pcmpeqw": ("%dr3", [("pcmpeqw,0 %dr2, %dr5, %dr2", None)], 8),
     "pmaxsh": ("%dr3", [("pmaxsh,0 %dr2, %dr5, %dr2", None)], 8),
     "psllw": ("%dr3", [("psllw,1 %dr2, %dr5, %dr2", None)], 8),

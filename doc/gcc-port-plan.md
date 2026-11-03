@@ -3127,6 +3127,22 @@ output:
   `setwd` stays volatile, as ia64's `alloc` is (D2), give its
   dependences latency 0 in `TARGET_SCHED_ADJUST_COST`. lcc's first
   instructions are in M1, "Prologue/epilogue".
+  Zero only a barrier's outgoing dependences, never both sides. At a
+  barrier sched-deps flushes the pending memory lists
+  (`sched_analyze_2`, sched-deps.cc:2758) and writes the barrier into
+  every register's last-set list (`sched_analyze_insn`,
+  sched-deps.cc:3384–3500), so each later insn depends on the barrier
+  alone, not on the producer before it. Latency 0 into the barrier as
+  well as out of it then lets a consumer share its producer's wide
+  instruction and read the old value. The proof of concept zeroed both
+  sides of its `%lsr` writes, and an `aaurwd` read the `%g18` that an
+  `addd` in the same instruction set (`gcc.c-torture/execute/pr37573`
+  at -O2 on v3 and v5, and three more tests at -Os on v3; P141). `setwd`,
+  first in its function, has no incoming side. To let the operations
+  before a mid-block write share its instruction, as lcc's AAU setup
+  does with `rwd %lsr`, describe the write with a register (a fixed
+  `%lsr`, set by `rwd` and used by the loop's end) instead of a
+  volatile.
 - **A taken transfer's whole wide instruction runs.** On ia64 and C6x a
   taken branch skips the rest of its group; on E2K every operation of
   the instruction holding a taken `ct` executes (control-transfer.md;
@@ -5349,7 +5365,13 @@ a few ways, a guide to what an `-march=elbrus-v5` mode needs first:
   Watch the one conflicting pattern with the divider (timing.md).
 - **`%lsr1`** for loop counts (written after `%lsr`, loops.md; it
   takes effect after 4 cycles like `%lsr`, and the two writes may be in
-  consecutive instructions).
+  consecutive instructions). They are two ALC0 operations, which lcc
+  puts in other operations' wide instructions: `rwd %lsr` with a `disp`
+  and an `aaurwd`, `rwd %lsr1` with `setwd`, `setbn` and `setbp` [lcc
+  1.29.16 `-O3`, SQLite for the 8C2]. The proof of concept printed them
+  as one insn taking a wide instruction of its own for each, and as two
+  operations SQLite has 8 fewer wide instructions at its 11 such loops
+  (P141).
 - **128-bit data**: two `ldd` + `qppackdl` for loads (`ldqp` goes to L2,
   latency 11), `stqp` for 16-byte stores where 16-byte aligned (else
   `qpswitchd` + two `std`, as lcc), `movaqp` in array prefetch loops at

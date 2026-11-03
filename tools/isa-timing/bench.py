@@ -253,6 +253,23 @@ SCHED = {
     # FP class with its +2 to integer consumers.
     "paddw": ("%dr3", [("paddw,0 %dr2, %dr5, %dr2", None)], 8),
     "pandd": ("%dr3", [("pandd,0 %dr2, %dr2, %dr2", None)], 8),
+    # A double's sign flipped by a packed or an integer xor between two
+    # FP operations (lcc's pxord for -x between FP operations, xord
+    # elsewhere); %dr5 = 0 keeps the value.
+    "faddd_to_pxord": ("%dr4", [("faddd,0 %dr2, %dr5, %dr2", None),
+                                ("pxord,0 %dr2, %dr5, %dr2", 12)], 8),
+    "pxord_to_faddd": ("%dr4", [("pxord,0 %dr2, %dr5, %dr2", None),
+                                ("faddd,0 %dr2, %dr5, %dr2", 12)], 6),
+    "faddd_to_pxord_x": ("%dr4", [("faddd,0 %dr2, %dr5, %dr2", None),
+                                  ("pxord,3 %dr2, %dr5, %dr2", 12)], 8),
+    "pxord_to_faddd_x": ("%dr4", [("pxord,0 %dr2, %dr5, %dr2", None),
+                                  ("faddd,3 %dr2, %dr5, %dr2", 12)], 6),
+    "faddd_to_xord": ("%dr4", [("faddd,0 %dr2, %dr5, %dr2", None),
+                               ("xord,0 %dr2, %dr5, %dr2", 12)], 10),
+    "xord_to_faddd": ("%dr4", [("xord,0 %dr2, %dr5, %dr2", None),
+                               ("faddd,0 %dr2, %dr5, %dr2", 12)], 6),
+    "pxord_to_addd": ("%dr4", [("pxord,0 %dr2, %dr5, %dr2", None),
+                               ("addd,0 %dr2, %dr5, %dr2", 12)], 6),
     "pcmpeqw": ("%dr3", [("pcmpeqw,0 %dr2, %dr5, %dr2", None)], 8),
     "pmaxsh": ("%dr3", [("pmaxsh,0 %dr2, %dr5, %dr2", None)], 8),
     "psllw": ("%dr3", [("psllw,1 %dr2, %dr5, %dr2", None)], 8),

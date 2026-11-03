@@ -1540,6 +1540,19 @@ appears with the epilogue, after postreload CSE. 127 of Lua's 1,398
 return prepares went, each a 6-cycle wait: Lua 0.7–1.0% fewer cycles,
 speedtest1 1.4%, LAME 0.2% on the 8C2.
 
+**Jumps to a return block** (P144). A block that jumps outright to a
+block that only returns should get that block's operations and its
+return in place of the jump, as a conditional branch to it becomes a
+conditional return. Otherwise the jump reaches a block that prepares
+the return again and waits its 6 cycles, also where an earlier prepare
+already holds it, and the return block stays a join, so the way that
+falls into it can't prepare its return earlier (Lua's
+`lua_checkstack`: after `luaD_growstack` a conditional return, then a
+jump to the return block; the fast path's return was prepared only
+there). The proof of concept: SQLite for the 8C2 had 609 such jumps
+(4 after), and benchmark set 2 on the 8C2 ran Lua's queen 2.6% and
+three more Lua benchmarks 0.6–0.7% faster, speedtest1 0.3%.
+
 **Sibling calls** (P91; `spec/abi/calling-convention.md`, "Tail calls").
 lcc makes `return g (x)` a jump at `-O2` and `-O3`: `disp %ctpr1, g`,
 the arguments in the caller's own `%dr0`… (a `ct` keeps the window) and
@@ -4983,6 +4996,17 @@ gives the schedule's cycles and the best possible for the same
 operations, so the port's output and lcc's can be compared block by
 block (validated on the 4C to within 2%). The guide's chapter 5
 lists the E2K performance counters (`BUB_E2` etc. for stalls).
+
+Where the proof of concept's cycles go, on the 8C2 at `-O2` (perf's
+`ticks`, `exec`, `bub_b_nop`, `bub_e2`, `bub_e2_mem`,
+`ib_no_command`, spill and fill events; spec/isa/monitors.md): issuing
+wide instructions 47–62%, scheduled `nop` waits 29–52%, interlock
+stalls 0–13% (nearly all on loads: Lua's binary-trees 12%, speedtest1
+10%, LAME 2%), instruction fetch and transfer bubbles 1–6%, spills
+under 0.3% (Lua 5.4's benchmarks, SQLite's speedtest1, LAME). These
+programs are latency-bound, not memory-bound: what the schedule leaves
+empty while a chain completes is a third to a half of the time, so
+shorter chains on hot paths pay (P144).
 
 ### 7.9 Wide-instruction size and the instruction cache
 

@@ -3189,9 +3189,13 @@ tree of two or three PLS words, CDS words and three or four literal
 words, and on v3 also function entries (`setwd` and `setbn`, a prepare
 with `ipd`, `getsp` and five more operations with literals: 15 words,
 so one more CDS word or `mova` fits, two more words don't). Print a
-commutative operation's small constant first, since gas never swaps
-operands (`addd 0x14, %dr0, %dr1` needs no LTS, `addd %dr0, 0x14, %dr1`
-half of one), and leave the literal slots to gas (an explicit `_ltsN`
+constant of 16–31 first wherever the operands commute, since gas never
+swaps operands: a commutative operation's (`addd 0x14, %dr0, %dr1`
+needs no LTS, `addd %dr0, 0x14, %dr1` half of one), a move's (lcc
+writes any 0–31 constant as `src1`, `addd 0x14, 0x0`), and above all a
+memory address's offset, since an address is `src1 + src2` (`ldd 0x18,
+%dr0`, not `ldd %dr0, 0x18`; P139 and its figures in 7.9). Leave the
+literal slots to gas (an explicit `_ltsN`
 with a lower slot left empty costs that slot's word, rounding aside).
 `tools/isa-extract/check_reservations.py` computes the same size for
 compiled code (the size part of `Checker.bundle`). The proof of concept's count after
@@ -4876,6 +4880,132 @@ gives the schedule's cycles and the best possible for the same
 operations, so the port's output and lcc's can be compared block by
 block (validated on the 4C to within 2%). The guide's chapter 5
 lists the E2K performance counters (`BUB_E2` etc. for stalls).
+
+### 7.9 Wide-instruction size and the instruction cache
+
+In code that stays in the instruction cache a wide instruction's size
+costs nothing, so the scheduler fills instructions as the slots allow
+and doesn't count bytes. Size costs in code that doesn't stay there,
+and through the cache's capacity, which every byte of code shares. So
+the port decides per block: pack hot code for cycles, keep cold code
+small.
+
+**What size costs** [hw: `spec/isa/control-transfer.md`, "Instruction
+fetch"; 4C, 8C2, 2C3]. The instruction cache is 128 KiB, 4-way, with
+256-byte lines, on every CPU so far (`spec/isa/timing.md`, "Cache
+geometry"):
+
+| Code | What its size costs |
+|---|---|
+| in the instruction cache | nothing: wide instructions of up to 64 bytes issue one a cycle, also right after a prepared taken transfer. Only some layouts of 56- and 64-byte instructions lose a cycle when the `ct` is exactly 5 cycles after its `disp` (6 or more never do) |
+| streaming from L2 | bytes: about 25.6 bytes a cycle on the 4C, 15–21 on the 8C2, 23.3 on the 2C3, so on the 4C and 2C3 an instruction over about 24 bytes costs a cycle per 23–26 bytes, and the 8C2 is slower |
+| streaming from memory | 4.5–5.1 bytes a cycle (4C, node-local memory), 2.7–3.2 (8C2), 2.7–3.0 (2C3) |
+| a transfer to code not in the cache | its target's first instruction issues 16–19 cycles after the prepare from L2, 155–225 from memory, unless the prepare (or a `pref`) was that far ahead; a prepare whose target's page is not in the ITLB fetches nothing |
+
+**What makes an instruction big** (`spec/isa/bundle.md`, "Counting the
+size"): HS, SS, one ALS per operation, CS0, CS1, the ALES and AAS
+halves, the literal syllables (LTS), PLS and CDS, rounded up to an even
+number of 32-bit words, at most 16 (64 bytes). The literals are what
+code generation chooses:
+
+- Four LTS per instruction. A 64-bit literal takes two and a 32-bit one
+  one; 16-bit literals go in the halves of LTS0 and LTS1, at most four
+  (bundle.md, "Literal values").
+- A constant 0–15 is free as `src2`, 0–31 as `src1` [checked: gas], so
+  a constant 16–31 goes in `src1` wherever the operands commute (7.4,
+  "Count each wide instruction's size"), and most such constants are
+  memory offsets: an address is `src1 + src2` (P139). lcc does this
+  [lcc 1.29.16 `-O3`, SQLite for the 8C2: 19,293 loads and stores and
+  2,668 moves and commutative operations with such a constant in
+  `src1`, and 2,344 16-bit literals of 16–31 left, nearly all in
+  operations that don't commute]. The proof of concept wrote 19,420
+  such literals, 15,031 of them in loads and stores. Printing them as
+  `src1` took 18,000 literals out of SQLite and its `.text` down by
+  1.3% for v3 and 1.4% for the 8C2, with as many wide instructions
+  (gcc-claude `c69e24729d7`; its C torture passes on the 4C and the
+  8C2). The literal counter that the DFA and the bundler share (7.2,
+  "Count each insn's literals from what its output template prints")
+  has to know which templates print the constant in `src1`, or the
+  scheduler keeps reserving the syllable the encoding no longer uses.
+- Every absolute address in code is a 64-bit literal, two of the four
+  LTS: MCST's ELF has no 32-bit literal relocation for an absolute
+  address (`R_E2K_32_ABS` is for data; `spec/abi/elf.md`, "Relocation
+  types"). In position-independent code, local data is a 64-bit
+  GOT-offset literal (`R_E2K_64_GOTOFF_LIT`); a 32-bit one
+  (`R_E2K_GOTOFF`, from gas's 32-bit `@GOTOFF` literal) exists, and
+  neither lcc nor the proof of concept uses it (untried).
+
+How often, in SQLite 3.53.4 built for the 8C2 (objdump's literal
+operands; addresses by relocation type) [lcc 1.29.16; gcc: the proof
+of concept 0.6+33]:
+
+| Build | Wide instructions | `.text` | Literal uses, 16 / 32 / 64-bit | Address literals |
+|---|---|---|---|---|
+| lcc `-O3` | 243,862 | 4.64 MB | 74,032 / 6,002 / 27,231 | 22,869, all 64-bit: data 19,685, code 3,184 |
+| proof of concept `-O2` | 232,689 | 3.67 MB | 83,613 / 2,863 / 12,431 | 11,020, all 64-bit: data 10,056, code 964 |
+| lcc `-O3 -fPIC` | 216,127 | 4.10 MB | 74,136 / 5,571 / 10,665 | 6,843 64-bit GOT offsets, 938 GOT bases, 53 32-bit GOT slots |
+| proof of concept `-O2 -fPIC` | 234,389 | 3.69 MB | 87,483 / 2,891 / 7,538 | 5,406 64-bit GOT offsets, 737 GOT bases, 40 32-bit GOT slots |
+
+**What lcc does** [lcc 1.29.16 `-O3`]:
+
+- It aligns code to 8 bytes only, the least a wide instruction needs:
+  1,780 `.align 8` in SQLite's `.text`, no other alignment there. It
+  doesn't align loop heads or functions to cache lines, and it puts no
+  code in hot or cold sections.
+- Its instructions seldom reach the limit: 16-word instructions are
+  0.02–0.13% of its code, mostly v3 function entries (bundle.md,
+  "Counting the size").
+- Its prepares for v3 targets carry `ipd 2`, which fetches two
+  256-byte lines of the target, and those for v4 and later none, the
+  default, which fetches three, as `ipd 3` does. Given enough lead, the
+  default fetches a three-line target from memory with nothing lost,
+  where `ipd 2` loses 50 (4C) to about 130 (8C2, 2C3) cycles
+  (control-transfer.md, "Prefetch depth").
+- Its code is larger than the proof of concept's: SQLite's `.text` is
+  26% larger (11% with `-fPIC`), and without `-fPIC` it has twice the
+  address literals.
+
+**In GCC.**
+
+- The scheduler's DFA models what a cycle's instruction holds, not its
+  bytes. The proof of concept gives it the literal syllables, CS0, CS1,
+  SS and one PLS as units, and after scheduling ends an instruction that
+  would go past 16 words, at the cost of a cycle (7.4, "Count each wide
+  instruction's size"). The limit hardly binds; the four LTS do.
+- No GCC scheduler models the instruction cache. What the port controls
+  is decided elsewhere, per block: `optimize_bb_for_size_p` (cold by
+  the profile, or `-Os`) tells a pass that a block's bytes matter more
+  than its cycles. The passes that grow code are the ones to keep out
+  of cold blocks: if-conversion's duplicated arms (D3), tail
+  duplication, unrolling, modulo scheduling's prologues and epilogues
+  (7.7), and speculation's recovery code (7.6). Where two encodings
+  take the same cycles, take the shorter (the `src1` constant above).
+- GCC's hot/cold partitioning (`-freorder-blocks-and-partition`) moves
+  cold blocks to `.text.unlikely`, which keeps the hot part of a
+  function dense in the cache. lcc doesn't do it. GCC turns it off only
+  for SJLJ or target-specific unwind info (`gcc/opts.cc:1563-1589`),
+  so a port with DWARF unwind info gets it. Whether MCST's unwinder,
+  which finds the FDE and LSDA by address and ignores CFI
+  (`spec/abi/stack-and-unwinding.md`), handles a function split in two
+  is not checked.
+- Alignment (`LOOP_ALIGN`, `JUMP_ALIGN`, `FUNCTION_BOUNDARY`,
+  `-falign-*`): in hot code nothing gains from it, since every
+  instruction issues in a cycle from the cache. Align to 8, as lcc
+  does. gas adds its own padding before jump targets at offsets
+  0x1c0–0x1ff of each 1 KiB block (`CODE_PLACEMENT`,
+  `spec/isa/hwbugs.md`; about 2,000 empty instructions in each
+  `libc.so.6`), and that padding is code size the port can't avoid.
+- Prefetch is scheduling: prepare every transfer that may be taken at
+  least its delay ahead (5 cycles for `disp`, 9 for `movtd`; D4), and
+  one whose target may be cold as early as the code allows: about 20
+  cycles hide L2, 200–255 hide memory. `pref` fetches a cold target
+  that a call or an `ibranch` reaches, a few hundred cycles ahead
+  (control-transfer.md, "Code not in the instruction cache").
+
+Not measured: how often whole programs miss the instruction cache, and
+how much smaller code gains from it (lcc's code against the proof of
+concept's); whether hot/cold partitioning or 32-bit GOT-offset literals
+pay; v4 and v7.
 
 ---
 

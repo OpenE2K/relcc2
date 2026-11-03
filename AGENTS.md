@@ -712,11 +712,11 @@ control speculation (sections 7.6, 7.7).
 ## Next steps (proposed, owner to choose)
 
 0. `docs/spec-poc-findings.md` (the PoC agent's file, untracked): every
-   entry through I57, A58 and P140 is folded into `spec/` and `doc/` and
-   removed from it (I57, A37–A58 and P108–P140 on 2026-11-03, rechecked
+   entry through I57, A58 and P141 is folded into `spec/` and `doc/` and
+   removed from it (I57, A37–A58 and P108–P141 on 2026-11-03, rechecked
    on the 4C and the 8C2 with the `fold*` probes; their 2C3 runs are
    owed, and the spec says "not run on the 2C3" where it names
-   machines). New ones continue as I58, A59, P141.
+   machines). New ones continue as I58, A59, P142.
 1. Extend the compat suite (see Current state). It runs on the 4C with
    `run.py --target v3 --remote ...`; all pairs match qemu except the
    tag-trap tests, which pass on the 4C and on the 8C2 (v5, `--target

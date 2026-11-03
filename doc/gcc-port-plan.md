@@ -1422,6 +1422,47 @@ logic and 4 after an FP compare, and on v3 2 cycles between an FP
 compare and a reader in the instruction before the return, not relying
 on the interlock.
 
+**Which CTPR a call takes, and where its prepare goes** (P143). lcc
+spreads its calls over the three CTPRs and prepares many in an earlier
+block: in SQLite for the 8C2, 10,366, 7,075 and 3,078 calls through
+`%ctpr1`, `2` and `3`, 7,016 of them prepared before their block. The
+proof of concept sent every call through `%ctpr1`, 2,513 prepared before
+their block. It tried two ways to do as lcc does; neither ran
+measurably faster on benchmark set 2 on the 8C2 (NPB class W,
+PolyBench, Lua, SQLite's speedtest1, LAME; best of 3, interleaved:
+within 2%, speedtest1 0.997 and 0.999):
+
+- **The CTPRs as an allocatable class, `NO_FUNCTION_CSE` 0** (as M5
+  has it for jumps, and as ia64's branch registers are), the move
+  patterns loading a CTPR with `disp` (symbol) or `movtd` (register).
+  GCC then needs three things from the port. `gcse.cc`'s PRE moves a
+  function's symbol out of a loop whatever its cost (only code
+  hoisting is limited by cost, gcse.cc:859), and the allocator keeps
+  it in a general register, so every call in the loop reloads it with
+  a `movtd`, 9 cycles before the call where a `disp` takes 5: a pass
+  after reload must give back the `disp` where every definition
+  reaching a `movtd` is one function's symbol, and before `ce3`, as a
+  `movtd` can't be predicated and an arm holding one keeps its branch.
+  IRA gives a call address that lives across a call the CTPR class
+  with a caller-save, which LRA can't make (nothing stores a CTPR) and
+  loops on: `TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS` must give such a
+  DImode pseudo the general registers, also when its class is
+  `ALL_REGS`. And hooks that run during if-conversion must not ask an
+  insn its type, as its changes aren't checked yet. With all three the
+  allocator spreads the calls over the CTPRs but prepares none
+  earlier, and SQLite's code is the same size.
+- **The prepare moved into the blocks before, after reload**, as for
+  jumps above, in a free CTPR: SQLite's calls wait a fifth fewer
+  cycles statically and its code grows 0.4%. A `disp` that
+  if-conversion left for two calls under opposite predicates must keep
+  its CTPR, or the second call goes through an empty one (SIGILL; GCC's
+  C torture didn't show it, SQLite's speedtest1 did).
+
+So `NO_FUNCTION_CSE` 1, as 37 of GCC's ports have it (ia64, x86,
+aarch64, riscv and loongarch among them), with the call's prepare in
+its own block, is a sound start [P143; the proof of concept's
+`eacecd28579` and branch `claudes-e2k-compiler-ctpr-class`].
+
 Indirect calls: `movtd %reg, %ctprN` (latency 9) then `call`. The
 `movtd` must not carry a predicate: gas accepts `movtd … ? %predN`, but
 the hardware traps at it (SIGILL), true predicate or false, while MCST's
@@ -1831,6 +1872,9 @@ consumers [lcc 1.29.16 `-O3`, v3, v5.8c2, v6.2c3 alike:
   A 64-bit operation would read the register's upper half, which can
   be diagnostic (`spec/abi/calling-convention.md`, "Unused parts of a
   slot").
+
+The same rule makes 64-bit vector logic packed (7.7,
+"Auto-vectorization with 64-bit vectors"; P142).
 
 `copysign` is `andd`, `andd` and `ord`, two literals and no branch. A
 port that has `neg` and `abs` patterns but no `copysign<mode>3` gets
@@ -4300,8 +4344,12 @@ check-free semi-speculative form works.
   sees values from before later copies and renaming. Call
   `init_alias_analysis` around a reorg pass that asks.
 - **Auto-vectorization with 64-bit vectors** (P32): V8QI, V4HI, V2SI and
-  V2SF in the ordinary registers (moves and logic as 64-bit integer
-  operations; `padd`/`psub`, saturating, min/max, compares and `pmerge`
+  V2SF in the ordinary registers (moves as 64-bit integer operations;
+  logic as packed `pandd`, `pord`, `pxord` and `pandnd` between packed
+  or FP operations, by D8's rule for sign operations: a packed result
+  reaches `pandd` in 1 cycle and `andd` in 4, so `paddh`, and, `paddh`
+  takes 2 cycles with `pandd` and 5 with `andd` [hw: `bench.py`, 4C;
+  P142]; lcc makes all its vector logic packed; `padd`/`psub`, saturating, min/max, compares and `pmerge`
   selects, `psign` abs, shifts (above), `pmullh`/`pmulhh`/`pmulhuh`,
   `pmaddh` dot products, `psadbw` sums, `phadd` reductions, `punpck`
   widening, `pshufb` permutes and narrowing (its bits 4–6 only on v5,

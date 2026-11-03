@@ -1808,6 +1808,45 @@ penalties (FP→integer +2, crossing between ALC0–2 and ALC3–5 +1 or +2,
 `spec/isa/timing.md`) go into the DFA's bypasses, not into register
 classes.
 
+**Sign operations** (`neg`, `abs` and `copysign`; P140). They are bit
+operations on the sign: `xord` or `andd`/`andnd` with a 64-bit mask
+(two LTS), or the packed `pxord`, `pandd` and `pandnd`, which compute
+the same 64 bits in ALC0, 1, 3 and 4 with an ALES half-syllable more.
+They differ in latency. An FP result reaches `pxord` in 4 cycles in
+its cluster (6 in the other) and `xord` in 6, and both give the value
+to an FP operation in 1 in their cluster, `pxord` in 4 to the other
+one. So between two FP operations in one cluster `pxord` takes 5
+cycles and `xord` 7, with a crossing both take at least 7, and a packed
+result reaches an integer operation only 4 cycles later
+(`spec/isa/timing.md`, "Latencies"; a store's data in 1, 3 from the
+other cluster: "Clusters"). lcc chooses by the producer and the
+consumers [lcc 1.29.16 `-O3`, v3, v5.8c2, v6.2c3 alike:
+`tools/abi/probes/foldp140_fpsign.c`]:
+
+- **`pxord`/`pandd`** for a double that an FP operation computes and
+  FP operations read: an add, multiply, compare, divide or conversion.
+- **`xord`/`andd`** for one that is loaded or is an argument, or goes
+  to a store, the return value or an integer operation.
+- **`xors`/`ands`** for a `float`, always, also between FP operations.
+  A 64-bit operation would read the register's upper half, which can
+  be diagnostic (`spec/abi/calling-convention.md`, "Unused parts of a
+  slot").
+
+`copysign` is `andd`, `andd` and `ord`, two literals and no branch. A
+port that has `neg` and `abs` patterns but no `copysign<mode>3` gets
+GCC's `expand_copysign_absneg` (`gcc/optabs.cc:4034`), which tests the sign
+with a branch around a `neg`. A pattern can't see the producer and the
+consumers, so the choice is a pass after reload. The proof of concept
+rewrites a `negdf2`/`absdf2` whose operand an FP-side operation of its
+block computes and whose result only FP-side operations and stores of
+the block read (a store never loses). It does this after the pipeliner
+and outside its kernels: that model charges every value that may cross
+the clusters for the crossing, so there the two cost the same, and in
+NPB BT's `lhsy` `pxord` cost a stage at the same II. GCC's C torture
+passes as before, and the static cycles of four functions of NPB BT
+and LU drop by 1 to 4. BT and LU class W on the 8C2 run as fast as
+before (BT 4.96–5.00 s, LU 10.18–10.28 s either way; P140).
+
 The one-register model above is what lcc does, and it is what inline
 asm's `x` constraint and `%xgN` register variables name
 (`spec/abi/source-compat.md`). The proof-of-concept backend instead kept

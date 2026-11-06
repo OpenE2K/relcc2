@@ -522,6 +522,7 @@ are interlocked unless the table says otherwise:
 | FP compare (`fcmp*b`; `fxcmp*b` in any format, ALC0 or ALC3) → predicated operation or `merge`; → `ct` | 4; 5 | 4; 5 |
 | packed compare into a predicate → predicated operation; → `ct` | — | 4; 5 |
 | compare → ELP (`pass %predN`) | 1 | 1 |
+| FP compare (`fcmp*b`) → `pass` or `landp` reading its `%pred` | 3 (8C2; early readers stall in 2-cycle steps, as above) | not measured |
 | CLP → CLP in the same instruction | 0 (two levels) | 0 |
 | CLP → CLP through a `%pred` | 1 | 1 |
 | a reader in the writer's own instruction | reads the old value | the same |
@@ -537,6 +538,12 @@ steps of other operands, and in 4-cycle steps on v6; a `ct` waits
 exactly; true and false predicates alike [hw:
 `tools/isa-probes/timeleft.c` `lat`, `timeleftv.c` `pr`; 4C, 8C2, 2C3;
 timing.md, "Stalls cost more than the latency"].
+
+The FP compare → predicate logic row is an outside measurement on the
+8C2 (1,500 MHz, `%clkr` and `perf` `cycles:u`, 2026-11): the same
+stand gave 4 to a predicated operation or `merge` and 5 to `ct`, as
+the rows above, and 2-cycle stall steps. It was not run on the 4C or
+the 2C3.
 
 gas's implicit `nop`s for a compare written outside braces (when
 `.ignore strict_delay` is off) are 2 for integer and packed compares and

@@ -218,6 +218,14 @@ cycle per cycle of distance, except for repeatable 4-cycle bumps at some
 distances (2 and 6 after `return`, 3 and 5 after `disp`) that we can't
 explain; isa-score models both prepares like the `disp` row above.
 
+After `movtd` a not-taken `ct` waits 5 cycles, not the 9 a taken one
+needs: placed D cycles after the `movtd` it costs 5 − D, as a taken
+one costs 9 − D [hw: an outside measurement on the 8C2, 1,500 MHz,
+2026-10-17: producer, D empty cycles, the `ct`, timed with `%clkr`;
+the smallest D without a stall, medians within 0.1 cycle of the
+minimum. The same stand gave `disp` → `ct` 5 taken and 2 not taken,
+and `return` → `ct` 6, as above].
+
 Cost of the transfer itself (cycles per block in a loop of 16 identical
 blocks, compared with a block of `nop`s of the same shape; the loop adds
 about 0.4 per block):

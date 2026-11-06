@@ -129,6 +129,7 @@ The guide's numbers (chapter 6.1) are in the second column for comparison.
 | `andp` → `ct ? pred` | 3 | 3 | — |
 | FP compare (`fcmpltdb`; `fxcmp*b` in any format, `timeleft.c`) → predicated ALU op or `merge` | — | 4 (an early reader stalls in 2-cycle steps on v3 and v5: "Stalls cost more than the latency") | — |
 | FP compare → `ct ? pred` | — | 5 | — |
+| FP compare → `pass`, `landp` (predicate logic reading its `%pred`; 8C2, an outside measurement: predicates.md, "Timing") | — | 3 (integer compare: 1) | — |
 
 **Integer divides take longer for larger quotients** (`pocchk.c`, the
 smallest gap from a divide to its use that costs no stall; 4C, 8C2 and
@@ -946,6 +947,26 @@ whose 320 KB matrix leaves L1 and which uses no array prefetch, runs
 12% slower than isa-score's L1 model on the 8C2 and 6% faster on the
 4C.
 
+An outside measurement on the 8C2 agrees within a cycle or two [hw: a
+random chase over 64-byte lines in a `%lsr` loop, `%clkr`, best of
+three processes, pinned to one core while the machine's load average
+was about 3; 2026-10-14]: L1 3 cycles a load (up to 64 KiB), L2 11,
+L3 33.5 (1–12 MiB), memory 183–186 with 2 MiB pages (199 at 1 GiB)
+and 198–235 with 4 KiB pages. It differs in where L2 ends: the chase
+got a clean 11 only up to 160 KiB, 13–22 (a mix of L2 and L3) from
+192 to 544 KiB, and L3's level from 640 KiB, where the 256 KiB chase
+above gives 11; whether the load on the machine shrank the L2 that
+chase could use was not checked. With 4 KiB pages DTLB misses show
+from 4 MiB (38 against 33.5) and reach 62 at 12 MiB, as the 768-entry
+DTLB above predicts. The same stands saw a miss stop only its
+consumers: after a load from memory, 128 instructions of independent
+arithmetic or 64 independent L1 loads cost nothing, so an iteration
+takes max(latency, instructions); two independent chases interleaved
+divide the time per load by 1.8–1.9 (L3, memory), four by 3.3–3.7
+(L2: by 2 and 4), loads in adjacent instructions as well as in one;
+with 4 KiB pages four chases gain less (83 cycles a load against 56,
+the four loads in one instruction).
+
 
 **Cache hints in the MAS** [source: kernel `asm/mas.h`; lcc]: for
 ordinary accesses (MAS `mod` 0) bits 5–6 (`dc_ch`) choose the caches
@@ -1587,7 +1608,18 @@ What v5 adds or changes:
 - **`ldqp` bypasses L1:** the single-register 128-bit load is served
   by L2. Its latency is **11** to any consumer (integer or `qp`; `ldd`
   stays 3), only one issues per cycle (2, 3 or 4 in one instruction
-  take 2, 3, 3–4 cycles), and the monitors show why: 10 million `ldqp`
+  take 2, 3, 3–4 cycles; of two in one instruction the second delivers
+  its value at **12**, a cycle after the first), and the 11 has no
+  cluster-crossing cost, where `ldd` takes 3 in its cluster and 4
+  across [hw: a gap-method stand outside this repository: a
+  40-instruction loop with the consumer d cycles after the load,
+  `%clkr`, 2 M iterations, best of 5, two sweeps; the 8C2 at
+  1,500 MHz, 2026-11-07. `ldqp` in ALC0, 2, 3 and 5 against `qpaddd`
+  in ALC0 and 3 (all 8 pairs), and `addd` and `stqp` consumers: 11
+  each, in the load's cluster and the other; offsets 0x100, 0x110,
+  0x130 and 0x7f0 and `,sm` the same; two `ldqp` in one instruction
+  (ALC0 and 3): the second 12; `stqp` then `ldqp` of its address:
+  nothing beyond the 11]), and the monitors show why: 10 million `ldqp`
   of one cached address make almost no L1 requests and 10 million L2
   queries, all hits, where `ldd` hits L1 (the v5 event list says
   `L1_REQUEST` counts "synchronous requests except qpword";

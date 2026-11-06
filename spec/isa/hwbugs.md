@@ -45,6 +45,22 @@ covers.
 | `RWD_LSR` (165225) | listed, enabled for no CPU in this kernel | some instructions are not allowed after `rwd %lsr`/`%lsr1` | `{nop}` after the `rwd` | — | lcc already leaves 4 cycles between `rwd %lsr` and the loop (loops.md: a loop entered sooner counts the old `%lsr` in its first iterations, below) |
 | `GENERATIONS_L2_PREF` (rm 35505) | E16C rev 2, E8V7 rev 0 | load/store "generations" conflict with the L2 prefetcher | the kernel disables the prefetcher while the binary compiler runs | none | binary translation only |
 
+An erratum named outside MCST's GPL code [source: LuaJIT's E2K port,
+commit `49098d66` of github.com/helce/LuaJIT, "workaround for
+HWBUG#67179 and HWBUG#68261: rlp/mrgc scoreboarding doesnt work"]:
+the port leaves 2 cycles between a compare and an operation predicated
+on its result (RLP) or a `merge` (MRGC), as if the hardware did not
+interlock them. **Not reproduced outside a return's instruction** [hw:
+an outside measurement on the 8C2, 2026-10-12]: 15 variants (a
+predicated operation, `merged`, a conditional `ct`; the reader in the
+compare's next instruction, after `nop 1` or `nop 2`, or one or two
+separate instructions later; the predicate set to the opposite value
+before each compare), 20 million random calls each, gave no wrong
+result. This agrees with the interlock in timing.md, "Hazards"; the
+one case known not to be interlocked on v3 and v5 is a reader in a
+taken return's instruction (and on v3 the one before it), which may be
+what the port met.
+
 ## How binutils works around `CODE_PLACEMENT` [source]
 
 MCSTBug #140436 (also #77417, #146897; `ENABLE_FIX_LCC_BUG_142105`
@@ -131,6 +147,7 @@ These don't change generated code but explain what tools see:
 | `aaurrq` of an array descriptor: the high half reads 0 on the 4C, `0x89abcdef` on the 8C2 | `semc.c` | same operation, different results | reading AAU state from user mode may be unspecified |
 | Some throughput patterns vary between runs: two stores agreeing in address bits 6–7 and a store plus a load in one 32-byte block (4C), `1 std + 2 ldd` and the store grid (2C3) | `bench.py` `tp` | non-deterministic cost | history-dependent banking is ordinary microarchitecture |
 | A speculative `ldqp,sm` (mod 0 or 3) that starts 8 or 4 bytes before a `PROT_NONE` or unmapped page, so that its high half lies wholly in the bad page, returns the low half diagnostic and the high half a clean 0 with tag 0; starting 12 bytes before (the high half straddling), both halves are diagnostic, as every scalar crossing load is | 2C3 (`memx.c` `pcq_ldqpsm`, `pcq_ldqpspec`, every run) | code that uses the high half alone gets a silent 0 instead of a diagnostic value; it resembles the v7 erratum `UNALIGNED_LOADS` (above) | the probe's readout of 16-byte tags (`stqp,sm`, then fills) shows both halves tagged for `ldqp,sm` from NULL; packed code still sees the diagnostic low half, and lcc's v6 code reads past ends only with aligned accesses, which never cross a page |
+| A failed `ldd,sm` (bad address) slows a successful load in a **higher** channel of the same wide instruction: that load's reader pays +8 to +12 cycles (+6 to +13 between runs), even when nobody reads the failed load; with the failed load in the higher channel the other pays nothing | 8C2, an outside measurement (2026-10-13; `%clkr`, the difference against the same loop with both addresses good) | a load's latency depends on its neighbour's address | the size moves between runs, it was seen on one machine, and the cause is not known. Where it is free to choose, a compiler can put a load that may fail in the higher channel |
 | `fdivd` every 2 cycles with an FP operation in ALC5 in every gap costs 2.76 cycles a pair instead of 2 | 8C2 (`bench.py` `v5_div*`); gone on the 2C3 | a resource conflict lcc's changelog only hints at (1.26: "FP operations in channel 5 need special scheduling") | a documented scheduling constraint rather than an error |
 | With `%bgr.cur` c ≠ 0, a timer signal's frame holds `%g24`–`%g31` shifted by c (`g[8 + j]` = what `cur` 0 names `%g(24 + ((j − c) & 7))`) and after `sigreturn` the code's `%g(24 + n)` holds its old `%g(24 + ((n − c) & 7))`; without a signal, 100 ms of spinning moved them by 1–3 places in 5 of 9 runs | 4C (`tools/abi/probes/kernleft.c` part 2: 26 of 27 signal runs over c = 1–3, 2026-10-13); the 8C2 keeps them in place, the 2C3 does not rename | user values change across kernel entries with no code touching them | the 4C runs MCST's old 6.1-1.9 kernel, which saves `%g16`–`%g31` before resetting `%bgr` (6.1-1.17 moved the save after it), so it may be the kernel's; a user-mode `std` of a rotated global stores the expected register; lcc never touches `%bgr` (kernel-interface.md, "The rotating globals in the frame") |
 

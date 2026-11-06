@@ -465,6 +465,18 @@ The protocol, as lcc uses it and as measured:
    proof-of-concept back end's P47]. Given I11, a compiler should keep
    the `rbranch` unless no use of the register precedes the check.
 
+   A related case reproduces every time [hw: an outside measurement on
+   the 8C2, 1,500 MHz, 2026-10-15, 1,000 runs a case with the stores
+   conflicting]: a check **without** `rbranch` whose entry was lost,
+   a compare of the checked register in the next instruction, then 0,
+   1 or 2 empty instructions and a conditional `ct` on that compare:
+   the `ct` went the way the stale (lock-load) value decided in 1,000
+   of 1,000 runs. With 3 empty instructions it went the right way. So
+   the reload of a failed check is not interlocked with a conditional
+   transfer that depends on it through a compare: without `rbranch`,
+   keep such a `ct` at least 3 instructions after the compare (timing.md,
+   "Hazards").
+
 **Quad lock and check loads (v5+)** [hw: Elbrus-8C2, `spec.c` built
 with `-DSPEC_V5`, `./spec-v5 v5`]: `ldqp,0,sm … %qprN, mas=0x4` with
 `ldqp,5 … %qprN, mas=0x3` (and `rbranch`) work as the doubleword pair,
@@ -615,12 +627,32 @@ What keeps or loses an entry:
 | a store **in the lock load's own wide instruction** (gas accepts it only in the lock's cluster: ALC2 with a lock in ALC0, ALC5 with a lock in ALC3) | the lock reads first (the value from before the store; [bundle.md](bundle.md)); a store to any locked byte (`std` +0, `stw` +4, `stb` +0) **loses** the new entry, a store to other bytes keeps it (+8, +32, 4 KiB, 4 KiB + 8, 16 KiB: no false conflict on bits 0–11 here) | `rbranch` taken in 1,000 of 1,000 runs and the check reloading the stored value; never for the other bytes; the same with the check 2 to 9 cycles after the lock and in either cluster; a MAS mod-4 store skips the DAM here too (`tools/isa-probes/memorycxx_dam.c`; 4C, 8C2, 2C3) |
 | a `call` (to a function that just returns) | kept | |
 | a call deep enough to spill the register file (64 levels) | lost | `DAM_BELL` 1 ([monitors.md](monitors.md)); 2 levels: kept |
+| calls nested about 40 deep (8C2, outside measurement below) | kept; 48 levels and deeper: all entries lost | |
 | a trap (page fault) | lost: the kernel clears the DAM on every page fault and context switch [source] | reload, `%MLOCK` |
+| any system call, `sched_yield`, a signal handler (8C2, outside measurement below) | lost | reload, `%MLOCK` |
+| time alone (8C2, outside measurement below) | lost now and then, with a time constant of about 0.3–0.5 million cycles (1.4% of entries within 5,000 cycles); the cause is not known | |
+| a store by **another core** (8C2, outside measurement below) | lost when it writes anywhere in the entry's 64-byte line, not only its bytes | |
+| a store through **another virtual mapping** of the same physical page (8C2, outside measurement below) | lost: the comparison uses the physical address | |
+| the line evicted from L1 (8C2, outside measurement below) | kept | |
 | **the destination register overwritten** | **kept** | the check returns the overwritten value, no `%MLOCK` |
 | check of another register, or no lock load | — | reload, `%MLOCK` |
 | the register locked again (other address) | the newer entry replaces it | a store to the first address keeps the check passing; a store to the second fails it |
 | 32 lock loads to other registers | kept | |
 | 33 or more lock loads | the oldest entries evicted | the table holds exactly **32** (`DAM_OVFL` = locks − 32 after a clear, monitors.md) |
+
+The rows marked "outside measurement" come from an independent group's
+stands on the 8C2 (1,500 MHz, 2026-10-15), lcc's form of the protocol
+(`ldd,0|3,sm … mas=0x4` above the stores, `ldd,2|5 … mas=0x3` into the
+same register with `rbranch` in its instruction, compensation code
+that recomputes and branches back). The same stands agree with the
+rest of this table (32 entries, the 33rd evicting the oldest; an entry
+per destination register; partial overlap of one byte enough) and
+measured the costs: an intact check costs nothing against the same
+schedule with plain loads, a failed one 19–21 cycles with its
+compensation block. One result differs from "The check removes the
+entry" above: there a check in the instruction right after an intact
+check of the same register still passed, so the entry goes a little
+after the check, not at once; checks further apart were not compared.
 
 So a store may share its wide instruction with a lock load: the entry
 the lock makes there never misses the store. When the store may write
@@ -689,6 +721,26 @@ it has at the check (the proof-of-concept back end's P28, where GMP's
 | A check load whose entry survived | none (no memory access); a use of its register in the next instruction issues as if the check were not there (`kt_check_use` against `kt_nocheck_use`, 22 cycles both) |
 | A failed check | the reload, plus `rbranch` into and out of compensation code |
 | `rbranch ? %dt_alN` not taken | none |
+
+**A failed speculative load's value is late** [hw: an outside
+measurement on the 8C2, 1,500 MHz, 2026-10-14: a loop of 24 or 32
+wide instructions with an `ldd,sm` from a bad address and its reader
+G instructions later, against the same loop with a good address,
+every G from 1 to 20, the reader in the load's cluster and in the
+other; `perf` `cycles:u`]. The load itself costs nothing, and nor does
+a diagnostic value nobody reads (a one-instruction loop body: 1.004
+cycles), but the value is ready only 11 cycles after the load, where
+a good one is ready at 3. A reader closer than that waits by the
+stall rule, 4 × ⌈(11 − G) / 4⌉ cycles: the difference against a good
+load was +8 at G = 1–6, +4 at G = 7–10 and 0 from G = 11, alike in
+both clusters and for both loop sizes (a second stand: +8.1 at
+G = 1–4, +4.06 at 8, nothing at 12). Readers that don't take the
+value don't wait: an operation under a false predicate pays nothing
+(the "false predicate" hazard, timing.md), but a `merged` that selects
+the other operand still waits for the diagnostic one (+8 at a short
+distance), so a select over a possibly failed load is cheaper as
+predicated operations. The 11 equals the 8C2's L2 hit; other machines
+were not measured.
 
 The guide's example (6.4.3, `if (a) *a++`): 10 cycles with a branch,
 6 with the load and add hoisted as `,sm`, 5 with a predicated store as

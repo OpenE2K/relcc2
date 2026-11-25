@@ -717,6 +717,7 @@ it has at the check (the proof-of-concept back end's P28, where GMP's
 |---|---|
 | A speculative operation that succeeds | none |
 | A speculative load from an invalid region, first time | one kernel entry (about 5,000 cycles); none afterwards |
+| A speculative load to an invalid page it did not touch recently (8C2, outside measurement below) | a table walk, about 18 cycles, whether or not anything reads the value |
 | A semi-speculative load from a valid page not yet touched | a page fault, even if the value is never used |
 | A check load whose entry survived | none (no memory access); a use of its register in the next instruction issues as if the check were not there (`kt_check_use` against `kt_nocheck_use`, 22 cycles both) |
 | A failed check | the reload, plus `rbranch` into and out of compensation code |
@@ -727,9 +728,11 @@ measurement on the 8C2, 1,500 MHz, 2026-10-14: a loop of 24 or 32
 wide instructions with an `ldd,sm` from a bad address and its reader
 G instructions later, against the same loop with a good address,
 every G from 1 to 20, the reader in the load's cluster and in the
-other; `perf` `cycles:u`]. The load itself costs nothing, and nor does
-a diagnostic value nobody reads (a one-instruction loop body: 1.004
-cycles), but the value is ready only 11 cycles after the load, where
+other; `perf` `cycles:u`]. With the bad address on the same page every
+time, the load itself costs nothing, and nor does a diagnostic value
+nobody reads (a one-instruction loop body: 1.004 cycles); a load to a
+new bad page each time does cost (below). The value is ready only 11
+cycles after the load, where
 a good one is ready at 3. A reader closer than that waits by the
 stall rule, 4 × ⌈(11 − G) / 4⌉ cycles: the difference against a good
 load was +8 at G = 1–6, +4 at G = 7–10 and 0 from G = 11, alike in
@@ -741,6 +744,29 @@ the other operand still waits for the diagnostic one (+8 at a short
 distance), so a select over a possibly failed load is cheaper as
 predicated operations. The 11 equals the 8C2's L2 hit; other machines
 were not measured.
+
+**A failed load to a new page each time walks the page table** [hw: an
+outside measurement on the 8C2, 1,500 MHz, 2026-11-24: a loop of 9
+wide instructions with two `ldd,sm` in one instruction (offsets 0 and
+8), 20 million iterations on one core, `perf stat` with `cycles:u`,
+`TICKS_E2`, `L1_QUERY`, `DTLB_QUERY`, `DTLB_HIT` and `DTLB_TLU_QUERY`;
+the baseline loads from the loop's own code]. With the address in an
+unmapped range and on the same page every iteration (or address 0, or
+a kernel address), the loop takes 10.0 cycles an iteration, as the
+baseline does: the two loads make no L1 access (`L1_QUERY` about 0,
+against 1 a load in the baseline) and no table walk (`DTLB_TLU_QUERY`
+about 0), and `DTLB_HIT` counts 1 a load, so the failed translation
+stays in the DTLB (inferred). With the address stepped by 4 KiB, or by
+2 MiB, every iteration, so that each iteration's loads go to a page not
+used before, the loop takes 46.0 cycles with nobody reading the values:
+about 18 a load, all of it in `TICKS_E2`, with 2 `DTLB_TLU_QUERY` and
+no `DTLB_HIT` a load. A reader 4 instructions after the loads adds
+the +8 above in both cases (18.0 and 54.0 cycles; a reader of good
+loads at that distance adds nothing). The counts are user mode only,
+so kernel time, if any, is not in them. So a speculative load of a
+pointer that is bad on many different pages (a stale or uninitialised field, not NULL) costs about
+as much as a DTLB miss each time, used or not; repeated bad pointers
+into one page stay free unless read. Other machines were not measured.
 
 The guide's example (6.4.3, `if (a) *a++`): 10 cycles with a branch,
 6 with the load and add hoisted as `,sm`, 5 with a predicated store as

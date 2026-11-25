@@ -367,6 +367,30 @@ in L2. From memory it is about 155–170 (4C), 175–195 (8C2) or 195–225
 move by tens of cycles with code layout: its 512 KiB L2 keeps the
 256 KiB eviction run only partly.)
 
+**Chains of transfers through cold code** [hw: an outside measurement
+on the 8C2, 1,500 MHz, 2026-11-24: N blocks of 6 wide instructions,
+each ending in a `ct` prepared by a `disp` without `ipd` 5
+instructions ahead, one block in each slot of a region at a random
+8-byte offset, visited in address order or in a random order, about
+20 million transfers; `perf stat` `cycles:u`, `IB_NO_COMMAND`,
+`L2_QUERY`, `L2_HIT` on one core]. Cycles a transfer beyond 1 a wide
+instruction, nearly all of them `IB_NO_COMMAND`:
+
+| Blocks in the region | address order | random order |
+|---|---|---|
+| 1,024 in 256 KiB (one a 256-byte line; code in L2) | 4.3 (8.1 `L2_QUERY`) | 10.5 (14.2) |
+| 4,096 in 1 MiB (one a line; code in L3) | 16.7 (8.0) | 29.2 (19.8) |
+| 256 in 256 KiB (one a KiB) | 13.7 (17.1) | 12.3 (16.3) |
+
+So a transfer to the line right after the previous block costs about 4
+cycles with the code in L2 and 17 with it in L3, roughly half of a
+transfer to an unrelated line: that line already comes with the
+previous target (a prepare without `ipd` fetches three lines,
+"Prefetch depth", below; inferred), and the transfer then waits for one line,
+8 `L2_QUERY` of 32 bytes. With the blocks 1 KiB apart, beyond those
+three lines, address order gains nothing. An unrelated target brings
+1.5–2.5 lines (12–20 queries). Not run on the 4C or the 2C3.
+
 **Prefetch depth.** The `ipd` of the prepare's instruction (Prepare
 operations, above) decides how much of a longer target comes with it. A
 768-byte (three-line) target, cycles lost against the cached case:

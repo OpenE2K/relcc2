@@ -909,6 +909,30 @@ three machines and `pf.c`'s stride chase agree]:
   16 MiB stream makes none. The ITLB holds 256 to 383 4 KiB pages, and
   a prepare whose target's page misses it fetches nothing
   ([control-transfer.md](control-transfer.md), "Prefetch depth").
+- **TLB sets on the 8C2** [hw: an outside measurement, 2026-11-23;
+  `perf stat` `cycles:u` and the TLB events on one core]. A chase of
+  dependent loads, one per page at a different 64-byte line of each,
+  cycling over P pages S bytes apart, 10 million loads: with 4 KiB
+  pages 1 MiB apart (equal virtual address bits 12–19) 2 and 3 pages
+  take 3.1 cycles a load and 4 pages 23.1, 6 pages 31.1, so the 4 KiB
+  entries are 3 ways of sets indexed by VA bits 12–19 and a miss with
+  the line in L1 costs about 20. With 2 MiB pages (`MADV_HUGEPAGE`)
+  512 MiB apart (equal bits 21–28) 1 page takes 3.1 and 2 pages 39.1,
+  and 256 pages 2 MiB apart take 3.1 where 300 take 32.9: the large
+  pages have one entry in each of 256 sets indexed by bits 21–28, and
+  a miss costs about 36. 600 4 KiB pages and 64 2 MiB pages used
+  together make no table walks. This is the kernel's layout above,
+  with the index bits measured. The **ITLB** has 64 sets indexed by
+  VA bits 12–17 and 5 ways (320 4 KiB pages, inside the 256–383
+  above): a ring of K taken `ct`s (each prepared by a `disp` 4
+  instructions ahead, the code in L1I) whose targets lie 1 MiB apart
+  costs 8.3 cycles a transfer at K = 5 and 25.4 at K = 6 (0.74 ITLB
+  misses a transfer), 34.5 at K = 8 (1.01); targets 256 KiB apart
+  also give 34.5 at K = 8, 128 or 64 KiB apart 7.4–7.6, as do targets
+  1 MiB + 4 KiB apart. So an ITLB miss at a prepared taken target
+  costs about 27 cycles, with 0.9 `L2_QUERY` a miss, all hits (the
+  walk's reads; the code itself stays in L1I). Not run on the 4C or
+  the 2C3.
 
 Compilers schedule loads for an L1 hit (3 cycles; 5 on v6), and so does
 lcc outside pipelined loops. Inside them lcc issues the loads array
@@ -955,8 +979,16 @@ L3 33.5 (1–12 MiB), memory 183–186 with 2 MiB pages (199 at 1 GiB)
 and 198–235 with 4 KiB pages. It differs in where L2 ends: the chase
 got a clean 11 only up to 160 KiB, 13–22 (a mix of L2 and L3) from
 192 to 544 KiB, and L3's level from 640 KiB, where the 256 KiB chase
-above gives 11; whether the load on the machine shrank the L2 that
-chase could use was not checked. With 4 KiB pages DTLB misses show
+above gives 11. A later run of a separate chase with 4 KiB pages
+and no other timing job on the machine [hw: an outside measurement on
+the 8C2, 2026-11-23: a random cyclic chase over 64-byte lines, 20
+million loads, `perf stat` `cycles:u`, three processes per size, one
+core] got 11.1 at 128 KiB in every process, but at 256 KiB 11.1 in one
+process and 14.9 in another (`L2_HIT` 79% of `L2_QUERY` in a third),
+17.5–20.1 at 384 KiB and 23.4 at 512 KiB. So where L2 ends moves from
+process to process; with 4 KiB pages the physical pages a buffer gets
+decide how evenly it fills L2's sets (inferred, not tested with 2 MiB
+pages), which may be all the earlier difference. With 4 KiB pages DTLB misses show
 from 4 MiB (38 against 33.5) and reach 62 at 12 MiB, as the 768-entry
 DTLB above predicts. The same stands saw a miss stop only its
 consumers: after a load from memory, 128 instructions of independent

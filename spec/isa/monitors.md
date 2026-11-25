@@ -264,6 +264,9 @@ So:
   miss is a page walk through the DTLB: `DTLB_QUERY` and
   `DTLB_TLU_QUERY` 1 per page, `TLU_BUSY` 11 / 14 / 40 cycles per page,
   as for data ("DTLB and AAU events", above).
+  An outside measurement on the 8C2 places it: 64 sets indexed by
+  virtual address bits 12–17, 5 ways, 320 pages (timing.md, "TLB sets
+  on the 8C2").
 
 One count is unexplained: a 144-byte loop of one prefetch in ALC3 a
 wide instruction that crosses a 256-byte line (`pf1c3_mem`) counts one
@@ -399,8 +402,9 @@ perf's decoder only dumps the words, a set bit 63 starting a record
   instruction line makes 1.23 `IB_DISP_MEM_QUERY`, why `TICKS_E2` counts
   3 cycles a step for load and multiply waits, and the `pf1c3_mem`
   instruction-fetch counts.
-- The ITLB's exact size (256 to 383 pages), and whether `pref` fetches
-  code whose page is not in the ITLB.
+- The ITLB's exact size on the 4C and the 2C3 (256 to 383 pages; the
+  8C2's, measured outside, is 320), and whether `pref` fetches code
+  whose page is not in the ITLB.
 - Whether an outstanding prefetch (a load to `%empty`) also holds up a
   `setwd` that grows the window.
 - `dimtp_trace`'s record format, and why `perf record` captured nothing.
